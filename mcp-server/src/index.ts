@@ -4,18 +4,22 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import jsforce, { Connection } from "jsforce";
+import fs from "fs";
+import path from "path";
 
 // --- Connection Management ---
+
+const TOKEN_FILE = path.join(
+  process.env.HOME || process.env.USERPROFILE || ".",
+  ".sf_mcp_tokens.json"
+);
 
 let conn: Connection | null = null;
 
 async function getConnection(): Promise<Connection> {
   if (conn) return conn;
 
-  const loginUrl = process.env.SF_LOGIN_URL || "https://login.salesforce.com";
-  const username = process.env.SF_USERNAME;
-  const password = process.env.SF_PASSWORD;
-  const token = process.env.SF_SECURITY_TOKEN || "";
+  // Priority 1: Direct access token from env
   const accessToken = process.env.SF_ACCESS_TOKEN;
   const instanceUrl = process.env.SF_INSTANCE_URL;
 
@@ -24,6 +28,53 @@ async function getConnection(): Promise<Connection> {
     return conn;
   }
 
+  // Priority 2: Token file from OAuth login (supports MFA)
+  if (fs.existsSync(TOKEN_FILE)) {
+    try {
+      const tokenData = JSON.parse(fs.readFileSync(TOKEN_FILE, "utf-8"));
+
+      const oauth2 = new jsforce.OAuth2({
+        clientId: tokenData.clientId,
+        clientSecret: tokenData.clientSecret,
+        redirectUri: "http://localhost:9876/callback",
+        loginUrl: tokenData.loginUrl,
+      });
+
+      conn = new jsforce.Connection({
+        oauth2,
+        accessToken: tokenData.accessToken,
+        refreshToken: tokenData.refreshToken,
+        instanceUrl: tokenData.instanceUrl,
+      });
+
+      // Test the connection; if token expired, jsforce will auto-refresh
+      try {
+        await conn.identity();
+      } catch {
+        // Force refresh
+        await conn.oauth2.refreshToken(tokenData.refreshToken);
+      }
+
+      // Save updated tokens back to file
+      const updated = {
+        ...tokenData,
+        accessToken: conn.accessToken,
+        savedAt: new Date().toISOString(),
+      };
+      fs.writeFileSync(TOKEN_FILE, JSON.stringify(updated, null, 2));
+
+      return conn;
+    } catch (err: any) {
+      console.error(`Token file error: ${err.message}. Re-run the auth script.`);
+    }
+  }
+
+  // Priority 3: Username/password (no MFA)
+  const loginUrl = process.env.SF_LOGIN_URL || "https://login.salesforce.com";
+  const username = process.env.SF_USERNAME;
+  const password = process.env.SF_PASSWORD;
+  const token = process.env.SF_SECURITY_TOKEN || "";
+
   if (username && password) {
     conn = new jsforce.Connection({ loginUrl });
     await conn.login(username, password + token);
@@ -31,7 +82,9 @@ async function getConnection(): Promise<Connection> {
   }
 
   throw new Error(
-    "Set SF_USERNAME + SF_PASSWORD (+ SF_SECURITY_TOKEN), or SF_ACCESS_TOKEN + SF_INSTANCE_URL"
+    "No valid auth found. Run the auth script first:\n" +
+    "  cd mcp-server && SF_CLIENT_ID=... SF_CLIENT_SECRET=... SF_LOGIN_URL=... npx tsx src/auth.ts\n" +
+    "Or set SF_ACCESS_TOKEN + SF_INSTANCE_URL env vars."
   );
 }
 
