@@ -16,14 +16,29 @@ const typeColors: Record<string, string> = {
   InvocableProcess: "bg-cyan-500/10 text-cyan-400",
 };
 
+const statusColors: Record<string, string> = {
+  Active: "bg-green-500/10 text-green-400",
+  Draft: "bg-yellow-500/10 text-yellow-400",
+  Obsolete: "bg-red-500/10 text-red-400",
+  InvalidDraft: "bg-orange-500/10 text-orange-400",
+};
+
 export function FlowList({ flows, isLoading }: FlowListProps) {
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  const filtered = flows.filter(
-    (f) =>
+  // Get unique statuses from the data
+  const statuses = Array.from(new Set(flows.map((f) => f.status))).sort();
+
+  const filtered = flows.filter((f) => {
+    const matchesSearch =
       f.label.toLowerCase().includes(search.toLowerCase()) ||
-      f.name.toLowerCase().includes(search.toLowerCase())
-  );
+      f.name.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus =
+      statusFilter === "all" ||
+      f.status.toLowerCase() === statusFilter.toLowerCase();
+    return matchesSearch && matchesStatus;
+  });
 
   if (isLoading) {
     return (
@@ -40,16 +55,45 @@ export function FlowList({ flows, isLoading }: FlowListProps) {
 
   return (
     <div className="space-y-4">
-      <input
-        type="text"
-        placeholder="Search flows..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full max-w-md rounded-lg border border-input bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-      />
+      <div className="flex items-center gap-3">
+        <input
+          type="text"
+          placeholder="Search flows..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 max-w-md rounded-lg border border-input bg-background px-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        />
+        <div className="flex rounded-lg border border-input">
+          <button
+            onClick={() => setStatusFilter("all")}
+            className={cn(
+              "px-3 py-2 text-xs font-medium transition-colors",
+              statusFilter === "all"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            All
+          </button>
+          {statuses.map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={cn(
+                "px-3 py-2 text-xs font-medium transition-colors",
+                statusFilter === status
+                  ? "bg-accent text-accent-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="text-xs text-muted-foreground">
-        {filtered.length} flows
+        {filtered.length} of {flows.length} flows
       </div>
 
       <div className="space-y-1">
@@ -67,9 +111,7 @@ export function FlowList({ flows, isLoading }: FlowListProps) {
                 <span
                   className={cn(
                     "rounded-full px-2 py-0.5 text-xs font-medium",
-                    flow.status === "Active"
-                      ? "bg-green-500/10 text-green-400"
-                      : "bg-yellow-500/10 text-yellow-400"
+                    statusColors[flow.status] || "bg-muted text-muted-foreground"
                   )}
                 >
                   {flow.status}
