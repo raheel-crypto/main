@@ -2,37 +2,69 @@ import { Connection } from "jsforce";
 import type { FlowDetailParsed, FlowElementParsed } from "../types/index.js";
 
 export async function listFlows(conn: Connection) {
+  // Use FlowDefinition which is more widely available than FlowDefinitionView
+  // Then get the active Flow version details
   const query = `
-    SELECT Id, ApiName, Label, ProcessType, TriggerType,
-           TriggerObjectOrEvent.QualifiedApiName, Description,
-           ActiveVersionId, LatestVersionId, LastModifiedDate
-    FROM FlowDefinitionView
-    ORDER BY Label
+    SELECT Id, DeveloperName, MasterLabel, ActiveVersion.VersionNumber,
+           ActiveVersion.Status, ActiveVersion.ProcessType,
+           Description
+    FROM FlowDefinition
+    ORDER BY MasterLabel
   `;
 
-  const result = await conn.tooling.query<{
-    Id: string;
-    ApiName: string;
-    Label: string;
-    ProcessType: string;
-    TriggerType: string | null;
-    TriggerObjectOrEvent: { QualifiedApiName: string } | null;
-    Description: string | null;
-    ActiveVersionId: string | null;
-    LatestVersionId: string;
-    LastModifiedDate: string;
-  }>(query);
+  try {
+    const result = await conn.tooling.query<{
+      Id: string;
+      DeveloperName: string;
+      MasterLabel: string;
+      ActiveVersion: {
+        VersionNumber: number;
+        Status: string;
+        ProcessType: string;
+      } | null;
+      Description: string | null;
+    }>(query);
 
-  return (result.records || []).map((f) => ({
-    id: f.ActiveVersionId || f.LatestVersionId,
-    name: f.ApiName,
-    label: f.Label,
-    type: f.ProcessType,
-    status: f.ActiveVersionId ? "Active" : "Draft",
-    triggerObject: f.TriggerObjectOrEvent?.QualifiedApiName || null,
-    triggerType: f.TriggerType || null,
-    lastModified: f.LastModifiedDate,
-  }));
+    return (result.records || []).map((f) => ({
+      id: f.Id,
+      name: f.DeveloperName,
+      label: f.MasterLabel,
+      type: f.ActiveVersion?.ProcessType || "Unknown",
+      status: f.ActiveVersion ? "Active" : "Draft",
+      triggerObject: null as string | null,
+      triggerType: null as string | null,
+      lastModified: "",
+    }));
+  } catch {
+    // Fallback: query Flow directly if FlowDefinition isn't available
+    const fallbackQuery = `
+      SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType, Status,
+             VersionNumber
+      FROM Flow
+      WHERE Status = 'Active'
+      ORDER BY MasterLabel
+    `;
+
+    const result = await conn.tooling.query<{
+      Id: string;
+      Definition: { DeveloperName: string } | null;
+      MasterLabel: string;
+      ProcessType: string;
+      Status: string;
+      VersionNumber: number;
+    }>(fallbackQuery);
+
+    return (result.records || []).map((f) => ({
+      id: f.Id,
+      name: f.Definition?.DeveloperName || f.MasterLabel,
+      label: f.MasterLabel,
+      type: f.ProcessType,
+      status: f.Status,
+      triggerObject: null as string | null,
+      triggerType: null as string | null,
+      lastModified: "",
+    }));
+  }
 }
 
 export async function getFlowDetail(
@@ -46,16 +78,29 @@ export async function getFlowDetail(
     WHERE Id = '${flowId}'
   `;
 
-  const result = await conn.tooling.query<{
+  // If the flowId is actually a FlowDefinition Id, get the active version
+  let result = await conn.tooling.query<{
     Id: string;
-    Definition: { DeveloperName: string };
+    Definition: { DeveloperName: string } | null;
     MasterLabel: string;
     ProcessType: string;
     Status: string;
     Metadata: any;
   }>(query);
 
-  const flow = result.records[0];
+  if (!result.records || result.records.length === 0) {
+    // Try querying by FlowDefinition Id to get the active version
+    const defQuery = `
+      SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType,
+             Status, Metadata
+      FROM Flow
+      WHERE DefinitionId = '${flowId}' AND Status = 'Active'
+      LIMIT 1
+    `;
+    result = await conn.tooling.query(defQuery);
+  }
+
+  const flow = result.records?.[0];
   if (!flow) {
     throw new Error(`Flow not found: ${flowId}`);
   }
