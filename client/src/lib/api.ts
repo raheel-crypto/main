@@ -36,6 +36,8 @@ export const api = {
   getFlow: (id: string) => request<FlowDetail>(`/api/flows/${id}`),
   explainFlow: (id: string) =>
     request<AIExplanation>(`/api/flows/${id}/explain`, { method: "POST" }),
+  assessFlow: (id: string) =>
+    request<AIExplanation>(`/api/flows/${id}/assess`, { method: "POST" }),
 
   // Apex
   getApexClasses: () => request<ApexSummary[]>("/api/apex"),

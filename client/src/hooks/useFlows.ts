@@ -57,3 +57,25 @@ export function useFlowExplanation() {
 
   return { data, isLoading, error, explain };
 }
+
+export function useFlowAssessment() {
+  const [data, setData] = useState<AIExplanation | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const assess = async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    setData(null);
+    try {
+      const result = await api.assessFlow(id);
+      setData(result);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return { data, isLoading, error, assess };
+}

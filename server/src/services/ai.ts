@@ -111,6 +111,66 @@ ${body}
   return parseAIResponse(text);
 }
 
+const WELL_ARCHITECTED_SYSTEM_PROMPT = `You are a senior Salesforce architect specializing in the Salesforce Well-Architected Framework and official Salesforce developer best practices.
+
+You assess Salesforce Flows against these pillars of the Well-Architected Framework:
+1. **Trusted** - Security, data integrity, compliance, sharing model respect
+2. **Easy** - Maintainability, readability, documentation, admin-friendly design
+3. **Adaptable** - Scalability, governor limits awareness, bulk-safe patterns, performance
+
+Also assess against official Salesforce Flow best practices:
+- Bulkification: Does the flow handle bulk operations properly? Are there DML/SOQL inside loops?
+- Error Handling: Are fault paths defined? Are errors handled gracefully?
+- Naming Conventions: Are elements named descriptively following best practices?
+- Performance: Are there unnecessary queries? Could queries be consolidated?
+- Security: Does the flow run in correct context? Are CRUD/FLS checks needed?
+- Hardcoded Values: Are there hardcoded IDs, emails, or values that should be custom metadata/labels?
+- Null Handling: Are null checks in place where needed?
+- Entry Conditions: Are entry conditions specific enough to avoid unnecessary executions?
+
+Format your response as JSON:
+{
+  "summary": "Overall assessment in 2-3 sentences",
+  "details": "Detailed markdown assessment organized by Well-Architected pillar, with specific element references",
+  "objectsAndFields": [{"object": "pillar name", "fields": ["finding 1", "finding 2"]}],
+  "suggestions": ["Each suggestion should be a specific, actionable step. Include WHAT to change, WHERE in the flow, and HOW to do it. Reference specific element names."]
+}
+
+IMPORTANT: Make suggestions extremely specific and actionable. Instead of "Add error handling", say "Add a Fault path on the 'Update_Account' Record Update element that routes to an 'Error_Handler' Screen element displaying the error message to the user, or to a 'Log_Error' Create Records element that creates a custom Error_Log__c record."`;
+
+export async function assessFlowArchitecture(
+  flow: FlowDetailParsed
+): Promise<AIExplanation> {
+  const userMessage = `Assess this Salesforce Flow against the Salesforce Well-Architected Framework and official developer best practices.
+
+Name: ${flow.label} (${flow.name})
+Type: ${flow.type}
+Trigger: ${flow.triggerType || "None"} on ${flow.triggerObject || "N/A"}
+Status: ${flow.status}
+
+Elements (${flow.elements.length} total):
+${JSON.stringify(flow.elements, null, 2)}
+
+Variables:
+${JSON.stringify(flow.variables, null, 2)}
+
+Referenced Objects: ${flow.referencedObjects.join(", ") || "None"}
+Referenced Fields: ${flow.referencedFields.join(", ") || "None"}
+
+Please provide a thorough assessment with specific, actionable remediation steps for each finding.`;
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 8192,
+    system: WELL_ARCHITECTED_SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userMessage }],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
+  return parseAIResponse(text);
+}
+
 function parseAIResponse(text: string): AIExplanation {
   try {
     // Try to extract JSON from the response

@@ -1,6 +1,10 @@
 import { useParams, Link } from "react-router-dom";
 import { FlowDetailView } from "../components/flows/FlowDetail";
-import { useFlowDetail, useFlowExplanation } from "../hooks/useFlows";
+import {
+  useFlowDetail,
+  useFlowExplanation,
+  useFlowAssessment,
+} from "../hooks/useFlows";
 
 export function FlowDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +14,11 @@ export function FlowDetailPage() {
     isLoading: isExplaining,
     explain,
   } = useFlowExplanation();
+  const {
+    data: assessment,
+    isLoading: isAssessing,
+    assess,
+  } = useFlowAssessment();
 
   if (isLoading) {
     return (
@@ -53,6 +62,9 @@ export function FlowDetailPage() {
         explanation={explanation}
         isExplaining={isExplaining}
         onExplain={() => explain(id!)}
+        assessment={assessment}
+        isAssessing={isAssessing}
+        onAssess={() => assess(id!)}
       />
     </div>
   );

@@ -1,5 +1,9 @@
+import { useState } from "react";
+import { cn } from "../../lib/utils";
+import { FlowCanvas } from "./FlowCanvas";
 import { FlowElements } from "./FlowElements";
 import { FlowAIExplanation } from "./FlowAIExplanation";
+import { FlowAssessment } from "./FlowAssessment";
 import type { FlowDetail as FlowDetailType, AIExplanation } from "../../lib/api";
 
 interface FlowDetailProps {
@@ -7,14 +11,24 @@ interface FlowDetailProps {
   explanation: AIExplanation | null;
   isExplaining: boolean;
   onExplain: () => void;
+  assessment: AIExplanation | null;
+  isAssessing: boolean;
+  onAssess: () => void;
 }
+
+type ViewMode = "diagram" | "elements";
 
 export function FlowDetailView({
   flow,
   explanation,
   isExplaining,
   onExplain,
+  assessment,
+  isAssessing,
+  onAssess,
 }: FlowDetailProps) {
+  const [viewMode, setViewMode] = useState<ViewMode>("diagram");
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -40,17 +54,71 @@ export function FlowDetailView({
         )}
       </div>
 
-      {/* AI Explanation */}
-      <FlowAIExplanation
-        explanation={explanation}
-        isLoading={isExplaining}
-        onExplain={onExplain}
-      />
+      {/* AI buttons row */}
+      <div className="flex gap-3">
+        <FlowAIExplanation
+          explanation={explanation}
+          isLoading={isExplaining}
+          onExplain={onExplain}
+        />
+        <FlowAssessment
+          assessment={assessment}
+          isLoading={isAssessing}
+          onAssess={onAssess}
+        />
+      </div>
+
+      {/* View toggle */}
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground">View:</span>
+        <div className="flex rounded-lg border border-input">
+          <button
+            onClick={() => setViewMode("diagram")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+              viewMode === "diagram"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="3" width="6" height="6" rx="1" />
+              <rect x="15" y="3" width="6" height="6" rx="1" />
+              <rect x="9" y="15" width="6" height="6" rx="1" />
+              <path d="M6 9v3h6m6-6v3H12m0 0v6" />
+            </svg>
+            Diagram
+          </button>
+          <button
+            onClick={() => setViewMode("elements")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+              viewMode === "elements"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+            List
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* Flow Elements */}
+        {/* Main content */}
         <div className="col-span-2">
-          <FlowElements elements={flow.elements} />
+          {viewMode === "diagram" ? (
+            <FlowCanvas elements={flow.elements} />
+          ) : (
+            <FlowElements elements={flow.elements} />
+          )}
         </div>
 
         {/* Metadata sidebar */}
