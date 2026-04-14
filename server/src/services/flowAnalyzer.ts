@@ -2,114 +2,110 @@ import { Connection } from "jsforce";
 import type { FlowDetailParsed, FlowElementParsed } from "../types/index.js";
 
 export async function listFlows(conn: Connection) {
-  // Use FlowDefinition which is more widely available than FlowDefinitionView
-  // Then get the active Flow version details
+  // Query Flow directly -- most reliable across all org types
+  // Get the latest version of each flow
   const query = `
-    SELECT Id, DeveloperName, MasterLabel, ActiveVersion.VersionNumber,
-           ActiveVersion.Status, ActiveVersion.ProcessType,
-           Description
-    FROM FlowDefinition
+    SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType, Status,
+           VersionNumber, Description
+    FROM Flow
     ORDER BY MasterLabel
   `;
 
-  try {
-    const result = await conn.tooling.query<{
-      Id: string;
-      DeveloperName: string;
-      MasterLabel: string;
-      ActiveVersion: {
-        VersionNumber: number;
-        Status: string;
-        ProcessType: string;
-      } | null;
-      Description: string | null;
-    }>(query);
+  console.log("[flows] Listing flows via Flow object...");
 
-    return (result.records || []).map((f) => ({
-      id: f.Id,
-      name: f.DeveloperName,
-      label: f.MasterLabel,
-      type: f.ActiveVersion?.ProcessType || "Unknown",
-      status: f.ActiveVersion ? "Active" : "Draft",
-      triggerObject: null as string | null,
-      triggerType: null as string | null,
-      lastModified: "",
-    }));
-  } catch {
-    // Fallback: query Flow directly if FlowDefinition isn't available
-    const fallbackQuery = `
-      SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType, Status,
-             VersionNumber
-      FROM Flow
-      WHERE Status = 'Active'
-      ORDER BY MasterLabel
-    `;
+  const result = await conn.tooling.query<{
+    Id: string;
+    Definition: { DeveloperName: string } | null;
+    MasterLabel: string;
+    ProcessType: string;
+    Status: string;
+    VersionNumber: number;
+    Description: string | null;
+  }>(query);
 
-    const result = await conn.tooling.query<{
-      Id: string;
-      Definition: { DeveloperName: string } | null;
-      MasterLabel: string;
-      ProcessType: string;
-      Status: string;
-      VersionNumber: number;
-    }>(fallbackQuery);
+  console.log(`[flows] Found ${result.records?.length || 0} flow versions`);
 
-    return (result.records || []).map((f) => ({
-      id: f.Id,
-      name: f.Definition?.DeveloperName || f.MasterLabel,
-      label: f.MasterLabel,
-      type: f.ProcessType,
-      status: f.Status,
-      triggerObject: null as string | null,
-      triggerType: null as string | null,
-      lastModified: "",
-    }));
+  // Deduplicate: keep only the highest version per flow name
+  const flowMap = new Map<string, (typeof result.records)[0]>();
+  for (const f of result.records || []) {
+    const key = f.Definition?.DeveloperName || f.MasterLabel;
+    const existing = flowMap.get(key);
+    if (!existing || f.VersionNumber > existing.VersionNumber) {
+      flowMap.set(key, f);
+    }
   }
+
+  return Array.from(flowMap.values()).map((f) => ({
+    id: f.Id,
+    name: f.Definition?.DeveloperName || f.MasterLabel,
+    label: f.MasterLabel,
+    type: f.ProcessType,
+    status: f.Status,
+    triggerObject: null as string | null,
+    triggerType: null as string | null,
+    lastModified: "",
+  }));
 }
 
 export async function getFlowDetail(
   conn: Connection,
   flowId: string
 ): Promise<FlowDetailParsed> {
-  const query = `
-    SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType,
-           Status, Metadata
-    FROM Flow
-    WHERE Id = '${flowId}'
-  `;
+  console.log(`[flows] Getting flow detail for: ${flowId}`);
 
-  // If the flowId is actually a FlowDefinition Id, get the active version
-  let result = await conn.tooling.query<{
+  interface FlowRecord {
     Id: string;
     Definition: { DeveloperName: string } | null;
     MasterLabel: string;
     ProcessType: string;
     Status: string;
     Metadata: any;
-  }>(query);
+  }
 
-  if (!result.records || result.records.length === 0) {
-    // Try querying by FlowDefinition Id to get the active version
-    const defQuery = `
+  // Try querying Flow by Id first
+  let flow: FlowRecord | null = null;
+
+  try {
+    const query = `
       SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType,
              Status, Metadata
       FROM Flow
-      WHERE DefinitionId = '${flowId}' AND Status = 'Active'
-      LIMIT 1
+      WHERE Id = '${flowId}'
     `;
-    result = await conn.tooling.query(defQuery);
+    const result = await conn.tooling.query<FlowRecord>(query);
+    flow = result.records?.[0] || null;
+  } catch (err) {
+    console.log(`[flows] Direct query failed:`, err);
   }
 
-  const flow = result.records?.[0];
+  // If that didn't work, maybe flowId is a FlowDefinition Id
+  if (!flow) {
+    try {
+      const defQuery = `
+        SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType,
+               Status, Metadata
+        FROM Flow
+        WHERE DefinitionId = '${flowId}'
+        ORDER BY VersionNumber DESC
+        LIMIT 1
+      `;
+      const result = await conn.tooling.query<FlowRecord>(defQuery);
+      flow = result.records?.[0] || null;
+    } catch (err) {
+      console.log(`[flows] Definition query failed:`, err);
+    }
+  }
+
   if (!flow) {
     throw new Error(`Flow not found: ${flowId}`);
   }
+
+  console.log(`[flows] Found flow: ${flow.MasterLabel}`);
 
   const metadata = flow.Metadata || {};
   const elements = parseFlowElements(metadata);
   const variables = parseFlowVariables(metadata);
 
-  // Extract all referenced objects and fields
   const referencedObjects = new Set<string>();
   const referencedFields = new Set<string>();
 
@@ -137,7 +133,6 @@ export async function getFlowDetail(
 function parseFlowElements(metadata: any): FlowElementParsed[] {
   const elements: FlowElementParsed[] = [];
 
-  // Start element
   if (metadata.start) {
     elements.push({
       name: "start",
@@ -147,141 +142,43 @@ function parseFlowElements(metadata: any): FlowElementParsed[] {
         ? `Triggered by: ${metadata.start.triggerType} on ${metadata.start.object || "N/A"}`
         : "Flow start",
       referencedFields: extractFieldRefs(metadata.start),
-      referencedObjects: metadata.start.object
-        ? [metadata.start.object]
-        : [],
+      referencedObjects: metadata.start.object ? [metadata.start.object] : [],
       connector: metadata.start.connector?.targetReference || null,
     });
   }
 
-  // Decisions
-  for (const d of metadata.decisions || []) {
-    elements.push({
-      name: d.name,
-      type: "Decision",
-      label: d.label || d.name,
-      description: d.description || null,
-      referencedFields: extractFieldRefs(d),
-      referencedObjects: extractObjectRefs(d),
-      connector: d.defaultConnector?.targetReference || null,
-    });
-  }
+  const elementTypes: {
+    key: string;
+    type: string;
+    descFn?: (el: any) => string;
+    connectorKey?: string;
+  }[] = [
+    { key: "decisions", type: "Decision" },
+    { key: "recordLookups", type: "RecordLookup", descFn: (r) => `Get records from ${r.object || "Unknown"}` },
+    { key: "recordCreates", type: "RecordCreate", descFn: (r) => `Create ${r.object || "Unknown"} record` },
+    { key: "recordUpdates", type: "RecordUpdate", descFn: (r) => `Update ${r.object || "Unknown"} record` },
+    { key: "recordDeletes", type: "RecordDelete", descFn: (r) => `Delete ${r.object || "Unknown"} record` },
+    { key: "assignments", type: "Assignment" },
+    { key: "loops", type: "Loop", connectorKey: "nextValueConnector" },
+    { key: "screens", type: "Screen" },
+    { key: "actionCalls", type: "ActionCall", descFn: (a) => `Action: ${a.actionName || a.actionType || "Unknown"}` },
+    { key: "subflows", type: "Subflow", descFn: (s) => `Subflow: ${s.flowName || "Unknown"}` },
+  ];
 
-  // Record Lookups
-  for (const r of metadata.recordLookups || []) {
-    elements.push({
-      name: r.name,
-      type: "RecordLookup",
-      label: r.label || r.name,
-      description: `Get records from ${r.object || "Unknown"}`,
-      referencedFields: extractFieldRefs(r),
-      referencedObjects: r.object ? [r.object] : [],
-      connector: r.connector?.targetReference || null,
-    });
-  }
-
-  // Record Creates
-  for (const r of metadata.recordCreates || []) {
-    elements.push({
-      name: r.name,
-      type: "RecordCreate",
-      label: r.label || r.name,
-      description: `Create ${r.object || "Unknown"} record`,
-      referencedFields: extractFieldRefs(r),
-      referencedObjects: r.object ? [r.object] : [],
-      connector: r.connector?.targetReference || null,
-    });
-  }
-
-  // Record Updates
-  for (const r of metadata.recordUpdates || []) {
-    elements.push({
-      name: r.name,
-      type: "RecordUpdate",
-      label: r.label || r.name,
-      description: `Update ${r.object || "Unknown"} record`,
-      referencedFields: extractFieldRefs(r),
-      referencedObjects: r.object ? [r.object] : [],
-      connector: r.connector?.targetReference || null,
-    });
-  }
-
-  // Record Deletes
-  for (const r of metadata.recordDeletes || []) {
-    elements.push({
-      name: r.name,
-      type: "RecordDelete",
-      label: r.label || r.name,
-      description: `Delete ${r.object || "Unknown"} record`,
-      referencedFields: extractFieldRefs(r),
-      referencedObjects: r.object ? [r.object] : [],
-      connector: r.connector?.targetReference || null,
-    });
-  }
-
-  // Assignments
-  for (const a of metadata.assignments || []) {
-    elements.push({
-      name: a.name,
-      type: "Assignment",
-      label: a.label || a.name,
-      description: a.description || "Assign variable values",
-      referencedFields: extractFieldRefs(a),
-      referencedObjects: extractObjectRefs(a),
-      connector: a.connector?.targetReference || null,
-    });
-  }
-
-  // Loops
-  for (const l of metadata.loops || []) {
-    elements.push({
-      name: l.name,
-      type: "Loop",
-      label: l.label || l.name,
-      description: l.description || "Loop through collection",
-      referencedFields: extractFieldRefs(l),
-      referencedObjects: extractObjectRefs(l),
-      connector: l.nextValueConnector?.targetReference || null,
-    });
-  }
-
-  // Screens
-  for (const s of metadata.screens || []) {
-    elements.push({
-      name: s.name,
-      type: "Screen",
-      label: s.label || s.name,
-      description: s.description || "Screen interaction",
-      referencedFields: extractFieldRefs(s),
-      referencedObjects: extractObjectRefs(s),
-      connector: s.connector?.targetReference || null,
-    });
-  }
-
-  // Action Calls (invocable actions, apex actions, etc.)
-  for (const a of metadata.actionCalls || []) {
-    elements.push({
-      name: a.name,
-      type: "ActionCall",
-      label: a.label || a.name,
-      description: `Action: ${a.actionName || a.actionType || "Unknown"}`,
-      referencedFields: extractFieldRefs(a),
-      referencedObjects: extractObjectRefs(a),
-      connector: a.connector?.targetReference || null,
-    });
-  }
-
-  // Subflows
-  for (const s of metadata.subflows || []) {
-    elements.push({
-      name: s.name,
-      type: "Subflow",
-      label: s.label || s.name,
-      description: `Subflow: ${s.flowName || "Unknown"}`,
-      referencedFields: extractFieldRefs(s),
-      referencedObjects: extractObjectRefs(s),
-      connector: s.connector?.targetReference || null,
-    });
+  for (const { key, type, descFn, connectorKey } of elementTypes) {
+    for (const el of metadata[key] || []) {
+      elements.push({
+        name: el.name,
+        type,
+        label: el.label || el.name,
+        description: descFn ? descFn(el) : (el.description || null),
+        referencedFields: extractFieldRefs(el),
+        referencedObjects: extractObjectRefs(el),
+        connector: connectorKey
+          ? el[connectorKey]?.targetReference || null
+          : el.connector?.targetReference || el.defaultConnector?.targetReference || null,
+      });
+    }
   }
 
   return elements;
@@ -300,22 +197,9 @@ function parseFlowVariables(
 
 function extractFieldRefs(element: any): string[] {
   const fields = new Set<string>();
-  const json = JSON.stringify(element);
-
-  // Match patterns like "Object.Field" in field references
-  const fieldPattern = /\b([A-Z][a-zA-Z0-9_]*\.[A-Z][a-zA-Z0-9_]*__c)\b/g;
-  let match;
-  while ((match = fieldPattern.exec(json)) !== null) {
-    fields.add(match[1]);
-  }
 
   // Extract from inputAssignments, outputAssignments, filters
-  for (const key of [
-    "inputAssignments",
-    "outputAssignments",
-    "filters",
-    "filterLogic",
-  ]) {
+  for (const key of ["inputAssignments", "outputAssignments", "filters"]) {
     const items = element[key];
     if (Array.isArray(items)) {
       for (const item of items) {

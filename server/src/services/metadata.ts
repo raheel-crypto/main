@@ -89,26 +89,85 @@ export async function getFieldUsage(
     MetadataComponentType: string;
   }[] = [];
 
+  // Strategy 1: Query by RefMetadataComponentName (most common)
   try {
-    // Try the standard MetadataComponentDependency query first
+    console.log(`[field-usage] Strategy 1: RefMetadataComponentName = '${fullFieldName}'`);
     const query = `
       SELECT MetadataComponentId, MetadataComponentName, MetadataComponentType
       FROM MetadataComponentDependency
       WHERE RefMetadataComponentName = '${fullFieldName}'
-      ORDER BY MetadataComponentType, MetadataComponentName
     `;
-
     const result = await conn.tooling.query<{
       MetadataComponentId: string;
       MetadataComponentName: string;
       MetadataComponentType: string;
     }>(query);
-
     records = result.records || [];
-  } catch {
-    // Fallback: find the field's EntityDefinitionId and query by Id
+    console.log(`[field-usage] Strategy 1 returned ${records.length} records`);
+  } catch (err: any) {
+    console.log(`[field-usage] Strategy 1 failed: ${err.message}`);
+  }
+
+  // Strategy 2: If Strategy 1 returned nothing, try just the field name
+  if (records.length === 0) {
     try {
-      // First get the field's DurableId
+      console.log(`[field-usage] Strategy 2: RefMetadataComponentName = '${fieldName}'`);
+      const query = `
+        SELECT MetadataComponentId, MetadataComponentName, MetadataComponentType
+        FROM MetadataComponentDependency
+        WHERE RefMetadataComponentName = '${fieldName}'
+      `;
+      const result = await conn.tooling.query<{
+        MetadataComponentId: string;
+        MetadataComponentName: string;
+        MetadataComponentType: string;
+      }>(query);
+      records = result.records || [];
+      console.log(`[field-usage] Strategy 2 returned ${records.length} records`);
+    } catch (err: any) {
+      console.log(`[field-usage] Strategy 2 failed: ${err.message}`);
+    }
+  }
+
+  // Strategy 3: Look up CustomField Id and query by RefMetadataComponentId
+  if (records.length === 0) {
+    try {
+      console.log(`[field-usage] Strategy 3: Looking up CustomField Id...`);
+      const fieldQuery = `
+        SELECT Id FROM CustomField
+        WHERE DeveloperName = '${fieldName.replace(/__c$/, '')}'
+          AND TableEnumOrId = '${objectName}'
+        LIMIT 1
+      `;
+      const fieldResult = await conn.tooling.query<{ Id: string }>(fieldQuery);
+      const fieldId = fieldResult.records?.[0]?.Id;
+
+      if (fieldId) {
+        console.log(`[field-usage] Found CustomField Id: ${fieldId}`);
+        const depQuery = `
+          SELECT MetadataComponentId, MetadataComponentName, MetadataComponentType
+          FROM MetadataComponentDependency
+          WHERE RefMetadataComponentId = '${fieldId}'
+        `;
+        const depResult = await conn.tooling.query<{
+          MetadataComponentId: string;
+          MetadataComponentName: string;
+          MetadataComponentType: string;
+        }>(depQuery);
+        records = depResult.records || [];
+        console.log(`[field-usage] Strategy 3 returned ${records.length} records`);
+      } else {
+        console.log(`[field-usage] Strategy 3: CustomField not found (may be standard field)`);
+      }
+    } catch (err: any) {
+      console.log(`[field-usage] Strategy 3 failed: ${err.message}`);
+    }
+  }
+
+  // Strategy 4: For standard fields, try FieldDefinition DurableId
+  if (records.length === 0) {
+    try {
+      console.log(`[field-usage] Strategy 4: FieldDefinition DurableId lookup...`);
       const fieldQuery = `
         SELECT DurableId
         FROM FieldDefinition
@@ -116,30 +175,34 @@ export async function getFieldUsage(
           AND QualifiedApiName = '${fieldName}'
         LIMIT 1
       `;
-      const fieldResult = await conn.tooling.query<{
-        DurableId: string;
-      }>(fieldQuery);
-
+      const fieldResult = await conn.tooling.query<{ DurableId: string }>(fieldQuery);
       const durableId = fieldResult.records?.[0]?.DurableId;
+
       if (durableId) {
+        console.log(`[field-usage] Found DurableId: ${durableId}`);
         const depQuery = `
           SELECT MetadataComponentId, MetadataComponentName, MetadataComponentType
           FROM MetadataComponentDependency
           WHERE RefMetadataComponentId = '${durableId}'
-          ORDER BY MetadataComponentType, MetadataComponentName
         `;
         const depResult = await conn.tooling.query<{
           MetadataComponentId: string;
           MetadataComponentName: string;
           MetadataComponentType: string;
         }>(depQuery);
-
         records = depResult.records || [];
+        console.log(`[field-usage] Strategy 4 returned ${records.length} records`);
       }
-    } catch {
-      // If dependency API is not available, scan for usage manually
-      records = await scanFieldUsageManually(conn, objectName, fieldName);
+    } catch (err: any) {
+      console.log(`[field-usage] Strategy 4 failed: ${err.message}`);
     }
+  }
+
+  // Strategy 5: Manual scan as last resort
+  if (records.length === 0) {
+    console.log(`[field-usage] Strategy 5: Manual scan fallback...`);
+    records = await scanFieldUsageManually(conn, objectName, fieldName);
+    console.log(`[field-usage] Strategy 5 returned ${records.length} records`);
   }
 
   // Group by component type
@@ -195,11 +258,11 @@ export async function getObjectAutomations(
   conn: Connection,
   objectName: string
 ) {
-  // Query flows related to this object using FlowDefinition
+  // Query active flows
   const flowQuery = `
-    SELECT Id, DeveloperName, MasterLabel,
-           ActiveVersion.ProcessType, ActiveVersion.Status
-    FROM FlowDefinition
+    SELECT Id, Definition.DeveloperName, MasterLabel, ProcessType, Status
+    FROM Flow
+    WHERE Status = 'Active'
     ORDER BY MasterLabel
   `;
 
@@ -223,9 +286,10 @@ export async function getObjectAutomations(
     conn.tooling
       .query<{
         Id: string;
-        DeveloperName: string;
+        Definition: { DeveloperName: string } | null;
         MasterLabel: string;
-        ActiveVersion: { ProcessType: string; Status: string } | null;
+        ProcessType: string;
+        Status: string;
       }>(flowQuery)
       .catch(() => ({ records: [] as any[], done: true, totalSize: 0 })),
     conn.tooling
@@ -246,14 +310,12 @@ export async function getObjectAutomations(
   ]);
 
   return {
-    flows: (flowResult.records || [])
-      .filter((f: any) => f.ActiveVersion)
-      .map((f: any) => ({
-        id: f.Id,
-        name: f.DeveloperName || f.MasterLabel,
-        type: f.ActiveVersion?.ProcessType || "Unknown",
-        status: f.ActiveVersion?.Status || "Unknown",
-      })),
+    flows: (flowResult.records || []).map((f: any) => ({
+      id: f.Id,
+      name: f.Definition?.DeveloperName || f.MasterLabel,
+      type: f.ProcessType || "Unknown",
+      status: f.Status || "Active",
+    })),
     validationRules: (vrResult.records || []).map((v) => ({
       id: v.Id,
       name: v.ValidationName,
@@ -300,60 +362,109 @@ async function scanFieldUsageManually(
     MetadataComponentType: string;
   }[] = [];
 
-  // Scan validation rules
+  // Scan validation rules on this object
   try {
     const vrQuery = `
-      SELECT Id, ValidationName
+      SELECT Id, ValidationName, Metadata
       FROM ValidationRule
       WHERE EntityDefinition.QualifiedApiName = '${objectName}'
     `;
     const vrResult = await conn.tooling.query<{
       Id: string;
       ValidationName: string;
+      Metadata: any;
     }>(vrQuery);
     for (const vr of vrResult.records || []) {
-      results.push({
-        MetadataComponentId: vr.Id,
-        MetadataComponentName: vr.ValidationName,
-        MetadataComponentType: "ValidationRule",
-      });
+      // Check if the field is referenced in the formula
+      const meta = JSON.stringify(vr.Metadata || {});
+      if (meta.includes(fieldName)) {
+        results.push({
+          MetadataComponentId: vr.Id,
+          MetadataComponentName: vr.ValidationName,
+          MetadataComponentType: "ValidationRule",
+        });
+      }
     }
-  } catch { /* skip if not available */ }
+  } catch (e: any) {
+    console.log(`[field-usage] Manual scan VR failed: ${e.message}`);
+  }
 
-  // Scan Apex classes for field references
+  // Scan Apex classes that reference this field
   try {
     const apexQuery = `
-      SELECT Id, Name
+      SELECT Id, Name, Body
       FROM ApexClass
       WHERE NamespacePrefix = null
     `;
     const apexResult = await conn.tooling.query<{
       Id: string;
       Name: string;
+      Body: string;
     }>(apexQuery);
-    // We'll report all apex classes -- detailed scanning would require reading Body
-    // For now, note them as potential references
-  } catch { /* skip */ }
+    for (const cls of apexResult.records || []) {
+      if (cls.Body && cls.Body.includes(fieldName)) {
+        results.push({
+          MetadataComponentId: cls.Id,
+          MetadataComponentName: cls.Name,
+          MetadataComponentType: "ApexClass",
+        });
+      }
+    }
+  } catch (e: any) {
+    console.log(`[field-usage] Manual scan Apex failed: ${e.message}`);
+  }
 
-  // Scan triggers
+  // Scan triggers on this object
   try {
     const triggerQuery = `
-      SELECT Id, Name
+      SELECT Id, Name, Body
       FROM ApexTrigger
       WHERE TableEnumOrId = '${objectName}'
     `;
     const triggerResult = await conn.tooling.query<{
       Id: string;
       Name: string;
+      Body: string;
     }>(triggerQuery);
     for (const t of triggerResult.records || []) {
-      results.push({
-        MetadataComponentId: t.Id,
-        MetadataComponentName: t.Name,
-        MetadataComponentType: "ApexTrigger",
-      });
+      if (t.Body && t.Body.includes(fieldName)) {
+        results.push({
+          MetadataComponentId: t.Id,
+          MetadataComponentName: t.Name,
+          MetadataComponentType: "ApexTrigger",
+        });
+      }
     }
-  } catch { /* skip */ }
+  } catch (e: any) {
+    console.log(`[field-usage] Manual scan Triggers failed: ${e.message}`);
+  }
+
+  // Scan flows for field references
+  try {
+    const flowQuery = `
+      SELECT Id, Definition.DeveloperName, MasterLabel, Metadata
+      FROM Flow
+      WHERE Status = 'Active'
+    `;
+    const flowResult = await conn.tooling.query<{
+      Id: string;
+      Definition: { DeveloperName: string } | null;
+      MasterLabel: string;
+      Metadata: any;
+    }>(flowQuery);
+    for (const f of flowResult.records || []) {
+      const meta = JSON.stringify(f.Metadata || {});
+      if (meta.includes(fieldName)) {
+        results.push({
+          MetadataComponentId: f.Id,
+          MetadataComponentName: f.Definition?.DeveloperName || f.MasterLabel,
+          MetadataComponentType: "Flow",
+        });
+      }
+    }
+  } catch (e: any) {
+    console.log(`[field-usage] Manual scan Flows failed: ${e.message}`);
+  }
 
   return results;
 }
