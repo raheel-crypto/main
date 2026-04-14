@@ -89,13 +89,17 @@ export function UserDetailPage() {
           ) : (
             <div className="space-y-2">
               {user.permissionSets.map((ps) => (
-                <div key={ps.id} className="rounded border border-border px-3 py-2">
-                  <div className="text-sm font-medium text-foreground">{ps.label}</div>
+                <Link
+                  key={ps.id}
+                  to={`/users/permission-sets/${ps.id}`}
+                  className="block rounded border border-border px-3 py-2 transition-colors hover:border-primary/50 hover:bg-accent/30"
+                >
+                  <div className="text-sm font-medium text-primary">{ps.label}</div>
                   <div className="text-xs text-muted-foreground font-mono">{ps.name}</div>
                   {ps.description && (
                     <div className="mt-1 text-xs text-muted-foreground">{ps.description}</div>
                   )}
-                </div>
+                </Link>
               ))}
             </div>
           )}

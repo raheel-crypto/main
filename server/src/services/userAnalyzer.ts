@@ -217,40 +217,125 @@ export async function getProfilePermissions(conn: Connection, profileId: string)
     return { objectPermissions: [], fieldPermissions: [] };
   }
 
-  // Get object permissions
+  return getPermissionsByParentId(conn, permissionSetId);
+}
+
+export async function listPermissionSets(conn: Connection) {
+  const query = `
+    SELECT Id, Name, Label, Description, IsOwnedByProfile, Type,
+           PermissionSetGroupId,
+           (SELECT AssigneeId FROM Assignments)
+    FROM PermissionSet
+    WHERE IsOwnedByProfile = false
+    ORDER BY Label
+  `;
+
+  const result = await conn.query<{
+    Id: string;
+    Name: string;
+    Label: string;
+    Description: string | null;
+    IsOwnedByProfile: boolean;
+    Type: string | null;
+    PermissionSetGroupId: string | null;
+    Assignments: { records: { AssigneeId: string }[] } | null;
+  }>(query);
+
+  return (result.records || []).map((ps) => ({
+    id: ps.Id,
+    name: ps.Name,
+    label: ps.Label,
+    description: ps.Description,
+    type: ps.Type || "Regular",
+    isGroup: ps.PermissionSetGroupId !== null,
+    assigneeCount: ps.Assignments?.records?.length || 0,
+  }));
+}
+
+export async function getPermissionSetDetail(conn: Connection, psId: string) {
+  // Get the permission set info
+  const psQuery = `
+    SELECT Id, Name, Label, Description, IsOwnedByProfile, Type
+    FROM PermissionSet
+    WHERE Id = '${psId}'
+  `;
+
+  const psResult = await conn.query<{
+    Id: string;
+    Name: string;
+    Label: string;
+    Description: string | null;
+    IsOwnedByProfile: boolean;
+    Type: string | null;
+  }>(psQuery);
+
+  const ps = psResult.records?.[0];
+  if (!ps) throw new Error(`Permission set not found: ${psId}`);
+
+  // Get assigned users
+  const assigneeQuery = `
+    SELECT Assignee.Id, Assignee.Name, Assignee.Email, Assignee.Profile.Name
+    FROM PermissionSetAssignment
+    WHERE PermissionSetId = '${psId}'
+    ORDER BY Assignee.Name
+  `;
+
+  const assigneeResult = await conn.query<{
+    Assignee: { Id: string; Name: string; Email: string; Profile: { Name: string } };
+  }>(assigneeQuery);
+
+  const permissions = await getPermissionsByParentId(conn, psId);
+
+  return {
+    id: ps.Id,
+    name: ps.Name,
+    label: ps.Label,
+    description: ps.Description,
+    type: ps.Type || "Regular",
+    assignees: (assigneeResult.records || []).map((a) => ({
+      id: a.Assignee.Id,
+      name: a.Assignee.Name,
+      email: a.Assignee.Email,
+      profileName: a.Assignee.Profile?.Name || "",
+    })),
+    ...permissions,
+  };
+}
+
+async function getPermissionsByParentId(conn: Connection, parentId: string) {
   const objPermQuery = `
     SELECT SobjectType, PermissionsCreate, PermissionsRead,
            PermissionsEdit, PermissionsDelete, PermissionsViewAllRecords,
            PermissionsModifyAllRecords
     FROM ObjectPermissions
-    WHERE ParentId = '${permissionSetId}'
+    WHERE ParentId = '${parentId}'
     ORDER BY SobjectType
   `;
 
-  const objPermResult = await conn.query<{
-    SobjectType: string;
-    PermissionsCreate: boolean;
-    PermissionsRead: boolean;
-    PermissionsEdit: boolean;
-    PermissionsDelete: boolean;
-    PermissionsViewAllRecords: boolean;
-    PermissionsModifyAllRecords: boolean;
-  }>(objPermQuery);
-
-  // Get field permissions
   const fieldPermQuery = `
     SELECT SobjectType, Field, PermissionsRead, PermissionsEdit
     FROM FieldPermissions
-    WHERE ParentId = '${permissionSetId}'
+    WHERE ParentId = '${parentId}'
     ORDER BY SobjectType, Field
   `;
 
-  const fieldPermResult = await conn.query<{
-    SobjectType: string;
-    Field: string;
-    PermissionsRead: boolean;
-    PermissionsEdit: boolean;
-  }>(fieldPermQuery);
+  const [objPermResult, fieldPermResult] = await Promise.all([
+    conn.query<{
+      SobjectType: string;
+      PermissionsCreate: boolean;
+      PermissionsRead: boolean;
+      PermissionsEdit: boolean;
+      PermissionsDelete: boolean;
+      PermissionsViewAllRecords: boolean;
+      PermissionsModifyAllRecords: boolean;
+    }>(objPermQuery),
+    conn.query<{
+      SobjectType: string;
+      Field: string;
+      PermissionsRead: boolean;
+      PermissionsEdit: boolean;
+    }>(fieldPermQuery),
+  ]);
 
   return {
     objectPermissions: (objPermResult.records || []).map((p) => ({

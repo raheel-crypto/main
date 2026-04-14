@@ -134,6 +134,7 @@ function parseFlowElements(metadata: any): FlowElementParsed[] {
   const elements: FlowElementParsed[] = [];
 
   if (metadata.start) {
+    const startConnector = metadata.start.connector?.targetReference || null;
     elements.push({
       name: "start",
       type: "Start",
@@ -143,30 +144,92 @@ function parseFlowElements(metadata: any): FlowElementParsed[] {
         : "Flow start",
       referencedFields: extractFieldRefs(metadata.start),
       referencedObjects: metadata.start.object ? [metadata.start.object] : [],
-      connector: metadata.start.connector?.targetReference || null,
+      connector: startConnector,
+      connectors: startConnector ? [{ target: startConnector, label: null }] : [],
     });
   }
 
-  const elementTypes: {
+  // Decisions need special handling for multiple outcome paths
+  for (const d of metadata.decisions || []) {
+    const connectors: { target: string; label: string | null }[] = [];
+
+    // Default outcome
+    if (d.defaultConnector?.targetReference) {
+      connectors.push({ target: d.defaultConnector.targetReference, label: "Default" });
+    }
+
+    // Decision rules (outcome branches)
+    for (const rule of d.rules || []) {
+      if (rule.connector?.targetReference) {
+        connectors.push({
+          target: rule.connector.targetReference,
+          label: rule.label || rule.name || null,
+        });
+      }
+    }
+
+    elements.push({
+      name: d.name,
+      type: "Decision",
+      label: d.label || d.name,
+      description: d.description || `${connectors.length} outcome(s)`,
+      referencedFields: extractFieldRefs(d),
+      referencedObjects: extractObjectRefs(d),
+      connector: connectors[0]?.target || null,
+      connectors,
+    });
+  }
+
+  // Loops have two paths: next iteration and after loop
+  for (const l of metadata.loops || []) {
+    const connectors: { target: string; label: string | null }[] = [];
+    if (l.nextValueConnector?.targetReference) {
+      connectors.push({ target: l.nextValueConnector.targetReference, label: "Each Item" });
+    }
+    if (l.noMoreValuesConnector?.targetReference) {
+      connectors.push({ target: l.noMoreValuesConnector.targetReference, label: "After Last" });
+    }
+
+    elements.push({
+      name: l.name,
+      type: "Loop",
+      label: l.label || l.name,
+      description: l.description || "Loop through collection",
+      referencedFields: extractFieldRefs(l),
+      referencedObjects: extractObjectRefs(l),
+      connector: connectors[0]?.target || null,
+      connectors,
+    });
+  }
+
+  // All other element types: single connector path (+ optional fault path)
+  const simpleTypes: {
     key: string;
     type: string;
     descFn?: (el: any) => string;
-    connectorKey?: string;
   }[] = [
-    { key: "decisions", type: "Decision" },
     { key: "recordLookups", type: "RecordLookup", descFn: (r) => `Get records from ${r.object || "Unknown"}` },
     { key: "recordCreates", type: "RecordCreate", descFn: (r) => `Create ${r.object || "Unknown"} record` },
     { key: "recordUpdates", type: "RecordUpdate", descFn: (r) => `Update ${r.object || "Unknown"} record` },
     { key: "recordDeletes", type: "RecordDelete", descFn: (r) => `Delete ${r.object || "Unknown"} record` },
     { key: "assignments", type: "Assignment" },
-    { key: "loops", type: "Loop", connectorKey: "nextValueConnector" },
     { key: "screens", type: "Screen" },
     { key: "actionCalls", type: "ActionCall", descFn: (a) => `Action: ${a.actionName || a.actionType || "Unknown"}` },
     { key: "subflows", type: "Subflow", descFn: (s) => `Subflow: ${s.flowName || "Unknown"}` },
   ];
 
-  for (const { key, type, descFn, connectorKey } of elementTypes) {
+  for (const { key, type, descFn } of simpleTypes) {
     for (const el of metadata[key] || []) {
+      const connectors: { target: string; label: string | null }[] = [];
+
+      if (el.connector?.targetReference) {
+        connectors.push({ target: el.connector.targetReference, label: null });
+      }
+      // Fault path
+      if (el.faultConnector?.targetReference) {
+        connectors.push({ target: el.faultConnector.targetReference, label: "Fault" });
+      }
+
       elements.push({
         name: el.name,
         type,
@@ -174,9 +237,8 @@ function parseFlowElements(metadata: any): FlowElementParsed[] {
         description: descFn ? descFn(el) : (el.description || null),
         referencedFields: extractFieldRefs(el),
         referencedObjects: extractObjectRefs(el),
-        connector: connectorKey
-          ? el[connectorKey]?.targetReference || null
-          : el.connector?.targetReference || el.defaultConnector?.targetReference || null,
+        connector: connectors[0]?.target || null,
+        connectors,
       });
     }
   }

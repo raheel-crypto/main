@@ -30,6 +30,11 @@ export interface FieldUsageTree {
   totalReferences: number;
 }
 
+export interface FlowConnector {
+  target: string;
+  label: string | null;
+}
+
 export interface FlowElementParsed {
   name: string;
   type: string;
@@ -38,6 +43,7 @@ export interface FlowElementParsed {
   referencedFields: string[];
   referencedObjects: string[];
   connector: string | null;
+  connectors: FlowConnector[];
 }
 
 export interface FlowDetailParsed {

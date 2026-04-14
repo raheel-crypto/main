@@ -53,6 +53,10 @@ export const api = {
   getProfiles: () => request<ProfileSummary[]>("/api/users/profiles"),
   getProfilePermissions: (id: string) =>
     request<ProfilePermissions>(`/api/users/profiles/${id}/permissions`),
+  getPermissionSets: () =>
+    request<PermissionSetSummary[]>("/api/users/permission-sets"),
+  getPermissionSetDetail: (id: string) =>
+    request<PermissionSetDetail>(`/api/users/permission-sets/${id}`),
 };
 
 // Types
@@ -135,6 +139,11 @@ export interface FlowSummary {
   lastModified: string;
 }
 
+export interface FlowConnector {
+  target: string;
+  label: string | null;
+}
+
 export interface FlowElement {
   name: string;
   type: string;
@@ -142,6 +151,7 @@ export interface FlowElement {
   description: string | null;
   referencedFields: string[];
   referencedObjects: string[];
+  connectors: FlowConnector[];
   connector: string | null;
 }
 
@@ -250,6 +260,27 @@ export interface FieldPermission {
 }
 
 export interface ProfilePermissions {
+  objectPermissions: ObjectPermission[];
+  fieldPermissions: FieldPermission[];
+}
+
+export interface PermissionSetSummary {
+  id: string;
+  name: string;
+  label: string;
+  description: string | null;
+  type: string;
+  isGroup: boolean;
+  assigneeCount: number;
+}
+
+export interface PermissionSetDetail {
+  id: string;
+  name: string;
+  label: string;
+  description: string | null;
+  type: string;
+  assignees: { id: string; name: string; email: string; profileName: string }[];
   objectPermissions: ObjectPermission[];
   fieldPermissions: FieldPermission[];
 }

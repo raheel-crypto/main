@@ -11,6 +11,7 @@ import { ApexDetailPage } from "./pages/ApexDetailPage";
 import { UsersPage } from "./pages/UsersPage";
 import { UserDetailPage } from "./pages/UserDetailPage";
 import { ProfileDetailPage } from "./pages/ProfileDetailPage";
+import { PermissionSetDetailPage } from "./pages/PermissionSetDetailPage";
 import { useSalesforceAuth } from "./hooks/useSalesforceAuth";
 import { LoginButton } from "./components/auth/LoginButton";
 
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/users" element={<UsersPage />} />
         <Route path="/users/:id" element={<UserDetailPage />} />
         <Route path="/users/profiles/:id" element={<ProfileDetailPage />} />
+        <Route path="/users/permission-sets/:id" element={<PermissionSetDetailPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>

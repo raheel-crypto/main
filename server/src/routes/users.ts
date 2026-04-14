@@ -6,6 +6,8 @@ import {
   getUserRecordCounts,
   listProfiles,
   getProfilePermissions,
+  listPermissionSets,
+  getPermissionSetDetail,
 } from "../services/userAnalyzer.js";
 
 const router = Router();
@@ -39,6 +41,28 @@ router.get("/profiles/:id/permissions", async (req, res) => {
     res.json(permissions);
   } catch (error: any) {
     console.error("Error getting profile permissions:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get("/permission-sets", async (req, res) => {
+  try {
+    const conn = getConnection(req.session.sf!);
+    const permSets = await listPermissionSets(conn);
+    res.json(permSets);
+  } catch (error: any) {
+    console.error("Error listing permission sets:", error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get("/permission-sets/:id", async (req, res) => {
+  try {
+    const conn = getConnection(req.session.sf!);
+    const detail = await getPermissionSetDetail(conn, req.params.id);
+    res.json(detail);
+  } catch (error: any) {
+    console.error("Error getting permission set detail:", error);
     res.status(500).json({ message: error.message });
   }
 });
