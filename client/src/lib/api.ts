@@ -57,6 +57,14 @@ export const api = {
     request<PermissionSetSummary[]>("/api/users/permission-sets"),
   getPermissionSetDetail: (id: string) =>
     request<PermissionSetDetail>(`/api/users/permission-sets/${id}`),
+
+  // Cleanup & Architect
+  runCleanupScan: () => request<CleanupFinding[]>("/api/cleanup/scan"),
+  architectChat: (messages: { role: string; content: string }[]) =>
+    request<ArchitectMessage>("/api/cleanup/architect", {
+      method: "POST",
+      body: JSON.stringify({ messages }),
+    }),
 };
 
 // Types
@@ -283,4 +291,19 @@ export interface PermissionSetDetail {
   assignees: { id: string; name: string; email: string; profileName: string }[];
   objectPermissions: ObjectPermission[];
   fieldPermissions: FieldPermission[];
+}
+
+export interface CleanupFinding {
+  category: string;
+  severity: "high" | "medium" | "low";
+  item: string;
+  object: string | null;
+  detail: string;
+  recommendation: string;
+}
+
+export interface ArchitectMessage {
+  role: "assistant";
+  content: string;
+  toolCalls?: { name: string; input: any; result: string }[];
 }

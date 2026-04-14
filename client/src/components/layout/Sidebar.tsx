@@ -8,6 +8,8 @@ const navItems = [
   { path: "/flows", label: "Flows", icon: "workflow" },
   { path: "/apex", label: "Apex Classes", icon: "code" },
   { path: "/users", label: "Users & Profiles", icon: "users" },
+  { path: "/cleanup", label: "Cleanup Scanner", icon: "scan" },
+  { path: "/architect", label: "Architect", icon: "brain" },
 ];
 
 const icons: Record<string, JSX.Element> = {
@@ -51,6 +53,16 @@ const icons: Record<string, JSX.Element> = {
       <circle cx="9" cy="7" r="4" />
       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  ),
+  scan: (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  ),
+  brain: (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
     </svg>
   ),
 };
