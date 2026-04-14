@@ -7,9 +7,14 @@ import { config } from "../config.js";
 
 const router = Router();
 
-router.get("/login", (_req, res) => {
-  const url = getAuthorizationUrl();
-  res.redirect(url);
+router.get("/login", (req, res) => {
+  const { url, codeVerifier } = getAuthorizationUrl();
+
+  // Store the PKCE code verifier in the session for the callback
+  (req.session as any).codeVerifier = codeVerifier;
+  req.session.save(() => {
+    res.redirect(url);
+  });
 });
 
 router.get("/callback", async (req, res) => {
@@ -20,8 +25,15 @@ router.get("/callback", async (req, res) => {
       return;
     }
 
-    const sfData = await handleCallback(code);
+    const codeVerifier = (req.session as any).codeVerifier;
+    if (!codeVerifier) {
+      res.redirect(`${config.clientUrl}?error=missing_code_verifier`);
+      return;
+    }
+
+    const sfData = await handleCallback(code, codeVerifier);
     req.session.sf = sfData;
+    delete (req.session as any).codeVerifier;
 
     res.redirect(config.clientUrl);
   } catch (error: any) {

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import jsforce, { Connection } from "jsforce";
 import { config } from "../config.js";
 
@@ -8,12 +9,33 @@ const oauth2 = new jsforce.OAuth2({
   loginUrl: config.salesforce.loginUrl,
 });
 
-export function getAuthorizationUrl(): string {
-  return oauth2.getAuthorizationUrl({ scope: "api refresh_token" });
+// PKCE helpers
+function generateCodeVerifier(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function generateCodeChallenge(verifier: string): string {
+  return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
+
+export function getAuthorizationUrl(): {
+  url: string;
+  codeVerifier: string;
+} {
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
+
+  const baseUrl = oauth2.getAuthorizationUrl({ scope: "api refresh_token" });
+  const url =
+    baseUrl +
+    `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+
+  return { url, codeVerifier };
 }
 
 export async function handleCallback(
-  code: string
+  code: string,
+  codeVerifier: string
 ): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -23,15 +45,55 @@ export async function handleCallback(
   userName: string;
   userEmail: string;
 }> {
-  const conn = new jsforce.Connection({ oauth2 });
-  await conn.authorize(code);
+  // Exchange authorization code for tokens with PKCE verifier
+  const params = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: config.salesforce.clientId,
+    client_secret: config.salesforce.clientSecret,
+    redirect_uri: config.salesforce.callbackUrl,
+    code_verifier: codeVerifier,
+  });
 
-  const identity = await conn.identity();
+  const tokenUrl = `${config.salesforce.loginUrl}/services/oauth2/token`;
+  const tokenRes = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+
+  if (!tokenRes.ok) {
+    const err = await tokenRes.text();
+    throw new Error(`Token exchange failed: ${err}`);
+  }
+
+  const tokenData = (await tokenRes.json()) as {
+    access_token: string;
+    refresh_token: string;
+    instance_url: string;
+    id: string;
+  };
+
+  // Get user identity
+  const identityRes = await fetch(tokenData.id, {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  });
+
+  if (!identityRes.ok) {
+    throw new Error("Failed to fetch user identity");
+  }
+
+  const identity = (await identityRes.json()) as {
+    user_id: string;
+    organization_id: string;
+    display_name: string;
+    email: string;
+  };
 
   return {
-    accessToken: conn.accessToken!,
-    refreshToken: conn.refreshToken!,
-    instanceUrl: conn.instanceUrl,
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token,
+    instanceUrl: tokenData.instance_url,
     userId: identity.user_id,
     orgId: identity.organization_id,
     userName: identity.display_name,
