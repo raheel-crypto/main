@@ -3,8 +3,9 @@ import { Connection } from "jsforce";
 export async function listActiveUsers(conn: Connection) {
   const query = `
     SELECT Id, Name, Email, Username, ProfileId, Profile.Name,
+           Profile.UserLicense.Name,
            UserRole.Name, LastLoginDate, IsActive, UserType,
-           License.Name, Title, Department, CompanyName,
+           Title, Department, CompanyName,
            CreatedDate, ManagerId, Manager.Name
     FROM User
     WHERE IsActive = true
@@ -17,12 +18,11 @@ export async function listActiveUsers(conn: Connection) {
     Email: string;
     Username: string;
     ProfileId: string;
-    Profile: { Name: string };
+    Profile: { Name: string; UserLicense: { Name: string } | null };
     UserRole: { Name: string } | null;
     LastLoginDate: string | null;
     IsActive: boolean;
     UserType: string;
-    License: { Name: string } | null;
     Title: string | null;
     Department: string | null;
     CompanyName: string | null;
@@ -41,7 +41,7 @@ export async function listActiveUsers(conn: Connection) {
     roleName: u.UserRole?.Name || null,
     lastLogin: u.LastLoginDate,
     userType: u.UserType,
-    license: u.License?.Name || null,
+    license: u.Profile?.UserLicense?.Name || u.UserType,
     title: u.Title,
     department: u.Department,
     company: u.CompanyName,
@@ -54,8 +54,9 @@ export async function getUserDetail(conn: Connection, userId: string) {
   // Get user info
   const userQuery = `
     SELECT Id, Name, Email, Username, ProfileId, Profile.Name,
+           Profile.UserLicense.Name,
            UserRole.Name, LastLoginDate, IsActive, UserType,
-           License.Name, Title, Department, CompanyName,
+           Title, Department, CompanyName,
            CreatedDate, ManagerId, Manager.Name
     FROM User
     WHERE Id = '${userId}'
@@ -67,12 +68,11 @@ export async function getUserDetail(conn: Connection, userId: string) {
     Email: string;
     Username: string;
     ProfileId: string;
-    Profile: { Name: string };
+    Profile: { Name: string; UserLicense: { Name: string } | null };
     UserRole: { Name: string } | null;
     LastLoginDate: string | null;
     IsActive: boolean;
     UserType: string;
-    License: { Name: string } | null;
     Title: string | null;
     Department: string | null;
     CompanyName: string | null;
@@ -122,7 +122,7 @@ export async function getUserDetail(conn: Connection, userId: string) {
     roleName: user.UserRole?.Name || null,
     lastLogin: user.LastLoginDate,
     userType: user.UserType,
-    license: user.License?.Name || null,
+    license: user.Profile?.UserLicense?.Name || user.UserType,
     title: user.Title,
     department: user.Department,
     company: user.CompanyName,
