@@ -44,6 +44,15 @@ export const api = {
   getApexClass: (id: string) => request<ApexDetail>(`/api/apex/${id}`),
   explainApex: (id: string) =>
     request<AIExplanation>(`/api/apex/${id}/explain`, { method: "POST" }),
+
+  // Users & Profiles
+  getUsers: () => request<UserSummary[]>("/api/users"),
+  getUser: (id: string) => request<UserDetail>(`/api/users/${id}`),
+  getUserRecords: (id: string) =>
+    request<RecordCount[]>(`/api/users/${id}/records`),
+  getProfiles: () => request<ProfileSummary[]>("/api/users/profiles"),
+  getProfilePermissions: (id: string) =>
+    request<ProfilePermissions>(`/api/users/profiles/${id}/permissions`),
 };
 
 // Types
@@ -181,4 +190,66 @@ export interface AIExplanation {
   details: string;
   objectsAndFields: { object: string; fields: string[] }[];
   suggestions: string[];
+}
+
+export interface UserSummary {
+  id: string;
+  name: string;
+  email: string;
+  username: string;
+  profileId: string;
+  profileName: string;
+  roleName: string | null;
+  lastLogin: string | null;
+  userType: string;
+  license: string | null;
+  title: string | null;
+  department: string | null;
+  company: string | null;
+  createdDate: string;
+  managerName: string | null;
+}
+
+export interface UserDetail extends UserSummary {
+  permissionSets: {
+    id: string;
+    name: string;
+    label: string;
+    description: string | null;
+  }[];
+}
+
+export interface RecordCount {
+  object: string;
+  count: number;
+}
+
+export interface ProfileSummary {
+  id: string;
+  name: string;
+  userType: string;
+  description: string | null;
+  activeUserCount: number;
+}
+
+export interface ObjectPermission {
+  object: string;
+  create: boolean;
+  read: boolean;
+  edit: boolean;
+  delete: boolean;
+  viewAll: boolean;
+  modifyAll: boolean;
+}
+
+export interface FieldPermission {
+  object: string;
+  field: string;
+  read: boolean;
+  edit: boolean;
+}
+
+export interface ProfilePermissions {
+  objectPermissions: ObjectPermission[];
+  fieldPermissions: FieldPermission[];
 }

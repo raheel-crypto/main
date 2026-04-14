@@ -8,6 +8,7 @@ import objectRoutes from "./routes/objects.js";
 import fieldRoutes from "./routes/fields.js";
 import flowRoutes from "./routes/flows.js";
 import apexRoutes from "./routes/apex.js";
+import userRoutes from "./routes/users.js";
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use("/api/objects", requireAuth, objectRoutes);
 app.use("/api/fields", requireAuth, fieldRoutes);
 app.use("/api/flows", requireAuth, flowRoutes);
 app.use("/api/apex", requireAuth, apexRoutes);
+app.use("/api/users", requireAuth, userRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

@@ -8,6 +8,9 @@ import { FlowsPage } from "./pages/FlowsPage";
 import { FlowDetailPage } from "./pages/FlowDetailPage";
 import { ApexPage } from "./pages/ApexPage";
 import { ApexDetailPage } from "./pages/ApexDetailPage";
+import { UsersPage } from "./pages/UsersPage";
+import { UserDetailPage } from "./pages/UserDetailPage";
+import { ProfileDetailPage } from "./pages/ProfileDetailPage";
 import { useSalesforceAuth } from "./hooks/useSalesforceAuth";
 import { LoginButton } from "./components/auth/LoginButton";
 
@@ -37,6 +40,9 @@ export default function App() {
         <Route path="/flows/:id" element={<FlowDetailPage />} />
         <Route path="/apex" element={<ApexPage />} />
         <Route path="/apex/:id" element={<ApexDetailPage />} />
+        <Route path="/users" element={<UsersPage />} />
+        <Route path="/users/:id" element={<UserDetailPage />} />
+        <Route path="/users/profiles/:id" element={<ProfileDetailPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
