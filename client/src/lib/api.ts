@@ -73,6 +73,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ toolName, toolArgs }),
     }),
+  setSFMcpToken: (accessToken: string) =>
+    request<{ ok: boolean }>("/api/sf-mcp/token", {
+      method: "POST",
+      body: JSON.stringify({ accessToken }),
+    }),
+  clearSFMcpToken: () =>
+    request<{ ok: boolean }>("/api/sf-mcp/token", { method: "DELETE" }),
 };
 
 // Types
@@ -325,5 +332,6 @@ export interface SFMcpTool {
 export interface SFMcpToolsResponse {
   tools: SFMcpTool[];
   connected: boolean;
+  usingCustomToken?: boolean;
   error?: string;
 }

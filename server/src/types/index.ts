@@ -11,6 +11,7 @@ declare module "express-session" {
       userName: string;
       userEmail: string;
     };
+    mcpToken?: string;
   }
 }
 
