@@ -88,7 +88,7 @@ router.get("/mcp-login", (req, res) => {
     response_type: "code",
     client_id: config.mcpApp.clientId,
     redirect_uri: config.mcpApp.callbackUrl,
-    scope: "sfap_api",
+    scope: "api sfap_api",
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
   });
