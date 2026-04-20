@@ -65,6 +65,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ messages }),
     }),
+
+  // Salesforce Hosted MCP
+  getSFMcpTools: () => request<SFMcpToolsResponse>("/api/sf-mcp/tools"),
+  callSFMcpTool: (toolName: string, toolArgs: Record<string, any>) =>
+    request<{ result: string }>("/api/sf-mcp/call", {
+      method: "POST",
+      body: JSON.stringify({ toolName, toolArgs }),
+    }),
 };
 
 // Types
@@ -306,4 +314,16 @@ export interface ArchitectMessage {
   role: "assistant";
   content: string;
   toolCalls?: { name: string; input: any; result: string }[];
+}
+
+export interface SFMcpTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, any>;
+}
+
+export interface SFMcpToolsResponse {
+  tools: SFMcpTool[];
+  connected: boolean;
+  error?: string;
 }

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Connection } from "jsforce";
 import { config } from "../config.js";
 import { getConnection } from "./salesforce.js";
+import { listSFMcpTools, callSFMcpTool } from "./sfMcpClient.js";
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
 
@@ -290,6 +291,26 @@ export async function architectChat(
 ): Promise<ChatMessage> {
   const conn = getConnection(session);
 
+  // Load Salesforce Hosted MCP tools alongside our custom tools
+  let sfMcpToolNames = new Set<string>();
+  let sfMcpAnthropicTools: Anthropic.Tool[] = [];
+  try {
+    const mcpTools = await listSFMcpTools(session.accessToken);
+    sfMcpToolNames = new Set(mcpTools.map((t) => t.name));
+    sfMcpAnthropicTools = mcpTools.map((t) => ({
+      name: t.name,
+      description: `[Salesforce Official MCP] ${t.description}`,
+      input_schema: t.inputSchema as Anthropic.Tool["input_schema"],
+    }));
+    if (mcpTools.length > 0) {
+      console.log(`[architect] SF MCP connected: ${mcpTools.map((t) => t.name).join(", ")}`);
+    }
+  } catch (e: any) {
+    console.log(`[architect] SF MCP not available: ${e.message}`);
+  }
+
+  const allTools = [...TOOLS, ...sfMcpAnthropicTools];
+
   // Build Anthropic messages
   const anthropicMessages: Anthropic.MessageParam[] = messages.map((m) => ({
     role: m.role,
@@ -300,7 +321,7 @@ export async function architectChat(
     model: "claude-sonnet-4-20250514",
     max_tokens: 8192,
     system: SYSTEM_PROMPT,
-    tools: TOOLS,
+    tools: allTools,
     messages: anthropicMessages,
   });
 
@@ -322,11 +343,18 @@ export async function architectChat(
       textParts.push(tb.text);
     }
 
-    // Execute all tool calls
+    // Execute all tool calls — route to SF MCP or our own tools
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const tool of toolUseBlocks) {
       console.log(`[architect] Executing tool: ${tool.name}`);
-      const result = await executeTool(conn, tool.name, tool.input);
+      let result: string;
+      if (sfMcpToolNames.has(tool.name)) {
+        result = await callSFMcpTool(session.accessToken, tool.name, tool.input).catch(
+          (e: any) => `SF MCP error: ${e.message}`
+        );
+      } else {
+        result = await executeTool(conn, tool.name, tool.input);
+      }
       toolCalls.push({ name: tool.name, input: tool.input, result });
       toolResults.push({
         type: "tool_result",
@@ -343,7 +371,7 @@ export async function architectChat(
       model: "claude-sonnet-4-20250514",
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
-      tools: TOOLS,
+      tools: allTools,
       messages: anthropicMessages,
     });
   }
