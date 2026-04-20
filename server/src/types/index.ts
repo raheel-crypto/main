@@ -12,6 +12,7 @@ declare module "express-session" {
       userEmail: string;
     };
     mcpToken?: string;
+    mcpCodeVerifier?: string;
   }
 }
 

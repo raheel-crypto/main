@@ -66,6 +66,9 @@ export const api = {
       body: JSON.stringify({ messages }),
     }),
 
+  // MCP auth status
+  getMcpAuthStatus: () => request<{ configured: boolean; connected: boolean }>("/auth/mcp-status"),
+
   // Salesforce Hosted MCP
   getSFMcpTools: () => request<SFMcpToolsResponse>("/api/sf-mcp/tools"),
   callSFMcpTool: (toolName: string, toolArgs: Record<string, any>) =>

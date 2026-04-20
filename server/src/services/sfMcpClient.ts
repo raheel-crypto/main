@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const MCP_PATH = "/platform/mcp/v1/platform/sobject-reads";
+const SF_MCP_URL = "https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads";
 
 export interface SFMcpTool {
   name: string;
@@ -9,16 +9,9 @@ export interface SFMcpTool {
   inputSchema: Record<string, any>;
 }
 
-function buildMcpUrl(instanceUrl: string): URL {
-  const base = instanceUrl.replace(/\/$/, "");
-  return new URL(`${base}${MCP_PATH}`);
-}
-
-async function createMcpClient(accessToken: string, instanceUrl: string): Promise<Client> {
-  const url = buildMcpUrl(instanceUrl);
-  console.log(`[sf-mcp] Connecting to ${url.toString()}`);
-
-  const transport = new StreamableHTTPClientTransport(url, {
+async function createMcpClient(accessToken: string): Promise<Client> {
+  console.log(`[sf-mcp] Connecting to ${SF_MCP_URL}`);
+  const transport = new StreamableHTTPClientTransport(new URL(SF_MCP_URL), {
     requestInit: {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -35,8 +28,8 @@ async function createMcpClient(accessToken: string, instanceUrl: string): Promis
   return client;
 }
 
-export async function listSFMcpTools(accessToken: string, instanceUrl: string): Promise<SFMcpTool[]> {
-  const client = await createMcpClient(accessToken, instanceUrl);
+export async function listSFMcpTools(accessToken: string): Promise<SFMcpTool[]> {
+  const client = await createMcpClient(accessToken);
   try {
     const { tools } = await client.listTools();
     return (tools || []).map((t) => ({
@@ -51,11 +44,10 @@ export async function listSFMcpTools(accessToken: string, instanceUrl: string): 
 
 export async function callSFMcpTool(
   accessToken: string,
-  instanceUrl: string,
   toolName: string,
   toolArgs: Record<string, any>
 ): Promise<string> {
-  const client = await createMcpClient(accessToken, instanceUrl);
+  const client = await createMcpClient(accessToken);
   try {
     const result = await client.callTool({ name: toolName, arguments: toolArgs });
     const content = result.content;

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { cn } from "../lib/utils";
 import { api, SFMcpTool } from "../lib/api";
 
@@ -10,6 +11,10 @@ interface ToolRunState {
 }
 
 export function SFMcpPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [mcpConfigured, setMcpConfigured] = useState(false);
+  const [mcpOAuthConnected, setMcpOAuthConnected] = useState(false);
   const [tools, setTools] = useState<SFMcpTool[]>([]);
   const [connected, setConnected] = useState(false);
   const [usingCustomToken, setUsingCustomToken] = useState(false);
@@ -18,32 +23,42 @@ export function SFMcpPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [runStates, setRunStates] = useState<Record<string, ToolRunState>>({});
 
-  // Token override state
+  // Manual token paste fallback
   const [showTokenForm, setShowTokenForm] = useState(false);
   const [tokenInput, setTokenInput] = useState("");
   const [savingToken, setSavingToken] = useState(false);
   const [tokenError, setTokenError] = useState<string | null>(null);
 
-  const loadTools = () => {
+  // OAuth result from redirect
+  const oauthSuccess = searchParams.get("mcpConnected") === "true";
+  const oauthError = searchParams.get("error");
+
+  // Clear URL params after reading
+  useEffect(() => {
+    if (oauthSuccess || oauthError) {
+      setSearchParams({}, { replace: true });
+    }
+  }, []);
+
+  const loadAll = () => {
     setIsLoading(true);
-    api
-      .getSFMcpTools()
-      .then((res) => {
-        setTools(res.tools);
-        setConnected(res.connected);
-        setUsingCustomToken(res.usingCustomToken || false);
-        setConnectionError(res.error || null);
-        if (!res.connected) setShowTokenForm(true);
+    Promise.all([api.getMcpAuthStatus(), api.getSFMcpTools()])
+      .then(([authStatus, toolsRes]) => {
+        setMcpConfigured(authStatus.configured);
+        setMcpOAuthConnected(authStatus.connected);
+        setTools(toolsRes.tools);
+        setConnected(toolsRes.connected);
+        setUsingCustomToken(toolsRes.usingCustomToken || false);
+        setConnectionError(toolsRes.error || null);
       })
       .catch((err) => {
         setConnected(false);
         setConnectionError(err.message);
-        setShowTokenForm(true);
       })
       .finally(() => setIsLoading(false));
   };
 
-  useEffect(() => { loadTools(); }, []);
+  useEffect(() => { loadAll(); }, []);
 
   const saveToken = async () => {
     if (!tokenInput.trim()) return;
@@ -53,7 +68,7 @@ export function SFMcpPage() {
       await api.setSFMcpToken(tokenInput.trim());
       setTokenInput("");
       setShowTokenForm(false);
-      loadTools();
+      loadAll();
     } catch (err: any) {
       setTokenError(err.message);
     } finally {
@@ -63,8 +78,7 @@ export function SFMcpPage() {
 
   const clearToken = async () => {
     await api.clearSFMcpToken().catch(() => {});
-    setUsingCustomToken(false);
-    loadTools();
+    loadAll();
   };
 
   const toggleExpand = (name: string) => {
@@ -138,20 +152,12 @@ export function SFMcpPage() {
             </button>
           )}
           <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2">
-            <div
-              className={cn(
-                "h-2 w-2 rounded-full",
-                isLoading
-                  ? "animate-pulse bg-yellow-400"
-                  : connected
-                  ? "bg-green-400"
-                  : "bg-red-400"
-              )}
-            />
+            <div className={cn(
+              "h-2 w-2 rounded-full",
+              isLoading ? "animate-pulse bg-yellow-400" : connected ? "bg-green-400" : "bg-red-400"
+            )} />
             <span className="text-xs text-muted-foreground">
-              {isLoading
-                ? "Connecting..."
-                : connected
+              {isLoading ? "Connecting..." : connected
                 ? `${tools.length} tools${usingCustomToken ? " · custom token" : ""}`
                 : "Not connected"}
             </span>
@@ -159,68 +165,126 @@ export function SFMcpPage() {
         </div>
       </div>
 
-      {/* Token setup panel */}
-      {showTokenForm && (
-        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+      {/* OAuth success banner */}
+      {oauthSuccess && (
+        <div className="rounded-lg border border-green-500/20 bg-green-500/5 px-4 py-3 text-sm text-green-400">
+          External Client App connected successfully.
+        </div>
+      )}
+
+      {/* OAuth error banner */}
+      {oauthError && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          OAuth error: {decodeURIComponent(oauthError)}
+        </div>
+      )}
+
+      {/* Auth setup panel — shown when not connected */}
+      {!isLoading && !connected && (
+        <div className="rounded-lg border border-border bg-card p-5 space-y-5">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">Configure MCP Access Token</h2>
+            <h2 className="text-sm font-semibold text-foreground">Connect to Salesforce Hosted MCP</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your main session token doesn't have the <code className="text-foreground">sfap_api</code> scope
-              required by Salesforce's AI MCP APIs. Provide a token from your External Client App instead.
+              The Salesforce Hosted MCP requires a token from an External Client App with the{" "}
+              <code className="text-foreground">sfap_api</code> scope — different from your main Connected App.
             </p>
           </div>
 
           {connectionError && (
-            <div className="rounded border border-destructive/30 bg-destructive/5 px-3 py-2 font-mono text-xs text-destructive">
+            <div className="rounded border border-border bg-muted px-3 py-2 font-mono text-xs text-muted-foreground">
               {connectionError}
             </div>
           )}
 
-          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-xs text-muted-foreground">
-            <p className="font-medium text-foreground">How to get a token from your External Client App:</p>
-            <ol className="list-decimal list-inside space-y-1">
-              <li>In Salesforce Setup → External Client Apps, open your MCP-enabled app</li>
-              <li>Make sure the app has the <code className="text-foreground">sfap_api</code> OAuth scope enabled</li>
-              <li>Use the Salesforce CLI to get a token:
-                <pre className="mt-1 rounded bg-muted px-2 py-1 text-foreground">sf org display --json</pre>
-              </li>
-              <li>Copy the <code className="text-foreground">accessToken</code> value and paste it below</li>
-            </ol>
-            <p className="pt-1">
-              Or re-authenticate to your main Connected App after adding the{" "}
-              <code className="text-foreground">sfap_api</code> scope — then log out and back in to this app.
-            </p>
+          {/* Option 1: OAuth with External Client App */}
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                Option 1 — Recommended
+              </span>
+              <span className="text-xs text-muted-foreground">OAuth via External Client App</span>
+            </div>
+
+            {mcpConfigured ? (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Your External Client App is configured. Click below to authenticate — you'll be
+                  redirected to Salesforce and back.
+                </p>
+                <a
+                  href="/auth/mcp-login"
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13 12H3" />
+                  </svg>
+                  Connect External Client App
+                </a>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Add your External Client App credentials to <code className="text-foreground">.env</code>:
+                </p>
+                <pre className="rounded bg-muted px-3 py-2 text-xs text-foreground">{`SF_MCP_CLIENT_ID=<your_consumer_key>
+SF_MCP_CLIENT_SECRET=<your_consumer_secret>`}</pre>
+                <p className="text-xs text-muted-foreground">
+                  In Setup → External Client Apps → open your app → copy the Consumer Key and Secret.
+                  Also add <code className="text-foreground">http://localhost:3001/auth/mcp-callback</code> as
+                  an allowed callback URL on the app.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  After updating <code className="text-foreground">.env</code>, restart the server.
+                </p>
+              </div>
+            )}
           </div>
 
-          <div className="flex gap-2">
-            <input
-              type="password"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && saveToken()}
-              placeholder="Paste your access token here..."
-              className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring font-mono"
-            />
-            <button
-              onClick={saveToken}
-              disabled={!tokenInput.trim() || savingToken}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {savingToken ? "Saving..." : "Save & Connect"}
-            </button>
-          </div>
-          {tokenError && (
-            <p className="text-xs text-destructive">{tokenError}</p>
-          )}
+          {/* Option 2: Manual token paste */}
+          <div className="rounded-lg border border-border p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                  Option 2
+                </span>
+                <span className="text-xs text-muted-foreground">Paste an access token manually</span>
+              </div>
+              <button
+                onClick={() => setShowTokenForm((v) => !v)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                {showTokenForm ? "Hide" : "Show"}
+              </button>
+            </div>
 
-          {connected && (
-            <button
-              onClick={() => setShowTokenForm(false)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Already connected — hide this
-            </button>
-          )}
+            {showTokenForm && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Run <code className="text-foreground">sf org display --json</code> in your terminal
+                  (authenticated to the org via your External Client App) and paste the{" "}
+                  <code className="text-foreground">accessToken</code> below.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && saveToken()}
+                    placeholder="Paste access token..."
+                    className="flex-1 rounded border border-input bg-background px-3 py-2 text-sm font-mono text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <button
+                    onClick={saveToken}
+                    disabled={!tokenInput.trim() || savingToken}
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {savingToken ? "Saving..." : "Connect"}
+                  </button>
+                </div>
+                {tokenError && <p className="text-xs text-destructive">{tokenError}</p>}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -239,20 +303,19 @@ export function SFMcpPage() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">
-              These tools are automatically available to the AI Architect. Run them directly here to inspect raw Salesforce data.
+              These tools are automatically available to the AI Architect. Run them here to inspect raw data.
             </p>
             <button
-              onClick={() => setShowTokenForm((v) => !v)}
+              onClick={clearToken}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
-              {showTokenForm ? "Hide token settings" : "Change token"}
+              Disconnect
             </button>
           </div>
 
           {tools.map((tool) => {
             const state = runStates[tool.name];
             const isOpen = expanded === tool.name;
-
             return (
               <div key={tool.name} className="rounded-lg border border-border bg-card overflow-hidden">
                 <button

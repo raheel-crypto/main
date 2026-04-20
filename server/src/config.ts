@@ -19,4 +19,9 @@ export const config = {
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || "",
   },
+  mcpApp: {
+    clientId: process.env.SF_MCP_CLIENT_ID || "",
+    clientSecret: process.env.SF_MCP_CLIENT_SECRET || "",
+    callbackUrl: process.env.SF_MCP_CALLBACK_URL || "http://localhost:3001/auth/mcp-callback",
+  },
 };
