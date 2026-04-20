@@ -7,6 +7,10 @@ function getMcpToken(req: any): string {
   return req.session.mcpToken || req.session.sf!.accessToken;
 }
 
+function getInstanceUrl(req: any): string {
+  return req.session.sf!.instanceUrl;
+}
+
 // POST /api/sf-mcp/token — store a custom MCP access token in the session
 router.post("/token", (req, res) => {
   const { accessToken } = req.body;
@@ -27,7 +31,7 @@ router.delete("/token", (req, res) => {
 // GET /api/sf-mcp/tools — list tools available from Salesforce Hosted MCP
 router.get("/tools", async (req, res) => {
   try {
-    const tools = await listSFMcpTools(getMcpToken(req));
+    const tools = await listSFMcpTools(getMcpToken(req), getInstanceUrl(req));
     res.json({ tools, connected: true, usingCustomToken: !!req.session.mcpToken });
   } catch (error: any) {
     console.error("[sf-mcp] Error listing tools:", error.message);
@@ -48,7 +52,7 @@ router.post("/call", async (req, res) => {
       res.status(400).json({ message: "toolName is required" });
       return;
     }
-    const result = await callSFMcpTool(getMcpToken(req), toolName, toolArgs || {});
+    const result = await callSFMcpTool(getMcpToken(req), getInstanceUrl(req), toolName, toolArgs || {});
     res.json({ result });
   } catch (error: any) {
     console.error("[sf-mcp] Error calling tool:", error.message);

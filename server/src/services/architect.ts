@@ -295,7 +295,7 @@ export async function architectChat(
   let sfMcpToolNames = new Set<string>();
   let sfMcpAnthropicTools: Anthropic.Tool[] = [];
   try {
-    const mcpTools = await listSFMcpTools(session.accessToken);
+    const mcpTools = await listSFMcpTools(session.accessToken, session.instanceUrl);
     sfMcpToolNames = new Set(mcpTools.map((t) => t.name));
     sfMcpAnthropicTools = mcpTools.map((t) => ({
       name: t.name,
@@ -349,7 +349,7 @@ export async function architectChat(
       console.log(`[architect] Executing tool: ${tool.name}`);
       let result: string;
       if (sfMcpToolNames.has(tool.name)) {
-        result = await callSFMcpTool(session.accessToken, tool.name, tool.input).catch(
+        result = await callSFMcpTool(session.accessToken, session.instanceUrl, tool.name, tool.input).catch(
           (e: any) => `SF MCP error: ${e.message}`
         );
       } else {

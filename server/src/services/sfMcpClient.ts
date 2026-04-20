@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const SF_MCP_URL = "https://api.salesforce.com/platform/mcp/v1/platform/sobject-reads";
+const MCP_PATH = "/platform/mcp/v1/platform/sobject-reads";
 
 export interface SFMcpTool {
   name: string;
@@ -9,8 +9,16 @@ export interface SFMcpTool {
   inputSchema: Record<string, any>;
 }
 
-async function createMcpClient(accessToken: string): Promise<Client> {
-  const transport = new StreamableHTTPClientTransport(new URL(SF_MCP_URL), {
+function buildMcpUrl(instanceUrl: string): URL {
+  const base = instanceUrl.replace(/\/$/, "");
+  return new URL(`${base}${MCP_PATH}`);
+}
+
+async function createMcpClient(accessToken: string, instanceUrl: string): Promise<Client> {
+  const url = buildMcpUrl(instanceUrl);
+  console.log(`[sf-mcp] Connecting to ${url.toString()}`);
+
+  const transport = new StreamableHTTPClientTransport(url, {
     requestInit: {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -27,8 +35,8 @@ async function createMcpClient(accessToken: string): Promise<Client> {
   return client;
 }
 
-export async function listSFMcpTools(accessToken: string): Promise<SFMcpTool[]> {
-  const client = await createMcpClient(accessToken);
+export async function listSFMcpTools(accessToken: string, instanceUrl: string): Promise<SFMcpTool[]> {
+  const client = await createMcpClient(accessToken, instanceUrl);
   try {
     const { tools } = await client.listTools();
     return (tools || []).map((t) => ({
@@ -43,10 +51,11 @@ export async function listSFMcpTools(accessToken: string): Promise<SFMcpTool[]> 
 
 export async function callSFMcpTool(
   accessToken: string,
+  instanceUrl: string,
   toolName: string,
   toolArgs: Record<string, any>
 ): Promise<string> {
-  const client = await createMcpClient(accessToken);
+  const client = await createMcpClient(accessToken, instanceUrl);
   try {
     const result = await client.callTool({ name: toolName, arguments: toolArgs });
     const content = result.content;
