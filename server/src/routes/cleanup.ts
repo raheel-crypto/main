@@ -23,7 +23,7 @@ router.post("/architect", async (req, res) => {
       res.status(400).json({ message: "messages array required" });
       return;
     }
-    const response = await architectChat(req.session.sf!, messages);
+    const response = await architectChat(req.session.sf!, messages, req.session.mcpToken);
     res.json(response);
   } catch (error: any) {
     console.error("Error in architect chat:", error);

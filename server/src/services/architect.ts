@@ -287,15 +287,17 @@ export interface ChatMessage {
 
 export async function architectChat(
   session: { accessToken: string; refreshToken: string; instanceUrl: string },
-  messages: { role: "user" | "assistant"; content: string }[]
+  messages: { role: "user" | "assistant"; content: string }[],
+  mcpToken?: string
 ): Promise<ChatMessage> {
   const conn = getConnection(session);
+  const mcpAccessToken = mcpToken || session.accessToken;
 
   // Load Salesforce Hosted MCP tools alongside our custom tools
   let sfMcpToolNames = new Set<string>();
   let sfMcpAnthropicTools: Anthropic.Tool[] = [];
   try {
-    const mcpTools = await listSFMcpTools(session.accessToken);
+    const mcpTools = await listSFMcpTools(mcpAccessToken);
     sfMcpToolNames = new Set(mcpTools.map((t) => t.name));
     sfMcpAnthropicTools = mcpTools.map((t) => ({
       name: t.name,
@@ -349,7 +351,7 @@ export async function architectChat(
       console.log(`[architect] Executing tool: ${tool.name}`);
       let result: string;
       if (sfMcpToolNames.has(tool.name)) {
-        result = await callSFMcpTool(session.accessToken, tool.name, tool.input).catch(
+        result = await callSFMcpTool(mcpAccessToken, tool.name, tool.input).catch(
           (e: any) => `SF MCP error: ${e.message}`
         );
       } else {
