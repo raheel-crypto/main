@@ -3,6 +3,7 @@ import crypto from "crypto";
 import {
   getAuthorizationUrl,
   handleCallback,
+  SFEnvironment,
 } from "../services/salesforce.js";
 import { config } from "../config.js";
 
@@ -15,11 +16,13 @@ function generateCodeChallenge(v: string) {
 
 const router = Router();
 
+// Main login — accepts ?env=sandbox to switch environment
 router.get("/login", (req, res) => {
-  const { url, codeVerifier } = getAuthorizationUrl();
+  const env = (req.query.env as string) === "sandbox" ? "sandbox" : "production";
+  const { url, codeVerifier } = getAuthorizationUrl(env);
 
-  // Store the PKCE code verifier in the session for the callback
   (req.session as any).codeVerifier = codeVerifier;
+  (req.session as any).pendingEnv = env;
   req.session.save(() => {
     res.redirect(url);
   });
@@ -34,14 +37,17 @@ router.get("/callback", async (req, res) => {
     }
 
     const codeVerifier = (req.session as any).codeVerifier;
+    const env: SFEnvironment = (req.session as any).pendingEnv || "production";
     if (!codeVerifier) {
       res.redirect(`${config.clientUrl}?error=missing_code_verifier`);
       return;
     }
 
-    const sfData = await handleCallback(code, codeVerifier);
+    const sfData = await handleCallback(code, codeVerifier, env);
     req.session.sf = sfData;
     delete (req.session as any).codeVerifier;
+    delete (req.session as any).pendingEnv;
+    delete req.session.mcpToken;
 
     res.redirect(config.clientUrl);
   } catch (error: any) {
@@ -61,6 +67,7 @@ router.get("/status", (req, res) => {
         email: req.session.sf.userEmail,
         orgId: req.session.sf.orgId,
         instanceUrl: req.session.sf.instanceUrl,
+        environment: req.session.sf.environment || "production",
       },
     });
   } else {
@@ -68,12 +75,26 @@ router.get("/status", (req, res) => {
   }
 });
 
-// MCP OAuth routes — uses the External Client App credentials to get an sfap_api token
+// Check which environments are configured
+router.get("/environments", (_req, res) => {
+  res.json({
+    production: !!config.salesforce.clientId,
+    sandbox: !!(config.sandbox.clientId || config.salesforce.clientId),
+  });
+});
+
+// MCP OAuth — uses External Client App credentials
 router.get("/mcp-login", (req, res) => {
-  if (!config.mcpApp.clientId) {
-    res.status(400).json({ message: "SF_MCP_CLIENT_ID not configured" });
+  const env = req.session.sf?.environment || "production";
+  const mcpCreds = env === "sandbox" && config.mcpSandbox.clientId
+    ? config.mcpSandbox
+    : config.mcpApp;
+
+  if (!mcpCreds.clientId) {
+    res.status(400).json({ message: "MCP client app not configured for this environment" });
     return;
   }
+
   const instanceUrl = req.session.sf?.instanceUrl;
   if (!instanceUrl) {
     res.redirect(`${config.clientUrl}/sf-mcp?error=not_logged_in`);
@@ -86,7 +107,7 @@ router.get("/mcp-login", (req, res) => {
 
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: config.mcpApp.clientId,
+    client_id: mcpCreds.clientId,
     redirect_uri: config.mcpApp.callbackUrl,
     scope: "mcp_api",
     code_challenge: codeChallenge,
@@ -108,16 +129,21 @@ router.get("/mcp-callback", async (req, res) => {
 
     const codeVerifier = (req.session as any).mcpCodeVerifier;
     const instanceUrl = req.session.sf?.instanceUrl;
+    const env = req.session.sf?.environment || "production";
     if (!codeVerifier || !instanceUrl) {
       res.redirect(`${config.clientUrl}/sf-mcp?error=session_lost`);
       return;
     }
 
+    const mcpCreds = env === "sandbox" && config.mcpSandbox.clientId
+      ? config.mcpSandbox
+      : config.mcpApp;
+
     const params = new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      client_id: config.mcpApp.clientId,
-      client_secret: config.mcpApp.clientSecret,
+      client_id: mcpCreds.clientId,
+      client_secret: mcpCreds.clientSecret,
       redirect_uri: config.mcpApp.callbackUrl,
       code_verifier: codeVerifier,
     });
@@ -146,10 +172,13 @@ router.get("/mcp-callback", async (req, res) => {
   }
 });
 
-// GET /auth/mcp-status — whether External Client App is configured and connected
 router.get("/mcp-status", (req, res) => {
+  const env = req.session.sf?.environment || "production";
+  const mcpCreds = env === "sandbox" && config.mcpSandbox.clientId
+    ? config.mcpSandbox
+    : config.mcpApp;
   res.json({
-    configured: !!config.mcpApp.clientId,
+    configured: !!mcpCreds.clientId,
     connected: !!req.session.mcpToken,
   });
 });

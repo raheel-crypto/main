@@ -1,4 +1,9 @@
+import { useState } from "react";
+import { cn } from "../../lib/utils";
+
 export function LoginButton() {
+  const [env, setEnv] = useState<"production" | "sandbox">("production");
+
   return (
     <div className="flex h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 rounded-xl border border-border bg-card p-8 text-center">
@@ -24,9 +29,46 @@ export function LoginButton() {
         </div>
 
         <div className="space-y-4">
+          {/* Environment toggle */}
+          <div className="flex items-center justify-center rounded-lg border border-border p-1">
+            <button
+              onClick={() => setEnv("production")}
+              className={cn(
+                "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                env === "production"
+                  ? "bg-sf-blue text-white"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Production
+            </button>
+            <button
+              onClick={() => setEnv("sandbox")}
+              className={cn(
+                "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                env === "sandbox"
+                  ? "bg-amber-500 text-white"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Sandbox
+            </button>
+          </div>
+
+          {env === "sandbox" && (
+            <p className="text-xs text-amber-400">
+              You'll be redirected to test.salesforce.com for sandbox login.
+            </p>
+          )}
+
           <a
-            href="/auth/login"
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-sf-blue px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-sf-blue/90"
+            href={`/auth/login?env=${env}`}
+            className={cn(
+              "inline-flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-white transition-colors",
+              env === "production"
+                ? "bg-sf-blue hover:bg-sf-blue/90"
+                : "bg-amber-500 hover:bg-amber-500/90"
+            )}
           >
             <svg
               className="h-5 w-5"
@@ -35,7 +77,7 @@ export function LoginButton() {
             >
               <path d="M16.9 14.6c-.3.9-1 1.6-1.9 2-.5.2-1.1.3-1.6.3-.6 0-1.1-.1-1.6-.3-.9-.4-1.6-1.1-1.9-2-.2-.5-.3-1.1-.3-1.6 0-.6.1-1.1.3-1.6.3-.9 1-1.6 1.9-2 .5-.2 1.1-.3 1.6-.3.6 0 1.1.1 1.6.3.9.4 1.6 1.1 1.9 2 .2.5.3 1.1.3 1.6 0 .6-.1 1.1-.3 1.6z" />
             </svg>
-            Connect to Salesforce
+            Connect to {env === "production" ? "Production" : "Sandbox"}
           </a>
 
           <div className="space-y-2">

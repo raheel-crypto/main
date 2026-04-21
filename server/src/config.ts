@@ -16,12 +16,20 @@ export const config = {
       process.env.SF_CALLBACK_URL || "http://localhost:3001/auth/callback",
     loginUrl: process.env.SF_LOGIN_URL || "https://login.salesforce.com",
   },
-  anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY || "",
+  sandbox: {
+    clientId: process.env.SF_SANDBOX_CLIENT_ID || "",
+    clientSecret: process.env.SF_SANDBOX_CLIENT_SECRET || "",
   },
   mcpApp: {
     clientId: process.env.SF_MCP_CLIENT_ID || "",
     clientSecret: process.env.SF_MCP_CLIENT_SECRET || "",
     callbackUrl: process.env.SF_MCP_CALLBACK_URL || "http://localhost:3001/auth/mcp-callback",
+  },
+  mcpSandbox: {
+    clientId: process.env.SF_MCP_SANDBOX_CLIENT_ID || "",
+    clientSecret: process.env.SF_MCP_SANDBOX_CLIENT_SECRET || "",
+  },
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY || "",
   },
 };

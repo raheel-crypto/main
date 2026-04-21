@@ -10,6 +10,7 @@ declare module "express-session" {
       orgId: string;
       userName: string;
       userEmail: string;
+      environment: "production" | "sandbox";
     };
     mcpToken?: string;
     mcpCodeVerifier?: string;

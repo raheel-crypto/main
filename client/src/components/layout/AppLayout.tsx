@@ -8,6 +8,7 @@ interface AppLayoutProps {
     email: string;
     orgId: string;
     instanceUrl: string;
+    environment: "production" | "sandbox";
   };
   children: ReactNode;
 }

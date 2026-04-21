@@ -2,14 +2,23 @@ import crypto from "crypto";
 import jsforce, { Connection } from "jsforce";
 import { config } from "../config.js";
 
-const oauth2 = new jsforce.OAuth2({
-  clientId: config.salesforce.clientId,
-  clientSecret: config.salesforce.clientSecret,
-  redirectUri: config.salesforce.callbackUrl,
-  loginUrl: config.salesforce.loginUrl,
-});
+export type SFEnvironment = "production" | "sandbox";
 
-// PKCE helpers
+function getCredentials(env: SFEnvironment) {
+  if (env === "sandbox" && config.sandbox.clientId) {
+    return {
+      clientId: config.sandbox.clientId,
+      clientSecret: config.sandbox.clientSecret,
+      loginUrl: "https://test.salesforce.com",
+    };
+  }
+  return {
+    clientId: config.salesforce.clientId,
+    clientSecret: config.salesforce.clientSecret,
+    loginUrl: env === "sandbox" ? "https://test.salesforce.com" : config.salesforce.loginUrl,
+  };
+}
+
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString("base64url");
 }
@@ -18,24 +27,31 @@ function generateCodeChallenge(verifier: string): string {
   return crypto.createHash("sha256").update(verifier).digest("base64url");
 }
 
-export function getAuthorizationUrl(): {
+export function getAuthorizationUrl(env: SFEnvironment): {
   url: string;
   codeVerifier: string;
 } {
+  const creds = getCredentials(env);
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
-  const baseUrl = oauth2.getAuthorizationUrl({ scope: "api refresh_token" });
-  const url =
-    baseUrl +
-    `&code_challenge=${codeChallenge}&code_challenge_method=S256`;
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: creds.clientId,
+    redirect_uri: config.salesforce.callbackUrl,
+    scope: "api refresh_token",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+  });
 
+  const url = `${creds.loginUrl}/services/oauth2/authorize?${params}`;
   return { url, codeVerifier };
 }
 
 export async function handleCallback(
   code: string,
-  codeVerifier: string
+  codeVerifier: string,
+  env: SFEnvironment
 ): Promise<{
   accessToken: string;
   refreshToken: string;
@@ -44,18 +60,20 @@ export async function handleCallback(
   orgId: string;
   userName: string;
   userEmail: string;
+  environment: SFEnvironment;
 }> {
-  // Exchange authorization code for tokens with PKCE verifier
+  const creds = getCredentials(env);
+
   const params = new URLSearchParams({
     grant_type: "authorization_code",
     code,
-    client_id: config.salesforce.clientId,
-    client_secret: config.salesforce.clientSecret,
+    client_id: creds.clientId,
+    client_secret: creds.clientSecret,
     redirect_uri: config.salesforce.callbackUrl,
     code_verifier: codeVerifier,
   });
 
-  const tokenUrl = `${config.salesforce.loginUrl}/services/oauth2/token`;
+  const tokenUrl = `${creds.loginUrl}/services/oauth2/token`;
   const tokenRes = await fetch(tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -74,7 +92,6 @@ export async function handleCallback(
     id: string;
   };
 
-  // Get user identity
   const identityRes = await fetch(tokenData.id, {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
@@ -98,6 +115,7 @@ export async function handleCallback(
     orgId: identity.organization_id,
     userName: identity.display_name,
     userEmail: identity.email,
+    environment: env,
   };
 }
 
@@ -106,6 +124,13 @@ export function getConnection(session: {
   refreshToken: string;
   instanceUrl: string;
 }): Connection {
+  const oauth2 = new jsforce.OAuth2({
+    clientId: config.salesforce.clientId,
+    clientSecret: config.salesforce.clientSecret,
+    redirectUri: config.salesforce.callbackUrl,
+    loginUrl: config.salesforce.loginUrl,
+  });
+
   return new jsforce.Connection({
     oauth2,
     accessToken: session.accessToken,

@@ -88,7 +88,13 @@ export const api = {
 // Types
 export interface AuthStatus {
   authenticated: boolean;
-  user?: { name: string; email: string; orgId: string; instanceUrl: string };
+  user?: {
+    name: string;
+    email: string;
+    orgId: string;
+    instanceUrl: string;
+    environment: "production" | "sandbox";
+  };
 }
 
 export interface SFObject {
