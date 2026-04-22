@@ -27,7 +27,6 @@ public with sharing class PipeGenController {
         @AuraEnabled public Date     lastActivityDate;
         @AuraEnabled public String   lastActivitySubject;
         @AuraEnabled public DateTime lastGongCallDate;
-        @AuraEnabled public String   lastGongCallType;
         @AuraEnabled public Integer  contactCount;
     }
 
@@ -144,18 +143,18 @@ public with sharing class PipeGenController {
 
         // ADJUST: Target_Account__c is a checkbox field on Account marking it as a target.
         // Swap in your own filter if you use a different field (e.g. Account_Tier__c = 'Tier 1').
-        // ADJUST: Gong_Calls__r is the child relationship name from Account → gong_call__c.
-        //         Confirm in Setup → Object Manager → gong_call__c → Fields → Account lookup.
-        // ADJUST: Call_Date__c and Call_Type__c — match actual Gong field API names in your org.
+        // ADJUST: Gong__gong_calls__r is the child relationship name from Account → Gong__gong_call__c.
+        //         Confirm in Setup → Object Manager → Gong__gong_call__c → Fields → Account lookup → Child Relationship Name.
+        // ADJUST: Gong__Start_Time__c is the call date field in the standard Gong package — verify in your org.
         List<Account> accounts = [
             SELECT Id, Name, Type,
                 (SELECT ActivityDate, Subject
                  FROM ActivityHistories
                  WHERE ActivityDate != null
                  ORDER BY ActivityDate DESC LIMIT 1),
-                (SELECT Name, Call_Date__c, Call_Type__c
-                 FROM Gong_Calls__r
-                 ORDER BY Call_Date__c DESC LIMIT 1),
+                (SELECT Name, Gong__Start_Time__c
+                 FROM Gong__gong_calls__r
+                 ORDER BY Gong__Start_Time__c DESC LIMIT 1),
                 (SELECT Id FROM Contacts WHERE IsDeleted = false)
             FROM Account
             WHERE OwnerId = :userId
@@ -174,9 +173,8 @@ public with sharing class PipeGenController {
                 row.lastActivityDate    = a.ActivityHistories[0].ActivityDate;
                 row.lastActivitySubject = a.ActivityHistories[0].Subject;
             }
-            if (!a.Gong_Calls__r.isEmpty()) {
-                row.lastGongCallDate = a.Gong_Calls__r[0].Call_Date__c;
-                row.lastGongCallType = a.Gong_Calls__r[0].Call_Type__c;
+            if (!a.Gong__gong_calls__r.isEmpty()) {
+                row.lastGongCallDate = a.Gong__gong_calls__r[0].Gong__Start_Time__c;
             }
             rows.add(row);
         }
@@ -188,15 +186,16 @@ public with sharing class PipeGenController {
     private static List<OppRow> buildStage1Opps(Id userId) {
         List<OppRow> rows = new List<OppRow>();
 
-        // ADJUST: Gong_Calls__r on Opportunity — confirm relationship name for your Gong package.
+        // ADJUST: Gong__gong_calls__r on Opportunity — confirm relationship name for your Gong package.
+        // ADJUST: Gong__Start_Time__c is the call date field — verify in your org.
         List<Opportunity> opps = [
             SELECT Id, Name, Amount, CloseDate, AccountId, Account.Name,
                 (SELECT ActivityDate, Subject
                  FROM ActivityHistories
                  ORDER BY ActivityDate DESC LIMIT 1),
-                (SELECT Name, Call_Date__c
-                 FROM Gong_Calls__r
-                 ORDER BY Call_Date__c DESC LIMIT 1),
+                (SELECT Name, Gong__Start_Time__c
+                 FROM Gong__gong_calls__r
+                 ORDER BY Gong__Start_Time__c DESC LIMIT 1),
                 (SELECT Id FROM OpportunityContactRoles WHERE IsDeleted = false)
             FROM Opportunity
             WHERE OwnerId = :userId
@@ -240,8 +239,8 @@ public with sharing class PipeGenController {
 
             if (!o.ActivityHistories.isEmpty())
                 row.lastActivityDate = o.ActivityHistories[0].ActivityDate;
-            if (!o.Gong_Calls__r.isEmpty())
-                row.lastGongCallDate = o.Gong_Calls__r[0].Call_Date__c;
+            if (!o.Gong__gong_calls__r.isEmpty())
+                row.lastGongCallDate = o.Gong__gong_calls__r[0].Gong__Start_Time__c;
 
             rows.add(row);
         }

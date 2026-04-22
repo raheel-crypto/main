@@ -99,11 +99,6 @@
                                             </td>
                                             <td>
                                                 <span class={acct.gongClass}>{acct.lastGongCallDateFormatted}</span>
-                                                <template lwc:if={acct.lastGongCallType}>
-                                                    <div class="slds-m-top_xx-small">
-                                                        <lightning-badge label={acct.lastGongCallType}></lightning-badge>
-                                                    </div>
-                                                </template>
                                             </td>
                                             <td>
                                                 <span class={acct.threadClass} title="Contact count (multi-thread depth)">{acct.contactCount}</span>

@@ -63,9 +63,9 @@ export default class PipeGenRepDashboard extends LightningElement {
         const daysSinceGong     = a.lastGongCallDate ? this.daysSince(a.lastGongCallDate, today) : 999;
         return {
             ...a,
-            sfUrl:                    `/lightning/r/Account/${a.id}/view`,
-            lastActivityDateFormatted: a.lastActivityDate ? this.fmtDate(a.lastActivityDate) : '—',
-            lastGongCallDateFormatted: a.lastGongCallDate ? this.fmtDate(a.lastGongCallDate) : '—',
+            sfUrl:                     `/lightning/r/Account/${a.id}/view`,
+            lastActivityDateFormatted:  a.lastActivityDate ? this.fmtDate(a.lastActivityDate) : '—',
+            lastGongCallDateFormatted:  a.lastGongCallDate ? this.fmtDate(a.lastGongCallDate) : '—',
             activityClass: daysSinceActivity > 30 ? 'stale-text' : 'slds-text-body_small',
             gongClass:     daysSinceGong     > 30 ? 'stale-text' : 'slds-text-body_small',
             threadClass:   (a.contactCount || 0) >= 3
