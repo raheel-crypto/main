@@ -116,13 +116,16 @@ public with sharing class PipeGenController {
         // Progression Actual: opps owned by rep that entered Stage 3 this quarter
         Set<Id> stage3Ids = new Set<Id>();
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId
+            SELECT OpportunityId, NewValue
             FROM OpportunityFieldHistory
             WHERE Field = 'StageName'
-              AND NewValue = :STAGE_3
               AND CreatedDate >= :qStart
               AND CreatedDate <= :qEnd
-        ]) { stage3Ids.add(h.OpportunityId); }
+        ]) {
+            if (h.NewValue == STAGE_3) {
+                stage3Ids.add(h.OpportunityId);
+            }
+        }
 
         qt.progressionActual = 0;
         if (!stage3Ids.isEmpty()) {
@@ -143,18 +146,18 @@ public with sharing class PipeGenController {
 
         // ADJUST: Target_Account__c is a checkbox field on Account marking it as a target.
         // Swap in your own filter if you use a different field (e.g. Account_Tier__c = 'Tier 1').
-        // ADJUST: Gong__gong_calls__r is the child relationship name from Account → Gong__gong_call__c.
+        // ADJUST: Gong__Conversations__r is the child relationship name from Account → Gong__gong_call__c.
         //         Confirm in Setup → Object Manager → Gong__gong_call__c → Fields → Account lookup → Child Relationship Name.
-        // ADJUST: Gong__Start_Time__c is the call date field in the standard Gong package — verify in your org.
+        // ADJUST: Gong__Call_Start__c is the call date field in the standard Gong package — verify in your org.
         List<Account> accounts = [
             SELECT Id, Name, Type,
                 (SELECT ActivityDate, Subject
                  FROM ActivityHistories
                  WHERE ActivityDate != null
                  ORDER BY ActivityDate DESC LIMIT 1),
-                (SELECT Name, Gong__Start_Time__c
-                 FROM Gong__gong_calls__r
-                 ORDER BY Gong__Start_Time__c DESC LIMIT 1),
+                (SELECT Name, Gong__Call_Start__c
+                 FROM Gong__Conversations__r
+                 ORDER BY Gong__Call_Start__c DESC LIMIT 1),
                 (SELECT Id FROM Contacts WHERE IsDeleted = false)
             FROM Account
             WHERE OwnerId = :userId
@@ -173,8 +176,8 @@ public with sharing class PipeGenController {
                 row.lastActivityDate    = a.ActivityHistories[0].ActivityDate;
                 row.lastActivitySubject = a.ActivityHistories[0].Subject;
             }
-            if (!a.Gong__gong_calls__r.isEmpty()) {
-                row.lastGongCallDate = a.Gong__gong_calls__r[0].Gong__Start_Time__c;
+            if (!a.Gong__Conversations__r.isEmpty()) {
+                row.lastGongCallDate = a.Gong__Conversations__r[0].Gong__Call_Start__c;
             }
             rows.add(row);
         }
@@ -186,16 +189,16 @@ public with sharing class PipeGenController {
     private static List<OppRow> buildStage1Opps(Id userId) {
         List<OppRow> rows = new List<OppRow>();
 
-        // ADJUST: Gong__gong_calls__r on Opportunity — confirm relationship name for your Gong package.
-        // ADJUST: Gong__Start_Time__c is the call date field — verify in your org.
+        // ADJUST: Gong__Conversations__r on Opportunity — confirm relationship name for your Gong package.
+        // ADJUST: Gong__Call_Start__c is the call date field — verify in your org.
         List<Opportunity> opps = [
             SELECT Id, Name, Amount, CloseDate, AccountId, Account.Name,
                 (SELECT ActivityDate, Subject
                  FROM ActivityHistories
                  ORDER BY ActivityDate DESC LIMIT 1),
-                (SELECT Name, Gong__Start_Time__c
-                 FROM Gong__gong_calls__r
-                 ORDER BY Gong__Start_Time__c DESC LIMIT 1),
+                (SELECT Name, Gong__Call_Start__c
+                 FROM Gong__Conversations__r
+                 ORDER BY Gong__Call_Start__c DESC LIMIT 1),
                 (SELECT Id FROM OpportunityContactRoles WHERE IsDeleted = false)
             FROM Opportunity
             WHERE OwnerId = :userId
@@ -210,14 +213,13 @@ public with sharing class PipeGenController {
         Set<Id> oppIds = new Map<Id, Opportunity>(opps).keySet();
         Map<Id, DateTime> stageEntry = new Map<Id, DateTime>();
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId, CreatedDate
+            SELECT OpportunityId, CreatedDate, NewValue
             FROM OpportunityFieldHistory
             WHERE Field = 'StageName'
-              AND NewValue = :STAGE_1
               AND OpportunityId IN :oppIds
             ORDER BY CreatedDate DESC
         ]) {
-            if (!stageEntry.containsKey(h.OpportunityId)) {
+            if (h.NewValue == STAGE_1 && !stageEntry.containsKey(h.OpportunityId)) {
                 stageEntry.put(h.OpportunityId, h.CreatedDate);
             }
         }
@@ -239,8 +241,8 @@ public with sharing class PipeGenController {
 
             if (!o.ActivityHistories.isEmpty())
                 row.lastActivityDate = o.ActivityHistories[0].ActivityDate;
-            if (!o.Gong__gong_calls__r.isEmpty())
-                row.lastGongCallDate = o.Gong__gong_calls__r[0].Gong__Start_Time__c;
+            if (!o.Gong__Conversations__r.isEmpty())
+                row.lastGongCallDate = o.Gong__Conversations__r[0].Gong__Call_Start__c;
 
             rows.add(row);
         }
@@ -320,10 +322,12 @@ public with sharing class PipeGenController {
     // ─── Commit Mutations ────────────────────────────────────────────────────────
 
     @AuraEnabled
-    public static Weekly_Commit__c saveCommit(Weekly_Commit__c commit) {
-        commit.Rep__c             = UserInfo.getUserId();
-        commit.Week_Start_Date__c = getWeekStart(Date.today());
-        upsert commit;
+    public static Weekly_Commit__c saveCommit(Weekly_Commit__c commitRecord) {
+        commitRecord.Rep__c             = UserInfo.getUserId();
+        commitRecord.Week_Start_Date__c = getWeekStart(Date.today());
+
+        upsert commitRecord;
+
         // Re-query to return lookup name fields
         return [
             SELECT Id, Motion_Type__c, Commit_Type__c, Commit_Description__c,
@@ -331,7 +335,7 @@ public with sharing class PipeGenController {
                    Target_Opportunity__c, Target_Opportunity__r.Name,
                    Committed_Count__c, Actual_Count__c,
                    Completion_Status__c, Gong_Verified__c, Notes__c
-            FROM Weekly_Commit__c WHERE Id = :commit.Id
+            FROM Weekly_Commit__c WHERE Id = :commitRecord.Id
         ];
     }
 
@@ -343,6 +347,7 @@ public with sharing class PipeGenController {
     // ─── Helpers ─────────────────────────────────────────────────────────────────
 
     // Returns the Monday of the week containing d
+    @TestVisible
     private static Date getWeekStart(Date d) {
         Integer dow = Math.mod(Date.newInstance(1900, 1, 7).daysBetween(d), 7);
         return d.addDays(-dow);

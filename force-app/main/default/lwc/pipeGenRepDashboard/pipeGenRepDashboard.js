@@ -233,7 +233,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         };
 
         try {
-            const saved = await saveCommit({ commit: record });
+            const saved = await saveCommit({ commitRecord: record });
             this.data = {
                 ...this.data,
                 thisWeekCommits: [...(this.data.thisWeekCommits || []), saved]
