@@ -66,6 +66,38 @@ export const api = {
       body: JSON.stringify({ messages }),
     }),
 
+  // Bulk Match
+  uploadBulkCSV: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch("/api/bulk/upload", {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message);
+      }
+      return res.json() as Promise<BulkUploadResult>;
+    });
+  },
+  getBulkObjects: () => request<{ name: string; label: string; custom: boolean }[]>("/api/bulk/objects"),
+  getBulkFields: (object: string) =>
+    request<{ matchFields: BulkField[]; writableFields: BulkField[] }>(`/api/bulk/fields/${object}`),
+  startBulkMatch: (jobId: string, objectName: string, csvColumn: string, sfField: string) =>
+    request<{ status: string }>("/api/bulk/match", {
+      method: "POST",
+      body: JSON.stringify({ jobId, objectName, csvColumn, sfField }),
+    }),
+  getBulkJobStatus: (jobId: string) => request<BulkJobStatus>(`/api/bulk/jobs/${jobId}/status`),
+  getBulkJobResults: (jobId: string) => request<BulkJobResults>(`/api/bulk/jobs/${jobId}/results`),
+  startBulkUpdate: (jobId: string, objectName: string, fieldMapping: { csvColumn: string; sfField: string }[]) =>
+    request<{ status: string }>("/api/bulk/update", {
+      method: "POST",
+      body: JSON.stringify({ jobId, objectName, fieldMapping }),
+    }),
+
   // MCP auth status
   getMcpAuthStatus: () => request<{ configured: boolean; connected: boolean }>("/auth/mcp-status"),
 
@@ -330,6 +362,39 @@ export interface ArchitectMessage {
   role: "assistant";
   content: string;
   toolCalls?: { name: string; input: any; result: string }[];
+}
+
+export interface BulkUploadResult {
+  jobId: string;
+  headers: string[];
+  preview: Record<string, string>[];
+  rowCount: number;
+}
+
+export interface BulkField {
+  name: string;
+  label: string;
+  type: string;
+}
+
+export interface BulkJobStatus {
+  status: string;
+  progress: number;
+  total: number;
+  matched: number;
+  unmatched: number;
+  duplicates: number;
+  updateSuccessCount: number;
+  updateFailedCount: number;
+  error: string | null;
+}
+
+export interface BulkJobResults {
+  status: string;
+  matched: { csvRow: Record<string, string>; sfId: string; sfName: string }[];
+  unmatched: Record<string, string>[];
+  duplicates: { csvRow: Record<string, string>; sfIds: string[]; sfNames: string[] }[];
+  updateFailures: { id: string; error: string }[];
 }
 
 export interface SFMcpTool {

@@ -11,11 +11,14 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@types/multer": "^2.1.0",
     "cors": "^2.8.5",
+    "csv-parse": "^6.2.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
-    "jsforce": "^3.6.3"
+    "jsforce": "^3.6.3",
+    "multer": "^2.1.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

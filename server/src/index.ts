@@ -11,6 +11,7 @@ import apexRoutes from "./routes/apex.js";
 import userRoutes from "./routes/users.js";
 import cleanupRoutes from "./routes/cleanup.js";
 import sfMcpRoutes from "./routes/sfmcp.js";
+import bulkRoutes from "./routes/bulk.js";
 
 const app = express();
 
@@ -21,7 +22,7 @@ app.use(
     credentials: true,
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
 app.use(
   session({
     secret: config.sessionSecret,
@@ -44,6 +45,7 @@ app.use("/api/apex", requireAuth, apexRoutes);
 app.use("/api/users", requireAuth, userRoutes);
 app.use("/api/cleanup", requireAuth, cleanupRoutes);
 app.use("/api/sf-mcp", requireAuth, sfMcpRoutes);
+app.use("/api/bulk", requireAuth, bulkRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {
