@@ -623,6 +623,9 @@ public with sharing class PipeGenController {
             Integer oldActual = c.Actual_Count__c != null ? c.Actual_Count__c.intValue() : -1;
             if (newActual == oldActual && newStatus == c.Completion_Status__c) continue;
 
+            // Never auto-downgrade from Completed — preserves manually-set or prior completions
+            if ('Completed'.equals(c.Completion_Status__c) && !'Completed'.equals(newStatus)) continue;
+
             c.Actual_Count__c      = newActual;
             c.Completion_Status__c = newStatus;
             toUpdate.add(new Weekly_Commit__c(
