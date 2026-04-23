@@ -5,6 +5,7 @@ import saveCommit               from '@salesforce/apex/PipeGenController.saveCom
 import deleteCommit             from '@salesforce/apex/PipeGenController.deleteCommit';
 import getAccountsForSelection  from '@salesforce/apex/PipeGenController.getAccountsForSelection';
 import updateTargetAccounts     from '@salesforce/apex/PipeGenController.updateTargetAccounts';
+import markCommitComplete       from '@salesforce/apex/PipeGenController.markCommitComplete';
 
 const CURRENCY  = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
@@ -62,8 +63,26 @@ export default class PipeGenRepDashboard extends LightningElement {
         const today = new Date();
         return {
             ...raw,
-            targetAccounts: (raw.targetAccounts || []).map(a => this.enrichAccount(a, today)),
-            inFlightOpps:   (raw.inFlightOpps   || []).map(o => this.enrichOpp(o))
+            targetAccounts:  (raw.targetAccounts  || []).map(a => this.enrichAccount(a, today)),
+            inFlightOpps:    (raw.inFlightOpps    || []).map(o => this.enrichOpp(o)),
+            thisWeekCommits: (raw.thisWeekCommits || []).map(c => this.enrichCommit(c))
+        };
+    }
+
+    enrichCommit(c) {
+        const actual    = c.Actual_Count__c    || 0;
+        const committed = c.Committed_Count__c || 1;
+        const status    = c.Completion_Status__c || 'Not Started';
+        const isMEDDPICC = c.Commit_Type__c === 'MEDDPICC Complete';
+        return {
+            ...c,
+            isMEDDPICC,
+            isCompleted:    status === 'Completed',
+            progressLabel:  `${actual} / ${committed}`,
+            statusDotClass: status === 'Completed' ? 'status-dot status-dot--complete'
+                          : status === 'Partial'   ? 'status-dot status-dot--partial'
+                          :                          'status-dot status-dot--pending',
+            showMarkDone:   isMEDDPICC && status !== 'Completed'
         };
     }
 
@@ -281,7 +300,7 @@ export default class PipeGenRepDashboard extends LightningElement {
 
         try {
             const saved = await saveCommit({ commitRecord: record });
-            this.data = { ...this.data, thisWeekCommits: [...(this.data.thisWeekCommits || []), saved] };
+            this.data = { ...this.data, thisWeekCommits: [...(this.data.thisWeekCommits || []), this.enrichCommit(saved)] };
             this.closeCommitForm();
             this.toast('Commit Saved', 'Your weekly commit has been recorded.', 'success');
         } catch (e) {
@@ -299,6 +318,16 @@ export default class PipeGenRepDashboard extends LightningElement {
             this.toast('Removed', 'Commit deleted.', 'success');
         } catch (err) {
             this.toast('Error', 'Could not delete commit.', 'error');
+        }
+    }
+
+    async handleMarkMEDDPICCComplete(e) {
+        const id = e.currentTarget.dataset.id;
+        try {
+            await markCommitComplete({ commitId: id });
+            await this.loadData();
+        } catch (err) {
+            this.toast('Error', 'Could not mark commit complete.', 'error');
         }
     }
 

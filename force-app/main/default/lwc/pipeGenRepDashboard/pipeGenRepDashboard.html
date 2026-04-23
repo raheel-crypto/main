@@ -234,16 +234,19 @@
                                     <template lwc:if={hasNetNewCommits}>
                                         <template for:each={netNewCommits} for:item="c">
                                             <div key={c.Id} class="commit-row slds-p-around_x-small slds-m-bottom_xx-small">
-                                                <div class="slds-grid slds-grid_align-spread">
+                                                <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-start">
                                                     <div class="slds-col">
-                                                        <lightning-badge label={c.Commit_Type__c}></lightning-badge>
-                                                        <span class="slds-text-body_small slds-m-left_x-small">{c.Commit_Description__c}</span>
+                                                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                            <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
+                                                            <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
+                                                            <span class="slds-text-body_small slds-m-left_x-small commit-progress">{c.progressLabel}</span>
+                                                        </div>
+                                                        <span class="slds-text-body_small">{c.Commit_Description__c}</span>
                                                         <template lwc:if={c.Target_Account__r}>
                                                             <div class="slds-text-body_small metric-light slds-m-top_xx-small">&#x1F3AF; {c.Target_Account__r.Name}</div>
                                                         </template>
-                                                        <div class="slds-text-body_small metric-light">Count: {c.Committed_Count__c}</div>
                                                     </div>
-                                                    <div class="slds-no-flex">
+                                                    <div class="slds-no-flex slds-grid slds-grid_vertical-align-center">
                                                         <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
                                                 </div>
@@ -264,16 +267,24 @@
                                     <template lwc:if={hasProgressionCommits}>
                                         <template for:each={progressionCommits} for:item="c">
                                             <div key={c.Id} class="commit-row slds-p-around_x-small slds-m-bottom_xx-small">
-                                                <div class="slds-grid slds-grid_align-spread">
+                                                <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-start">
                                                     <div class="slds-col">
-                                                        <lightning-badge label={c.Commit_Type__c}></lightning-badge>
-                                                        <span class="slds-text-body_small slds-m-left_x-small">{c.Commit_Description__c}</span>
+                                                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                            <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
+                                                            <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
+                                                            <span class="slds-text-body_small slds-m-left_x-small commit-progress">{c.progressLabel}</span>
+                                                        </div>
+                                                        <span class="slds-text-body_small">{c.Commit_Description__c}</span>
                                                         <template lwc:if={c.Target_Opportunity__r}>
                                                             <div class="slds-text-body_small metric-light slds-m-top_xx-small">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
                                                         </template>
-                                                        <div class="slds-text-body_small metric-light">Count: {c.Committed_Count__c}</div>
+                                                        <template lwc:if={c.showMarkDone}>
+                                                            <div class="slds-m-top_xx-small">
+                                                                <lightning-button label="Mark Done" size="x-small" variant="success" data-id={c.Id} onclick={handleMarkMEDDPICCComplete}></lightning-button>
+                                                            </div>
+                                                        </template>
                                                     </div>
-                                                    <div class="slds-no-flex">
+                                                    <div class="slds-no-flex slds-grid slds-grid_vertical-align-center">
                                                         <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
                                                 </div>

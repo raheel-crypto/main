@@ -83,6 +83,37 @@ public with sharing class PipeGenController {
         STAGE_2 => 14
     };
 
+    // ─── Nektar Activity Verification ────────────────────────────────────────────
+
+    // Maps Commit_Type__c → Meeting_Type__c values on Event that verify it.
+    // null value = any meeting type qualifies (used for Multi-Thread).
+    private static final Map<String, Set<String>> COMMIT_MEETING_MAP = new Map<String, Set<String>>{
+        'First Meeting Booked'            => new Set<String>{ 'First Meeting' },
+        'Multi-Thread Intro'              => new Set<String>{ 'First Meeting', 'Discovery', 'Prospect Meeting' },
+        'Champion-Led Referral'           => new Set<String>{ 'First Meeting' },
+        'Inbound Converted'               => new Set<String>{ 'Discovery', 'Prospect Meeting' },
+        'Discovery Call - Economic Buyer' => new Set<String>{ 'Discovery' },
+        'Technical Validation'            => new Set<String>{ 'POV Validation & Alignment', 'POV Readout' },
+        'Exec Alignment'                  => new Set<String>{ 'Deal Progression' },
+        'Multi-Thread'                    => null
+    };
+
+    private static final String COMMIT_EXEC_OUTREACH = 'Exec Outreach Sequence';
+    private static final String COMMIT_MEDDPICC      = 'MEDDPICC Complete';
+
+    // Nektar DM persona title keywords — longest/most specific phrases first
+    // so a contains() check on "Managing Director" fires before the broader "Director"
+    private static final List<String> DM_TITLE_KEYWORDS = new List<String>{
+        'Managing Director Investment Banking', 'Director Investment Banking',
+        'Senior Managing Director', 'Executive Director', 'Investment Director',
+        'Managing Director', 'General Partner', 'Portfolio Manager',
+        'Head of M&A', 'Head of Investments', 'Director of Research',
+        'Head of Equity Research', 'Head of Credit', 'Head of Private Equity',
+        'Head of Macro', 'Head of Quantitative Research', 'Head of Fixed Income',
+        'Head of Trading', 'Head of Capital Markets',
+        'Partner', 'Principal', 'Director', 'MD'
+    };
+
     // ─── Main Entry Point ────────────────────────────────────────────────────────
 
     @AuraEnabled(cacheable=false)
@@ -283,7 +314,8 @@ public with sharing class PipeGenController {
 
     private static List<Weekly_Commit__c> buildThisWeekCommits(Id userId) {
         Date weekStart = getWeekStart(Date.today());
-        return [
+        Date weekEnd   = weekStart.addDays(6);
+        List<Weekly_Commit__c> commits = [
             SELECT Id, Motion_Type__c, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
                    Target_Opportunity__c, Target_Opportunity__r.Name,
@@ -294,6 +326,7 @@ public with sharing class PipeGenController {
               AND Week_Start_Date__c = :weekStart
             ORDER BY Motion_Type__c ASC, CreatedDate ASC
         ];
+        return verifyAndPersistCommits(commits, userId, weekStart, weekEnd);
     }
 
     // ─── Last Week's Scorecard ───────────────────────────────────────────────────
@@ -303,6 +336,18 @@ public with sharing class PipeGenController {
         Date lastWeekStart = getWeekStart(Date.today()).addDays(-7);
         Date lastWeekEnd   = lastWeekStart.addDays(6);
 
+        // Verify last week's commits against actual activity before scoring
+        List<Weekly_Commit__c> lastWeekCommits = [
+            SELECT Id, Motion_Type__c, Commit_Type__c, Completion_Status__c,
+                   Committed_Count__c, Actual_Count__c,
+                   Target_Account__c, Target_Opportunity__c,
+                   Target_Opportunity__r.StageName
+            FROM Weekly_Commit__c
+            WHERE Rep__c = :userId
+              AND Week_Start_Date__c = :lastWeekStart
+        ];
+        lastWeekCommits = verifyAndPersistCommits(lastWeekCommits, userId, lastWeekStart, lastWeekEnd);
+
         sc.nnCommitsTotal       = 0;
         sc.nnCommitsCompleted   = 0;
         sc.progCommitsTotal     = 0;
@@ -310,14 +355,7 @@ public with sharing class PipeGenController {
         sc.progOppsAdvanced     = 0;
         sc.progOppsStalled      = 0;
 
-        for (Weekly_Commit__c c : [
-            SELECT Motion_Type__c, Completion_Status__c,
-                   Committed_Count__c, Actual_Count__c,
-                   Target_Opportunity__c, Target_Opportunity__r.StageName
-            FROM Weekly_Commit__c
-            WHERE Rep__c = :userId
-              AND Week_Start_Date__c = :lastWeekStart
-        ]) {
+        for (Weekly_Commit__c c : lastWeekCommits) {
             if (c.Motion_Type__c == 'Net New') {
                 sc.nnCommitsTotal++;
                 if (c.Completion_Status__c == 'Completed') sc.nnCommitsCompleted++;
@@ -368,6 +406,166 @@ public with sharing class PipeGenController {
     @AuraEnabled
     public static void deleteCommit(Id commitId) {
         delete new Weekly_Commit__c(Id = commitId);
+    }
+
+    // Sets Actual_Count__c to the committed amount and marks complete — MEDDPICC manual override
+    @AuraEnabled
+    public static void markCommitComplete(Id commitId) {
+        Weekly_Commit__c c = [
+            SELECT Id, Committed_Count__c
+            FROM Weekly_Commit__c
+            WHERE Id = :commitId
+            LIMIT 1
+        ];
+        c.Actual_Count__c      = c.Committed_Count__c != null ? c.Committed_Count__c.intValue() : 1;
+        c.Completion_Status__c = 'Completed';
+        update c;
+    }
+
+    // ─── Activity Verification ───────────────────────────────────────────────────
+
+    // Matches each commit to Nektar-enriched Events (and Tasks for Exec Outreach),
+    // updates Actual_Count__c and Completion_Status__c, persists changes, returns commits.
+    private static List<Weekly_Commit__c> verifyAndPersistCommits(
+            List<Weekly_Commit__c> commits, Id userId, Date weekStart, Date weekEnd) {
+
+        if (commits.isEmpty()) return commits;
+
+        Set<Id> targetAcctIds = new Set<Id>();
+        Set<Id> targetOppIds  = new Set<Id>();
+        Set<Id> execAcctIds   = new Set<Id>();
+
+        for (Weekly_Commit__c c : commits) {
+            if (c.Commit_Type__c == COMMIT_MEDDPICC) continue;
+            if (c.Target_Account__c    != null) targetAcctIds.add(c.Target_Account__c);
+            if (c.Target_Opportunity__c != null) targetOppIds.add(c.Target_Opportunity__c);
+            if (c.Commit_Type__c == COMMIT_EXEC_OUTREACH && c.Target_Account__c != null)
+                execAcctIds.add(c.Target_Account__c);
+        }
+
+        // Events: Net New commits match on AccountId; Progression commits match on WhatId (= Opp)
+        Map<Id, List<String>> meetingsByAcct = new Map<Id, List<String>>();
+        Map<Id, List<String>> meetingsByOpp  = new Map<Id, List<String>>();
+
+        if (!targetAcctIds.isEmpty() || !targetOppIds.isEmpty()) {
+            for (Event e : [
+                SELECT Meeting_Type__c, AccountId, WhatId
+                FROM Event
+                WHERE OwnerId = :userId
+                  AND ActivityDate >= :weekStart
+                  AND ActivityDate <= :weekEnd
+                  AND Meeting_Type__c != null
+                  AND (AccountId IN :targetAcctIds OR WhatId IN :targetOppIds)
+            ]) {
+                if (e.AccountId != null && targetAcctIds.contains(e.AccountId)) {
+                    if (!meetingsByAcct.containsKey(e.AccountId))
+                        meetingsByAcct.put(e.AccountId, new List<String>());
+                    meetingsByAcct.get(e.AccountId).add(e.Meeting_Type__c);
+                }
+                if (e.WhatId != null && targetOppIds.contains(e.WhatId)) {
+                    if (!meetingsByOpp.containsKey(e.WhatId))
+                        meetingsByOpp.put(e.WhatId, new List<String>());
+                    meetingsByOpp.get(e.WhatId).add(e.Meeting_Type__c);
+                }
+            }
+        }
+
+        // Tasks: Exec Outreach — contact Title must match DM persona list
+        Map<Id, Integer> execHitsByAcct = new Map<Id, Integer>();
+        if (!execAcctIds.isEmpty()) {
+            List<Task> tasks = [
+                SELECT WhoId, AccountId
+                FROM Task
+                WHERE OwnerId = :userId
+                  AND ActivityDate >= :weekStart
+                  AND ActivityDate <= :weekEnd
+                  AND AccountId IN :execAcctIds
+                  AND WhoId != null
+            ];
+            Set<Id> contactIds = new Set<Id>();
+            for (Task t : tasks) {
+                if (String.valueOf(t.WhoId).startsWith('003')) contactIds.add(t.WhoId);
+            }
+            Map<Id, String> titleByContact = new Map<Id, String>();
+            for (Contact c : [
+                SELECT Id, Title FROM Contact WHERE Id IN :contactIds AND Title != null
+            ]) { titleByContact.put(c.Id, c.Title); }
+
+            for (Task t : tasks) {
+                if (!isDmTitle(titleByContact.get(t.WhoId))) continue;
+                Integer prev = execHitsByAcct.get(t.AccountId);
+                execHitsByAcct.put(t.AccountId, prev != null ? prev + 1 : 1);
+            }
+        }
+
+        // Compute new actuals and derive status; only DML records that actually changed
+        List<Weekly_Commit__c> toUpdate = new List<Weekly_Commit__c>();
+
+        for (Weekly_Commit__c c : commits) {
+            Integer newActual;
+            String  newStatus;
+
+            if (c.Commit_Type__c == COMMIT_MEDDPICC) {
+                newActual = c.Actual_Count__c != null ? c.Actual_Count__c.intValue() : 0;
+                newStatus = deriveStatus(newActual, c.Committed_Count__c);
+                if (newStatus == c.Completion_Status__c) continue;
+                c.Completion_Status__c = newStatus;
+                toUpdate.add(new Weekly_Commit__c(Id = c.Id, Completion_Status__c = newStatus));
+                continue;
+            }
+
+            if (c.Commit_Type__c == COMMIT_EXEC_OUTREACH && c.Target_Account__c != null) {
+                Integer h = execHitsByAcct.get(c.Target_Account__c);
+                newActual = h != null ? h : 0;
+
+            } else if (c.Motion_Type__c == 'Net New' && c.Target_Account__c != null) {
+                Set<String> mapped   = COMMIT_MEETING_MAP.get(c.Commit_Type__c);
+                List<String> meetings = meetingsByAcct.get(c.Target_Account__c);
+                newActual = 0;
+                if (meetings != null && mapped != null)
+                    for (String mt : meetings) if (mapped.contains(mt)) newActual++;
+
+            } else if (c.Motion_Type__c == 'Progression' && c.Target_Opportunity__c != null) {
+                Set<String> mapped    = COMMIT_MEETING_MAP.get(c.Commit_Type__c);
+                List<String> meetings = meetingsByOpp.get(c.Target_Opportunity__c);
+                newActual = 0;
+                if (meetings != null)
+                    for (String mt : meetings)
+                        if (mapped == null || mapped.contains(mt)) newActual++;
+
+            } else {
+                continue; // no target linked — nothing to verify
+            }
+
+            newStatus = deriveStatus(newActual, c.Committed_Count__c);
+            Integer oldActual = c.Actual_Count__c != null ? c.Actual_Count__c.intValue() : -1;
+            if (newActual == oldActual && newStatus == c.Completion_Status__c) continue;
+
+            c.Actual_Count__c      = newActual;
+            c.Completion_Status__c = newStatus;
+            toUpdate.add(new Weekly_Commit__c(
+                Id = c.Id, Actual_Count__c = newActual, Completion_Status__c = newStatus
+            ));
+        }
+
+        if (!toUpdate.isEmpty()) update toUpdate;
+        return commits;
+    }
+
+    private static String deriveStatus(Integer actual, Decimal committed) {
+        Integer target = committed != null ? committed.intValue() : 1;
+        if (actual >= target) return 'Completed';
+        if (actual > 0)       return 'Partial';
+        return 'Not Started';
+    }
+
+    private static Boolean isDmTitle(String title) {
+        if (String.isBlank(title)) return false;
+        String tl = title.toLowerCase();
+        for (String kw : DM_TITLE_KEYWORDS) {
+            if (tl.contains(kw.toLowerCase())) return true;
+        }
+        return false;
     }
 
     // ─── Account Selection ───────────────────────────────────────────────────────
