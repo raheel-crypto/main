@@ -768,4 +768,230 @@ private class PipeGenControllerTest {
             Test.stopTest();
         }
     }
+
+    // ─── markCommitComplete ──────────────────────────────────────────────────
+
+    @isTest
+    static void testMarkCommitComplete_setsActualAndStatus() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Weekly_Commit__c c = new Weekly_Commit__c(
+                Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+                Motion_Type__c = 'Progression', Commit_Type__c = 'MEDDPICC Complete',
+                Commit_Description__c = 'Complete MEDDPICC', Committed_Count__c = 2,
+                Completion_Status__c = 'Not Started'
+            );
+            insert c;
+
+            Test.startTest();
+            PipeGenController.markCommitComplete(c.Id);
+            Test.stopTest();
+
+            Weekly_Commit__c updated = [SELECT Actual_Count__c, Completion_Status__c FROM Weekly_Commit__c WHERE Id = :c.Id];
+            System.assertEquals(2,           updated.Actual_Count__c,     'Actual should equal Committed_Count__c');
+            System.assertEquals('Completed', updated.Completion_Status__c, 'Status should be Completed');
+        }
+    }
+
+    // ─── verifyAndPersistCommits — Net New event matching ────────────────────
+
+    @isTest
+    static void testVerifyCommits_netNewEventMatchCompletesCommit() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'First Meeting Co');
+            Weekly_Commit__c c = new Weekly_Commit__c(
+                Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+                Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+                Commit_Description__c = 'Book first meeting', Committed_Count__c = 1,
+                Target_Account__c = a.Id, Completion_Status__c = 'Not Started'
+            );
+            insert c;
+
+            insert new Event(
+                OwnerId = rep.Id, WhatId = a.Id, Subject = 'First Meeting',
+                StartDateTime = DateTime.now(), EndDateTime = DateTime.now().addHours(1),
+                Meeting_Type__c = 'First Meeting'
+            );
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            Weekly_Commit__c updated = [SELECT Actual_Count__c, Completion_Status__c FROM Weekly_Commit__c WHERE Id = :c.Id];
+            System.assertEquals('Completed', updated.Completion_Status__c, 'Matching event should complete the commit');
+            System.assertEquals(1,           updated.Actual_Count__c);
+        }
+    }
+
+    @isTest
+    static void testVerifyCommits_partialMatchWhenCountBelowCommitted() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Partial Co');
+            Weekly_Commit__c c = new Weekly_Commit__c(
+                Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+                Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+                Commit_Description__c = 'Book two meetings', Committed_Count__c = 2,
+                Target_Account__c = a.Id, Completion_Status__c = 'Not Started'
+            );
+            insert c;
+
+            // Only one event — should be Partial, not Completed
+            insert new Event(
+                OwnerId = rep.Id, WhatId = a.Id, Subject = 'First Meeting',
+                StartDateTime = DateTime.now(), EndDateTime = DateTime.now().addHours(1),
+                Meeting_Type__c = 'First Meeting'
+            );
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            Weekly_Commit__c updated = [SELECT Actual_Count__c, Completion_Status__c FROM Weekly_Commit__c WHERE Id = :c.Id];
+            System.assertEquals('Partial', updated.Completion_Status__c, 'One event against committed=2 should be Partial');
+            System.assertEquals(1,         updated.Actual_Count__c);
+        }
+    }
+
+    // ─── verifyAndPersistCommits — Progression event matching ────────────────
+
+    @isTest
+    static void testVerifyCommits_progressionEventMatchCompletesCommit() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Prog Event Co');
+            Opportunity o = makeOpp(rep.Id, a.Id, 'Prog Deal', 'Stage 1', 50000);
+            Weekly_Commit__c c = new Weekly_Commit__c(
+                Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+                Motion_Type__c = 'Progression', Commit_Type__c = 'Discovery Call - Economic Buyer',
+                Commit_Description__c = 'Run discovery', Committed_Count__c = 1,
+                Target_Opportunity__c = o.Id, Completion_Status__c = 'Not Started'
+            );
+            insert c;
+
+            insert new Event(
+                OwnerId = rep.Id, WhatId = o.Id, Subject = 'Discovery Call',
+                StartDateTime = DateTime.now(), EndDateTime = DateTime.now().addHours(1),
+                Meeting_Type__c = 'Discovery'
+            );
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            Weekly_Commit__c updated = [SELECT Actual_Count__c, Completion_Status__c FROM Weekly_Commit__c WHERE Id = :c.Id];
+            System.assertEquals('Completed', updated.Completion_Status__c, 'Discovery event on opp should complete progression commit');
+            System.assertEquals(1,           updated.Actual_Count__c);
+        }
+    }
+
+    // ─── verifyAndPersistCommits — Exec Outreach task + DM title ─────────────
+
+    @isTest
+    static void testVerifyCommits_execOutreachDmTitleCompletes() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Exec Co');
+            Contact dm = new Contact(LastName = 'Smith', AccountId = a.Id, Title = 'Managing Director');
+            insert dm;
+
+            Weekly_Commit__c c = new Weekly_Commit__c(
+                Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+                Motion_Type__c = 'Net New', Commit_Type__c = 'Exec Outreach Sequence',
+                Commit_Description__c = 'Reach MD', Committed_Count__c = 1,
+                Target_Account__c = a.Id, Completion_Status__c = 'Not Started'
+            );
+            insert c;
+
+            insert new Task(
+                OwnerId = rep.Id, WhatId = a.Id, WhoId = dm.Id,
+                Subject = 'Email to MD', ActivityDate = Date.today(), Status = 'Completed'
+            );
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            Weekly_Commit__c updated = [SELECT Actual_Count__c, Completion_Status__c FROM Weekly_Commit__c WHERE Id = :c.Id];
+            System.assertEquals('Completed', updated.Completion_Status__c, 'Task to DM-title contact should complete exec outreach');
+            System.assertEquals(1,           updated.Actual_Count__c);
+        }
+    }
+
+    @isTest
+    static void testVerifyCommits_execOutreachNonDmTitleNoMatch() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Non-DM Co');
+            Contact nonDm = new Contact(LastName = 'Jones', AccountId = a.Id, Title = 'Sales Development Rep');
+            insert nonDm;
+
+            Weekly_Commit__c c = new Weekly_Commit__c(
+                Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+                Motion_Type__c = 'Net New', Commit_Type__c = 'Exec Outreach Sequence',
+                Commit_Description__c = 'Reach exec', Committed_Count__c = 1,
+                Target_Account__c = a.Id, Completion_Status__c = 'Not Started'
+            );
+            insert c;
+
+            insert new Task(
+                OwnerId = rep.Id, WhatId = a.Id, WhoId = nonDm.Id,
+                Subject = 'Email to SDR', ActivityDate = Date.today(), Status = 'Completed'
+            );
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            Weekly_Commit__c updated = [SELECT Completion_Status__c FROM Weekly_Commit__c WHERE Id = :c.Id];
+            System.assertNotEquals('Completed', updated.Completion_Status__c, 'Non-DM title should not verify exec outreach');
+        }
+    }
+
+    // ─── verifyAndPersistCommits — MEDDPICC manual path ──────────────────────
+
+    @isTest
+    static void testVerifyCommits_meddpiccActualCountDrivesStatus() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Weekly_Commit__c c = new Weekly_Commit__c(
+                Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+                Motion_Type__c = 'Progression', Commit_Type__c = 'MEDDPICC Complete',
+                Commit_Description__c = 'MEDDPICC fields', Committed_Count__c = 1,
+                Actual_Count__c = 1, Completion_Status__c = 'Not Started'
+            );
+            insert c;
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            Weekly_Commit__c updated = [SELECT Completion_Status__c FROM Weekly_Commit__c WHERE Id = :c.Id];
+            System.assertEquals('Completed', updated.Completion_Status__c, 'Actual >= Committed should auto-complete MEDDPICC via verify');
+        }
+    }
+
+    // ─── buildTargetAccounts — Event-based activity date ─────────────────────
+
+    @isTest
+    static void testTargetAccounts_lastActivityDatePopulatedFromEvent() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Activity Co');
+
+            insert new Event(
+                OwnerId = rep.Id, WhatId = a.Id, Subject = 'Account Review',
+                StartDateTime = DateTime.now(), EndDateTime = DateTime.now().addHours(1)
+            );
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(1, d.targetAccounts.size());
+            System.assertNotEquals(null, d.targetAccounts[0].lastActivityDate,    'Event should populate lastActivityDate');
+            System.assertNotEquals(null, d.targetAccounts[0].lastActivitySubject, 'Event subject should populate lastActivitySubject');
+        }
+    }
 }
