@@ -237,6 +237,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     get hasPendingChanges()  { return this.pendingChanges.length > 0; }
     get pendingCount()       { return this.pendingChanges.length; }
     get pendingLabel()       { return `Save ${this.pendingCount} change${this.pendingCount === 1 ? '' : 's'}`; }
+    get pendingCountLabel()  { return `${this.pendingCount} unsaved change${this.pendingCount === 1 ? '' : 's'}`; }
     get targetedCardCount()  { return this.accountCards.filter(c => c.effectiveTargeted).length; }
     get totalCardCount()     { return this.accountCards.length; }
 
