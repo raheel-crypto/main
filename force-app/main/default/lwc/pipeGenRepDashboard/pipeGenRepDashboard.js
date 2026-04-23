@@ -1,25 +1,27 @@
 import { LightningElement, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import getRepDashboardData from '@salesforce/apex/PipeGenController.getRepDashboardData';
-import saveCommit        from '@salesforce/apex/PipeGenController.saveCommit';
-import deleteCommit      from '@salesforce/apex/PipeGenController.deleteCommit';
+import getRepDashboardData      from '@salesforce/apex/PipeGenController.getRepDashboardData';
+import saveCommit               from '@salesforce/apex/PipeGenController.saveCommit';
+import deleteCommit             from '@salesforce/apex/PipeGenController.deleteCommit';
+import getAccountsForSelection  from '@salesforce/apex/PipeGenController.getAccountsForSelection';
+import updateTargetAccounts     from '@salesforce/apex/PipeGenController.updateTargetAccounts';
 
-const CURRENCY = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const CURRENCY  = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
-const STALE_DAYS = 21;
 
 const EMPTY_COMMIT = () => ({
-    motionType:   'Net New',
-    commitType:   '',
-    description:  '',
-    accountId:    null,
-    accountName:  '',
-    oppId:        null,
+    motionType:     'Net New',
+    commitType:     '',
+    description:    '',
+    accountId:      null,
+    accountName:    '',
+    oppId:          null,
     committedCount: 1
 });
 
 export default class PipeGenRepDashboard extends LightningElement {
 
+    // ─── Dashboard state ──────────────────────────────────────────────────────
     @track data                 = null;
     @track isLoading            = true;
     @track errorMessage         = null;
@@ -27,6 +29,13 @@ export default class PipeGenRepDashboard extends LightningElement {
     @track isSaving             = false;
     @track accountSearchResults = [];
     @track newCommit            = EMPTY_COMMIT();
+
+    // ─── Account card tab state ───────────────────────────────────────────────
+    @track accountCards         = [];
+    @track accountCardsLoaded   = false;
+    @track isLoadingCards       = false;
+    @track isSavingTargets      = false;
+    @track cardSearchTerm       = '';
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -40,10 +49,10 @@ export default class PipeGenRepDashboard extends LightningElement {
         this.isLoading    = true;
         this.errorMessage = null;
         try {
-            const raw  = await getRepDashboardData();
-            this.data  = this.processData(raw);
+            const raw = await getRepDashboardData();
+            this.data = this.processData(raw);
         } catch (e) {
-            this.errorMessage = e.body?.message || 'Failed to load dashboard data. Check the browser console for details.';
+            this.errorMessage = e.body?.message || 'Failed to load dashboard data.';
         } finally {
             this.isLoading = false;
         }
@@ -54,7 +63,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         return {
             ...raw,
             targetAccounts: (raw.targetAccounts || []).map(a => this.enrichAccount(a, today)),
-            stage1Opps:     (raw.stage1Opps     || []).map(o => this.enrichOpp(o, today))
+            inFlightOpps:   (raw.inFlightOpps   || []).map(o => this.enrichOpp(o))
         };
     }
 
@@ -74,49 +83,51 @@ export default class PipeGenRepDashboard extends LightningElement {
         };
     }
 
-    enrichOpp(o, today) {
+    enrichOpp(o) {
         return {
             ...o,
             sfUrl:                    `/lightning/r/Opportunity/${o.id}/view`,
             amountFormatted:           CURRENCY.format(o.amount || 0),
             lastActivityDateFormatted: o.lastActivityDate ? this.fmtDate(o.lastActivityDate) : '—',
             lastGongCallDateFormatted: o.lastGongCallDate ? this.fmtDate(o.lastGongCallDate) : '—',
-            rowClass:     o.isStale ? 'slds-hint-parent stale-row' : 'slds-hint-parent',
-            daysClass:    o.isStale ? 'stale-text bold-cell' : 'bold-cell',
-            contactClass: (o.contactRoleCount || 0) < 2 ? 'stale-text' : 'healthy-text'
+            stageBadgeClass:  o.stageName === 'Stage 2' ? 'stage-badge stage-badge--s2' : 'stage-badge stage-badge--s1',
+            rowClass:         o.isStale ? 'slds-hint-parent stale-row' : 'slds-hint-parent',
+            daysClass:        o.isStale ? 'stale-text bold-cell' : 'bold-cell',
+            contactClass:     (o.contactRoleCount || 0) < 2 ? 'stale-text' : 'healthy-text',
+            staleLabel:       `>${o.staleThreshold}d`
         };
     }
 
-    // ─── Computed Properties — visibility ────────────────────────────────────
+    // ─── Computed — visibility ────────────────────────────────────────────────
 
-    get isReady()             { return !this.isLoading && !this.errorMessage && !!this.data; }
-    get hasError()            { return !!this.errorMessage; }
-    get hasAccounts()         { return (this.data?.targetAccounts?.length || 0) > 0; }
-    get hasStage1Opps()       { return (this.data?.stage1Opps?.length     || 0) > 0; }
-    get hasNetNewCommits()    { return this.netNewCommits.length > 0; }
+    get isReady()              { return !this.isLoading && !this.errorMessage && !!this.data; }
+    get hasError()             { return !!this.errorMessage; }
+    get hasAccounts()          { return (this.data?.targetAccounts?.length  || 0) > 0; }
+    get hasInFlightOpps()      { return (this.data?.inFlightOpps?.length    || 0) > 0; }
+    get hasNetNewCommits()     { return this.netNewCommits.length > 0; }
     get hasProgressionCommits(){ return this.progressionCommits.length > 0; }
-    get hasAccountResults()   { return this.accountSearchResults.length > 0; }
-    get isNetNew()            { return this.newCommit.motionType === 'Net New'; }
-    get isProgression()       { return this.newCommit.motionType === 'Progression'; }
+    get hasAccountResults()    { return this.accountSearchResults.length > 0; }
+    get isNetNew()             { return this.newCommit.motionType === 'Net New'; }
+    get isProgression()        { return this.newCommit.motionType === 'Progression'; }
 
-    get staleOppCount()  { return (this.data?.stage1Opps || []).filter(o => o.isStale).length; }
-    get staleThreshold() { return STALE_DAYS; }
-
+    get staleOppCount() {
+        return (this.data?.inFlightOpps || []).filter(o => o.isStale).length;
+    }
     get mandatoryProgressionWarning() {
         return this.staleOppCount > 0 && this.progressionCommits.length === 0;
     }
 
-    // ─── Computed Properties — labels ────────────────────────────────────────
+    // ─── Computed — labels ────────────────────────────────────────────────────
 
-    get accountCountLabel() { return `${this.data?.targetAccounts?.length || 0} accounts`; }
-    get stage1CountLabel()  { return `${this.data?.stage1Opps?.length     || 0} opps`; }
+    get accountCountLabel()   { return `${this.data?.targetAccounts?.length || 0} accounts`; }
+    get inFlightCountLabel()  { return `${this.data?.inFlightOpps?.length   || 0} opps`; }
 
-    // ─── Computed Properties — quarterly target ───────────────────────────────
+    // ─── Computed — quarterly target ─────────────────────────────────────────
 
-    get qt()                  { return this.data?.quarterlyTarget || {}; }
-    get netNewPercent()       { return pct(this.qt.netNewActual,      this.qt.netNewTarget); }
-    get progPercent()         { return pct(this.qt.progressionActual, this.qt.progressionTarget); }
-    get blendedPercent()      { return pct((this.qt.netNewActual||0) + (this.qt.progressionActual||0), this.qt.totalTarget); }
+    get qt()                     { return this.data?.quarterlyTarget || {}; }
+    get netNewPercent()          { return pct(this.qt.netNewActual,      this.qt.netNewTarget); }
+    get progPercent()            { return pct(this.qt.progressionActual, this.qt.progressionTarget); }
+    get blendedPercent()         { return pct((this.qt.netNewActual||0) + (this.qt.progressionActual||0), this.qt.totalTarget); }
     get netNewActualFormatted()  { return CURRENCY.format(this.qt.netNewActual      || 0); }
     get netNewTargetFormatted()  { return CURRENCY.format(this.qt.netNewTarget      || 0); }
     get progActualFormatted()    { return CURRENCY.format(this.qt.progressionActual || 0); }
@@ -128,7 +139,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         return CURRENCY.format(Math.max(0, gap));
     }
 
-    // ─── Computed Properties — commits ───────────────────────────────────────
+    // ─── Computed — commits ───────────────────────────────────────────────────
 
     get netNewCommits() {
         return (this.data?.thisWeekCommits || []).filter(c => c.Motion_Type__c === 'Net New');
@@ -137,18 +148,18 @@ export default class PipeGenRepDashboard extends LightningElement {
         return (this.data?.thisWeekCommits || []).filter(c => c.Motion_Type__c === 'Progression');
     }
 
-    // ─── Computed Properties — scorecard ─────────────────────────────────────
+    // ─── Computed — scorecard ─────────────────────────────────────────────────
 
     get scorecard() {
         const sc = this.data?.lastWeekScorecard || {};
         return {
             ...sc,
-            nnDollarFormatted:          CURRENCY.format(sc.nnDollarGenerated || 0),
+            nnDollarFormatted:           CURRENCY.format(sc.nnDollarGenerated || 0),
             progConversionRateFormatted: `${Math.round(sc.progConversionRate || 0)}%`
         };
     }
 
-    // ─── Computed Properties — form options ──────────────────────────────────
+    // ─── Computed — commit form options ──────────────────────────────────────
 
     get motionOptions() {
         return [
@@ -160,11 +171,11 @@ export default class PipeGenRepDashboard extends LightningElement {
     get commitTypeOptions() {
         if (this.isNetNew) {
             return [
-                { label: 'First Meeting Booked',    value: 'First Meeting Booked' },
-                { label: 'Multi-Thread Intro',       value: 'Multi-Thread Intro' },
-                { label: 'Champion-Led Referral',    value: 'Champion-Led Referral' },
-                { label: 'Exec Outreach Sequence',   value: 'Exec Outreach Sequence' },
-                { label: 'Inbound Converted',        value: 'Inbound Converted' }
+                { label: 'First Meeting Booked',   value: 'First Meeting Booked' },
+                { label: 'Multi-Thread Intro',      value: 'Multi-Thread Intro' },
+                { label: 'Champion-Led Referral',   value: 'Champion-Led Referral' },
+                { label: 'Exec Outreach Sequence',  value: 'Exec Outreach Sequence' },
+                { label: 'Inbound Converted',       value: 'Inbound Converted' }
             ];
         }
         return [
@@ -176,21 +187,57 @@ export default class PipeGenRepDashboard extends LightningElement {
         ];
     }
 
-    get stage1OppOptions() {
-        return (this.data?.stage1Opps || []).map(o => ({
-            label: `${o.name} — ${o.accountName} (${o.daysInStage}d in S1)`,
+    get inFlightOppOptions() {
+        return (this.data?.inFlightOpps || []).map(o => ({
+            label: `${o.name} — ${o.accountName} (${o.stageName}, ${o.daysInStage}d)`,
             value: o.id
         }));
     }
 
+    // ─── Computed — account cards ────────────────────────────────────────────
+
+    get filteredCards() {
+        const term = this.cardSearchTerm.toLowerCase();
+        return term.length < 2
+            ? this.accountCards
+            : this.accountCards.filter(c => c.name.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term));
+    }
+
+    get targetedCards() {
+        return this.filteredCards.filter(c => c.effectiveTargeted).map(c => this.applyCardClass(c));
+    }
+
+    get untargetedCards() {
+        return this.filteredCards.filter(c => !c.effectiveTargeted).map(c => this.applyCardClass(c));
+    }
+
+    get pendingChanges() {
+        return this.accountCards.filter(c => c.effectiveTargeted !== c.isTargeted);
+    }
+
+    get hasPendingChanges()  { return this.pendingChanges.length > 0; }
+    get pendingCount()       { return this.pendingChanges.length; }
+    get pendingLabel()       { return `Save ${this.pendingCount} change${this.pendingCount === 1 ? '' : 's'}`; }
+    get targetedCardCount()  { return this.accountCards.filter(c => c.effectiveTargeted).length; }
+    get totalCardCount()     { return this.accountCards.length; }
+
+    applyCardClass(c) {
+        const isPending = c.effectiveTargeted !== c.isTargeted;
+        let cls = 'acct-card';
+        if (c.effectiveTargeted) cls += ' acct-card--targeted';
+        if (isPending && c.effectiveTargeted)  cls += ' acct-card--pending-add';
+        if (isPending && !c.effectiveTargeted) cls += ' acct-card--pending-remove';
+        return { ...c, cardClass: cls, isPending };
+    }
+
     // ─── Commit Form Handlers ─────────────────────────────────────────────────
 
-    openCommitForm()  { this.showCommitForm = true;  this.newCommit = EMPTY_COMMIT(); this.accountSearchResults = []; }
+    openCommitForm()  { this.showCommitForm = true; this.newCommit = EMPTY_COMMIT(); this.accountSearchResults = []; }
     closeCommitForm() { this.showCommitForm = false; }
 
     handleMotionChange(e)      { this.newCommit = { ...EMPTY_COMMIT(), motionType: e.detail.value }; this.accountSearchResults = []; }
-    handleCommitTypeChange(e)  { this.newCommit = { ...this.newCommit, commitType:   e.detail.value }; }
-    handleDescriptionChange(e) { this.newCommit = { ...this.newCommit, description:  e.detail.value }; }
+    handleCommitTypeChange(e)  { this.newCommit = { ...this.newCommit, commitType:    e.detail.value }; }
+    handleDescriptionChange(e) { this.newCommit = { ...this.newCommit, description:   e.detail.value }; }
     handleCountChange(e)       { this.newCommit = { ...this.newCommit, committedCount: parseInt(e.detail.value, 10) || 1 }; }
     handleOppChange(e)         { this.newCommit = { ...this.newCommit, oppId: e.detail.value }; }
 
@@ -228,20 +275,17 @@ export default class PipeGenRepDashboard extends LightningElement {
             Commit_Type__c:        this.newCommit.commitType,
             Commit_Description__c: this.newCommit.description,
             Committed_Count__c:    this.newCommit.committedCount,
-            Target_Account__c:     this.newCommit.accountId   || null,
-            Target_Opportunity__c: this.newCommit.oppId       || null
+            Target_Account__c:     this.newCommit.accountId || null,
+            Target_Opportunity__c: this.newCommit.oppId     || null
         };
 
         try {
             const saved = await saveCommit({ commitRecord: record });
-            this.data = {
-                ...this.data,
-                thisWeekCommits: [...(this.data.thisWeekCommits || []), saved]
-            };
+            this.data = { ...this.data, thisWeekCommits: [...(this.data.thisWeekCommits || []), saved] };
             this.closeCommitForm();
             this.toast('Commit Saved', 'Your weekly commit has been recorded.', 'success');
         } catch (e) {
-            this.toast('Save Failed', e.body?.message || 'Could not save commit. Check field permissions.', 'error');
+            this.toast('Save Failed', e.body?.message || 'Could not save commit.', 'error');
         } finally {
             this.isSaving = false;
         }
@@ -251,13 +295,60 @@ export default class PipeGenRepDashboard extends LightningElement {
         const id = e.currentTarget.dataset.id;
         try {
             await deleteCommit({ commitId: id });
-            this.data = {
-                ...this.data,
-                thisWeekCommits: (this.data.thisWeekCommits || []).filter(c => c.Id !== id)
-            };
+            this.data = { ...this.data, thisWeekCommits: (this.data.thisWeekCommits || []).filter(c => c.Id !== id) };
             this.toast('Removed', 'Commit deleted.', 'success');
         } catch (err) {
             this.toast('Error', 'Could not delete commit.', 'error');
+        }
+    }
+
+    // ─── Account Cards Handlers ───────────────────────────────────────────────
+
+    async handleAccountsTabActive() {
+        if (this.accountCardsLoaded) return;
+        this.isLoadingCards = true;
+        try {
+            const raw = await getAccountsForSelection();
+            this.accountCards = raw.map(c => ({ ...c, effectiveTargeted: c.isTargeted }));
+            this.accountCardsLoaded = true;
+        } catch (e) {
+            this.toast('Error', 'Could not load accounts.', 'error');
+        } finally {
+            this.isLoadingCards = false;
+        }
+    }
+
+    handleCardToggle(e) {
+        const id = e.currentTarget.dataset.id;
+        this.accountCards = this.accountCards.map(c =>
+            c.id === id ? { ...c, effectiveTargeted: !c.effectiveTargeted } : c
+        );
+    }
+
+    handleCardSearch(e) {
+        this.cardSearchTerm = e.detail.value || '';
+    }
+
+    cancelTargetChanges() {
+        this.accountCards = this.accountCards.map(c => ({ ...c, effectiveTargeted: c.isTargeted }));
+    }
+
+    async saveTargetAccounts() {
+        const changes    = this.accountCards.filter(c => c.effectiveTargeted !== c.isTargeted);
+        const toTarget   = changes.filter(c =>  c.effectiveTargeted).map(c => c.id);
+        const toUntarget = changes.filter(c => !c.effectiveTargeted).map(c => c.id);
+        const count      = changes.length;
+
+        this.isSavingTargets = true;
+        try {
+            await updateTargetAccounts({ toTarget, toUntarget });
+            this.accountCards = this.accountCards.map(c => ({ ...c, isTargeted: c.effectiveTargeted }));
+            this.toast('Saved', `${count} account${count === 1 ? '' : 's'} updated.`, 'success');
+            this.loadData(); // refresh dashboard target account list
+        } catch (e) {
+            this.toast('Error', e.body?.message || 'Could not update accounts.', 'error');
+        } finally {
+            this.isSavingTargets = false;
         }
     }
 
@@ -277,7 +368,6 @@ export default class PipeGenRepDashboard extends LightningElement {
     }
 }
 
-// Module-level helper — avoids repeated inline math
 function pct(actual, target) {
     if (!target || target <= 0) return 0;
     return Math.min(100, Math.round((actual / target) * 100));

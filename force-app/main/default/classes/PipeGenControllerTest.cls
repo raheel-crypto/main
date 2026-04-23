@@ -84,7 +84,7 @@ private class PipeGenControllerTest {
 
             System.assertNotEquals(null, d.quarterlyTarget);
             System.assertNotEquals(null, d.targetAccounts);
-            System.assertNotEquals(null, d.stage1Opps);
+            System.assertNotEquals(null, d.inFlightOpps);
             System.assertNotEquals(null, d.thisWeekCommits);
             System.assertNotEquals(null, d.lastWeekScorecard);
         }
@@ -99,7 +99,7 @@ private class PipeGenControllerTest {
             Test.stopTest();
 
             System.assertEquals(0, d.targetAccounts.size());
-            System.assertEquals(0, d.stage1Opps.size());
+            System.assertEquals(0, d.inFlightOpps.size());
             System.assertEquals(0, d.thisWeekCommits.size());
         }
     }
@@ -173,8 +173,8 @@ private class PipeGenControllerTest {
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            System.assertEquals(1, d.stage1Opps.size());
-            System.assertEquals('Open S1', d.stage1Opps[0].name);
+            System.assertEquals(1, d.inFlightOpps.size());
+            System.assertEquals('Open S1', d.inFlightOpps[0].name);
         }
     }
 
@@ -193,7 +193,7 @@ private class PipeGenControllerTest {
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            PipeGenController.OppRow row = d.stage1Opps[0];
+            PipeGenController.OppRow row = d.inFlightOpps[0];
             System.assertEquals(o.Id, row.id);
             System.assertEquals('Acme Deal', row.name);
             System.assertEquals(125000, row.amount);
@@ -217,7 +217,7 @@ private class PipeGenControllerTest {
             Test.stopTest();
 
             // Just-created opp has 0 days in stage — not stale
-            System.assertEquals(false, d.stage1Opps[0].isStale);
+            System.assertEquals(false, d.inFlightOpps[0].isStale);
         }
     }
 
@@ -529,5 +529,208 @@ private class PipeGenControllerTest {
         Date sunday   = Date.newInstance(2026, 4, 26);
         Date expected = Date.newInstance(2026, 4, 20);
         System.assertEquals(expected, PipeGenController.getWeekStart(sunday));
+    }
+}
+
+
+    // ─── In-Flight Opps — Stage 2 ────────────────────────────────────────────
+
+    @isTest
+    static void testInFlightOpps_includesStage2() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Two-Stage Co');
+            makeOpp(rep.Id, a.Id, 'Stage 1 Deal', 'Stage 1', 40000);
+            makeOpp(rep.Id, a.Id, 'Stage 2 Deal', 'Stage 2', 60000);
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(2, d.inFlightOpps.size(), 'Both Stage 1 and Stage 2 opps should appear');
+            Set<String> stages = new Set<String>();
+            for (PipeGenController.OppRow row : d.inFlightOpps) stages.add(row.stageName);
+            System.assert(stages.contains('Stage 1'));
+            System.assert(stages.contains('Stage 2'));
+        }
+    }
+
+    @isTest
+    static void testInFlightOpps_staleThresholdDiffersByStage() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Threshold Co');
+            makeOpp(rep.Id, a.Id, 'S1 Opp', 'Stage 1', 50000);
+            makeOpp(rep.Id, a.Id, 'S2 Opp', 'Stage 2', 50000);
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            Map<String, Integer> thresholds = new Map<String, Integer>();
+            for (PipeGenController.OppRow row : d.inFlightOpps) thresholds.put(row.stageName, row.staleThreshold);
+            System.assertEquals(21, thresholds.get('Stage 1'), 'Stage 1 threshold = 21 days');
+            System.assertEquals(14, thresholds.get('Stage 2'), 'Stage 2 threshold = 14 days');
+        }
+    }
+
+    @isTest
+    static void testInFlightOpps_excludesStage3AndClosed() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Filter Co');
+            makeOpp(rep.Id, a.Id, 'S1',         'Stage 1',    50000);
+            makeOpp(rep.Id, a.Id, 'S2',         'Stage 2',    50000);
+            makeOpp(rep.Id, a.Id, 'S3',         'Stage 3',    50000);
+            makeOpp(rep.Id, a.Id, 'Closed Won', 'Closed Won', 50000);
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(2, d.inFlightOpps.size());
+        }
+    }
+
+    @isTest
+    static void testInFlightOpps_stageNamePopulatedOnRow() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Stage Name Co');
+            makeOpp(rep.Id, a.Id, 'My Deal', 'Stage 2', 75000);
+
+            Test.startTest();
+            PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
+            Test.stopTest();
+
+            System.assertEquals('Stage 2', d.inFlightOpps[0].stageName);
+        }
+    }
+
+    // ─── Account Selection ───────────────────────────────────────────────────
+
+    @isTest
+    static void testGetAccountsForSelection_returnsAllOwnerAccounts() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            makeTargetAccount(rep.Id, 'Targeted');
+            insert new Account(Name = 'Not Targeted', OwnerId = rep.Id, Target_Account__c = false);
+
+            Test.startTest();
+            List<PipeGenController.AccountCard> cards = PipeGenController.getAccountsForSelection();
+            Test.stopTest();
+
+            System.assertEquals(2, cards.size(), 'Should return all accounts regardless of target flag');
+        }
+    }
+
+    @isTest
+    static void testGetAccountsForSelection_targetedFirstInOrder() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            insert new Account(Name = 'Z Not Targeted', OwnerId = rep.Id, Target_Account__c = false);
+            makeTargetAccount(rep.Id, 'A Targeted');
+
+            Test.startTest();
+            List<PipeGenController.AccountCard> cards = PipeGenController.getAccountsForSelection();
+            Test.stopTest();
+
+            System.assertEquals(true,  cards[0].isTargeted, 'Targeted accounts should sort first');
+            System.assertEquals(false, cards[1].isTargeted);
+        }
+    }
+
+    @isTest
+    static void testGetAccountsForSelection_countsPopulated() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'Counted Co');
+            insert new Contact(LastName = 'Smith', AccountId = a.Id);
+            insert new Contact(LastName = 'Jones', AccountId = a.Id);
+            makeOpp(rep.Id, a.Id, 'Open Opp', 'Stage 1', 50000);
+
+            Test.startTest();
+            List<PipeGenController.AccountCard> cards = PipeGenController.getAccountsForSelection();
+            Test.stopTest();
+
+            System.assertEquals(2, cards[0].contactCount);
+            System.assertEquals(1, cards[0].openOppCount);
+        }
+    }
+
+    @isTest
+    static void testGetAccountsForSelection_isTargetedFlagCorrect() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            makeTargetAccount(rep.Id, 'Is Targeted');
+            insert new Account(Name = 'Not Targeted', OwnerId = rep.Id, Target_Account__c = false);
+
+            Test.startTest();
+            List<PipeGenController.AccountCard> cards = PipeGenController.getAccountsForSelection();
+            Test.stopTest();
+
+            Map<String, Boolean> flags = new Map<String, Boolean>();
+            for (PipeGenController.AccountCard c : cards) flags.put(c.name, c.isTargeted);
+            System.assertEquals(true,  flags.get('Is Targeted'));
+            System.assertEquals(false, flags.get('Not Targeted'));
+        }
+    }
+
+    // ─── updateTargetAccounts ────────────────────────────────────────────────
+
+    @isTest
+    static void testUpdateTargetAccounts_setsTargetTrue() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = new Account(Name = 'To Target', OwnerId = rep.Id, Target_Account__c = false);
+            insert a;
+
+            Test.startTest();
+            PipeGenController.updateTargetAccounts(new List<Id>{ a.Id }, new List<Id>());
+            Test.stopTest();
+
+            System.assertEquals(true, [SELECT Target_Account__c FROM Account WHERE Id = :a.Id].Target_Account__c);
+        }
+    }
+
+    @isTest
+    static void testUpdateTargetAccounts_setsTargetFalse() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account a = makeTargetAccount(rep.Id, 'To Untarget');
+
+            Test.startTest();
+            PipeGenController.updateTargetAccounts(new List<Id>(), new List<Id>{ a.Id });
+            Test.stopTest();
+
+            System.assertEquals(false, [SELECT Target_Account__c FROM Account WHERE Id = :a.Id].Target_Account__c);
+        }
+    }
+
+    @isTest
+    static void testUpdateTargetAccounts_handlesBothListsSimultaneously() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Account toOn  = new Account(Name = 'Turn On',  OwnerId = rep.Id, Target_Account__c = false);
+            Account toOff = new Account(Name = 'Turn Off', OwnerId = rep.Id, Target_Account__c = true);
+            insert new List<Account>{ toOn, toOff };
+
+            Test.startTest();
+            PipeGenController.updateTargetAccounts(new List<Id>{ toOn.Id }, new List<Id>{ toOff.Id });
+            Test.stopTest();
+
+            System.assertEquals(true,  [SELECT Target_Account__c FROM Account WHERE Id = :toOn.Id].Target_Account__c);
+            System.assertEquals(false, [SELECT Target_Account__c FROM Account WHERE Id = :toOff.Id].Target_Account__c);
+        }
+    }
+
+    @isTest
+    static void testUpdateTargetAccounts_nullListsDoNothing() {
+        User rep = makeRep(0);
+        System.runAs(rep) {
+            Test.startTest();
+            PipeGenController.updateTargetAccounts(null, null);
+            Test.stopTest();
+        }
     }
 }

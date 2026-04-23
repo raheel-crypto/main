@@ -3,11 +3,11 @@ public with sharing class PipeGenController {
     // ─── Wrapper Classes ────────────────────────────────────────────────────────
 
     public class DashboardData {
-        @AuraEnabled public QuarterlyTarget quarterlyTarget;
-        @AuraEnabled public List<AccountRow>  targetAccounts;
-        @AuraEnabled public List<OppRow>      stage1Opps;
+        @AuraEnabled public QuarterlyTarget        quarterlyTarget;
+        @AuraEnabled public List<AccountRow>       targetAccounts;
+        @AuraEnabled public List<OppRow>           inFlightOpps;
         @AuraEnabled public List<Weekly_Commit__c> thisWeekCommits;
-        @AuraEnabled public ScorecardData     lastWeekScorecard;
+        @AuraEnabled public ScorecardData          lastWeekScorecard;
     }
 
     public class QuarterlyTarget {
@@ -33,10 +33,12 @@ public with sharing class PipeGenController {
     public class OppRow {
         @AuraEnabled public String   id;
         @AuraEnabled public String   name;
+        @AuraEnabled public String   stageName;
         @AuraEnabled public Decimal  amount;
         @AuraEnabled public String   accountName;
         @AuraEnabled public String   accountId;
         @AuraEnabled public Integer  daysInStage;
+        @AuraEnabled public Integer  staleThreshold;
         @AuraEnabled public Date     lastActivityDate;
         @AuraEnabled public DateTime lastGongCallDate;
         @AuraEnabled public Integer  contactRoleCount;
@@ -56,12 +58,30 @@ public with sharing class PipeGenController {
         @AuraEnabled public Decimal progConversionRate;
     }
 
+    public class AccountCard {
+        @AuraEnabled public String  id;
+        @AuraEnabled public String  name;
+        @AuraEnabled public String  type;
+        @AuraEnabled public String  industry;
+        @AuraEnabled public Boolean isTargeted;
+        @AuraEnabled public Integer contactCount;
+        @AuraEnabled public Integer openOppCount;
+    }
+
     // ─── Config ─────────────────────────────────────────────────────────────────
 
     // Adjust stage names to match your org's picklist values
-    private static final String STAGE_1       = 'Stage 1';
-    private static final String STAGE_3       = 'Stage 3';
-    private static final Integer STALE_DAYS   = 21;
+    private static final String STAGE_1 = 'Stage 1';
+    private static final String STAGE_2 = 'Stage 2';
+    private static final String STAGE_3 = 'Stage 3';
+
+    private static final Set<String> IN_FLIGHT_STAGES = new Set<String>{ STAGE_1, STAGE_2 };
+
+    // Staleness thresholds in days per stage — S2 tighter since it should be moving faster
+    private static final Map<String, Integer> STALE_THRESHOLDS = new Map<String, Integer>{
+        STAGE_1 => 21,
+        STAGE_2 => 14
+    };
 
     // ─── Main Entry Point ────────────────────────────────────────────────────────
 
@@ -69,10 +89,10 @@ public with sharing class PipeGenController {
     public static DashboardData getRepDashboardData() {
         Id userId = UserInfo.getUserId();
         DashboardData d = new DashboardData();
-        d.quarterlyTarget  = buildQuarterlyTarget(userId);
-        d.targetAccounts   = buildTargetAccounts(userId);
-        d.stage1Opps       = buildStage1Opps(userId);
-        d.thisWeekCommits  = buildThisWeekCommits(userId);
+        d.quarterlyTarget   = buildQuarterlyTarget(userId);
+        d.targetAccounts    = buildTargetAccounts(userId);
+        d.inFlightOpps      = buildInFlightOpps(userId);
+        d.thisWeekCommits   = buildThisWeekCommits(userId);
         d.lastWeekScorecard = buildLastWeekScorecard(userId);
         return d;
     }
@@ -83,14 +103,13 @@ public with sharing class PipeGenController {
         QuarterlyTarget qt = new QuarterlyTarget();
         Date today = Date.today();
 
-        // Quarter boundaries
         Integer qStartMonth = ((today.month() - 1) / 3) * 3 + 1;
         Date qStart = Date.newInstance(today.year(), qStartMonth, 1);
         Date qEnd   = qStart.addMonths(3).addDays(-1);
         qt.quarter  = 'Q' + ((qStartMonth / 3) + 1) + ' ' + today.year();
         qt.weeksRemaining = Math.max(0, today.daysBetween(qEnd) / 7);
 
-        // Quota — stored on User as Pipe_Gen_Annual_Target__c (create this field or swap in your own)
+        // Quota — stored on User as Pipe_Gen_Annual_Target__c
         Decimal annual = 0;
         try {
             User u = [SELECT Pipe_Gen_Annual_Target__c FROM User WHERE Id = :userId LIMIT 1];
@@ -101,7 +120,6 @@ public with sharing class PipeGenController {
         qt.netNewTarget      = qt.totalTarget * 0.5;
         qt.progressionTarget = qt.totalTarget * 0.5;
 
-        // Net New Actual: opps the rep created this quarter (any non-zero stage)
         AggregateResult[] nnRes = [
             SELECT SUM(Amount) tot
             FROM Opportunity
@@ -113,7 +131,6 @@ public with sharing class PipeGenController {
         ];
         qt.netNewActual = nnRes[0].get('tot') != null ? (Decimal)nnRes[0].get('tot') : 0;
 
-        // Progression Actual: opps owned by rep that entered Stage 3 this quarter
         Set<Id> stage3Ids = new Set<Id>();
         for (OpportunityFieldHistory h : [
             SELECT OpportunityId, NewValue
@@ -121,10 +138,8 @@ public with sharing class PipeGenController {
             WHERE Field = 'StageName'
               AND CreatedDate >= :qStart
               AND CreatedDate <= :qEnd
-        ]) { 
-            if (h.NewValue == STAGE_3) {
-                stage3Ids.add(h.OpportunityId);
-            }
+        ]) {
+            if (h.NewValue == STAGE_3) stage3Ids.add(h.OpportunityId);
         }
 
         qt.progressionActual = 0;
@@ -144,11 +159,6 @@ public with sharing class PipeGenController {
     private static List<AccountRow> buildTargetAccounts(Id userId) {
         List<AccountRow> rows = new List<AccountRow>();
 
-        // ADJUST: Target_Account__c is a checkbox field on Account marking it as a target.
-        // Swap in your own filter if you use a different field (e.g. Account_Tier__c = 'Tier 1').
-        // ADJUST: Gong__gong_calls__r is the child relationship name from Account → Gong__gong_call__c.
-        //         Confirm in Setup → Object Manager → Gong__gong_call__c → Fields → Account lookup → Child Relationship Name.
-        // ADJUST: Gong__Start_Time__c is the call date field in the standard Gong package — verify in your org.
         List<Account> accounts = [
             SELECT Id, Name, Type,
                 (SELECT ActivityDate, Subject
@@ -183,15 +193,13 @@ public with sharing class PipeGenController {
         return rows;
     }
 
-    // ─── Stage 1 Opps ───────────────────────────────────────────────────────────
+    // ─── In-Flight Opps (Stage 1 + Stage 2) ─────────────────────────────────────
 
-    private static List<OppRow> buildStage1Opps(Id userId) {
+    private static List<OppRow> buildInFlightOpps(Id userId) {
         List<OppRow> rows = new List<OppRow>();
 
-        // ADJUST: Gong__gong_calls__r on Opportunity — confirm relationship name for your Gong package.
-        // ADJUST: Gong__Start_Time__c is the call date field — verify in your org.
         List<Opportunity> opps = [
-            SELECT Id, Name, Amount, CloseDate, AccountId, Account.Name,
+            SELECT Id, Name, StageName, Amount, CloseDate, AccountId, Account.Name,
                 (SELECT ActivityDate, Subject
                  FROM ActivityHistories
                  ORDER BY ActivityDate DESC, LastModifiedDate DESC LIMIT 1),
@@ -201,42 +209,65 @@ public with sharing class PipeGenController {
                 (SELECT Id FROM OpportunityContactRoles WHERE IsDeleted = false)
             FROM Opportunity
             WHERE OwnerId = :userId
-              AND StageName = :STAGE_1
+              AND StageName IN :IN_FLIGHT_STAGES
               AND IsClosed = false
-            ORDER BY CreatedDate ASC
+            ORDER BY StageName ASC, CreatedDate ASC
         ];
 
         if (opps.isEmpty()) return rows;
 
-        // Get when each opp last entered Stage 1 from field history
+        // Find when each opp last entered its CURRENT stage
         Set<Id> oppIds = new Map<Id, Opportunity>(opps).keySet();
         Map<Id, DateTime> stageEntry = new Map<Id, DateTime>();
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId, CreatedDate, NewValue
+            SELECT OpportunityId, NewValue, CreatedDate
             FROM OpportunityFieldHistory
             WHERE Field = 'StageName'
               AND OpportunityId IN :oppIds
             ORDER BY CreatedDate DESC
         ]) {
-            if (h.NewValue == STAGE_1 && !stageEntry.containsKey(h.OpportunityId)) {
+            // Match history entry to the opp's current stage — first hit (most recent) wins
+            Opportunity o = opps[0]; // placeholder; we look up below
+            if (!stageEntry.containsKey(h.OpportunityId)) {
+                stageEntry.put(h.OpportunityId, null); // reserve slot
+            }
+        }
+
+        // Build a lookup map for opp current stage, then re-scan history
+        Map<Id, String> oppCurrentStage = new Map<Id, String>();
+        for (Opportunity o : opps) oppCurrentStage.put(o.Id, o.StageName);
+
+        stageEntry.clear();
+        for (OpportunityFieldHistory h : [
+            SELECT OpportunityId, NewValue, CreatedDate
+            FROM OpportunityFieldHistory
+            WHERE Field = 'StageName'
+              AND OpportunityId IN :oppIds
+            ORDER BY CreatedDate DESC
+        ]) {
+            String currentStage = oppCurrentStage.get(h.OpportunityId);
+            if (h.NewValue == currentStage && !stageEntry.containsKey(h.OpportunityId)) {
                 stageEntry.put(h.OpportunityId, h.CreatedDate);
             }
         }
 
         Date today = Date.today();
         for (Opportunity o : opps) {
-            OppRow row          = new OppRow();
-            row.id              = o.Id;
-            row.name            = o.Name;
-            row.amount          = o.Amount;
-            row.accountName     = o.Account.Name;
-            row.accountId       = o.AccountId;
-            row.closeDate       = o.CloseDate;
+            OppRow row           = new OppRow();
+            row.id               = o.Id;
+            row.name             = o.Name;
+            row.stageName        = o.StageName;
+            row.amount           = o.Amount;
+            row.accountName      = o.Account.Name;
+            row.accountId        = o.AccountId;
+            row.closeDate        = o.CloseDate;
             row.contactRoleCount = o.OpportunityContactRoles.size();
+            row.staleThreshold   = STALE_THRESHOLDS.containsKey(o.StageName)
+                                    ? STALE_THRESHOLDS.get(o.StageName) : 21;
 
-            DateTime entry   = stageEntry.get(o.Id);
-            row.daysInStage  = entry != null ? entry.date().daysBetween(today) : 0;
-            row.isStale      = row.daysInStage > STALE_DAYS;
+            DateTime entry  = stageEntry.get(o.Id);
+            row.daysInStage = entry != null ? entry.date().daysBetween(today) : 0;
+            row.isStale     = row.daysInStage > row.staleThreshold;
 
             if (!o.ActivityHistories.isEmpty())
                 row.lastActivityDate = o.ActivityHistories[0].ActivityDate;
@@ -272,12 +303,12 @@ public with sharing class PipeGenController {
         Date lastWeekStart = getWeekStart(Date.today()).addDays(-7);
         Date lastWeekEnd   = lastWeekStart.addDays(6);
 
-        sc.nnCommitsTotal      = 0;
-        sc.nnCommitsCompleted  = 0;
-        sc.progCommitsTotal    = 0;
+        sc.nnCommitsTotal       = 0;
+        sc.nnCommitsCompleted   = 0;
+        sc.progCommitsTotal     = 0;
         sc.progCommitsCompleted = 0;
-        sc.progOppsAdvanced    = 0;
-        sc.progOppsStalled     = 0;
+        sc.progOppsAdvanced     = 0;
+        sc.progOppsStalled      = 0;
 
         for (Weekly_Commit__c c : [
             SELECT Motion_Type__c, Completion_Status__c,
@@ -300,7 +331,6 @@ public with sharing class PipeGenController {
             }
         }
 
-        // Net new $ and opp count from opps created last week
         AggregateResult[] nnRes = [
             SELECT SUM(Amount) tot, COUNT(Id) cnt
             FROM Opportunity
@@ -324,10 +354,7 @@ public with sharing class PipeGenController {
     public static Weekly_Commit__c saveCommit(Weekly_Commit__c commitRecord) {
         commitRecord.Rep__c             = UserInfo.getUserId();
         commitRecord.Week_Start_Date__c = getWeekStart(Date.today());
-        
         upsert commitRecord;
-        
-        // Re-query to return lookup name fields
         return [
             SELECT Id, Rep__c, Week_Start_Date__c, Motion_Type__c, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
@@ -343,14 +370,48 @@ public with sharing class PipeGenController {
         delete new Weekly_Commit__c(Id = commitId);
     }
 
+    // ─── Account Selection ───────────────────────────────────────────────────────
+
+    @AuraEnabled(cacheable=false)
+    public static List<AccountCard> getAccountsForSelection() {
+        Id userId = UserInfo.getUserId();
+        List<AccountCard> cards = new List<AccountCard>();
+        for (Account a : [
+            SELECT Id, Name, Type, Industry, Target_Account__c,
+                (SELECT Id FROM Contacts WHERE IsDeleted = false),
+                (SELECT Id FROM Opportunities WHERE IsClosed = false)
+            FROM Account
+            WHERE OwnerId = :userId
+            ORDER BY Target_Account__c DESC, Name ASC
+            LIMIT 300
+        ]) {
+            AccountCard card  = new AccountCard();
+            card.id           = a.Id;
+            card.name         = a.Name;
+            card.type         = a.Type;
+            card.industry     = a.Industry;
+            card.isTargeted   = a.Target_Account__c;
+            card.contactCount = a.Contacts.size();
+            card.openOppCount = a.Opportunities.size();
+            cards.add(card);
+        }
+        return cards;
+    }
+
+    @AuraEnabled
+    public static void updateTargetAccounts(List<Id> toTarget, List<Id> toUntarget) {
+        List<Account> updates = new List<Account>();
+        for (Id id : (toTarget   != null ? toTarget   : new List<Id>())) updates.add(new Account(Id = id, Target_Account__c = true));
+        for (Id id : (toUntarget != null ? toUntarget : new List<Id>())) updates.add(new Account(Id = id, Target_Account__c = false));
+        if (!updates.isEmpty()) update updates;
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────────
 
     // Returns the Monday of the week containing d
     @TestVisible
     private static Date getWeekStart(Date d) {
         // Jan 1, 1900 was a Monday - use it as reference
-        // Calculate days since that Monday, then mod 7 to get day of week
-        // dow = 0 for Monday, 1 for Tuesday, ..., 6 for Sunday
         Date monday1900 = Date.newInstance(1900, 1, 1);
         Integer daysSince = monday1900.daysBetween(d);
         Integer dow = Math.mod(daysSince, 7);
