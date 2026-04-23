@@ -350,15 +350,25 @@ private class PipeGenControllerTest {
                 Rep__c = rep.Id, Week_Start_Date__c = lw,
                 Motion_Type__c = 'Progression', Commit_Type__c = 'Discovery Call - Economic Buyer',
                 Commit_Description__c = 'Advance deal', Committed_Count__c = 1,
-                Completion_Status__c = 'Completed', Target_Opportunity__c = advanced.Id
+                Target_Opportunity__c = advanced.Id
             );
             Weekly_Commit__c c2 = new Weekly_Commit__c(
                 Rep__c = rep.Id, Week_Start_Date__c = lw,
                 Motion_Type__c = 'Progression', Commit_Type__c = 'Discovery Call - Economic Buyer',
                 Commit_Description__c = 'Progress stalled deal', Committed_Count__c = 1,
-                Completion_Status__c = 'Missed', Target_Opportunity__c = stalled.Id
+                Target_Opportunity__c = stalled.Id
             );
             insert new List<Weekly_Commit__c>{ c1, c2 };
+
+            // Provide a Nektar Discovery event on advanced — drives auto-verification to Completed for c1
+            insert new Event(
+                OwnerId         = rep.Id,
+                WhatId          = advanced.Id,
+                Subject         = 'Discovery Meeting',
+                StartDateTime   = DateTime.newInstance(lw, Time.newInstance(9, 0, 0, 0)),
+                EndDateTime     = DateTime.newInstance(lw, Time.newInstance(10, 0, 0, 0)),
+                Meeting_Type__c = 'Discovery'
+            );
 
             // Simulate the advanced opportunity moving to Stage 3 after the progression commit
             advanced.StageName = 'Stage 3';
