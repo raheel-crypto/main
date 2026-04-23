@@ -192,9 +192,6 @@ public with sharing class PipeGenController {
 
         List<Account> accounts = [
             SELECT Id, Name, Type,
-                (SELECT ActivityDate, Subject
-                 FROM ActivityHistories
-                 ORDER BY ActivityDate DESC, LastModifiedDate DESC LIMIT 1),
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -212,14 +209,49 @@ public with sharing class PipeGenController {
             row.name         = a.Name;
             row.type         = a.Type;
             row.contactCount = a.Contacts.size();
-            if (!a.ActivityHistories.isEmpty() && a.ActivityHistories[0].ActivityDate != null) {
-                row.lastActivityDate    = a.ActivityHistories[0].ActivityDate;
-                row.lastActivitySubject = a.ActivityHistories[0].Subject;
-            }
+            // We'll populate lastActivityDate separately to avoid ActivityHistories relationship restriction
             if (!a.Gong__Conversations__r.isEmpty()) {
                 row.lastGongCallDate = a.Gong__Conversations__r[0].Gong__Call_Start__c;
             }
             rows.add(row);
+        }
+        
+        // Populate lastActivityDate using an Event aggregate per Account to avoid ActivityHistories
+        Set<Id> acctIds = new Set<Id>();
+        for (AccountRow r : rows) acctIds.add(r.id);
+        if (!acctIds.isEmpty()) {
+            for (AggregateResult ar : [
+                SELECT AccountId acctId, MAX(StartDateTime) maxDateTime
+                FROM Event
+                WHERE AccountId IN :acctIds
+                  AND StartDateTime != null
+                GROUP BY AccountId
+            ]) {
+                Id aid = (Id) ar.get('acctId');
+                Datetime maxDt = (Datetime) ar.get('maxDateTime');
+                Date maxDate = maxDt != null ? maxDt.date() : null;
+                for (AccountRow r : rows) {
+                    if (r.id == aid) {
+                        r.lastActivityDate = maxDate;
+                        break;
+                    }
+                }
+            }
+            // Populate lastActivitySubject if needed: do a lightweight query for latest Event subject per account
+            for (Event e : [
+                SELECT AccountId, Subject, ActivityDate
+                FROM Event
+                WHERE AccountId IN :acctIds
+                  AND ActivityDate != null
+                ORDER BY AccountId ASC, ActivityDate DESC
+            ]) {
+                for (AccountRow r : rows) {
+                    if (r.id == e.AccountId && r.lastActivitySubject == null) {
+                        r.lastActivitySubject = e.Subject;
+                        break;
+                    }
+                }
+            }
         }
         return rows;
     }
@@ -231,9 +263,6 @@ public with sharing class PipeGenController {
 
         List<Opportunity> opps = [
             SELECT Id, Name, StageName, Amount, CloseDate, AccountId, Account.Name,
-                (SELECT ActivityDate, Subject
-                 FROM ActivityHistories
-                 ORDER BY ActivityDate DESC, LastModifiedDate DESC LIMIT 1),
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -300,12 +329,50 @@ public with sharing class PipeGenController {
             row.daysInStage = entry != null ? entry.date().daysBetween(today) : 0;
             row.isStale     = row.daysInStage > row.staleThreshold;
 
-            if (!o.ActivityHistories.isEmpty())
-                row.lastActivityDate = o.ActivityHistories[0].ActivityDate;
-            if (!o.Gong__Conversations__r.isEmpty())
-                row.lastGongCallDate = o.Gong__Conversations__r[0].Gong__Call_Start__c;
-
+            // Fetch recent activity dates via Event query to avoid ActivityHistories relationship restriction
+            row.lastActivityDate = null;
+            row.lastGongCallDate = null;
             rows.add(row);
+        }
+        
+        // Populate lastActivityDate and lastGongCallDate for the opp rows with a single Event query
+        Set<Id> oppIdsWithRows = new Set<Id>();
+        for (OppRow r : rows) oppIdsWithRows.add(r.id);
+        if (!oppIdsWithRows.isEmpty()) {
+            // Recent Events (ActivityDate) per Opportunity
+            for (AggregateResult ar : [
+                SELECT WhatId oppId, MAX(StartDateTime) maxDateTime
+                FROM Event
+                WHERE WhatId IN :oppIdsWithRows
+                  AND StartDateTime != null
+                GROUP BY WhatId
+            ]) {
+                Id oppId = (Id) ar.get('oppId');
+                Datetime maxDt = (Datetime) ar.get('maxDateTime');
+                Date maxDate = maxDt != null ? maxDt.date() : null;
+                for (OppRow r : rows) {
+                    if (r.id == oppId) {
+                        r.lastActivityDate = maxDate;
+                        break;
+                    }
+                }
+            }
+            // Gong call timestamps per Opportunity (via relationship field on Conversation)
+            for (AggregateResult ar2 : [
+                SELECT Gong__Primary_Opportunity__c oppId, MAX(Gong__Call_Start__c) maxGong
+                FROM Gong__Gong_Call__c
+                WHERE Gong__Primary_Opportunity__c IN :oppIds
+                GROUP BY Gong__Primary_Opportunity__c
+            ]) {
+                Id oppId = (Id) ar2.get('oppId');
+                Datetime maxGong = (Datetime) ar2.get('maxGong');
+                for (OppRow r : rows) {
+                    if (r.id == oppId) {
+                        r.lastGongCallDate = maxGong;
+                        break;
+                    }
+                }
+            }
         }
         return rows;
     }
@@ -340,8 +407,7 @@ public with sharing class PipeGenController {
         List<Weekly_Commit__c> lastWeekCommits = [
             SELECT Id, Motion_Type__c, Commit_Type__c, Completion_Status__c,
                    Committed_Count__c, Actual_Count__c,
-                   Target_Account__c, Target_Opportunity__c,
-                   Target_Opportunity__r.StageName
+                   Target_Account__c, Target_Opportunity__c
             FROM Weekly_Commit__c
             WHERE Rep__c = :userId
               AND Week_Start_Date__c = :lastWeekStart
@@ -355,6 +421,21 @@ public with sharing class PipeGenController {
         sc.progOppsAdvanced     = 0;
         sc.progOppsStalled      = 0;
 
+        // Query opportunity stages separately to avoid relationship issues
+        Set<Id> progOppIds = new Set<Id>();
+        for (Weekly_Commit__c c : lastWeekCommits) {
+            if (c.Motion_Type__c == 'Progression' && c.Target_Opportunity__c != null) {
+                progOppIds.add(c.Target_Opportunity__c);
+            }
+        }
+        
+        Map<Id, String> oppStages = new Map<Id, String>();
+        if (!progOppIds.isEmpty()) {
+            for (Opportunity o : [SELECT Id, StageName FROM Opportunity WHERE Id IN :progOppIds]) {
+                oppStages.put(o.Id, o.StageName);
+            }
+        }
+
         for (Weekly_Commit__c c : lastWeekCommits) {
             if (c.Motion_Type__c == 'Net New') {
                 sc.nnCommitsTotal++;
@@ -362,8 +443,9 @@ public with sharing class PipeGenController {
             } else if (c.Motion_Type__c == 'Progression') {
                 sc.progCommitsTotal++;
                 if (c.Completion_Status__c == 'Completed') sc.progCommitsCompleted++;
-                if (c.Target_Opportunity__c != null) {
-                    if (c.Target_Opportunity__r.StageName == STAGE_3) sc.progOppsAdvanced++;
+                if (c.Target_Opportunity__c != null && oppStages.containsKey(c.Target_Opportunity__c)) {
+                    String stage = oppStages.get(c.Target_Opportunity__c);
+                    if (stage == STAGE_3) sc.progOppsAdvanced++;
                     else sc.progOppsStalled++;
                 }
             }
