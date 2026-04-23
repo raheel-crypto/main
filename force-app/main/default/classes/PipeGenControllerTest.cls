@@ -1004,4 +1004,242 @@ private class PipeGenControllerTest {
             System.assertNotEquals(null, d.targetAccounts[0].lastActivitySubject, 'Event subject should populate lastActivitySubject');
         }
     }
+
+    private static Integer repCounter = 0;
+
+    private static User makeRepUnder(Id managerId) {
+        repCounter++;
+        Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        User u = new User(
+            FirstName             = 'Rep',
+            LastName              = 'User' + repCounter,
+            Email                 = 'mgrrep' + repCounter + '@test.example.com',
+            Username              = 'mgrrep' + repCounter + System.currentTimeMillis() + '@test.example.com',
+            Alias                 = 'mr' + repCounter,
+            TimeZoneSidKey        = 'America/New_York',
+            LocaleSidKey          = 'en_US',
+            EmailEncodingKey      = 'UTF-8',
+            LanguageLocaleKey     = 'en_US',
+            ProfileId             = p.Id,
+            ManagerId             = managerId,
+            Pipe_Gen_Annual_Target__c = 0
+        );
+        insert u;
+        return u;
+    }
+
+    // ─── getManagerTeamData ───────────────────────────────────────────────────
+
+    @isTest
+    static void testManagerDashboard_emptyWhenNoDirectReports() {
+        User mgr = makeRep(0);
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            System.assertEquals(0, d.reps.size(),            'No direct reports — reps list should be empty');
+            System.assertEquals(0, d.teamSummary.totalReps,  'No direct reports — totalReps should be 0');
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_returnsOnlyDirectReports() {
+        User mgr  = makeRep(0);
+        User rep1 = makeRepUnder(mgr.Id);
+        makeRep(0); // unrelated user — should not appear
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            System.assertEquals(1, d.reps.size(), 'Only direct reports should appear');
+            System.assertEquals(rep1.Id, d.reps[0].repId, 'Direct report Id should match');
+            System.assertEquals(1, d.teamSummary.totalReps);
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_teamSummaryAggregates() {
+        User mgr  = makeRep(0);
+        User rep1 = makeRepUnder(mgr.Id);
+        User rep2 = makeRepUnder(mgr.Id);
+
+        Date tw = thisWeekStart();
+        insert new List<Weekly_Commit__c>{
+            new Weekly_Commit__c(Rep__c = rep1.Id, Week_Start_Date__c = tw,
+                Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+                Commit_Description__c = 'Done commit', Committed_Count__c = 1,
+                Completion_Status__c = 'Completed'),
+            new Weekly_Commit__c(Rep__c = rep1.Id, Week_Start_Date__c = tw,
+                Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+                Commit_Description__c = 'Open commit', Committed_Count__c = 1,
+                Completion_Status__c = 'Not Started')
+        };
+        // rep2 has no commits this week
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            System.assertEquals(2, d.teamSummary.totalReps);
+            System.assertEquals(2, d.teamSummary.totalCommits,     'Two commits across team');
+            System.assertEquals(1, d.teamSummary.completedCommits,  'One completed commit');
+            System.assertEquals(1, d.teamSummary.repsWithNoCommits, 'rep2 has no commits');
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_riskReasonNoCommits() {
+        User mgr = makeRep(0);
+        makeRepUnder(mgr.Id); // no commits this week
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            PipeGenController.RepSummary rs = d.reps[0];
+            System.assertEquals(true, rs.hasRisk, 'Rep with no commits should be at risk');
+            System.assert(rs.riskReasons[0].containsIgnoreCase('no commits'),
+                'Risk reason should mention no commits — got: ' + rs.riskReasons[0]);
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_riskReasonInFlightNoProgression() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        Account a = new Account(Name = 'Risk Co', OwnerId = rep.Id);
+        insert a;
+        insert new Opportunity(Name = 'In-Flight', OwnerId = rep.Id, AccountId = a.Id,
+            StageName = 'Stage 1', CloseDate = Date.today().addDays(30), Amount = 50000);
+
+        // Net New commit only — no Progression
+        insert new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'NN commit', Committed_Count__c = 1,
+            Completion_Status__c = 'Not Started');
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            PipeGenController.RepSummary rs = d.reps[0];
+            System.assertEquals(1, rs.inFlightOppCount, 'In-flight opp count should be 1');
+            System.assertEquals(true, rs.hasRisk);
+            Boolean hasInFlightReason = false;
+            for (String r : rs.riskReasons)
+                if (r.containsIgnoreCase('in-flight')) hasInFlightReason = true;
+            System.assert(hasInFlightReason, 'Risk reasons should mention in-flight — got: ' + rs.riskReasons);
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_noRiskWhenCommitsCompleted() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        insert new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'Done', Committed_Count__c = 1,
+            Completion_Status__c = 'Completed');
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            System.assertEquals(false, d.reps[0].hasRisk,
+                'Rep with completed commit and no in-flight opps should not be at risk');
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_atRiskCommitCountedInSummary() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        insert new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'Flagged', Committed_Count__c = 1,
+            Completion_Status__c = 'Not Started', At_Risk__c = true);
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            System.assertEquals(1, d.teamSummary.atRiskCommitCount,
+                'At-risk commit should be reflected in team summary');
+        }
+    }
+
+    // ─── saveManagerNote ──────────────────────────────────────────────────────
+
+    @isTest
+    static void testSaveManagerNote_persistsNote() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        Weekly_Commit__c c = new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'Commit', Committed_Count__c = 1);
+        insert c;
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.saveManagerNote(c.Id, 'Work on discovery questioning.');
+            Test.stopTest();
+        }
+
+        System.assertEquals('Work on discovery questioning.',
+            [SELECT Manager_Note__c FROM Weekly_Commit__c WHERE Id = :c.Id].Manager_Note__c);
+    }
+
+    // ─── setAtRiskFlag ────────────────────────────────────────────────────────
+
+    @isTest
+    static void testSetAtRiskFlag_setsTrue() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        Weekly_Commit__c c = new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'Commit', Committed_Count__c = 1, At_Risk__c = false);
+        insert c;
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.setAtRiskFlag(c.Id, true);
+            Test.stopTest();
+        }
+
+        System.assertEquals(true, [SELECT At_Risk__c FROM Weekly_Commit__c WHERE Id = :c.Id].At_Risk__c,
+            'At_Risk__c should be true after flag');
+    }
+
+    @isTest
+    static void testSetAtRiskFlag_setsFalse() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        Weekly_Commit__c c = new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'Commit', Committed_Count__c = 1, At_Risk__c = true);
+        insert c;
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.setAtRiskFlag(c.Id, false);
+            Test.stopTest();
+        }
+
+        System.assertEquals(false, [SELECT At_Risk__c FROM Weekly_Commit__c WHERE Id = :c.Id].At_Risk__c,
+            'At_Risk__c should be false after unflag');
+    }
 }
