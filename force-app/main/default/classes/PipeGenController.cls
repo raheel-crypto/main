@@ -121,7 +121,7 @@ public with sharing class PipeGenController {
             WHERE Field = 'StageName'
               AND CreatedDate >= :qStart
               AND CreatedDate <= :qEnd
-        ]) {
+        ]) { 
             if (h.NewValue == STAGE_3) {
                 stage3Ids.add(h.OpportunityId);
             }
@@ -146,15 +146,14 @@ public with sharing class PipeGenController {
 
         // ADJUST: Target_Account__c is a checkbox field on Account marking it as a target.
         // Swap in your own filter if you use a different field (e.g. Account_Tier__c = 'Tier 1').
-        // ADJUST: Gong__Conversations__r is the child relationship name from Account → Gong__gong_call__c.
+        // ADJUST: Gong__gong_calls__r is the child relationship name from Account → Gong__gong_call__c.
         //         Confirm in Setup → Object Manager → Gong__gong_call__c → Fields → Account lookup → Child Relationship Name.
-        // ADJUST: Gong__Call_Start__c is the call date field in the standard Gong package — verify in your org.
+        // ADJUST: Gong__Start_Time__c is the call date field in the standard Gong package — verify in your org.
         List<Account> accounts = [
             SELECT Id, Name, Type,
                 (SELECT ActivityDate, Subject
                  FROM ActivityHistories
-                 WHERE ActivityDate != null
-                 ORDER BY ActivityDate DESC LIMIT 1),
+                 ORDER BY ActivityDate DESC, LastModifiedDate DESC LIMIT 1),
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -172,7 +171,7 @@ public with sharing class PipeGenController {
             row.name         = a.Name;
             row.type         = a.Type;
             row.contactCount = a.Contacts.size();
-            if (!a.ActivityHistories.isEmpty()) {
+            if (!a.ActivityHistories.isEmpty() && a.ActivityHistories[0].ActivityDate != null) {
                 row.lastActivityDate    = a.ActivityHistories[0].ActivityDate;
                 row.lastActivitySubject = a.ActivityHistories[0].Subject;
             }
@@ -189,13 +188,13 @@ public with sharing class PipeGenController {
     private static List<OppRow> buildStage1Opps(Id userId) {
         List<OppRow> rows = new List<OppRow>();
 
-        // ADJUST: Gong__Conversations__r on Opportunity — confirm relationship name for your Gong package.
-        // ADJUST: Gong__Call_Start__c is the call date field — verify in your org.
+        // ADJUST: Gong__gong_calls__r on Opportunity — confirm relationship name for your Gong package.
+        // ADJUST: Gong__Start_Time__c is the call date field — verify in your org.
         List<Opportunity> opps = [
             SELECT Id, Name, Amount, CloseDate, AccountId, Account.Name,
                 (SELECT ActivityDate, Subject
                  FROM ActivityHistories
-                 ORDER BY ActivityDate DESC LIMIT 1),
+                 ORDER BY ActivityDate DESC, LastModifiedDate DESC LIMIT 1),
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -325,12 +324,12 @@ public with sharing class PipeGenController {
     public static Weekly_Commit__c saveCommit(Weekly_Commit__c commitRecord) {
         commitRecord.Rep__c             = UserInfo.getUserId();
         commitRecord.Week_Start_Date__c = getWeekStart(Date.today());
-
+        
         upsert commitRecord;
-
+        
         // Re-query to return lookup name fields
         return [
-            SELECT Id, Motion_Type__c, Commit_Type__c, Commit_Description__c,
+            SELECT Id, Rep__c, Week_Start_Date__c, Motion_Type__c, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
                    Target_Opportunity__c, Target_Opportunity__r.Name,
                    Committed_Count__c, Actual_Count__c,
@@ -349,7 +348,12 @@ public with sharing class PipeGenController {
     // Returns the Monday of the week containing d
     @TestVisible
     private static Date getWeekStart(Date d) {
-        Integer dow = Math.mod(Date.newInstance(1900, 1, 7).daysBetween(d), 7);
+        // Jan 1, 1900 was a Monday - use it as reference
+        // Calculate days since that Monday, then mod 7 to get day of week
+        // dow = 0 for Monday, 1 for Tuesday, ..., 6 for Sunday
+        Date monday1900 = Date.newInstance(1900, 1, 1);
+        Integer daysSince = monday1900.daysBetween(d);
+        Integer dow = Math.mod(daysSince, 7);
         return d.addDays(-dow);
     }
 }
