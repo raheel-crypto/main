@@ -6,7 +6,10 @@ private class PipeGenControllerTest {
     // Mirrors the private getWeekStart so test data dates align with controller queries
     private static Date thisWeekStart() {
         Date d = Date.today();
-        Integer dow = Math.mod(Date.newInstance(1900, 1, 7).daysBetween(d), 7);
+        // Jan 1, 1900 was a Monday - use it as reference
+        Date monday1900 = Date.newInstance(1900, 1, 1);
+        Integer daysSince = monday1900.daysBetween(d);
+        Integer dow = Math.mod(daysSince, 7);
         return d.addDays(-dow);
     }
 
