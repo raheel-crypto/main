@@ -68,6 +68,31 @@ public with sharing class PipeGenController {
         @AuraEnabled public Integer openOppCount;
     }
 
+    public class ManagerDashboardData {
+        @AuraEnabled public List<RepSummary> reps;
+        @AuraEnabled public TeamSummary      teamSummary;
+    }
+
+    public class TeamSummary {
+        @AuraEnabled public Integer totalReps;
+        @AuraEnabled public Integer totalCommits;
+        @AuraEnabled public Integer completedCommits;
+        @AuraEnabled public Integer atRiskCommitCount;
+        @AuraEnabled public Integer repsWithNoCommits;
+    }
+
+    public class RepSummary {
+        @AuraEnabled public String                 repId;
+        @AuraEnabled public String                 repName;
+        @AuraEnabled public List<Weekly_Commit__c> thisWeekCommits;
+        @AuraEnabled public ScorecardData          lastWeekScorecard;
+        @AuraEnabled public List<String>           riskReasons;
+        @AuraEnabled public Boolean                hasRisk;
+        @AuraEnabled public Integer                inFlightOppCount;
+        @AuraEnabled public Integer                thisWeekTotal;
+        @AuraEnabled public Integer                thisWeekCompleted;
+    }
+
     // ─── Config ─────────────────────────────────────────────────────────────────
 
     // Adjust stage names to match your org's picklist values
@@ -687,6 +712,165 @@ public with sharing class PipeGenController {
         for (Id id : (toTarget   != null ? toTarget   : new List<Id>())) updates.add(new Account(Id = id, Target_Account__c = true));
         for (Id id : (toUntarget != null ? toUntarget : new List<Id>())) updates.add(new Account(Id = id, Target_Account__c = false));
         if (!updates.isEmpty()) update updates;
+    }
+
+    // ─── Manager Dashboard ───────────────────────────────────────────────────────
+
+    @AuraEnabled(cacheable=false)
+    public static ManagerDashboardData getManagerTeamData() {
+        Id   mgr       = UserInfo.getUserId();
+        Date weekStart = getWeekStart(Date.today());
+        Date lwStart   = weekStart.addDays(-7);
+
+        List<User> reps = [
+            SELECT Id, Name
+            FROM   User
+            WHERE  ManagerId = :mgr
+              AND  IsActive   = true
+            ORDER BY Name
+        ];
+        ManagerDashboardData result = new ManagerDashboardData();
+        result.reps        = new List<RepSummary>();
+        result.teamSummary = new TeamSummary();
+        if (reps.isEmpty()) return result;
+
+        Set<Id> repIds = new Map<Id, User>(reps).keySet();
+
+        // ── This week commits (one query for whole team) ─────────────────────
+        Map<Id, List<Weekly_Commit__c>> twByRep = new Map<Id, List<Weekly_Commit__c>>();
+        for (Id rid : repIds) twByRep.put(rid, new List<Weekly_Commit__c>());
+        for (Weekly_Commit__c c : [
+            SELECT Id, Rep__c, Motion_Type__c, Commit_Type__c, Commit_Description__c,
+                   Target_Account__c, Target_Account__r.Name,
+                   Target_Opportunity__c, Target_Opportunity__r.Name,
+                   Committed_Count__c, Actual_Count__c,
+                   Completion_Status__c, Manager_Note__c, At_Risk__c, Notes__c
+            FROM   Weekly_Commit__c
+            WHERE  Rep__c IN :repIds
+              AND  Week_Start_Date__c = :weekStart
+            ORDER BY Motion_Type__c ASC, CreatedDate ASC
+        ]) { twByRep.get(c.Rep__c).add(c); }
+
+        // ── Last week commits (scorecard) ────────────────────────────────────
+        Map<Id, List<Weekly_Commit__c>> lwByRep = new Map<Id, List<Weekly_Commit__c>>();
+        for (Id rid : repIds) lwByRep.put(rid, new List<Weekly_Commit__c>());
+        for (Weekly_Commit__c c : [
+            SELECT Id, Rep__c, Motion_Type__c, Completion_Status__c,
+                   Committed_Count__c, Target_Opportunity__c
+            FROM   Weekly_Commit__c
+            WHERE  Rep__c IN :repIds
+              AND  Week_Start_Date__c = :lwStart
+        ]) { lwByRep.get(c.Rep__c).add(c); }
+
+        // ── In-flight opp count per rep (risk signal) ────────────────────────
+        Map<Id, Integer> inFlightByRep = new Map<Id, Integer>();
+        for (Id rid : repIds) inFlightByRep.put(rid, 0);
+        for (AggregateResult ar : [
+            SELECT OwnerId rid, COUNT(Id) cnt
+            FROM   Opportunity
+            WHERE  OwnerId IN :repIds
+              AND  StageName IN :IN_FLIGHT_STAGES
+              AND  IsClosed   = false
+            GROUP BY OwnerId
+        ]) { inFlightByRep.put((Id)ar.get('rid'), (Integer)ar.get('cnt')); }
+
+        // ── Opp stages for last-week scorecard ───────────────────────────────
+        Set<Id> allOppIds = new Set<Id>();
+        for (List<Weekly_Commit__c> lst : lwByRep.values())
+            for (Weekly_Commit__c c : lst)
+                if (c.Target_Opportunity__c != null) allOppIds.add(c.Target_Opportunity__c);
+
+        Map<Id, String> oppStages = new Map<Id, String>();
+        if (!allOppIds.isEmpty())
+            for (Opportunity o : [SELECT Id, StageName FROM Opportunity WHERE Id IN :allOppIds])
+                oppStages.put(o.Id, o.StageName);
+
+        // ── Build per-rep summaries ───────────────────────────────────────────
+        Integer teamTotal = 0, teamCompleted = 0, teamAtRisk = 0, teamNoCommits = 0;
+
+        for (User rep : reps) {
+            List<Weekly_Commit__c> twCommits = twByRep.get(rep.Id);
+            List<Weekly_Commit__c> lwCommits = lwByRep.get(rep.Id);
+            Integer inFlight = inFlightByRep.get(rep.Id);
+
+            RepSummary rs        = new RepSummary();
+            rs.repId             = rep.Id;
+            rs.repName           = rep.Name;
+            rs.thisWeekCommits   = twCommits;
+            rs.inFlightOppCount  = inFlight;
+            rs.lastWeekScorecard = buildRepScorecard(lwCommits, oppStages);
+            rs.riskReasons       = computeRiskReasons(twCommits, inFlight);
+            rs.hasRisk           = !rs.riskReasons.isEmpty();
+            rs.thisWeekTotal     = twCommits.size();
+            rs.thisWeekCompleted = 0;
+            for (Weekly_Commit__c c : twCommits) {
+                if (c.Completion_Status__c == 'Completed') rs.thisWeekCompleted++;
+                if (c.At_Risk__c) teamAtRisk++;
+            }
+            teamTotal     += twCommits.size();
+            teamCompleted += rs.thisWeekCompleted;
+            if (twCommits.isEmpty()) teamNoCommits++;
+
+            result.reps.add(rs);
+        }
+
+        result.teamSummary.totalReps         = reps.size();
+        result.teamSummary.totalCommits      = teamTotal;
+        result.teamSummary.completedCommits  = teamCompleted;
+        result.teamSummary.atRiskCommitCount = teamAtRisk;
+        result.teamSummary.repsWithNoCommits = teamNoCommits;
+        return result;
+    }
+
+    @AuraEnabled
+    public static void saveManagerNote(Id commitId, String note) {
+        update new Weekly_Commit__c(Id = commitId, Manager_Note__c = note);
+    }
+
+    @AuraEnabled
+    public static void setAtRiskFlag(Id commitId, Boolean atRisk) {
+        update new Weekly_Commit__c(Id = commitId, At_Risk__c = atRisk);
+    }
+
+    private static List<String> computeRiskReasons(List<Weekly_Commit__c> commits, Integer inFlightCount) {
+        List<String> reasons = new List<String>();
+        if (commits.isEmpty()) {
+            reasons.add('No commits this week');
+            return reasons;
+        }
+        Integer progCount = 0, completedCount = 0;
+        for (Weekly_Commit__c c : commits) {
+            if (c.Motion_Type__c == 'Progression') progCount++;
+            if (c.Completion_Status__c == 'Completed') completedCount++;
+        }
+        if (progCount == 0 && inFlightCount > 0)
+            reasons.add(inFlightCount + ' in-flight opp' + (inFlightCount > 1 ? 's' : '') + ', no progression commit');
+        if (completedCount == 0)
+            reasons.add(commits.size() + ' commit' + (commits.size() > 1 ? 's' : '') + ' logged, none completed');
+        return reasons;
+    }
+
+    private static ScorecardData buildRepScorecard(List<Weekly_Commit__c> commits, Map<Id, String> oppStages) {
+        ScorecardData sc    = new ScorecardData();
+        sc.nnCommitsTotal   = 0; sc.nnCommitsCompleted  = 0;
+        sc.progCommitsTotal = 0; sc.progCommitsCompleted = 0;
+        sc.progOppsAdvanced = 0; sc.progOppsStalled = 0;
+        sc.nnDollarGenerated = 0; sc.nnOppsCreated = 0;
+        for (Weekly_Commit__c c : commits) {
+            if (c.Motion_Type__c == 'Net New') {
+                sc.nnCommitsTotal++;
+                if (c.Completion_Status__c == 'Completed') sc.nnCommitsCompleted++;
+            } else if (c.Motion_Type__c == 'Progression') {
+                sc.progCommitsTotal++;
+                if (c.Completion_Status__c == 'Completed') sc.progCommitsCompleted++;
+                String stage = oppStages.get(c.Target_Opportunity__c);
+                if (stage == STAGE_3)   sc.progOppsAdvanced++;
+                else if (stage != null) sc.progOppsStalled++;
+            }
+        }
+        sc.progConversionRate = sc.progCommitsTotal > 0
+            ? (sc.progOppsAdvanced * 100.0 / sc.progCommitsTotal) : 0;
+        return sc;
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────────
