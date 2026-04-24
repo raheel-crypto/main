@@ -732,6 +732,11 @@ public with sharing class PipeGenController {
         ManagerDashboardData result = new ManagerDashboardData();
         result.reps        = new List<RepSummary>();
         result.teamSummary = new TeamSummary();
+        result.teamSummary.totalReps         = reps.size();
+        result.teamSummary.totalCommits      = 0;
+        result.teamSummary.completedCommits  = 0;
+        result.teamSummary.atRiskCommitCount = 0;
+        result.teamSummary.repsWithNoCommits = 0;
         if (reps.isEmpty()) return result;
 
         Set<Id> repIds = new Map<Id, User>(reps).keySet();
