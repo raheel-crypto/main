@@ -82,6 +82,9 @@ export default class PipeGenRepDashboard extends LightningElement {
             statusDotClass: status === 'Completed' ? 'status-dot status-dot--complete'
                           : status === 'Partial'   ? 'status-dot status-dot--partial'
                           :                          'status-dot status-dot--pending',
+            commitCardClass: status === 'Completed' ? 'commit-card commit-card--complete'
+                           : status === 'Partial'   ? 'commit-card commit-card--partial'
+                           :                          'commit-card commit-card--pending',
             showMarkDone:   isMEDDPICC && status !== 'Completed'
         };
     }

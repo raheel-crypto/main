@@ -497,3 +497,83 @@
     font-weight: 600;
     color: #e0e7ff;
 }
+
+/* ── Commit Cards ─────────────────────────────────────────────────────────── */
+
+.commit-card {
+    border: 1px solid #e5e7eb;
+    border-left: 4px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.875rem;
+    margin-bottom: 0.5rem;
+    background: #ffffff;
+    transition: box-shadow 0.15s, transform 0.12s;
+}
+
+.commit-card:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+}
+
+.commit-card--complete {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+}
+
+.commit-card--partial {
+    border-left-color: #f59e0b;
+    background: #fffbeb;
+}
+
+.commit-card--pending {
+    border-left-color: #ef4444;
+    background: #fef2f2;
+}
+
+.cc-header {
+    margin-bottom: 0.3rem;
+}
+
+.cc-title-group {
+    min-width: 0;
+    flex: 1;
+}
+
+.cc-actions {
+    flex-shrink: 0;
+}
+
+.cc-type {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #1e3a5f;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.cc-progress {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #6b7280;
+    font-variant-numeric: tabular-nums;
+    background: rgba(0, 0, 0, 0.06);
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+.cc-desc {
+    font-size: 0.8rem;
+    color: #374151;
+    line-height: 1.4;
+    margin-bottom: 0.2rem;
+}
+
+.cc-target {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
