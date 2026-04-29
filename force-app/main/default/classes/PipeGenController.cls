@@ -11,13 +11,18 @@ public with sharing class PipeGenController {
     }
 
     public class QuarterlyTarget {
-        @AuraEnabled public Decimal totalTarget;
-        @AuraEnabled public Decimal netNewTarget;
-        @AuraEnabled public Decimal progressionTarget;
-        @AuraEnabled public Decimal netNewActual;
-        @AuraEnabled public Decimal progressionActual;
-        @AuraEnabled public Integer weeksRemaining;
-        @AuraEnabled public String  quarter;
+        @AuraEnabled public Decimal        pipelineTarget;
+        @AuraEnabled public Decimal        pipelineActual;
+        @AuraEnabled public Integer        weeksRemaining;
+        @AuraEnabled public String         quarter;
+        @AuraEnabled public List<StageCard> stageCards;
+    }
+
+    public class StageCard {
+        @AuraEnabled public String  stageName;
+        @AuraEnabled public Integer oppCount;
+        @AuraEnabled public Decimal amount;
+        @AuraEnabled public Boolean isClosedWon;
     }
 
     public class AccountRow {
@@ -66,6 +71,15 @@ public with sharing class PipeGenController {
         @AuraEnabled public Boolean isTargeted;
         @AuraEnabled public Integer contactCount;
         @AuraEnabled public Integer openOppCount;
+        @AuraEnabled public String  accountStatus;
+        @AuraEnabled public Decimal arr;
+        @AuraEnabled public String  accountTier;
+        @AuraEnabled public Decimal estimatedTam;
+        @AuraEnabled public Integer bankerCount;
+        @AuraEnabled public String  website;
+        @AuraEnabled public String  segment;
+        @AuraEnabled public Date    lastActivityDate;
+        @AuraEnabled public Integer earlyStageOppCount;
     }
 
     public class ManagerDashboardData {
@@ -95,17 +109,40 @@ public with sharing class PipeGenController {
 
     // ─── Config ─────────────────────────────────────────────────────────────────
 
-    // Adjust stage names to match your org's picklist values
-    private static final String STAGE_1 = 'Stage 1';
-    private static final String STAGE_2 = 'Stage 2';
-    private static final String STAGE_3 = 'Stage 3';
+    private static final String STAGE_DEMO        = '1 - Demo';
+    private static final String STAGE_DISCOVERY   = '2 - Discovery';
+    private static final String STAGE_POV         = '3 - POV';
+    private static final String STAGE_PROPOSAL    = '4 - Proposal';
+    private static final String STAGE_CONTRACTING = '5 - Contracting';
+    private static final String STAGE_CLOSED_WON  = 'Closed Won';
+    private static final String STAGE_CLOSED_LOST = 'Closed Lost';
 
-    private static final Set<String> IN_FLIGHT_STAGES = new Set<String>{ STAGE_1, STAGE_2 };
+    // All open in-flight stages
+    private static final Set<String> IN_FLIGHT_STAGES = new Set<String>{
+        STAGE_DEMO, STAGE_DISCOVERY, STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING
+    };
 
-    // Staleness thresholds in days per stage — S2 tighter since it should be moving faster
+    // Pipeline target = 2-Discovery and beyond (excludes 1-Demo)
+    private static final Set<String> PIPELINE_STAGES = new Set<String>{
+        STAGE_DISCOVERY, STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING, STAGE_CLOSED_WON
+    };
+
+    // Stage order for display
+    private static final List<String> STAGE_ORDER = new List<String>{
+        STAGE_DEMO, STAGE_DISCOVERY, STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING, STAGE_CLOSED_WON
+    };
+
+    // Stages where a progression commit counts as "advanced"
+    private static final Set<String> ADVANCED_STAGES = new Set<String>{
+        STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING, STAGE_CLOSED_WON
+    };
+
     private static final Map<String, Integer> STALE_THRESHOLDS = new Map<String, Integer>{
-        STAGE_1 => 21,
-        STAGE_2 => 14
+        STAGE_DEMO        => 21,
+        STAGE_DISCOVERY   => 14,
+        STAGE_POV         => 14,
+        STAGE_PROPOSAL    => 10,
+        STAGE_CONTRACTING => 7
     };
 
     // ─── Nektar Activity Verification ────────────────────────────────────────────
@@ -162,51 +199,73 @@ public with sharing class PipeGenController {
         Integer qStartMonth = ((today.month() - 1) / 3) * 3 + 1;
         Date qStart = Date.newInstance(today.year(), qStartMonth, 1);
         Date qEnd   = qStart.addMonths(3).addDays(-1);
-        qt.quarter  = 'Q' + ((qStartMonth / 3) + 1) + ' ' + today.year();
+        qt.quarter        = 'Q' + ((qStartMonth / 3) + 1) + ' ' + today.year();
         qt.weeksRemaining = Math.max(0, today.daysBetween(qEnd) / 7);
 
-        // Quota — stored on User as Pipe_Gen_Annual_Target__c
         Decimal annual = 0;
         try {
             User u = [SELECT Pipe_Gen_Annual_Target__c FROM User WHERE Id = :userId LIMIT 1];
             annual = u.Pipe_Gen_Annual_Target__c != null ? u.Pipe_Gen_Annual_Target__c : 0;
         } catch (Exception e) { annual = 0; }
+        qt.pipelineTarget = annual / 4;
 
-        qt.totalTarget       = annual / 4;
-        qt.netNewTarget      = qt.totalTarget * 0.5;
-        qt.progressionTarget = qt.totalTarget * 0.5;
-
-        AggregateResult[] nnRes = [
-            SELECT SUM(Amount) tot
-            FROM Opportunity
+        // Opps created this quarter
+        Set<Id> createdThisQtr = new Set<Id>();
+        for (Opportunity o : [
+            SELECT Id FROM Opportunity
             WHERE OwnerId = :userId
               AND CreatedDate >= :qStart
               AND CreatedDate <= :qEnd
-              AND IsClosed = false
-              AND StageName != 'Stage 0'
-        ];
-        qt.netNewActual = nnRes[0].get('tot') != null ? (Decimal)nnRes[0].get('tot') : 0;
+              AND StageName != :STAGE_CLOSED_LOST
+        ]) { createdThisQtr.add(o.Id); }
 
-        Set<Id> stage3Ids = new Set<Id>();
+        // Opps progressed into pipeline stages (2+) this quarter
+        Set<Id> progressedThisQtr = new Set<Id>();
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId, NewValue
-            FROM OpportunityFieldHistory
-            WHERE Field = 'StageName'
+            SELECT OpportunityId FROM OpportunityFieldHistory
+            WHERE Field      = 'StageName'
+              AND NewValue   IN :PIPELINE_STAGES
               AND CreatedDate >= :qStart
               AND CreatedDate <= :qEnd
-        ]) {
-            if (h.NewValue == STAGE_3) stage3Ids.add(h.OpportunityId);
+        ]) { progressedThisQtr.add(h.OpportunityId); }
+
+        Set<Id> qualifyingIds = new Set<Id>(createdThisQtr);
+        qualifyingIds.addAll(progressedThisQtr);
+
+        // Initialize stage cards
+        Map<String, StageCard> cardMap = new Map<String, StageCard>();
+        for (String s : STAGE_ORDER) {
+            StageCard sc  = new StageCard();
+            sc.stageName  = s;
+            sc.oppCount   = 0;
+            sc.amount     = 0;
+            sc.isClosedWon = (s == STAGE_CLOSED_WON);
+            cardMap.put(s, sc);
         }
 
-        qt.progressionActual = 0;
-        if (!stage3Ids.isEmpty()) {
-            AggregateResult[] pRes = [
-                SELECT SUM(Amount) tot
+        Decimal pipelineActual = 0;
+        if (!qualifyingIds.isEmpty()) {
+            for (Opportunity o : [
+                SELECT Id, StageName, Amount, ARR__c
                 FROM Opportunity
-                WHERE Id IN :stage3Ids AND OwnerId = :userId
-            ];
-            qt.progressionActual = pRes[0].get('tot') != null ? (Decimal)pRes[0].get('tot') : 0;
+                WHERE Id IN :qualifyingIds
+                  AND OwnerId = :userId
+                  AND StageName != :STAGE_CLOSED_LOST
+            ]) {
+                StageCard sc = cardMap.get(o.StageName);
+                if (sc == null) continue;
+                sc.oppCount++;
+                Decimal val = (o.StageName == STAGE_CLOSED_WON)
+                    ? (o.ARR__c != null ? o.ARR__c : 0)
+                    : (o.Amount  != null ? o.Amount  : 0);
+                sc.amount += val;
+                if (PIPELINE_STAGES.contains(o.StageName)) pipelineActual += val;
+            }
         }
+
+        qt.pipelineActual = pipelineActual;
+        qt.stageCards     = new List<StageCard>();
+        for (String s : STAGE_ORDER) qt.stageCards.add(cardMap.get(s));
         return qt;
     }
 
@@ -470,7 +529,7 @@ public with sharing class PipeGenController {
                 if (c.Completion_Status__c == 'Completed') sc.progCommitsCompleted++;
                 if (c.Target_Opportunity__c != null && oppStages.containsKey(c.Target_Opportunity__c)) {
                     String stage = oppStages.get(c.Target_Opportunity__c);
-                    if (stage == STAGE_3) sc.progOppsAdvanced++;
+                    if (ADVANCED_STAGES.contains(stage)) sc.progOppsAdvanced++;
                     else sc.progOppsStalled++;
                 }
             }
@@ -682,28 +741,97 @@ public with sharing class PipeGenController {
 
     @AuraEnabled(cacheable=false)
     public static List<AccountCard> getAccountsForSelection() {
-        Id userId = UserInfo.getUserId();
-        List<AccountCard> cards = new List<AccountCard>();
-        for (Account a : [
-            SELECT Id, Name, Type, Industry, Target_Account__c,
-                (SELECT Id FROM Contacts WHERE IsDeleted = false),
-                (SELECT Id FROM Opportunities WHERE IsClosed = false)
+        Id   userId       = UserInfo.getUserId();
+        Date today        = Date.today();
+        Date thirtyAgo    = today.addDays(-30);
+        Date sixMonthsAgo = today.addDays(-180);
+
+        List<Account> accounts = [
+            SELECT Id, Name, Type, Industry, Target_Account__c, Website,
+                   Account_Status__c, ARR__c, Account_Tier__c,
+                   Estimated_TAM__c, Number_of_Bankers__c,
+                   (SELECT Id, StageName, Type, CloseDate, IsClosed
+                    FROM Opportunities WHERE IsDeleted = false
+                    ORDER BY CloseDate DESC LIMIT 50),
+                   (SELECT Id FROM Contacts WHERE IsDeleted = false)
             FROM Account
             WHERE OwnerId = :userId
-            ORDER BY Target_Account__c DESC, Name ASC
+            ORDER BY Name ASC
             LIMIT 300
-        ]) {
-            AccountCard card  = new AccountCard();
-            card.id           = a.Id;
-            card.name         = a.Name;
-            card.type         = a.Type;
-            card.industry     = a.Industry;
-            card.isTargeted   = a.Target_Account__c;
-            card.contactCount = a.Contacts.size();
-            card.openOppCount = a.Opportunities.size();
+        ];
+
+        Set<Id> acctIds = new Map<Id, Account>(accounts).keySet();
+        Map<Id, Date> lastActivityByAcct = new Map<Id, Date>();
+        for (AggregateResult ar : [
+            SELECT AccountId aid, MAX(ActivityDate) maxDate
+            FROM Event
+            WHERE AccountId IN :acctIds
+              AND ActivityDate != null
+            GROUP BY AccountId
+        ]) { lastActivityByAcct.put((Id)ar.get('aid'), (Date)ar.get('maxDate')); }
+
+        List<AccountCard> cards = new List<AccountCard>();
+        for (Account a : accounts) {
+            Integer openOppCount   = 0;
+            Integer earlyStageCount = 0;
+            Boolean hasRecentCL    = false;
+            Boolean hasOldCL       = false;
+            Boolean hasOnlyOldCL   = true;
+
+            for (Opportunity o : a.Opportunities) {
+                if (!o.IsClosed) {
+                    openOppCount++;
+                    hasOnlyOldCL = false;
+                    if (o.StageName == STAGE_DEMO || o.StageName == STAGE_DISCOVERY)
+                        earlyStageCount++;
+                } else if (o.StageName == STAGE_CLOSED_LOST && o.CloseDate != null) {
+                    if (o.CloseDate >= sixMonthsAgo) hasRecentCL = true;
+                    else hasOldCL = true;
+                }
+            }
+
+            AccountCard card       = new AccountCard();
+            card.id                = a.Id;
+            card.name              = a.Name;
+            card.type              = a.Type;
+            card.industry          = a.Industry;
+            card.isTargeted        = a.Target_Account__c;
+            card.contactCount      = a.Contacts.size();
+            card.openOppCount      = openOppCount;
+            card.earlyStageOppCount = earlyStageCount;
+            card.accountStatus     = a.Account_Status__c;
+            card.arr               = a.ARR__c;
+            card.accountTier       = a.Account_Tier__c;
+            card.estimatedTam      = a.Estimated_TAM__c;
+            card.bankerCount       = a.Number_of_Bankers__c != null ? a.Number_of_Bankers__c.intValue() : 0;
+            card.website           = a.Website;
+            card.lastActivityDate  = lastActivityByAcct.get(a.Id);
+            card.segment           = computeSegment(
+                a.Account_Status__c, a.ARR__c, openOppCount, earlyStageCount,
+                hasRecentCL, hasOldCL, hasOnlyOldCL,
+                lastActivityByAcct.get(a.Id), thirtyAgo
+            );
             cards.add(card);
         }
         return cards;
+    }
+
+    private static String computeSegment(
+        String status, Decimal arr, Integer openCount, Integer earlyCount,
+        Boolean hasRecentCL, Boolean hasOldCL, Boolean hasOnlyOldCL,
+        Date lastActivity, Date thirtyAgo
+    ) {
+        Boolean isCustomer       = 'Customer'.equals(status);
+        Boolean isFormerCustomer = 'Former Customer'.equals(status);
+        Boolean isProspect       = 'Prospect'.equals(status);
+
+        if (isCustomer && arr != null && arr > 0) return 'Expansion';
+        if (earlyCount > 0 && !isCustomer && !isFormerCustomer) return 'Early Stage';
+        if (isProspect && (openCount == 0 || hasOnlyOldCL)) return 'Uncracked';
+        if (!isCustomer && !isFormerCustomer && openCount == 0 && hasRecentCL) return 'Recent Closed Lost';
+        if (!isCustomer && !isFormerCustomer && openCount == 0
+                && lastActivity != null && lastActivity >= thirtyAgo) return 'No Opportunities';
+        return 'Other';
     }
 
     @AuraEnabled
@@ -828,6 +956,50 @@ public with sharing class PipeGenController {
     }
 
     @AuraEnabled
+    public static List<Weekly_Commit__c> carryForwardIncompleteCommits() {
+        Id   userId        = UserInfo.getUserId();
+        Date weekStart     = getWeekStart(Date.today());
+        Date lastWeekStart = weekStart.addDays(-7);
+
+        List<Weekly_Commit__c> incomplete = [
+            SELECT Motion_Type__c, Commit_Type__c, Commit_Description__c,
+                   Target_Account__c, Target_Opportunity__c, Committed_Count__c, Notes__c
+            FROM Weekly_Commit__c
+            WHERE Rep__c = :userId
+              AND Week_Start_Date__c = :lastWeekStart
+              AND Completion_Status__c != 'Completed'
+        ];
+        if (incomplete.isEmpty()) return new List<Weekly_Commit__c>();
+
+        List<Weekly_Commit__c> toInsert = new List<Weekly_Commit__c>();
+        for (Weekly_Commit__c c : incomplete) {
+            toInsert.add(new Weekly_Commit__c(
+                Rep__c                = userId,
+                Week_Start_Date__c    = weekStart,
+                Motion_Type__c        = c.Motion_Type__c,
+                Commit_Type__c        = c.Commit_Type__c,
+                Commit_Description__c = c.Commit_Description__c,
+                Target_Account__c     = c.Target_Account__c,
+                Target_Opportunity__c = c.Target_Opportunity__c,
+                Committed_Count__c    = c.Committed_Count__c,
+                Notes__c              = c.Notes__c
+            ));
+        }
+        insert toInsert;
+
+        return [
+            SELECT Id, Motion_Type__c, Commit_Type__c, Commit_Description__c,
+                   Target_Account__c, Target_Account__r.Name,
+                   Target_Opportunity__c, Target_Opportunity__r.Name,
+                   Committed_Count__c, Actual_Count__c,
+                   Completion_Status__c, Gong_Verified__c, Notes__c
+            FROM Weekly_Commit__c
+            WHERE Id IN :toInsert
+            ORDER BY Motion_Type__c ASC, CreatedDate ASC
+        ];
+    }
+
+    @AuraEnabled
     public static void saveManagerNote(Id commitId, String note) {
         update new Weekly_Commit__c(Id = commitId, Manager_Note__c = note);
     }
@@ -869,8 +1041,8 @@ public with sharing class PipeGenController {
                 sc.progCommitsTotal++;
                 if (c.Completion_Status__c == 'Completed') sc.progCommitsCompleted++;
                 String stage = oppStages.get(c.Target_Opportunity__c);
-                if (stage == STAGE_3)   sc.progOppsAdvanced++;
-                else if (stage != null) sc.progOppsStalled++;
+                if (ADVANCED_STAGES.contains(stage))  sc.progOppsAdvanced++;
+                else if (stage != null)                sc.progOppsStalled++;
             }
         }
         sc.progConversionRate = sc.progCommitsTotal > 0
