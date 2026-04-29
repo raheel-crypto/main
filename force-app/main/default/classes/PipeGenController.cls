@@ -279,7 +279,7 @@ public with sharing class PipeGenController {
         List<AccountRow> rows = new List<AccountRow>();
 
         List<Account> accounts = [
-            SELECT Id, Name, Type,
+            SELECT Id, Name, Type, LastActivityDate,
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -297,35 +297,18 @@ public with sharing class PipeGenController {
             row.name         = a.Name;
             row.type         = a.Type;
             row.contactCount = a.Contacts.size();
+            row.lastActivityDate = a.LastActivityDate;
             // We'll populate lastActivityDate separately to avoid ActivityHistories relationship restriction
             if (!a.Gong__Conversations__r.isEmpty()) {
                 row.lastGongCallDate = a.Gong__Conversations__r[0].Gong__Call_Start__c;
             }
             rows.add(row);
         }
-        
-        // Populate lastActivityDate using an Event aggregate per Account to avoid ActivityHistories
+
+        // Populate lastActivitySubject from most recent Event per account
         Set<Id> acctIds = new Set<Id>();
         for (AccountRow r : rows) acctIds.add(r.id);
         if (!acctIds.isEmpty()) {
-            for (AggregateResult ar : [
-                SELECT AccountId acctId, MAX(StartDateTime) maxDateTime
-                FROM Event
-                WHERE AccountId IN :acctIds
-                  AND StartDateTime != null
-                GROUP BY AccountId
-            ]) {
-                Id aid = (Id) ar.get('acctId');
-                Datetime maxDt = (Datetime) ar.get('maxDateTime');
-                Date maxDate = maxDt != null ? maxDt.date() : null;
-                for (AccountRow r : rows) {
-                    if (r.id == aid) {
-                        r.lastActivityDate = maxDate;
-                        break;
-                    }
-                }
-            }
-            // Populate lastActivitySubject if needed: do a lightweight query for latest Event subject per account
             for (Event e : [
                 SELECT AccountId, Subject, ActivityDate
                 FROM Event
@@ -350,7 +333,7 @@ public with sharing class PipeGenController {
         List<OppRow> rows = new List<OppRow>();
 
         List<Opportunity> opps = [
-            SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, AccountId, Account.Name,
+            SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastActivityDate, AccountId, Account.Name,
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -420,34 +403,15 @@ public with sharing class PipeGenController {
             row.daysInStage = entry != null ? entry.date().daysBetween(today) : 0;
             row.isStale     = row.daysInStage > row.staleThreshold;
 
-            // Fetch recent activity dates via Event query to avoid ActivityHistories relationship restriction
-            row.lastActivityDate = null;
+            row.lastActivityDate = o.LastActivityDate;
             row.lastGongCallDate = null;
             rows.add(row);
         }
-        
-        // Populate lastActivityDate and lastGongCallDate for the opp rows with a single Event query
+
+        // Populate lastGongCallDate per Opportunity
         Set<Id> oppIdsWithRows = new Set<Id>();
         for (OppRow r : rows) oppIdsWithRows.add(r.id);
         if (!oppIdsWithRows.isEmpty()) {
-            // Recent Events (ActivityDate) per Opportunity
-            for (AggregateResult ar : [
-                SELECT WhatId oppId, MAX(StartDateTime) maxDateTime
-                FROM Event
-                WHERE WhatId IN :oppIdsWithRows
-                  AND StartDateTime != null
-                GROUP BY WhatId
-            ]) {
-                Id oppId = (Id) ar.get('oppId');
-                Datetime maxDt = (Datetime) ar.get('maxDateTime');
-                Date maxDate = maxDt != null ? maxDt.date() : null;
-                for (OppRow r : rows) {
-                    if (r.id == oppId) {
-                        r.lastActivityDate = maxDate;
-                        break;
-                    }
-                }
-            }
             // Gong call timestamps per Opportunity (via relationship field on Conversation)
             for (AggregateResult ar2 : [
                 SELECT Gong__Primary_Opportunity__c oppId, MAX(Gong__Call_Start__c) maxGong
@@ -756,7 +720,7 @@ public with sharing class PipeGenController {
         List<Account> accounts = [
             SELECT Id, Name, Type, Industry, Target_Account__c, Website,
                    Account_Status__c, ARR__c, Account_Tier__c,
-                   Estimated_TAM__c, Number_of_Bankers__c,
+                   Estimated_TAM__c, Number_of_Bankers__c, LastActivityDate,
                    (SELECT Id, StageName, Type, CloseDate, IsClosed
                     FROM Opportunities WHERE IsDeleted = false
                     ORDER BY CloseDate DESC LIMIT 50),
@@ -766,19 +730,6 @@ public with sharing class PipeGenController {
             ORDER BY Name ASC
             LIMIT 300
         ];
-
-        Set<Id> acctIds = new Map<Id, Account>(accounts).keySet();
-        Map<Id, Date> lastActivityByAcct = new Map<Id, Date>();
-        for (AggregateResult ar : [
-            SELECT AccountId aid, MAX(StartDateTime) maxDt
-            FROM Event
-            WHERE AccountId IN :acctIds
-              AND StartDateTime != null
-            GROUP BY AccountId
-        ]) {
-            Datetime dt = (Datetime) ar.get('maxDt');
-            lastActivityByAcct.put((Id)ar.get('aid'), dt != null ? dt.date() : null);
-        }
 
         List<AccountCard> cards = new List<AccountCard>();
         for (Account a : accounts) {
@@ -815,7 +766,7 @@ public with sharing class PipeGenController {
             card.estimatedTam      = a.Estimated_TAM__c;
             card.bankerCount       = a.Number_of_Bankers__c != null ? a.Number_of_Bankers__c.intValue() : 0;
             card.website           = a.Website;
-            card.lastActivityDate  = lastActivityByAcct.get(a.Id);
+            card.lastActivityDate  = a.LastActivityDate;
             card.segment           = computeSegment(
                 a.Account_Status__c, a.ARR__c, openOppCount, earlyStageCount,
                 hasRecentCL, hasOldCL, hasOnlyOldCL,
