@@ -359,6 +359,7 @@ public with sharing class PipeGenController {
             WHERE OwnerId = :userId
               AND StageName IN :IN_FLIGHT_STAGES
               AND IsClosed = false
+              AND Type IN ('New Business', 'Upsell', 'Pilot')
             ORDER BY StageName ASC, CreatedDate ASC
         ];
 
