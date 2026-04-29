@@ -220,14 +220,18 @@ public with sharing class PipeGenController {
         ]) { createdThisQtr.add(o.Id); }
 
         // Opps progressed into pipeline stages (2+) this quarter
+        // NewValue is not filterable in SOQL, so filter in Apex
         Set<Id> progressedThisQtr = new Set<Id>();
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId FROM OpportunityFieldHistory
+            SELECT OpportunityId, NewValue
+            FROM OpportunityFieldHistory
             WHERE Field      = 'StageName'
-              AND NewValue   IN :PIPELINE_STAGES
               AND CreatedDate >= :qStart
               AND CreatedDate <= :qEnd
-        ]) { progressedThisQtr.add(h.OpportunityId); }
+        ]) {
+            if (PIPELINE_STAGES.contains((String)h.NewValue))
+                progressedThisQtr.add(h.OpportunityId);
+        }
 
         Set<Id> qualifyingIds = new Set<Id>(createdThisQtr);
         qualifyingIds.addAll(progressedThisQtr);
@@ -763,12 +767,15 @@ public with sharing class PipeGenController {
         Set<Id> acctIds = new Map<Id, Account>(accounts).keySet();
         Map<Id, Date> lastActivityByAcct = new Map<Id, Date>();
         for (AggregateResult ar : [
-            SELECT AccountId aid, MAX(ActivityDate) maxDate
+            SELECT AccountId aid, MAX(StartDateTime) maxDt
             FROM Event
             WHERE AccountId IN :acctIds
-              AND ActivityDate != null
+              AND StartDateTime != null
             GROUP BY AccountId
-        ]) { lastActivityByAcct.put((Id)ar.get('aid'), (Date)ar.get('maxDate')); }
+        ]) {
+            Datetime dt = (Datetime) ar.get('maxDt');
+            lastActivityByAcct.put((Id)ar.get('aid'), dt != null ? dt.date() : null);
+        }
 
         List<AccountCard> cards = new List<AccountCard>();
         for (Account a : accounts) {
