@@ -246,24 +246,25 @@
                                         Net New
                                     </div>
                                     <template lwc:if={hasNetNewCommits}>
-                                        <template for:each={netNewCommits} for:item="c">
-                                            <div key={c.Id} class={c.commitCardClass}>
-                                                <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center cc-header">
-                                                    <div class="slds-grid slds-grid_vertical-align-center cc-title-group">
+                                        <div class="commit-grid">
+                                            <template for:each={netNewCommits} for:item="c">
+                                                <div key={c.Id} class={c.commitCardClass}>
+                                                    <div class="ctile-logo-row">
+                                                        <div class={c.ctileAvatarClass}>{c.typeInitials}</div>
                                                         <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
-                                                        <span class="cc-type slds-m-left_xx-small">{c.Commit_Type__c}</span>
                                                     </div>
-                                                    <div class="slds-grid slds-grid_vertical-align-center cc-actions">
+                                                    <div class="ctile-type">{c.Commit_Type__c}</div>
+                                                    <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                                    <template lwc:if={c.Target_Account__r}>
+                                                        <div class="ctile-ref">&#x1F3AF; {c.Target_Account__r.Name}</div>
+                                                    </template>
+                                                    <div class="ctile-footer">
                                                         <span class="cc-progress">{c.progressLabel}</span>
-                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit} class="slds-m-left_xx-small"></lightning-button-icon>
+                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
                                                 </div>
-                                                <div class="cc-desc">{c.Commit_Description__c}</div>
-                                                <template lwc:if={c.Target_Account__r}>
-                                                    <div class="cc-target">&#x1F3AF; {c.Target_Account__r.Name}</div>
-                                                </template>
-                                            </div>
-                                        </template>
+                                            </template>
+                                        </div>
                                     </template>
                                     <template lwc:else>
                                         <p class="empty-msg">No net new commits yet this week.</p>
@@ -277,29 +278,30 @@
                                         Progression
                                     </div>
                                     <template lwc:if={hasProgressionCommits}>
-                                        <template for:each={progressionCommits} for:item="c">
-                                            <div key={c.Id} class={c.commitCardClass}>
-                                                <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center cc-header">
-                                                    <div class="slds-grid slds-grid_vertical-align-center cc-title-group">
+                                        <div class="commit-grid">
+                                            <template for:each={progressionCommits} for:item="c">
+                                                <div key={c.Id} class={c.commitCardClass}>
+                                                    <div class="ctile-logo-row">
+                                                        <div class={c.ctileAvatarClass}>{c.typeInitials}</div>
                                                         <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
-                                                        <span class="cc-type slds-m-left_xx-small">{c.Commit_Type__c}</span>
                                                     </div>
-                                                    <div class="slds-grid slds-grid_vertical-align-center cc-actions">
+                                                    <div class="ctile-type">{c.Commit_Type__c}</div>
+                                                    <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                                    <template lwc:if={c.Target_Opportunity__r}>
+                                                        <div class="ctile-ref">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
+                                                    </template>
+                                                    <div class="ctile-footer">
                                                         <span class="cc-progress">{c.progressLabel}</span>
-                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit} class="slds-m-left_xx-small"></lightning-button-icon>
+                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
+                                                    <template lwc:if={c.showMarkDone}>
+                                                        <div class="slds-m-top_x-small">
+                                                            <lightning-button label="Mark Done" size="x-small" variant="success" data-id={c.Id} onclick={handleMarkMEDDPICCComplete}></lightning-button>
+                                                        </div>
+                                                    </template>
                                                 </div>
-                                                <div class="cc-desc">{c.Commit_Description__c}</div>
-                                                <template lwc:if={c.Target_Opportunity__r}>
-                                                    <div class="cc-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
-                                                </template>
-                                                <template lwc:if={c.showMarkDone}>
-                                                    <div class="slds-m-top_x-small">
-                                                        <lightning-button label="Mark Done" size="x-small" variant="success" data-id={c.Id} onclick={handleMarkMEDDPICCComplete}></lightning-button>
-                                                    </div>
-                                                </template>
-                                            </div>
-                                        </template>
+                                            </template>
+                                        </div>
                                     </template>
                                     <template lwc:else>
                                         <p class="empty-msg">No progression commits yet this week.</p>
@@ -351,6 +353,28 @@
                 </template>
 
                 <template lwc:if={accountCardsLoaded}>
+
+                    <!-- Targeted accounts strip -->
+                    <template lwc:if={hasTargetedCards}>
+                        <div class="targeted-strip slds-p-horizontal_medium">
+                            <span class="targeted-strip-label">Targeted</span>
+                            <div class="targeted-strip-scroll">
+                                <template for:each={targetedCards} for:item="card">
+                                    <div key={card.id} class="targeted-chip" data-id={card.id} onclick={handleCardToggle}>
+                                        <template lwc:if={card.faviconUrl}>
+                                            <img src={card.faviconUrl} alt="" class="tchip-favicon" />
+                                        </template>
+                                        <template lwc:else>
+                                            <div class="tchip-avatar" style={card.avatarStyle}>{card.avatarInitial}</div>
+                                        </template>
+                                        <span class="tchip-name">{card.name}</span>
+                                        <span class="tchip-x">&#x00D7;</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
                     <!-- Toolbar -->
                     <div class="slds-grid slds-grid_align-spread slds-p-around_medium slds-p-bottom_x-small card-toolbar slds-wrap">
                         <div class="slds-col slds-grow">

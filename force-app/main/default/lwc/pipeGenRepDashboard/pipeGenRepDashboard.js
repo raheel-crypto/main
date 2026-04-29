@@ -77,22 +77,27 @@ export default class PipeGenRepDashboard extends LightningElement {
     }
 
     enrichCommit(c) {
-        const actual    = c.Actual_Count__c    || 0;
-        const committed = c.Committed_Count__c || 1;
-        const status    = c.Completion_Status__c || 'Not Started';
+        const actual     = c.Actual_Count__c    || 0;
+        const committed  = c.Committed_Count__c || 1;
+        const status     = c.Completion_Status__c || 'Not Started';
         const isMEDDPICC = c.Commit_Type__c === 'MEDDPICC Complete';
+        const isNN       = c.Motion_Type__c === 'Net New';
+        const words      = (c.Commit_Type__c || '').split(' ');
+        const typeInitials = words.slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
         return {
             ...c,
             isMEDDPICC,
-            isCompleted:    status === 'Completed',
-            progressLabel:  `${actual} / ${committed}`,
-            statusDotClass: status === 'Completed' ? 'status-dot status-dot--complete'
-                          : status === 'Partial'   ? 'status-dot status-dot--partial'
-                          :                          'status-dot status-dot--pending',
+            isCompleted:     status === 'Completed',
+            progressLabel:   `${actual} / ${committed}`,
+            typeInitials,
+            ctileAvatarClass: isNN ? 'ctile-avatar ctile-avatar--nn' : 'ctile-avatar ctile-avatar--prog',
+            statusDotClass:  status === 'Completed' ? 'status-dot status-dot--complete'
+                           : status === 'Partial'   ? 'status-dot status-dot--partial'
+                           :                          'status-dot status-dot--pending',
             commitCardClass: status === 'Completed' ? 'commit-card commit-card--complete'
                            : status === 'Partial'   ? 'commit-card commit-card--partial'
                            :                          'commit-card commit-card--pending',
-            showMarkDone:   isMEDDPICC && status !== 'Completed'
+            showMarkDone:    isMEDDPICC && status !== 'Completed'
         };
     }
 
@@ -279,6 +284,13 @@ export default class PipeGenRepDashboard extends LightningElement {
 
     get hasNoSegments()    { return this.accountSegments.length === 0; }
 
+    get targetedCards() {
+        return this.accountCards
+            .filter(c => c.effectiveTargeted)
+            .map(c => this.applyCardClass(c));
+    }
+    get hasTargetedCards() { return this.targetedCards.length > 0; }
+
     get pendingChanges() {
         return this.accountCards.filter(c => c.effectiveTargeted !== c.isTargeted);
     }
@@ -408,7 +420,8 @@ export default class PipeGenRepDashboard extends LightningElement {
     async handleCarryForward() {
         this.isCarryingForward = true;
         try {
-            const count = await carryForwardIncompleteCommits();
+            const carried = await carryForwardIncompleteCommits();
+            const count = Array.isArray(carried) ? carried.length : 0;
             if (count > 0) {
                 await this.loadData();
                 this.toast('Carried Forward', `${count} incomplete commit${count === 1 ? '' : 's'} copied from last week.`, 'success');

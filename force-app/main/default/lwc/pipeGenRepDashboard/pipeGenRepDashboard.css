@@ -675,21 +675,31 @@
     color: #e0e7ff;
 }
 
+/* ── Commit Grid ─────────────────────────────────────────────────────────── */
+
+.commit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 0.75rem;
+}
+
 /* ── Commit Cards ─────────────────────────────────────────────────────────── */
 
 .commit-card {
     border: 1px solid #e5e7eb;
     border-left: 4px solid #e5e7eb;
-    border-radius: 0.5rem;
-    padding: 0.7rem 0.875rem;
-    margin-bottom: 0.5rem;
+    border-radius: 0.625rem;
+    padding: 0.875rem 1rem 0.75rem;
     background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
     transition: box-shadow 0.15s, transform 0.12s;
 }
 
 .commit-card:hover {
-    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
 }
 
 .commit-card--complete {
@@ -753,4 +763,144 @@
     font-weight: 500;
     color: #6b7280;
     margin-top: 0.25rem;
+}
+
+/* ── Commit Tile Interior ────────────────────────────────────────────────── */
+
+.ctile-logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.375rem;
+}
+
+.ctile-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #ffffff;
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+}
+
+.ctile-avatar--nn   { background: #2563eb; }
+.ctile-avatar--prog { background: #059669; }
+
+.ctile-type {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1e3a5f;
+    line-height: 1.25;
+}
+
+.ctile-desc {
+    font-size: 0.775rem;
+    color: #374151;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+}
+
+.ctile-ref {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #6b7280;
+}
+
+.ctile-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    padding-top: 0.375rem;
+    margin-top: 0.1rem;
+}
+
+/* ── Targeted Accounts Strip ─────────────────────────────────────────────── */
+
+.targeted-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.25rem;
+}
+
+.targeted-strip-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #059669;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.targeted-strip-scroll {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    flex: 1;
+}
+
+.targeted-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem 0.2rem 0.3rem;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #065f46;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+}
+
+.targeted-chip:hover {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+}
+
+.tchip-favicon,
+.tchip-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.tchip-favicon { object-fit: contain; }
+
+.tchip-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: white;
+}
+
+.tchip-name {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tchip-x {
+    font-size: 0.9rem;
+    color: #34d399;
+    line-height: 1;
 }
