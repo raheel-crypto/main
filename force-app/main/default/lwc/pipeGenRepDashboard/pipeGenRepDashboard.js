@@ -82,21 +82,23 @@ export default class PipeGenRepDashboard extends LightningElement {
         const status     = c.Completion_Status__c || 'Not Started';
         const isMEDDPICC = c.Commit_Type__c === 'MEDDPICC Complete';
         const isNN       = c.Motion_Type__c === 'Net New';
-        const words      = (c.Commit_Type__c || '').split(' ');
-        const typeInitials = words.slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+        const motionSuffix = isNN ? 'nn' : 'prog';
+        const statusSuffix = status === 'Completed' ? 'complete'
+                           : status === 'Partial'   ? 'partial'
+                           :                          'pending';
+        const refName    = (c.Target_Account__r && c.Target_Account__r.Name)
+                         || (c.Target_Opportunity__r && c.Target_Opportunity__r.Name)
+                         || '';
         return {
             ...c,
             isMEDDPICC,
             isCompleted:     status === 'Completed',
             progressLabel:   `${actual} / ${committed}`,
-            typeInitials,
-            ctileAvatarClass: isNN ? 'ctile-avatar ctile-avatar--nn' : 'ctile-avatar ctile-avatar--prog',
+            refName,
             statusDotClass:  status === 'Completed' ? 'status-dot status-dot--complete'
                            : status === 'Partial'   ? 'status-dot status-dot--partial'
                            :                          'status-dot status-dot--pending',
-            commitCardClass: status === 'Completed' ? 'commit-card commit-card--complete'
-                           : status === 'Partial'   ? 'commit-card commit-card--partial'
-                           :                          'commit-card commit-card--pending',
+            commitCardClass: `commit-card commit-card--${motionSuffix} commit-card--${statusSuffix}`,
             showMarkDone:    isMEDDPICC && status !== 'Completed'
         };
     }

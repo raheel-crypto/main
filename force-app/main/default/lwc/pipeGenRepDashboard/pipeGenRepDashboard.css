@@ -683,39 +683,62 @@
     gap: 0.75rem;
 }
 
-/* ── Commit Cards ─────────────────────────────────────────────────────────── */
+/* ── Commit Cards — gradient-border glow style ───────────────────────────── */
 
 .commit-card {
-    border: 1px solid #e5e7eb;
-    border-left: 4px solid #e5e7eb;
+    position: relative;
+    border: 2px solid transparent;
     border-radius: 0.625rem;
     padding: 0.875rem 1rem 0.75rem;
-    background: #ffffff;
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    transition: box-shadow 0.15s, transform 0.12s;
+    transition: box-shadow 0.22s, transform 0.14s;
 }
 
-.commit-card:hover {
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-    transform: translateY(-2px);
+/* Net New: blue → violet */
+.commit-card--nn {
+    background:
+        linear-gradient(#0e1628, #0e1628) padding-box,
+        linear-gradient(135deg, #3b82f6 0%, #a855f7 100%) border-box;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.35),
+                0 0 22px rgba(168, 85, 247, 0.18);
 }
 
-.commit-card--complete {
-    border-left-color: #10b981;
-    background: #f0fdf4;
+.commit-card--nn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.6),
+                0 0 38px rgba(168, 85, 247, 0.3);
 }
 
-.commit-card--partial {
-    border-left-color: #f59e0b;
-    background: #fffbeb;
+/* Progression: emerald → cyan */
+.commit-card--prog {
+    background:
+        linear-gradient(#0e1628, #0e1628) padding-box,
+        linear-gradient(135deg, #10b981 0%, #06b6d4 100%) border-box;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.35),
+                0 0 22px rgba(6, 182, 212, 0.18);
 }
 
-.commit-card--pending {
-    border-left-color: #ef4444;
-    background: #fef2f2;
+.commit-card--prog:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.6),
+                0 0 38px rgba(6, 182, 212, 0.3);
 }
+
+/* Completed: brighter base glow */
+.commit-card--nn.commit-card--complete {
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.5),
+                0 0 30px rgba(168, 85, 247, 0.25);
+}
+
+.commit-card--prog.commit-card--complete {
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.5),
+                0 0 30px rgba(6, 182, 212, 0.25);
+}
+
+/* Pending: dimmed */
+.commit-card--pending { opacity: 0.82; }
 
 .cc-header {
     margin-bottom: 0.3rem;
@@ -743,9 +766,9 @@
 .cc-progress {
     font-size: 0.7rem;
     font-weight: 600;
-    color: #6b7280;
+    color: #94a3b8;
     font-variant-numeric: tabular-nums;
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.09);
     padding: 0.1rem 0.45rem;
     border-radius: 999px;
     white-space: nowrap;
@@ -771,36 +794,30 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 0.375rem;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
 }
 
-.ctile-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.7rem;
-    font-weight: 800;
-    color: #ffffff;
-    flex-shrink: 0;
-    letter-spacing: 0.02em;
+.ctile-acct-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
-
-.ctile-avatar--nn   { background: #2563eb; }
-.ctile-avatar--prog { background: #059669; }
 
 .ctile-type {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #1e3a5f;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #94a3b8;
     line-height: 1.25;
 }
 
 .ctile-desc {
     font-size: 0.775rem;
-    color: #374151;
+    color: #cbd5e1;
     line-height: 1.45;
     display: -webkit-box;
     -webkit-line-clamp: 3;
@@ -809,17 +826,11 @@
     flex: 1;
 }
 
-.ctile-ref {
-    font-size: 0.7rem;
-    font-weight: 500;
-    color: #6b7280;
-}
-
 .ctile-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
     padding-top: 0.375rem;
     margin-top: 0.1rem;
 }

@@ -250,17 +250,14 @@
                                             <template for:each={netNewCommits} for:item="c">
                                                 <div key={c.Id} class={c.commitCardClass}>
                                                     <div class="ctile-logo-row">
-                                                        <div class={c.ctileAvatarClass}>{c.typeInitials}</div>
+                                                        <div class="ctile-acct-name">{c.refName}</div>
                                                         <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
                                                     </div>
                                                     <div class="ctile-type">{c.Commit_Type__c}</div>
                                                     <div class="ctile-desc">{c.Commit_Description__c}</div>
-                                                    <template lwc:if={c.Target_Account__r}>
-                                                        <div class="ctile-ref">&#x1F3AF; {c.Target_Account__r.Name}</div>
-                                                    </template>
                                                     <div class="ctile-footer">
                                                         <span class="cc-progress">{c.progressLabel}</span>
-                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
+                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
                                                 </div>
                                             </template>
@@ -282,17 +279,14 @@
                                             <template for:each={progressionCommits} for:item="c">
                                                 <div key={c.Id} class={c.commitCardClass}>
                                                     <div class="ctile-logo-row">
-                                                        <div class={c.ctileAvatarClass}>{c.typeInitials}</div>
+                                                        <div class="ctile-acct-name">{c.refName}</div>
                                                         <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
                                                     </div>
                                                     <div class="ctile-type">{c.Commit_Type__c}</div>
                                                     <div class="ctile-desc">{c.Commit_Description__c}</div>
-                                                    <template lwc:if={c.Target_Opportunity__r}>
-                                                        <div class="ctile-ref">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
-                                                    </template>
                                                     <div class="ctile-footer">
                                                         <span class="cc-progress">{c.progressLabel}</span>
-                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
+                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
                                                     <template lwc:if={c.showMarkDone}>
                                                         <div class="slds-m-top_x-small">
