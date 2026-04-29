@@ -350,7 +350,7 @@ public with sharing class PipeGenController {
         List<OppRow> rows = new List<OppRow>();
 
         List<Opportunity> opps = [
-            SELECT Id, Name, StageName, Amount, CloseDate, AccountId, Account.Name,
+            SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, AccountId, Account.Name,
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -413,7 +413,9 @@ public with sharing class PipeGenController {
             row.staleThreshold   = STALE_THRESHOLDS.containsKey(o.StageName)
                                     ? STALE_THRESHOLDS.get(o.StageName) : 21;
 
-            DateTime entry  = stageEntry.get(o.Id);
+            // Fall back to CreatedDate when no stage-change history exists
+            // (opp was created directly in its current stage)
+            DateTime entry  = stageEntry.containsKey(o.Id) ? stageEntry.get(o.Id) : o.CreatedDate;
             row.daysInStage = entry != null ? entry.date().daysBetween(today) : 0;
             row.isStale     = row.daysInStage > row.staleThreshold;
 
