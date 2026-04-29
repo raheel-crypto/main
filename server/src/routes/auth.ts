@@ -90,6 +90,8 @@ router.get("/mcp-login", (req, res) => {
     ? config.mcpSandbox
     : config.mcpApp;
 
+  console.log(`[mcp-login] env=${env}, clientId=${mcpCreds.clientId ? "set" : "MISSING"}, instanceUrl=${req.session.sf?.instanceUrl || "MISSING"}`);
+
   if (!mcpCreds.clientId) {
     res.status(400).json({ message: "MCP client app not configured for this environment" });
     return;
@@ -97,6 +99,7 @@ router.get("/mcp-login", (req, res) => {
 
   const instanceUrl = req.session.sf?.instanceUrl;
   if (!instanceUrl) {
+    console.log("[mcp-login] No instanceUrl in session, redirecting with error");
     res.redirect(`${config.clientUrl}/sf-mcp?error=not_logged_in`);
     return;
   }
@@ -104,6 +107,9 @@ router.get("/mcp-login", (req, res) => {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   (req.session as any).mcpCodeVerifier = codeVerifier;
+
+  const redirectUrl = `${instanceUrl}/services/oauth2/authorize`;
+  console.log(`[mcp-login] Redirecting to ${redirectUrl}`);
 
   const params = new URLSearchParams({
     response_type: "code",
@@ -115,14 +121,16 @@ router.get("/mcp-login", (req, res) => {
   });
 
   req.session.save(() => {
-    res.redirect(`${instanceUrl}/services/oauth2/authorize?${params}`);
+    res.redirect(`${redirectUrl}?${params}`);
   });
 });
 
 router.get("/mcp-callback", async (req, res) => {
+  console.log("[mcp-callback] Hit callback");
   try {
     const code = req.query.code as string;
     if (!code) {
+      console.log("[mcp-callback] No code in query params");
       res.redirect(`${config.clientUrl}/sf-mcp?error=no_code`);
       return;
     }
@@ -130,7 +138,9 @@ router.get("/mcp-callback", async (req, res) => {
     const codeVerifier = (req.session as any).mcpCodeVerifier;
     const instanceUrl = req.session.sf?.instanceUrl;
     const env = req.session.sf?.environment || "production";
+    console.log(`[mcp-callback] codeVerifier=${codeVerifier ? "set" : "MISSING"}, instanceUrl=${instanceUrl || "MISSING"}`);
     if (!codeVerifier || !instanceUrl) {
+      console.log("[mcp-callback] Session lost - missing codeVerifier or instanceUrl");
       res.redirect(`${config.clientUrl}/sf-mcp?error=session_lost`);
       return;
     }
