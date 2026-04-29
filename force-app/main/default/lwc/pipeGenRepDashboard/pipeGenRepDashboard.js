@@ -86,11 +86,15 @@ export default class PipeGenRepDashboard extends LightningElement {
         const statusSuffix = status === 'Completed' ? 'complete'
                            : status === 'Partial'   ? 'partial'
                            :                          'pending';
-        const refName    = (c.Target_Account__r && c.Target_Account__r.Name)
-                         || (c.Target_Opportunity__r && c.Target_Opportunity__r.Name)
-                         || '';
+        // Explicitly read relationship objects before spread — LWC SObject proxies
+        // do not always enumerate relationship fields when spread with {...c}
+        const acctRel = c.Target_Account__r     || null;
+        const oppRel  = c.Target_Opportunity__r || null;
+        const refName = (acctRel && acctRel.Name) || (oppRel && oppRel.Name) || '';
         return {
             ...c,
+            Target_Account__r:     acctRel,
+            Target_Opportunity__r: oppRel,
             isMEDDPICC,
             isCompleted:     status === 'Completed',
             progressLabel:   `${actual} / ${committed}`,
@@ -186,10 +190,16 @@ export default class PipeGenRepDashboard extends LightningElement {
     // ─── Computed — commits ───────────────────────────────────────────────────
 
     get netNewCommits() {
-        return (this.data?.thisWeekCommits || []).filter(c => c.Motion_Type__c === 'Net New');
+        return (this.data?.thisWeekCommits || [])
+            .filter(c => c.Motion_Type__c === 'Net New')
+            .slice()
+            .sort(commitStatusSort);
     }
     get progressionCommits() {
-        return (this.data?.thisWeekCommits || []).filter(c => c.Motion_Type__c === 'Progression');
+        return (this.data?.thisWeekCommits || [])
+            .filter(c => c.Motion_Type__c === 'Progression')
+            .slice()
+            .sort(commitStatusSort);
     }
 
     // ─── Computed — scorecard ─────────────────────────────────────────────────
@@ -510,4 +520,9 @@ export default class PipeGenRepDashboard extends LightningElement {
 function pct(actual, target) {
     if (!target || target <= 0) return 0;
     return Math.min(100, Math.round((actual / target) * 100));
+}
+
+function commitStatusSort(a, b) {
+    const order = { 'Completed': 0, 'Partial': 1, 'Not Started': 2 };
+    return (order[a.Completion_Status__c] ?? 2) - (order[b.Completion_Status__c] ?? 2);
 }
