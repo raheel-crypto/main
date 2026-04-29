@@ -76,7 +76,7 @@ private class PipeGenControllerTest {
         User rep = makeRep(2000000);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Acme Corp');
-            makeOpp(rep.Id, a.Id, 'Acme Deal', 'Stage 1', 75000);
+            makeOpp(rep.Id, a.Id, 'Acme Deal', '1 - Demo', 75000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
@@ -165,8 +165,8 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Test Co');
-            makeOpp(rep.Id, a.Id, 'Open S1',    'Stage 1',    50000);
-            makeOpp(rep.Id, a.Id, 'Stage 3',    'Stage 3',    50000);
+            makeOpp(rep.Id, a.Id, 'Open S1',    '1 - Demo',   50000);
+            makeOpp(rep.Id, a.Id, 'Stage 3',    '3 - POV',    50000);
             makeOpp(rep.Id, a.Id, 'Closed Won', 'Closed Won', 50000);
 
             Test.startTest();
@@ -183,7 +183,7 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Acme');
-            Opportunity o = makeOpp(rep.Id, a.Id, 'Acme Deal', 'Stage 1', 125000);
+            Opportunity o = makeOpp(rep.Id, a.Id, 'Acme Deal', '1 - Demo', 125000);
 
             Contact c = new Contact(LastName = 'Smith', AccountId = a.Id);
             insert c;
@@ -210,7 +210,7 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Fresh Co');
-            makeOpp(rep.Id, a.Id, 'Fresh Deal', 'Stage 1', 50000);
+            makeOpp(rep.Id, a.Id, 'Fresh Deal', '1 - Demo', 50000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
@@ -232,9 +232,7 @@ private class PipeGenControllerTest {
             Test.stopTest();
 
             PipeGenController.QuarterlyTarget qt = d.quarterlyTarget;
-            System.assertEquals(500000, qt.totalTarget,       '$2M / 4 = $500K quarterly');
-            System.assertEquals(250000, qt.netNewTarget,      '50% of $500K');
-            System.assertEquals(250000, qt.progressionTarget, '50% of $500K');
+            System.assertEquals(500000, qt.pipelineTarget, '$2M / 4 = $500K quarterly pipeline target');
             System.assertNotEquals(null, qt.quarter);
             System.assert(qt.weeksRemaining >= 0);
         }
@@ -248,7 +246,7 @@ private class PipeGenControllerTest {
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            System.assertEquals(0, d.quarterlyTarget.totalTarget);
+            System.assertEquals(0, d.quarterlyTarget.pipelineTarget);
         }
     }
 
@@ -257,14 +255,14 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'NetNew Co');
-            makeOpp(rep.Id, a.Id, 'Opp A', 'Stage 1', 80000);
-            makeOpp(rep.Id, a.Id, 'Opp B', 'Stage 2', 40000);
+            makeOpp(rep.Id, a.Id, 'Opp A', '2 - Discovery', 80000);
+            makeOpp(rep.Id, a.Id, 'Opp B', '2 - Discovery', 40000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            System.assertEquals(120000, d.quarterlyTarget.netNewActual);
+            System.assertEquals(120000, d.quarterlyTarget.pipelineActual, '2-Discovery opps count toward pipeline');
         }
     }
 
@@ -273,13 +271,13 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Stage0 Co');
-            makeOpp(rep.Id, a.Id, 'Stage 0 Opp', 'Stage 0', 100000);
+            makeOpp(rep.Id, a.Id, 'Demo Opp', '1 - Demo', 100000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            System.assertEquals(0, d.quarterlyTarget.netNewActual, 'Stage 0 opps excluded');
+            System.assertEquals(0, d.quarterlyTarget.pipelineActual, '1-Demo opps excluded from pipeline actual');
         }
     }
 
@@ -342,8 +340,8 @@ private class PipeGenControllerTest {
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Scorecard Co');
             // Create both opps initially in Stage 1 so we can simulate advancement after the week
-            Opportunity advanced = makeOpp(rep.Id, a.Id, 'Advanced Opp', 'Stage 1', 50000);
-            Opportunity stalled  = makeOpp(rep.Id, a.Id, 'Stalled Opp',  'Stage 1', 30000);
+            Opportunity advanced = makeOpp(rep.Id, a.Id, 'Advanced Opp', '1 - Demo', 50000);
+            Opportunity stalled  = makeOpp(rep.Id, a.Id, 'Stalled Opp',  '1 - Demo', 30000);
 
             Date lw = lastWeekStart();
             Weekly_Commit__c c1 = new Weekly_Commit__c(
@@ -371,12 +369,12 @@ private class PipeGenControllerTest {
             );
 
             // Simulate the advanced opportunity moving to Stage 3 after the progression commit
-            advanced.StageName = 'Stage 3';
+            advanced.StageName = '3 - POV';
             update advanced;
 
             // Sanity checks to make debugging failing assertions easier
             Opportunity advancedRef = [SELECT Id, StageName FROM Opportunity WHERE Id = :advanced.Id];
-            System.assertEquals('Stage 3', advancedRef.StageName, 'Advanced opp should be Stage 3 at scoring time');
+            System.assertEquals('3 - POV', advancedRef.StageName, 'Advanced opp should be 3 - POV at scoring time');
             List<Weekly_Commit__c> lwCommits = [SELECT Id, Rep__c, Week_Start_Date__c, Motion_Type__c, Target_Opportunity__c, Completion_Status__c
                                                 FROM Weekly_Commit__c WHERE Rep__c = :rep.Id AND Week_Start_Date__c = :lw];
             System.assertEquals(2, lwCommits.size(), 'Two last-week commits should exist');
@@ -393,8 +391,8 @@ private class PipeGenControllerTest {
             PipeGenController.ScorecardData sc = d.lastWeekScorecard;
             Opportunity advCheck = [SELECT Id, StageName FROM Opportunity WHERE Id = :advanced.Id];
             Opportunity stlCheck = [SELECT Id, StageName FROM Opportunity WHERE Id = :stalled.Id];
-            System.assertEquals('Stage 3', advCheck.StageName, 'Advanced opp in DB should be Stage 3');
-            System.assertEquals('Stage 1', stlCheck.StageName, 'Stalled opp in DB should be Stage 1');
+            System.assertEquals('3 - POV',  advCheck.StageName, 'Advanced opp in DB should be 3 - POV');
+            System.assertEquals('1 - Demo', stlCheck.StageName, 'Stalled opp in DB should be 1 - Demo');
 
             List<Weekly_Commit__c> postCommits = [SELECT Id, Motion_Type__c, Target_Opportunity__c, Completion_Status__c
                                                   FROM Weekly_Commit__c
@@ -504,7 +502,7 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Prog Co');
-            Opportunity o = makeOpp(rep.Id, a.Id, 'Prog Deal', 'Stage 1', 60000);
+            Opportunity o = makeOpp(rep.Id, a.Id, 'Prog Deal', '1 - Demo', 60000);
 
             Weekly_Commit__c toSave = new Weekly_Commit__c(
                 Motion_Type__c        = 'Progression',
@@ -585,8 +583,8 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Two-Stage Co');
-            makeOpp(rep.Id, a.Id, 'Stage 1 Deal', 'Stage 1', 40000);
-            makeOpp(rep.Id, a.Id, 'Stage 2 Deal', 'Stage 2', 60000);
+            makeOpp(rep.Id, a.Id, 'Stage 1 Deal', '1 - Demo',      40000);
+            makeOpp(rep.Id, a.Id, 'Stage 2 Deal', '2 - Discovery', 60000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
@@ -595,8 +593,8 @@ private class PipeGenControllerTest {
             System.assertEquals(2, d.inFlightOpps.size(), 'Both Stage 1 and Stage 2 opps should appear');
             Set<String> stages = new Set<String>();
             for (PipeGenController.OppRow row : d.inFlightOpps) stages.add(row.stageName);
-            System.assert(stages.contains('Stage 1'));
-            System.assert(stages.contains('Stage 2'));
+            System.assert(stages.contains('1 - Demo'));
+            System.assert(stages.contains('2 - Discovery'));
         }
     }
 
@@ -605,8 +603,8 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Threshold Co');
-            makeOpp(rep.Id, a.Id, 'S1 Opp', 'Stage 1', 50000);
-            makeOpp(rep.Id, a.Id, 'S2 Opp', 'Stage 2', 50000);
+            makeOpp(rep.Id, a.Id, 'S1 Opp', '1 - Demo',      50000);
+            makeOpp(rep.Id, a.Id, 'S2 Opp', '2 - Discovery', 50000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
@@ -614,8 +612,8 @@ private class PipeGenControllerTest {
 
             Map<String, Integer> thresholds = new Map<String, Integer>();
             for (PipeGenController.OppRow row : d.inFlightOpps) thresholds.put(row.stageName, row.staleThreshold);
-            System.assertEquals(21, thresholds.get('Stage 1'), 'Stage 1 threshold = 21 days');
-            System.assertEquals(14, thresholds.get('Stage 2'), 'Stage 2 threshold = 14 days');
+            System.assertEquals(21, thresholds.get('1 - Demo'),      '1-Demo threshold = 21 days');
+            System.assertEquals(14, thresholds.get('2 - Discovery'), '2-Discovery threshold = 14 days');
         }
     }
 
@@ -624,16 +622,16 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Filter Co');
-            makeOpp(rep.Id, a.Id, 'S1',         'Stage 1',    50000);
-            makeOpp(rep.Id, a.Id, 'S2',         'Stage 2',    50000);
-            makeOpp(rep.Id, a.Id, 'S3',         'Stage 3',    50000);
-            makeOpp(rep.Id, a.Id, 'Closed Won', 'Closed Won', 50000);
+            makeOpp(rep.Id, a.Id, 'S1',         '1 - Demo',      50000);
+            makeOpp(rep.Id, a.Id, 'S2',         '2 - Discovery', 50000);
+            makeOpp(rep.Id, a.Id, 'S3',         '3 - POV',       50000);
+            makeOpp(rep.Id, a.Id, 'Closed Won', 'Closed Won',    50000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            System.assertEquals(2, d.inFlightOpps.size());
+            System.assertEquals(3, d.inFlightOpps.size(), 'S1, S2, S3 are all in-flight; Closed Won excluded');
         }
     }
 
@@ -642,13 +640,13 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Stage Name Co');
-            makeOpp(rep.Id, a.Id, 'My Deal', 'Stage 2', 75000);
+            makeOpp(rep.Id, a.Id, 'My Deal', '2 - Discovery', 75000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            System.assertEquals('Stage 2', d.inFlightOpps[0].stageName);
+            System.assertEquals('2 - Discovery', d.inFlightOpps[0].stageName);
         }
     }
 
@@ -692,7 +690,7 @@ private class PipeGenControllerTest {
             Account a = makeTargetAccount(rep.Id, 'Counted Co');
             insert new Contact(LastName = 'Smith', AccountId = a.Id);
             insert new Contact(LastName = 'Jones', AccountId = a.Id);
-            makeOpp(rep.Id, a.Id, 'Open Opp', 'Stage 1', 50000);
+            makeOpp(rep.Id, a.Id, 'Open Opp', '1 - Demo', 50000);
 
             Test.startTest();
             List<PipeGenController.AccountCard> cards = PipeGenController.getAccountsForSelection();
@@ -871,7 +869,7 @@ private class PipeGenControllerTest {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Prog Event Co');
-            Opportunity o = makeOpp(rep.Id, a.Id, 'Prog Deal', 'Stage 1', 50000);
+            Opportunity o = makeOpp(rep.Id, a.Id, 'Prog Deal', '1 - Demo', 50000);
             Weekly_Commit__c c = new Weekly_Commit__c(
                 Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
                 Motion_Type__c = 'Progression', Commit_Type__c = 'Discovery Call - Economic Buyer',
@@ -1116,7 +1114,7 @@ private class PipeGenControllerTest {
         Account a = new Account(Name = 'Risk Co', OwnerId = rep.Id);
         insert a;
         insert new Opportunity(Name = 'In-Flight', OwnerId = rep.Id, AccountId = a.Id,
-            StageName = 'Stage 1', CloseDate = Date.today().addDays(30), Amount = 50000);
+            StageName = '1 - Demo', CloseDate = Date.today().addDays(30), Amount = 50000);
 
         // Net New commit only — no Progression
         insert new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),

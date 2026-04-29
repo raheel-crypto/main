@@ -1,14 +1,19 @@
 import { LightningElement, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import getRepDashboardData      from '@salesforce/apex/PipeGenController.getRepDashboardData';
-import saveCommit               from '@salesforce/apex/PipeGenController.saveCommit';
-import deleteCommit             from '@salesforce/apex/PipeGenController.deleteCommit';
-import getAccountsForSelection  from '@salesforce/apex/PipeGenController.getAccountsForSelection';
-import updateTargetAccounts     from '@salesforce/apex/PipeGenController.updateTargetAccounts';
-import markCommitComplete       from '@salesforce/apex/PipeGenController.markCommitComplete';
+import getRepDashboardData           from '@salesforce/apex/PipeGenController.getRepDashboardData';
+import saveCommit                    from '@salesforce/apex/PipeGenController.saveCommit';
+import deleteCommit                  from '@salesforce/apex/PipeGenController.deleteCommit';
+import getAccountsForSelection       from '@salesforce/apex/PipeGenController.getAccountsForSelection';
+import updateTargetAccounts          from '@salesforce/apex/PipeGenController.updateTargetAccounts';
+import markCommitComplete            from '@salesforce/apex/PipeGenController.markCommitComplete';
+import carryForwardIncompleteCommits from '@salesforce/apex/PipeGenController.carryForwardIncompleteCommits';
 
-const CURRENCY  = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+const CURRENCY   = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+
+const SEGMENT_ORDER = ['Expansion', 'Early Stage', 'Uncracked', 'Recent Closed Lost', 'No Opportunities', 'Other'];
+
+const AVATAR_COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#06b6d4','#ef4444','#6366f1'];
 
 const EMPTY_COMMIT = () => ({
     motionType:     'Net New',
@@ -28,6 +33,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     @track errorMessage         = null;
     @track showCommitForm       = false;
     @track isSaving             = false;
+    @track isCarryingForward    = false;
     @track accountSearchResults = [];
     @track newCommit            = EMPTY_COMMIT();
 
@@ -37,6 +43,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     @track isLoadingCards       = false;
     @track isSavingTargets      = false;
     @track cardSearchTerm       = '';
+    @track accountSortBy        = 'name';
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -106,13 +113,17 @@ export default class PipeGenRepDashboard extends LightningElement {
     }
 
     enrichOpp(o) {
+        const s = o.stageName || '';
+        let stageCls = 'stage-badge stage-badge--s1';
+        if (s === '2 - Discovery') stageCls = 'stage-badge stage-badge--s2';
+        else if (s === '3 - POV' || s === '4 - Proposal' || s === '5 - Contracting') stageCls = 'stage-badge stage-badge--s3';
         return {
             ...o,
             sfUrl:                    `/lightning/r/Opportunity/${o.id}/view`,
             amountFormatted:           CURRENCY.format(o.amount || 0),
             lastActivityDateFormatted: o.lastActivityDate ? this.fmtDate(o.lastActivityDate) : '—',
             lastGongCallDateFormatted: o.lastGongCallDate ? this.fmtDate(o.lastGongCallDate) : '—',
-            stageBadgeClass:  o.stageName === 'Stage 2' ? 'stage-badge stage-badge--s2' : 'stage-badge stage-badge--s1',
+            stageBadgeClass:  stageCls,
             rowClass:         o.isStale ? 'slds-hint-parent stale-row' : 'slds-hint-parent',
             daysClass:        o.isStale ? 'stale-text bold-cell' : 'bold-cell',
             contactClass:     (o.contactRoleCount || 0) < 2 ? 'stale-text' : 'healthy-text',
@@ -144,21 +155,25 @@ export default class PipeGenRepDashboard extends LightningElement {
     get accountCountLabel()   { return `${this.data?.targetAccounts?.length || 0} accounts`; }
     get inFlightCountLabel()  { return `${this.data?.inFlightOpps?.length   || 0} opps`; }
 
-    // ─── Computed — quarterly target ─────────────────────────────────────────
+    // ─── Computed — pipeline target ──────────────────────────────────────────
 
-    get qt()                     { return this.data?.quarterlyTarget || {}; }
-    get netNewPercent()          { return pct(this.qt.netNewActual,      this.qt.netNewTarget); }
-    get progPercent()            { return pct(this.qt.progressionActual, this.qt.progressionTarget); }
-    get blendedPercent()         { return pct((this.qt.netNewActual||0) + (this.qt.progressionActual||0), this.qt.totalTarget); }
-    get netNewActualFormatted()  { return CURRENCY.format(this.qt.netNewActual      || 0); }
-    get netNewTargetFormatted()  { return CURRENCY.format(this.qt.netNewTarget      || 0); }
-    get progActualFormatted()    { return CURRENCY.format(this.qt.progressionActual || 0); }
-    get progTargetFormatted()    { return CURRENCY.format(this.qt.progressionTarget || 0); }
-    get netNewGapFormatted()     { return CURRENCY.format(Math.max(0, (this.qt.netNewTarget||0)      - (this.qt.netNewActual||0))); }
-    get progGapFormatted()       { return CURRENCY.format(Math.max(0, (this.qt.progressionTarget||0) - (this.qt.progressionActual||0))); }
-    get totalGapFormatted() {
-        const gap = (this.qt.totalTarget||0) - (this.qt.netNewActual||0) - (this.qt.progressionActual||0);
-        return CURRENCY.format(Math.max(0, gap));
+    get qt()                       { return this.data?.quarterlyTarget || {}; }
+    get pipelinePercent()          { return pct(this.qt.pipelineActual, this.qt.pipelineTarget); }
+    get pipelineActualFormatted()  { return CURRENCY.format(this.qt.pipelineActual  || 0); }
+    get pipelineTargetFormatted()  { return CURRENCY.format(this.qt.pipelineTarget  || 0); }
+    get pipelineGapFormatted() {
+        return CURRENCY.format(Math.max(0, (this.qt.pipelineTarget || 0) - (this.qt.pipelineActual || 0)));
+    }
+    get progressBarStyle() {
+        const w = this.pipelinePercent;
+        const hue = Math.round(w * 1.2); // 0% = red (0°), 100% = green (120°)
+        return `width:${w}%;background-color:hsl(${hue},72%,42%);`;
+    }
+    get stageCards() {
+        return (this.qt.stageCards || []).map(sc => ({
+            ...sc,
+            amountFormatted: CURRENCY.format(sc.amount || 0)
+        }));
     }
 
     // ─── Computed — commits ───────────────────────────────────────────────────
@@ -216,22 +231,53 @@ export default class PipeGenRepDashboard extends LightningElement {
         }));
     }
 
-    // ─── Computed — account cards ────────────────────────────────────────────
+    get sortOptions() {
+        return [
+            { label: 'Name',          value: 'name' },
+            { label: 'Last Activity', value: 'activityDate' },
+            { label: '# Contacts',    value: 'contactCount' }
+        ];
+    }
 
-    get filteredCards() {
+    // ─── Computed — account segments ─────────────────────────────────────────
+
+    get sortedFilteredCards() {
         const term = this.cardSearchTerm.toLowerCase();
-        return term.length < 2
-            ? this.accountCards
-            : this.accountCards.filter(c => c.name.toLowerCase().includes(term) || (c.industry || '').toLowerCase().includes(term));
+        let cards = term.length >= 2
+            ? this.accountCards.filter(c =>
+                c.name.toLowerCase().includes(term) ||
+                (c.industry  || '').toLowerCase().includes(term) ||
+                (c.accountStatus || '').toLowerCase().includes(term))
+            : [...this.accountCards];
+
+        if (this.accountSortBy === 'activityDate') {
+            cards.sort((a, b) => {
+                const da = a.lastActivityDate ? new Date(a.lastActivityDate) : new Date(0);
+                const db = b.lastActivityDate ? new Date(b.lastActivityDate) : new Date(0);
+                return db - da;
+            });
+        } else if (this.accountSortBy === 'contactCount') {
+            cards.sort((a, b) => (b.contactCount || 0) - (a.contactCount || 0));
+        } else {
+            cards.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        }
+        return cards;
     }
 
-    get targetedCards() {
-        return this.filteredCards.filter(c => c.effectiveTargeted).map(c => this.applyCardClass(c));
+    get accountSegments() {
+        const segMap = {};
+        for (const seg of SEGMENT_ORDER) segMap[seg] = [];
+        for (const c of this.sortedFilteredCards) {
+            const seg = c.segment || 'Other';
+            const bucket = segMap[seg] ? seg : 'Other';
+            segMap[bucket].push(this.applyCardClass(c));
+        }
+        return SEGMENT_ORDER
+            .filter(seg => segMap[seg].length > 0)
+            .map(seg => ({ key: seg, label: seg, cards: segMap[seg] }));
     }
 
-    get untargetedCards() {
-        return this.filteredCards.filter(c => !c.effectiveTargeted).map(c => this.applyCardClass(c));
-    }
+    get hasNoSegments()    { return this.accountSegments.length === 0; }
 
     get pendingChanges() {
         return this.accountCards.filter(c => c.effectiveTargeted !== c.isTargeted);
@@ -247,10 +293,34 @@ export default class PipeGenRepDashboard extends LightningElement {
     applyCardClass(c) {
         const isPending = c.effectiveTargeted !== c.isTargeted;
         let cls = 'acct-card';
-        if (c.effectiveTargeted) cls += ' acct-card--targeted';
-        if (isPending && c.effectiveTargeted)  cls += ' acct-card--pending-add';
-        if (isPending && !c.effectiveTargeted) cls += ' acct-card--pending-remove';
-        return { ...c, cardClass: cls, isPending };
+        if      (c.accountStatus === 'Customer')    cls += ' acct-card--customer';
+        else if ((c.openOppCount || 0) > 0)          cls += ' acct-card--prospect-opps';
+        else                                          cls += ' acct-card--prospect-no-opps';
+        if (c.effectiveTargeted)                      cls += ' acct-card--targeted';
+        if (isPending && c.effectiveTargeted)         cls += ' acct-card--pending-add';
+        if (isPending && !c.effectiveTargeted)        cls += ' acct-card--pending-remove';
+
+        const initial = (c.name || '?').charAt(0).toUpperCase();
+        let hashVal = 0;
+        for (let i = 0; i < (c.name || '').length; i++) {
+            hashVal = (hashVal * 31 + (c.name || '').charCodeAt(i)) & 0xffff;
+        }
+        const avatarColor  = AVATAR_COLORS[hashVal % AVATAR_COLORS.length];
+        const avatarStyle  = `background-color:${avatarColor};`;
+        const faviconUrl   = c.website ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(c.website)}&sz=32` : null;
+
+        return {
+            ...c,
+            cardClass: cls,
+            isPending,
+            avatarInitial: initial,
+            avatarStyle,
+            faviconUrl,
+            arrFormatted:  c.arr          ? CURRENCY.format(c.arr)          : null,
+            tamFormatted:  c.estimatedTam ? CURRENCY.format(c.estimatedTam) : null,
+            activityFmt:   c.lastActivityDate ? this.fmtDate(c.lastActivityDate) : '—',
+            showArr:       c.accountStatus === 'Customer' && !!c.arr
+        };
     }
 
     // ─── Commit Form Handlers ─────────────────────────────────────────────────
@@ -335,6 +405,23 @@ export default class PipeGenRepDashboard extends LightningElement {
         }
     }
 
+    async handleCarryForward() {
+        this.isCarryingForward = true;
+        try {
+            const count = await carryForwardIncompleteCommits();
+            if (count > 0) {
+                await this.loadData();
+                this.toast('Carried Forward', `${count} incomplete commit${count === 1 ? '' : 's'} copied from last week.`, 'success');
+            } else {
+                this.toast('Nothing to Carry', 'No incomplete commits from last week.', 'info');
+            }
+        } catch (e) {
+            this.toast('Error', e.body?.message || 'Could not carry forward commits.', 'error');
+        } finally {
+            this.isCarryingForward = false;
+        }
+    }
+
     // ─── Account Cards Handlers ───────────────────────────────────────────────
 
     async handleAccountsTabActive() {
@@ -362,6 +449,10 @@ export default class PipeGenRepDashboard extends LightningElement {
         this.cardSearchTerm = e.detail.value || '';
     }
 
+    handleSortChange(e) {
+        this.accountSortBy = e.detail.value;
+    }
+
     cancelTargetChanges() {
         this.accountCards = this.accountCards.map(c => ({ ...c, effectiveTargeted: c.isTargeted }));
     }
@@ -377,7 +468,7 @@ export default class PipeGenRepDashboard extends LightningElement {
             await updateTargetAccounts({ toTarget, toUntarget });
             this.accountCards = this.accountCards.map(c => ({ ...c, isTargeted: c.effectiveTargeted }));
             this.toast('Saved', `${count} account${count === 1 ? '' : 's'} updated.`, 'success');
-            this.loadData(); // refresh dashboard target account list
+            this.loadData();
         } catch (e) {
             this.toast('Error', e.body?.message || 'Could not update accounts.', 'error');
         } finally {
