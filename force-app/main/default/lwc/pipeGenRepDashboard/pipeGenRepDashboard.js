@@ -116,6 +116,10 @@ export default class PipeGenRepDashboard extends LightningElement {
             hashVal = (hashVal * 31 + (a.name || '').charCodeAt(i)) & 0xffff;
         }
         const avatarColor = AVATAR_COLORS[hashVal % AVATAR_COLORS.length];
+        const acctType    = (a.type || '').toLowerCase();
+        const cardClass   = acctType.includes('customer')
+            ? 'acct-card acct-card--customer acct-card--targeted'
+            : 'acct-card acct-card--prospect-opps acct-card--targeted';
         return {
             ...a,
             sfUrl:                     `/lightning/r/Account/${a.id}/view`,
@@ -126,7 +130,8 @@ export default class PipeGenRepDashboard extends LightningElement {
             threadClass:   (a.contactCount || 0) >= 3 ? 'healthy-text'
                          : (a.contactCount || 0) === 0  ? 'stale-text' : 'da-date',
             avatarInitial: initial,
-            avatarStyle:   `background-color:${avatarColor};`
+            avatarStyle:   `background-color:${avatarColor};`,
+            cardClass
         };
     }
 
@@ -137,6 +142,16 @@ export default class PipeGenRepDashboard extends LightningElement {
         else if (s === '3 - POV' || s === '4 - Proposal' || s === '5 - Contracting') stageCls = 'stage-badge stage-badge--s3';
         const daysSinceActivity = o.lastActivityDate ? Math.floor((new Date() - new Date(o.lastActivityDate)) / 86400000) : 999;
         const daysSinceGong     = o.lastGongCallDate ? Math.floor((new Date() - new Date(o.lastGongCallDate)) / 86400000) : 999;
+        let oppCardClass = 'acct-card';
+        if (o.isStale) {
+            oppCardClass += ' opp-card--stale';
+        } else if (s.startsWith('5') || s.startsWith('6') || s.startsWith('7')) {
+            oppCardClass += ' opp-card--late';
+        } else if (s.startsWith('3') || s.startsWith('4')) {
+            oppCardClass += ' opp-card--mid';
+        } else {
+            oppCardClass += ' opp-card--early';
+        }
         return {
             ...o,
             sfUrl:                    `/lightning/r/Opportunity/${o.id}/view`,
@@ -144,7 +159,7 @@ export default class PipeGenRepDashboard extends LightningElement {
             lastActivityDateFormatted: o.lastActivityDate ? this.fmtDate(o.lastActivityDate) : '—',
             lastGongCallDateFormatted: o.lastGongCallDate ? this.fmtDate(o.lastGongCallDate) : '—',
             stageBadgeClass:  stageCls,
-            doCardClass:      o.isStale ? 'do-card do-card--stale' : 'do-card',
+            oppCardClass,
             daysClass:        o.isStale ? 'do-days do-days--stale' : 'do-days',
             activityDateClass: daysSinceActivity > 30 ? 'stale-text' : 'da-date',
             gongDateClass:     daysSinceGong     > 30 ? 'stale-text' : 'da-date',

@@ -318,15 +318,21 @@
 }
 
 .stage-badge--s1 {
-    background: #dbeafe;
-    color: #1d4ed8;
-    border: 1px solid #bfdbfe;
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.35);
 }
 
 .stage-badge--s2 {
-    background: #d1fae5;
-    color: #065f46;
-    border: 1px solid #a7f3d0;
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.stage-badge--s3 {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+    border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
 /* ── Metric (dark, for use on white backgrounds) ─────────────────────────── */
@@ -951,6 +957,101 @@
     font-size: 0.9rem;
     color: #34d399;
     line-height: 1;
+}
+
+/* ── Opp Card Variants (reuse acct-card base) ────────────────────────────── */
+
+/* Early stage (1-Qualify, 2-Discovery): blue → indigo */
+.opp-card--early {
+    background:
+        linear-gradient(135deg, #0d0f20 0%, #110f26 100%) padding-box,
+        linear-gradient(135deg, #3b82f6 0%, #6366f1 100%) border-box;
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.22), 0 0 18px rgba(99, 102, 241, 0.1);
+}
+
+.opp-card--early:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.5), 0 0 34px rgba(99, 102, 241, 0.24);
+}
+
+/* Mid stage (3-POV, 4-Proposal): amber → orange */
+.opp-card--mid {
+    background:
+        linear-gradient(135deg, #1a1308 0%, #1c1510 100%) padding-box,
+        linear-gradient(135deg, #f59e0b 0%, #f97316 100%) border-box;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.22), 0 0 18px rgba(249, 115, 22, 0.1);
+}
+
+.opp-card--mid:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.5), 0 0 34px rgba(249, 115, 22, 0.24);
+}
+
+/* Late stage (5-Contracting+): emerald → cyan */
+.opp-card--late {
+    background:
+        linear-gradient(135deg, #0a1e16 0%, #0c1e25 100%) padding-box,
+        linear-gradient(135deg, #10b981 0%, #06b6d4 100%) border-box;
+    box-shadow: 0 0 6px rgba(16, 185, 129, 0.22), 0 0 18px rgba(6, 182, 212, 0.1);
+}
+
+.opp-card--late:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.5), 0 0 34px rgba(6, 182, 212, 0.24);
+}
+
+/* Stale: red → orange */
+.opp-card--stale {
+    background:
+        linear-gradient(135deg, #1a0808 0%, #1c0f0f 100%) padding-box,
+        linear-gradient(135deg, #ef4444 0%, #f97316 100%) border-box;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4), 0 0 26px rgba(249, 115, 22, 0.15);
+}
+
+.opp-card--stale:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 18px rgba(239, 68, 68, 0.6), 0 0 40px rgba(249, 115, 22, 0.28);
+}
+
+/* ── Opp Card Interior ───────────────────────────────────────────────────── */
+
+.opp-logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    margin-bottom: 0.4rem;
+}
+
+.opp-amount-large {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #34d399;
+    margin: 0.25rem 0 0.1rem;
+}
+
+.opp-name {
+    text-decoration: none;
+    display: block;
+}
+
+.opp-name:hover {
+    color: #93c5fd;
+    text-decoration: underline;
+}
+
+/* ── SF link icon in account cards ──────────────────────────────────────── */
+
+.card-sf-link {
+    color: rgba(255, 255, 255, 0.3);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+}
+
+.card-sf-link:hover {
+    color: rgba(255, 255, 255, 0.7);
 }
 
 /* ── Tab Dark Background ─────────────────────────────────────────────────── */
