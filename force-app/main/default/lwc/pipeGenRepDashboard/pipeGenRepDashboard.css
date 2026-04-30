@@ -1099,8 +1099,16 @@
 .slds-tabs--scoped__content,
 .slds-tabs_default__content,
 .slds-tabs--default__content {
-    background: transparent !important;
-    border-color: rgba(255, 255, 255, 0.1) !important;
+    background: #080d1a !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.slds-tabs_scoped__nav,
+.slds-tabs--scoped__nav,
+.slds-tabs_default__nav,
+.slds-tabs--default__nav {
+    background: #0c1426 !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 /* ── Tab Dark Background ─────────────────────────────────────────────────── */
