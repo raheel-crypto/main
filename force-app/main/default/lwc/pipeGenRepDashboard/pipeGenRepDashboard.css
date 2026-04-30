@@ -952,3 +952,265 @@
     color: #34d399;
     line-height: 1;
 }
+
+/* ── Tab Dark Background ─────────────────────────────────────────────────── */
+
+.tab-dark-bg {
+    background: linear-gradient(160deg, #080d1a 0%, #0c1426 50%, #0f1a36 100%);
+    border-radius: 0 0 0.75rem 0.75rem;
+    padding: 1rem;
+    min-height: 400px;
+}
+
+/* ── Dash Section (dark card container) ──────────────────────────────────── */
+
+.dash-section {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 0.625rem;
+    overflow: hidden;
+}
+
+.dash-section-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem 0.625rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.03);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.dash-section-title {
+    display: flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.dash-section-bd {
+    padding: 0.875rem 1rem;
+}
+
+/* ── Dashboard Account Cards (da-*) ──────────────────────────────────────── */
+
+.da-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.da-card {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.5rem;
+    transition: background 0.15s;
+}
+
+.da-card:hover {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.da-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.da-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.da-name {
+    font-size: 0.825rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    text-decoration: none;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.da-name:hover {
+    color: #93c5fd;
+    text-decoration: underline;
+}
+
+.da-type {
+    font-size: 0.67rem;
+    color: rgba(255, 255, 255, 0.38);
+    margin-top: 0.1rem;
+}
+
+.da-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.12rem;
+    flex-shrink: 0;
+    font-size: 0.67rem;
+}
+
+.da-date {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Dashboard Opp Cards (do-*) ──────────────────────────────────────────── */
+
+.do-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.do-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    transition: background 0.15s;
+}
+
+.do-card:hover {
+    background: rgba(255, 255, 255, 0.09);
+}
+
+.do-card--stale {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: rgba(239, 68, 68, 0.05);
+}
+
+.do-card-hd {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+}
+
+.do-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #e2e8f0;
+    text-decoration: none;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 0.15rem;
+}
+
+.do-name:hover {
+    color: #93c5fd;
+    text-decoration: underline;
+}
+
+.do-acct {
+    font-size: 0.67rem;
+    color: rgba(255, 255, 255, 0.38);
+    margin-bottom: 0.3rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.do-amount {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #34d399;
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.do-days {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.do-days--stale {
+    color: #f87171;
+}
+
+.do-card-ft {
+    display: flex;
+    gap: 0.625rem;
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.45);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 0.35rem;
+    margin-top: 0.3rem;
+    flex-wrap: wrap;
+}
+
+/* ── Scorecard dark overrides ────────────────────────────────────────────── */
+
+.dash-section .scorecard-dl dt {
+    color: rgba(255, 255, 255, 0.48);
+}
+
+.dash-section .scorecard-dl dd {
+    color: #f1f5f9;
+}
+
+/* ── Commit form dark override ───────────────────────────────────────────── */
+
+.tab-dark-bg .commit-form {
+    background: rgba(0, 112, 210, 0.1);
+    border-left-color: #3b82f6;
+}
+
+.tab-dark-bg .empty-msg {
+    color: rgba(255, 255, 255, 0.38);
+}
+
+/* ── Tab 2 toolbar & chip dark overrides ─────────────────────────────────── */
+
+.tab-dark-bg .card-toolbar {
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.tab-dark-bg .metric-dark {
+    color: rgba(255, 255, 255, 0.65);
+    font-weight: 600;
+}
+
+.tab-dark-bg .targeted-strip-label {
+    color: #34d399;
+}
+
+.tab-dark-bg .targeted-chip {
+    background: rgba(16, 185, 129, 0.13);
+    border-color: rgba(16, 185, 129, 0.32);
+    color: #6ee7b7;
+}
+
+.tab-dark-bg .targeted-chip:hover {
+    background: rgba(16, 185, 129, 0.24);
+    border-color: rgba(16, 185, 129, 0.52);
+}
+
+.tab-dark-bg .tchip-x {
+    color: #6ee7b7;
+}

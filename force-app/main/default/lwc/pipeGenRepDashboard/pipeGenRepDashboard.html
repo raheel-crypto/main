@@ -71,115 +71,91 @@
 
             <!-- ════ TAB 1: WEEKLY DASHBOARD ════ -->
             <lightning-tab label="Weekly Dashboard" value="dashboard" icon-name="utility:metrics">
-                <div class="slds-grid slds-gutters slds-wrap slds-p-top_medium">
+                <div class="tab-dark-bg">
+                <div class="slds-grid slds-gutters slds-wrap">
 
                     <!-- LEFT COLUMN -->
                     <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
 
                         <!-- Target Accounts -->
-                        <lightning-card icon-name="standard:account" class="slds-m-bottom_medium">
-                            <span slot="title">Target Accounts &mdash; Net New Universe</span>
-                            <div slot="actions">
+                        <div class="dash-section slds-m-bottom_medium">
+                            <div class="dash-section-hd">
+                                <div class="dash-section-title">
+                                    <lightning-icon icon-name="standard:account" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                    Target Accounts
+                                </div>
                                 <lightning-badge label={accountCountLabel}></lightning-badge>
                             </div>
-                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                            <div class="dash-section-bd">
                                 <template lwc:if={hasAccounts}>
-                                    <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered dash-table">
-                                        <thead>
-                                            <tr>
-                                                <th><div class="slds-truncate">Account</div></th>
-                                                <th><div class="slds-truncate">Last Activity</div></th>
-                                                <th><div class="slds-truncate">Last Gong Call</div></th>
-                                                <th><div class="slds-truncate">Contacts</div></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <template for:each={data.targetAccounts} for:item="acct">
-                                                <tr key={acct.id} class="slds-hint-parent">
-                                                    <td>
-                                                        <a href={acct.sfUrl} target="_blank" class="acct-link">{acct.name}</a>
-                                                        <template lwc:if={acct.type}>
-                                                            <div class="slds-text-body_small cc-target">{acct.type}</div>
-                                                        </template>
-                                                    </td>
-                                                    <td>
-                                                        <span class={acct.activityClass}>{acct.lastActivityDateFormatted}</span>
-                                                        <template lwc:if={acct.lastActivitySubject}>
-                                                            <div class="slds-text-body_small cc-target cell-sub">{acct.lastActivitySubject}</div>
-                                                        </template>
-                                                    </td>
-                                                    <td>
-                                                        <span class={acct.gongClass}>{acct.lastGongCallDateFormatted}</span>
-                                                    </td>
-                                                    <td>
-                                                        <span class={acct.threadClass} title="Contact count">{acct.contactCount}</span>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
+                                    <div class="da-grid">
+                                        <template for:each={data.targetAccounts} for:item="acct">
+                                            <div key={acct.id} class="da-card">
+                                                <div class="da-avatar" style={acct.avatarStyle}>{acct.avatarInitial}</div>
+                                                <div class="da-body">
+                                                    <a href={acct.sfUrl} target="_blank" class="da-name">{acct.name}</a>
+                                                    <template lwc:if={acct.type}>
+                                                        <div class="da-type">{acct.type}</div>
+                                                    </template>
+                                                </div>
+                                                <div class="da-stats">
+                                                    <span class={acct.activityClass} title="Last SF activity">{acct.lastActivityDateFormatted}</span>
+                                                    <span class={acct.gongClass} title="Last Gong call">&#x1F3A7; {acct.lastGongCallDateFormatted}</span>
+                                                    <span class={acct.threadClass} title="Contacts">&#x1F465; {acct.contactCount}</span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
                                 </template>
                                 <template lwc:else>
                                     <p class="empty-msg">No target accounts. Use the Accounts tab to flag some.</p>
                                 </template>
                             </div>
-                        </lightning-card>
+                        </div>
 
                         <!-- Opps In-Flight -->
-                        <lightning-card icon-name="standard:opportunity" class="slds-m-bottom_medium">
-                            <span slot="title">
-                                Opps In-Flight &mdash; All Stages
-                                <template lwc:if={staleOppCount}>
-                                    <span class="badge-stale slds-m-left_x-small">{staleOppCount} stale</span>
-                                </template>
-                            </span>
-                            <div slot="actions">
+                        <div class="dash-section slds-m-bottom_medium">
+                            <div class="dash-section-hd">
+                                <div class="dash-section-title">
+                                    <lightning-icon icon-name="standard:opportunity" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                    Opps In-Flight
+                                    <template lwc:if={staleOppCount}>
+                                        <span class="badge-stale slds-m-left_x-small">{staleOppCount} stale</span>
+                                    </template>
+                                </div>
                                 <lightning-badge label={inFlightCountLabel}></lightning-badge>
                             </div>
-                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                            <div class="dash-section-bd">
                                 <template lwc:if={hasInFlightOpps}>
-                                    <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered dash-table">
-                                        <thead>
-                                            <tr>
-                                                <th><div class="slds-truncate">Opportunity</div></th>
-                                                <th><div class="slds-truncate">Stage</div></th>
-                                                <th><div class="slds-truncate">Amount</div></th>
-                                                <th><div class="slds-truncate">Days</div></th>
-                                                <th><div class="slds-truncate">Activity</div></th>
-                                                <th><div class="slds-truncate">Contacts</div></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <template for:each={data.inFlightOpps} for:item="opp">
-                                                <tr key={opp.id} class={opp.rowClass}>
-                                                    <td>
-                                                        <a href={opp.sfUrl} target="_blank" class="acct-link">{opp.name}</a>
-                                                        <div class="slds-text-body_small cc-target">{opp.accountName}</div>
-                                                    </td>
-                                                    <td>
-                                                        <span class={opp.stageBadgeClass}>{opp.stageName}</span>
-                                                    </td>
-                                                    <td class="slds-text-body_small">{opp.amountFormatted}</td>
-                                                    <td>
-                                                        <span class={opp.daysClass}>{opp.daysInStage}d</span>
+                                    <div class="do-grid">
+                                        <template for:each={data.inFlightOpps} for:item="opp">
+                                            <div key={opp.id} class={opp.doCardClass}>
+                                                <div class="do-card-hd">
+                                                    <span class={opp.stageBadgeClass}>{opp.stageName}</span>
+                                                    <span class="do-amount">{opp.amountFormatted}</span>
+                                                    <span class={opp.daysClass}>
+                                                        {opp.daysInStage}d
                                                         <template lwc:if={opp.isStale}>
-                                                            <lightning-icon icon-name="utility:warning" size="x-small" variant="warning" alternative-text="Stale" class="slds-m-left_xx-small" title={opp.staleLabel}></lightning-icon>
+                                                            <lightning-icon icon-name="utility:warning" size="xx-small" variant="warning" alternative-text="Stale" title={opp.staleLabel}></lightning-icon>
                                                         </template>
-                                                    </td>
-                                                    <td class="slds-text-body_small">{opp.lastActivityDateFormatted}</td>
-                                                    <td>
-                                                        <span class={opp.contactClass}>{opp.contactRoleCount}</span>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
+                                                    </span>
+                                                </div>
+                                                <a href={opp.sfUrl} target="_blank" class="do-name">{opp.name}</a>
+                                                <div class="do-acct">{opp.accountName}</div>
+                                                <div class="do-card-ft">
+                                                    <span title="Last SF activity"><span class={opp.activityDateClass}>{opp.lastActivityDateFormatted}</span></span>
+                                                    <span title="Last Gong call">&#x1F3A7; <span class={opp.gongDateClass}>{opp.lastGongCallDateFormatted}</span></span>
+                                                    <span class={opp.contactClass} title="Contact roles">&#x1F465; {opp.contactRoleCount}</span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
                                 </template>
                                 <template lwc:else>
                                     <p class="empty-msg">No open in-flight opps.</p>
                                 </template>
                             </div>
-                        </lightning-card>
+                        </div>
 
                     </div>
                     <!-- end LEFT -->
@@ -188,18 +164,21 @@
                     <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
 
                         <!-- This Week's Commits -->
-                        <lightning-card icon-name="utility:task" class="slds-m-bottom_medium">
-                            <span slot="title">
-                                This Week&rsquo;s Commits
-                                <template lwc:if={mandatoryProgressionWarning}>
-                                    <span class="badge-warn slds-m-left_small">&#x26A0; Progression commit required</span>
-                                </template>
-                            </span>
-                            <div slot="actions">
-                                <lightning-button label="&#x21B7; Carry Forward" variant="neutral" size="small" onclick={handleCarryForward} disabled={isCarryingForward} class="slds-m-right_x-small"></lightning-button>
-                                <lightning-button label="+ Add Commit" variant="brand" onclick={openCommitForm} disabled={showCommitForm}></lightning-button>
+                        <div class="dash-section slds-m-bottom_medium">
+                            <div class="dash-section-hd">
+                                <div class="dash-section-title">
+                                    <lightning-icon icon-name="utility:task" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                    This Week&rsquo;s Commits
+                                    <template lwc:if={mandatoryProgressionWarning}>
+                                        <span class="badge-warn slds-m-left_small">&#x26A0; Progression commit required</span>
+                                    </template>
+                                </div>
+                                <div class="slds-grid slds-grid_vertical-align-center">
+                                    <lightning-button label="&#x21B7; Carry Forward" variant="neutral" size="small" onclick={handleCarryForward} disabled={isCarryingForward} class="slds-m-right_x-small"></lightning-button>
+                                    <lightning-button label="+ Add Commit" variant="brand" onclick={openCommitForm} disabled={showCommitForm}></lightning-button>
+                                </div>
                             </div>
-                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                            <div class="dash-section-bd">
 
                                 <!-- Commit Form -->
                                 <template lwc:if={showCommitForm}>
@@ -303,11 +282,17 @@
                                 </div>
 
                             </div>
-                        </lightning-card>
+                        </div>
 
                         <!-- Last Week's Scorecard -->
-                        <lightning-card title="Last Week's Scorecard" icon-name="utility:chart" class="slds-m-bottom_medium">
-                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                        <div class="dash-section slds-m-bottom_medium">
+                            <div class="dash-section-hd">
+                                <div class="dash-section-title">
+                                    <lightning-icon icon-name="utility:chart" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                    Last Week&rsquo;s Scorecard
+                                </div>
+                            </div>
+                            <div class="dash-section-bd">
                                 <div class="slds-grid slds-gutters">
                                     <div class="slds-col slds-size_1-of-2">
                                         <div class="section-divider netnew-divider slds-m-bottom_small">Net New</div>
@@ -328,16 +313,18 @@
                                     </div>
                                 </div>
                             </div>
-                        </lightning-card>
+                        </div>
 
                     </div>
                     <!-- end RIGHT -->
 
                 </div>
+                </div>
             </lightning-tab>
 
             <!-- ════ TAB 2: TARGET ACCOUNTS ════ -->
             <lightning-tab label="Target Accounts" value="accounts" icon-name="utility:target" onactive={handleAccountsTabActive}>
+                <div class="tab-dark-bg">
 
                 <!-- Loading cards -->
                 <template lwc:if={isLoadingCards}>
@@ -504,6 +491,7 @@
 
                 </template>
 
+                </div>
             </lightning-tab>
 
         </lightning-tabset>

@@ -110,16 +110,23 @@ export default class PipeGenRepDashboard extends LightningElement {
     enrichAccount(a, today) {
         const daysSinceActivity = a.lastActivityDate ? this.daysSince(a.lastActivityDate, today) : 999;
         const daysSinceGong     = a.lastGongCallDate ? this.daysSince(a.lastGongCallDate, today) : 999;
+        const initial  = (a.name || '?').charAt(0).toUpperCase();
+        let   hashVal  = 0;
+        for (let i = 0; i < (a.name || '').length; i++) {
+            hashVal = (hashVal * 31 + (a.name || '').charCodeAt(i)) & 0xffff;
+        }
+        const avatarColor = AVATAR_COLORS[hashVal % AVATAR_COLORS.length];
         return {
             ...a,
             sfUrl:                     `/lightning/r/Account/${a.id}/view`,
             lastActivityDateFormatted:  a.lastActivityDate ? this.fmtDate(a.lastActivityDate) : '—',
             lastGongCallDateFormatted:  a.lastGongCallDate ? this.fmtDate(a.lastGongCallDate) : '—',
-            activityClass: daysSinceActivity > 30 ? 'stale-text' : 'slds-text-body_small',
-            gongClass:     daysSinceGong     > 30 ? 'stale-text' : 'slds-text-body_small',
-            threadClass:   (a.contactCount || 0) >= 3
-                ? 'healthy-text'
-                : ((a.contactCount || 0) === 0 ? 'stale-text' : 'slds-text-body_small')
+            activityClass: daysSinceActivity > 30 ? 'stale-text' : 'da-date',
+            gongClass:     daysSinceGong     > 30 ? 'stale-text' : 'da-date',
+            threadClass:   (a.contactCount || 0) >= 3 ? 'healthy-text'
+                         : (a.contactCount || 0) === 0  ? 'stale-text' : 'da-date',
+            avatarInitial: initial,
+            avatarStyle:   `background-color:${avatarColor};`
         };
     }
 
@@ -128,6 +135,8 @@ export default class PipeGenRepDashboard extends LightningElement {
         let stageCls = 'stage-badge stage-badge--s1';
         if (s === '2 - Discovery') stageCls = 'stage-badge stage-badge--s2';
         else if (s === '3 - POV' || s === '4 - Proposal' || s === '5 - Contracting') stageCls = 'stage-badge stage-badge--s3';
+        const daysSinceActivity = o.lastActivityDate ? Math.floor((new Date() - new Date(o.lastActivityDate)) / 86400000) : 999;
+        const daysSinceGong     = o.lastGongCallDate ? Math.floor((new Date() - new Date(o.lastGongCallDate)) / 86400000) : 999;
         return {
             ...o,
             sfUrl:                    `/lightning/r/Opportunity/${o.id}/view`,
@@ -135,8 +144,10 @@ export default class PipeGenRepDashboard extends LightningElement {
             lastActivityDateFormatted: o.lastActivityDate ? this.fmtDate(o.lastActivityDate) : '—',
             lastGongCallDateFormatted: o.lastGongCallDate ? this.fmtDate(o.lastGongCallDate) : '—',
             stageBadgeClass:  stageCls,
-            rowClass:         o.isStale ? 'slds-hint-parent stale-row' : 'slds-hint-parent',
-            daysClass:        o.isStale ? 'stale-text bold-cell' : 'bold-cell',
+            doCardClass:      o.isStale ? 'do-card do-card--stale' : 'do-card',
+            daysClass:        o.isStale ? 'do-days do-days--stale' : 'do-days',
+            activityDateClass: daysSinceActivity > 30 ? 'stale-text' : 'da-date',
+            gongDateClass:     daysSinceGong     > 30 ? 'stale-text' : 'da-date',
             contactClass:     (o.contactRoleCount || 0) < 2 ? 'stale-text' : 'healthy-text',
             staleLabel:       `>${o.staleThreshold}d`
         };
