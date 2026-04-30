@@ -770,7 +770,7 @@ public with sharing class PipeGenController {
             card.segment           = computeSegment(
                 a.Account_Status__c, a.ARR__c, openOppCount, earlyStageCount,
                 hasRecentCL, hasOldCL, hasOnlyOldCL,
-                lastActivityByAcct.get(a.Id), thirtyAgo
+                a.LastActivityDate, thirtyAgo
             );
             cards.add(card);
         }
