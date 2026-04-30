@@ -29,6 +29,10 @@ public with sharing class PipeGenController {
         @AuraEnabled public String   id;
         @AuraEnabled public String   name;
         @AuraEnabled public String   type;
+        @AuraEnabled public String   accountStatus;
+        @AuraEnabled public Decimal  arr;
+        @AuraEnabled public Decimal  estimatedTam;
+        @AuraEnabled public String   website;
         @AuraEnabled public Date     lastActivityDate;
         @AuraEnabled public String   lastActivitySubject;
         @AuraEnabled public DateTime lastGongCallDate;
@@ -279,7 +283,8 @@ public with sharing class PipeGenController {
         List<AccountRow> rows = new List<AccountRow>();
 
         List<Account> accounts = [
-            SELECT Id, Name, Type, LastActivityDate,
+            SELECT Id, Name, Type, Account_Status__c, ARR__c, Estimated_TAM__c, Website,
+                   LastActivityDate,
                 (SELECT Name, Gong__Call_Start__c
                  FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
@@ -292,13 +297,16 @@ public with sharing class PipeGenController {
         ];
 
         for (Account a : accounts) {
-            AccountRow row   = new AccountRow();
-            row.id           = a.Id;
-            row.name         = a.Name;
-            row.type         = a.Type;
-            row.contactCount = a.Contacts.size();
-            row.lastActivityDate = a.LastActivityDate;
-            // We'll populate lastActivityDate separately to avoid ActivityHistories relationship restriction
+            AccountRow row        = new AccountRow();
+            row.id                = a.Id;
+            row.name              = a.Name;
+            row.type              = a.Type;
+            row.accountStatus     = a.Account_Status__c;
+            row.arr               = a.ARR__c;
+            row.estimatedTam      = a.Estimated_TAM__c;
+            row.website           = a.Website;
+            row.contactCount      = a.Contacts.size();
+            row.lastActivityDate  = a.LastActivityDate;
             if (!a.Gong__Conversations__r.isEmpty()) {
                 row.lastGongCallDate = a.Gong__Conversations__r[0].Gong__Call_Start__c;
             }

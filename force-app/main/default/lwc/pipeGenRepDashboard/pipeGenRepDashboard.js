@@ -115,11 +115,14 @@ export default class PipeGenRepDashboard extends LightningElement {
         for (let i = 0; i < (a.name || '').length; i++) {
             hashVal = (hashVal * 31 + (a.name || '').charCodeAt(i)) & 0xffff;
         }
-        const avatarColor = AVATAR_COLORS[hashVal % AVATAR_COLORS.length];
-        const acctType    = (a.type || '').toLowerCase();
-        const cardClass   = acctType.includes('customer')
+        const avatarColor  = AVATAR_COLORS[hashVal % AVATAR_COLORS.length];
+        const isCustomer   = a.accountStatus === 'Customer';
+        const cardClass    = isCustomer
             ? 'acct-card acct-card--customer acct-card--targeted'
             : 'acct-card acct-card--prospect-opps acct-card--targeted';
+        const faviconUrl   = a.website
+            ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(a.website)}&sz=32`
+            : null;
         return {
             ...a,
             sfUrl:                     `/lightning/r/Account/${a.id}/view`,
@@ -129,8 +132,13 @@ export default class PipeGenRepDashboard extends LightningElement {
             gongClass:     daysSinceGong     > 30 ? 'stale-text' : 'da-date',
             threadClass:   (a.contactCount || 0) >= 3 ? 'healthy-text'
                          : (a.contactCount || 0) === 0  ? 'stale-text' : 'da-date',
-            avatarInitial: initial,
-            avatarStyle:   `background-color:${avatarColor};`,
+            avatarInitial:  initial,
+            avatarStyle:    `background-color:${avatarColor};`,
+            faviconUrl,
+            arrFormatted:   a.arr          ? CURRENCY.format(a.arr)          : null,
+            tamFormatted:   a.estimatedTam ? CURRENCY.format(a.estimatedTam) : null,
+            showArr:        isCustomer && !!a.arr,
+            showStatusPill: !isCustomer && !!a.accountStatus,
             cardClass
         };
     }
@@ -211,6 +219,25 @@ export default class PipeGenRepDashboard extends LightningElement {
             ...sc,
             amountFormatted: CURRENCY.format(sc.amount || 0)
         }));
+    }
+
+    // ─── Computed — opps by stage ────────────────────────────────────────────
+
+    get inFlightOppsByStage() {
+        const opps = this.data?.inFlightOpps || [];
+        const STAGE_ORDER = ['1 - Qualify', '2 - Discovery', '3 - POV', '4 - Proposal', '5 - Contracting'];
+        const grouped = {};
+        opps.forEach(o => {
+            const s = o.stageName || 'Other';
+            if (!grouped[s]) grouped[s] = [];
+            grouped[s].push(o);
+        });
+        const result = [];
+        STAGE_ORDER.forEach(s => {
+            if (grouped[s]) { result.push({ key: s, label: s, opps: grouped[s] }); delete grouped[s]; }
+        });
+        Object.keys(grouped).sort().forEach(s => result.push({ key: s, label: s, opps: grouped[s] }));
+        return result;
     }
 
     // ─── Computed — commits ───────────────────────────────────────────────────

@@ -92,15 +92,28 @@
                                         <template for:each={data.targetAccounts} for:item="acct">
                                             <div key={acct.id} class={acct.cardClass}>
                                                 <div class="acct-logo-row">
-                                                    <div class="acct-avatar" style={acct.avatarStyle}>{acct.avatarInitial}</div>
+                                                    <template lwc:if={acct.faviconUrl}>
+                                                        <img src={acct.faviconUrl} alt="" class="acct-favicon" />
+                                                    </template>
+                                                    <template lwc:else>
+                                                        <div class="acct-avatar" style={acct.avatarStyle}>{acct.avatarInitial}</div>
+                                                    </template>
                                                     <a href={acct.sfUrl} target="_blank" class="card-sf-link" title="Open in Salesforce">
                                                         <lightning-icon icon-name="utility:new_window" size="xx-small"></lightning-icon>
                                                     </a>
                                                 </div>
                                                 <div class="card-name">{acct.name}</div>
                                                 <div class="card-meta">
-                                                    <template lwc:if={acct.type}>
-                                                        <span class="pill pill--status">{acct.type}</span>
+                                                    <template lwc:if={acct.showStatusPill}>
+                                                        <span class="pill pill--status">{acct.accountStatus}</span>
+                                                    </template>
+                                                </div>
+                                                <div class="card-financials">
+                                                    <template lwc:if={acct.showArr}>
+                                                        <span class="fin-item fin-arr">ARR {acct.arrFormatted}</span>
+                                                    </template>
+                                                    <template lwc:if={acct.tamFormatted}>
+                                                        <span class="fin-item">TAM {acct.tamFormatted}</span>
                                                     </template>
                                                 </div>
                                                 <div class="card-stats">
@@ -140,35 +153,43 @@
                             </div>
                             <div class="dash-section-bd">
                                 <template lwc:if={hasInFlightOpps}>
-                                    <div class="card-grid">
-                                        <template for:each={data.inFlightOpps} for:item="opp">
-                                            <div key={opp.id} class={opp.oppCardClass}>
-                                                <div class="opp-logo-row">
-                                                    <span class={opp.stageBadgeClass}>{opp.stageName}</span>
-                                                    <span class={opp.daysClass}>
-                                                        {opp.daysInStage}d
-                                                        <template lwc:if={opp.isStale}>
-                                                            <lightning-icon icon-name="utility:warning" size="xx-small" variant="warning" alternative-text="Stale" title={opp.staleLabel}></lightning-icon>
-                                                        </template>
-                                                    </span>
-                                                </div>
-                                                <a href={opp.sfUrl} target="_blank" class="card-name opp-name">{opp.name}</a>
-                                                <div class="do-acct">{opp.accountName}</div>
-                                                <div class="opp-amount-large">{opp.amountFormatted}</div>
-                                                <div class="card-stats">
-                                                    <span class={opp.activityDateClass} title="Last SF activity">
-                                                        <lightning-icon icon-name="utility:event" size="xx-small"></lightning-icon>
-                                                        {opp.lastActivityDateFormatted}
-                                                    </span>
-                                                    <span class={opp.gongDateClass} title="Last Gong call">&#x1F3A7; {opp.lastGongCallDateFormatted}</span>
-                                                    <span class={opp.contactClass} title="Contact roles">
-                                                        <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
-                                                        {opp.contactRoleCount}
-                                                    </span>
-                                                </div>
+                                    <template for:each={inFlightOppsByStage} for:item="stageSeg">
+                                        <div key={stageSeg.key} class="opp-stage-section slds-m-bottom_medium">
+                                            <div class="opp-stage-header slds-m-bottom_small">
+                                                {stageSeg.label}
+                                                <span class="segment-count">({stageSeg.opps.length})</span>
                                             </div>
-                                        </template>
-                                    </div>
+                                            <div class="card-grid">
+                                                <template for:each={stageSeg.opps} for:item="opp">
+                                                    <div key={opp.id} class={opp.oppCardClass}>
+                                                        <div class="opp-logo-row">
+                                                            <span class={opp.stageBadgeClass}>{opp.stageName}</span>
+                                                            <span class={opp.daysClass}>
+                                                                {opp.daysInStage}d
+                                                                <template lwc:if={opp.isStale}>
+                                                                    <lightning-icon icon-name="utility:warning" size="xx-small" variant="warning" alternative-text="Stale" title={opp.staleLabel}></lightning-icon>
+                                                                </template>
+                                                            </span>
+                                                        </div>
+                                                        <a href={opp.sfUrl} target="_blank" class="card-name opp-name">{opp.name}</a>
+                                                        <div class="do-acct">{opp.accountName}</div>
+                                                        <div class="opp-amount-large">{opp.amountFormatted}</div>
+                                                        <div class="card-stats">
+                                                            <span class={opp.activityDateClass} title="Last SF activity">
+                                                                <lightning-icon icon-name="utility:event" size="xx-small"></lightning-icon>
+                                                                {opp.lastActivityDateFormatted}
+                                                            </span>
+                                                            <span class={opp.gongDateClass} title="Last Gong call">&#x1F3A7; {opp.lastGongCallDateFormatted}</span>
+                                                            <span class={opp.contactClass} title="Contact roles">
+                                                                <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                                                                {opp.contactRoleCount}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
                                 </template>
                                 <template lwc:else>
                                     <p class="empty-msg">No open in-flight opps.</p>

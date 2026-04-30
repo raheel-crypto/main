@@ -1054,6 +1054,55 @@
     color: rgba(255, 255, 255, 0.7);
 }
 
+/* ── Opp Stage Sections (inside dash-section-bd) ────────────────────────── */
+
+.opp-stage-section {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    padding-top: 0.75rem;
+}
+
+.opp-stage-section:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+.opp-stage-header {
+    font-size: 0.67rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.42);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* ── Dark segment overrides for tab-dark-bg context ─────────────────────── */
+
+.tab-dark-bg .segment-section {
+    border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+.tab-dark-bg .segment-header {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.tab-dark-bg .segment-count,
+.opp-stage-header .segment-count {
+    color: rgba(255, 255, 255, 0.25);
+    font-weight: 500;
+}
+
+/* ── Lightning-tabset background override ────────────────────────────────── */
+
+.slds-tabs_scoped__content,
+.slds-tabs--scoped__content,
+.slds-tabs_default__content,
+.slds-tabs--default__content {
+    background: transparent !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
 /* ── Tab Dark Background ─────────────────────────────────────────────────── */
 
 .tab-dark-bg {
