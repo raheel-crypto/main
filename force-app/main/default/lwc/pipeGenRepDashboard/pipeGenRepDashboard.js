@@ -215,10 +215,27 @@ export default class PipeGenRepDashboard extends LightningElement {
         return `width:${w}%;background-color:hsl(${hue},72%,42%);`;
     }
     get stageCards() {
-        return (this.qt.stageCards || []).map(sc => ({
-            ...sc,
-            amountFormatted: CURRENCY.format(sc.amount || 0)
-        }));
+        return (this.qt.stageCards || []).map(sc => {
+            let stageCardClass = 'stage-card';
+            if (sc.isClosedWon) {
+                stageCardClass += ' stage-card--won';
+            } else if ((sc.stageName || '').startsWith('5')) {
+                stageCardClass += ' stage-card--contracting';
+            } else if ((sc.stageName || '').startsWith('4')) {
+                stageCardClass += ' stage-card--proposal';
+            } else if ((sc.stageName || '').startsWith('3')) {
+                stageCardClass += ' stage-card--pov';
+            } else if ((sc.stageName || '').startsWith('2')) {
+                stageCardClass += ' stage-card--discovery';
+            } else {
+                stageCardClass += ' stage-card--qualify';
+            }
+            return {
+                ...sc,
+                amountFormatted: CURRENCY.format(sc.amount || 0),
+                stageCardClass
+            };
+        });
     }
 
     // ─── Computed — opps by stage ────────────────────────────────────────────

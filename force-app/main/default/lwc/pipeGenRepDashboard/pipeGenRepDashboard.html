@@ -54,7 +54,7 @@
                 <div class="slds-col slds-size_1-of-1">
                     <div class="stage-strip">
                         <template for:each={stageCards} for:item="sc">
-                            <div key={sc.stageName} class="stage-card">
+                            <div key={sc.stageName} class={sc.stageCardClass}>
                                 <div class="sc-name">{sc.stageName}</div>
                                 <div class="sc-count">{sc.oppCount} deal{sc.oppCount !== 1 ? 's' : ''}</div>
                                 <div class="sc-amount">{sc.amountFormatted}</div>
