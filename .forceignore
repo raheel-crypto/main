@@ -1,0 +1,14 @@
+# Non-Salesforce code in this repo (sf-visualizer client / server / mcp-server)
+client/**
+server/**
+mcp-server/**
+node_modules/**
+
+# Top-level non-SF files
+package.json
+package-lock.json
+tsconfig.json
+.env.example
+
+# CLAUDE / docs
+CLAUDE.md
