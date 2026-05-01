@@ -1,0 +1,38 @@
+query GetAccountContacts($accountId: ID!) {
+	uiapi {
+		query {
+			Contact(
+				where: { AccountId: { eq: $accountId } }
+				first: 20
+				orderBy: { Name: { order: ASC } }
+			) {
+				edges {
+					node {
+						Id
+						Name @optional {
+							value
+							displayValue
+						}
+						Title @optional {
+							value
+							displayValue
+						}
+						Email @optional {
+							value
+							displayValue
+						}
+						Phone @optional {
+							value
+							displayValue
+						}
+						Department @optional {
+							value
+							displayValue
+						}
+					}
+				}
+				totalCount
+			}
+		}
+	}
+}

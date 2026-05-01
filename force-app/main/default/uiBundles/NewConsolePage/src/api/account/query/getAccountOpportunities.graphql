@@ -1,0 +1,44 @@
+query GetAccountOpportunities($accountId: ID!) {
+	uiapi {
+		query {
+			Opportunity(
+				where: { AccountId: { eq: $accountId } }
+				first: 20
+				orderBy: { CloseDate: { order: ASC } }
+			) {
+				edges {
+					node {
+						Id
+						Name @optional {
+							value
+							displayValue
+						}
+						StageName @optional {
+							value
+							displayValue
+						}
+						Amount @optional {
+							value
+							displayValue
+						}
+						CloseDate @optional {
+							value
+							displayValue
+						}
+						Probability @optional {
+							value
+							displayValue
+						}
+						IsClosed @optional {
+							value
+						}
+						IsWon @optional {
+							value
+						}
+					}
+				}
+				totalCount
+			}
+		}
+	}
+}
