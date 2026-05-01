@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <label>Discovery Call - Economic Buyer</label>
+    <protected>false</protected>
+    <values>
+        <field>Commit_Type_Name__c</field>
+        <value xsi:type="xsd:string">Discovery Call - Economic Buyer</value>
+    </values>
+    <values>
+        <field>Motion__c</field>
+        <value xsi:type="xsd:string">Progression</value>
+    </values>
+    <values>
+        <field>Display_Label__c</field>
+        <value xsi:type="xsd:string">Discovery Call (Economic Buyer)</value>
+    </values>
+    <values>
+        <field>Verification_Method__c</field>
+        <value xsi:type="xsd:string">Event_Meeting_Type</value>
+    </values>
+    <values>
+        <field>Meeting_Type_Names__c</field>
+        <value xsi:type="xsd:string">Discovery</value>
+    </values>
+    <values>
+        <field>Sort_Order__c</field>
+        <value xsi:type="xsd:double">1.0</value>
+    </values>
+</CustomMetadata>

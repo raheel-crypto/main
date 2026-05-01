@@ -111,64 +111,144 @@ public with sharing class PipeGenController {
         @AuraEnabled public Integer                thisWeekCompleted;
     }
 
-    // ─── Config ─────────────────────────────────────────────────────────────────
+    // ─── Configuration ──────────────────────────────────────────────────────────
+    // Stage and commit-type config is loaded from Custom Metadata Types so
+    // Sales Ops can tune thresholds, ordering, and verification rules without
+    // a code deploy. See PipeGen_Stage__mdt and PipeGen_Commit_Type__mdt.
 
-    private static final String STAGE_DEMO        = '1 - Demo';
-    private static final String STAGE_DISCOVERY   = '2 - Discovery';
-    private static final String STAGE_POV         = '3 - POV';
-    private static final String STAGE_PROPOSAL    = '4 - Proposal';
-    private static final String STAGE_CONTRACTING = '5 - Contracting';
-    private static final String STAGE_CLOSED_WON  = 'Closed Won';
+    @TestVisible
+    private static Map<String, PipeGen_Stage__mdt> stageConfigCache;
+
+    @TestVisible
+    private static Map<String, PipeGen_Commit_Type__mdt> commitTypeConfigCache;
+
+    // Closed Lost is referenced as a filter target only (not a configured pipeline
+    // stage). Kept as a literal rather than a CMT field for simplicity.
     private static final String STAGE_CLOSED_LOST = 'Closed Lost';
 
-    // All open in-flight stages
-    private static final Set<String> IN_FLIGHT_STAGES = new Set<String>{
-        STAGE_DEMO, STAGE_DISCOVERY, STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING
-    };
+    private static Map<String, PipeGen_Stage__mdt> getStageConfig() {
+        if (stageConfigCache == null) {
+            stageConfigCache = new Map<String, PipeGen_Stage__mdt>();
+            for (PipeGen_Stage__mdt s : [
+                SELECT Stage_Name__c, Stage_Order__c, Is_In_Flight__c, Is_Pipeline_Stage__c,
+                       Is_Advanced_Stage__c, Is_Closed_Won__c, Stale_Threshold_Days__c, Card_Color_Class__c
+                FROM PipeGen_Stage__mdt
+            ]) {
+                stageConfigCache.put(s.Stage_Name__c, s);
+            }
+        }
+        return stageConfigCache;
+    }
 
-    // Pipeline target = 2-Discovery and beyond (excludes 1-Demo)
-    private static final Set<String> PIPELINE_STAGES = new Set<String>{
-        STAGE_DISCOVERY, STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING, STAGE_CLOSED_WON
-    };
+    private static Map<String, PipeGen_Commit_Type__mdt> getCommitTypeConfig() {
+        if (commitTypeConfigCache == null) {
+            commitTypeConfigCache = new Map<String, PipeGen_Commit_Type__mdt>();
+            for (PipeGen_Commit_Type__mdt c : [
+                SELECT Commit_Type_Name__c, Motion__c, Display_Label__c,
+                       Verification_Method__c, Meeting_Type_Names__c, Sort_Order__c
+                FROM PipeGen_Commit_Type__mdt
+            ]) {
+                commitTypeConfigCache.put(c.Commit_Type_Name__c, c);
+            }
+        }
+        return commitTypeConfigCache;
+    }
 
-    // Stage order for display
-    private static final List<String> STAGE_ORDER = new List<String>{
-        STAGE_DEMO, STAGE_DISCOVERY, STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING, STAGE_CLOSED_WON
-    };
+    // ─── Stage Configuration Helpers ────────────────────────────────────────────
 
-    // Stages where a progression commit counts as "advanced"
-    private static final Set<String> ADVANCED_STAGES = new Set<String>{
-        STAGE_POV, STAGE_PROPOSAL, STAGE_CONTRACTING, STAGE_CLOSED_WON
-    };
+    private static Set<String> getInFlightStageNames() {
+        Set<String> result = new Set<String>();
+        for (PipeGen_Stage__mdt s : getStageConfig().values()) {
+            if (s.Is_In_Flight__c == true) result.add(s.Stage_Name__c);
+        }
+        return result;
+    }
 
-    private static final Map<String, Integer> STALE_THRESHOLDS = new Map<String, Integer>{
-        STAGE_DEMO        => 21,
-        STAGE_DISCOVERY   => 14,
-        STAGE_POV         => 14,
-        STAGE_PROPOSAL    => 10,
-        STAGE_CONTRACTING => 7
-    };
+    private static Set<String> getPipelineStageNames() {
+        Set<String> result = new Set<String>();
+        for (PipeGen_Stage__mdt s : getStageConfig().values()) {
+            if (s.Is_Pipeline_Stage__c == true) result.add(s.Stage_Name__c);
+        }
+        return result;
+    }
 
-    // ─── Nektar Activity Verification ────────────────────────────────────────────
+    private static Set<String> getAdvancedStageNames() {
+        Set<String> result = new Set<String>();
+        for (PipeGen_Stage__mdt s : getStageConfig().values()) {
+            if (s.Is_Advanced_Stage__c == true) result.add(s.Stage_Name__c);
+        }
+        return result;
+    }
 
-    // Maps Commit_Type__c → Meeting_Type__c values on Event that verify it.
-    // null value = any meeting type qualifies (used for Multi-Thread).
-    private static final Map<String, Set<String>> COMMIT_MEETING_MAP = new Map<String, Set<String>>{
-        'First Meeting Booked'            => new Set<String>{ 'First Meeting' },
-        'Multi-Thread Intro'              => new Set<String>{ 'First Meeting', 'Discovery', 'Prospect Meeting' },
-        'Champion-Led Referral'           => new Set<String>{ 'First Meeting' },
-        'Inbound Converted'               => new Set<String>{ 'Discovery', 'Prospect Meeting' },
-        'Discovery Call - Economic Buyer' => new Set<String>{ 'Discovery' },
-        'Technical Validation'            => new Set<String>{ 'POV Validation & Alignment', 'POV Readout' },
-        'Exec Alignment'                  => new Set<String>{ 'Deal Progression' },
-        'Multi-Thread'                    => null
-    };
+    private static List<String> getStageOrderList() {
+        Map<Decimal, PipeGen_Stage__mdt> byOrder = new Map<Decimal, PipeGen_Stage__mdt>();
+        for (PipeGen_Stage__mdt s : getStageConfig().values()) {
+            if (s.Stage_Order__c != null) byOrder.put(s.Stage_Order__c, s);
+        }
+        List<Decimal> orders = new List<Decimal>(byOrder.keySet());
+        orders.sort();
+        List<String> result = new List<String>();
+        for (Decimal o : orders) result.add(byOrder.get(o).Stage_Name__c);
+        return result;
+    }
 
-    private static final String COMMIT_EXEC_OUTREACH = 'Exec Outreach Sequence';
-    private static final String COMMIT_MEDDPICC      = 'MEDDPICC Complete';
+    private static Integer getStaleThresholdForStage(String stageName) {
+        PipeGen_Stage__mdt s = getStageConfig().get(stageName);
+        if (s == null || s.Stale_Threshold_Days__c == null) return 21;
+        return Integer.valueOf(s.Stale_Threshold_Days__c);
+    }
 
-    // Nektar DM persona title keywords — longest/most specific phrases first
-    // so a contains() check on "Managing Director" fires before the broader "Director"
+    private static Boolean isClosedWonStage(String stageName) {
+        PipeGen_Stage__mdt s = getStageConfig().get(stageName);
+        return s != null && s.Is_Closed_Won__c == true;
+    }
+
+    private static Boolean isPipelineStage(String stageName) {
+        PipeGen_Stage__mdt s = getStageConfig().get(stageName);
+        return s != null && s.Is_Pipeline_Stage__c == true;
+    }
+
+    private static Boolean isAdvancedStage(String stageName) {
+        PipeGen_Stage__mdt s = getStageConfig().get(stageName);
+        return s != null && s.Is_Advanced_Stage__c == true;
+    }
+
+    // "Early stage" = in-flight but not yet advanced (Demo, Discovery).
+    private static Boolean isEarlyStage(String stageName) {
+        PipeGen_Stage__mdt s = getStageConfig().get(stageName);
+        return s != null && s.Is_In_Flight__c == true && s.Is_Advanced_Stage__c != true;
+    }
+
+    // ─── Commit Type Configuration Helpers ──────────────────────────────────────
+
+    private static Boolean isCommitTypeManual(String commitTypeName) {
+        PipeGen_Commit_Type__mdt c = getCommitTypeConfig().get(commitTypeName);
+        return c != null && 'Manual'.equals(c.Verification_Method__c);
+    }
+
+    private static Boolean isCommitTypeTaskBased(String commitTypeName) {
+        PipeGen_Commit_Type__mdt c = getCommitTypeConfig().get(commitTypeName);
+        return c != null && 'Task_With_DM_Contact'.equals(c.Verification_Method__c);
+    }
+
+    // Returns null when any meeting type qualifies (e.g. Multi-Thread).
+    private static Set<String> getMeetingTypesForCommit(String commitTypeName) {
+        PipeGen_Commit_Type__mdt c = getCommitTypeConfig().get(commitTypeName);
+        if (c == null || !'Event_Meeting_Type'.equals(c.Verification_Method__c)) return null;
+        if (String.isBlank(c.Meeting_Type_Names__c)) return null;
+        Set<String> result = new Set<String>();
+        for (String t : c.Meeting_Type_Names__c.split(';')) {
+            String trimmed = t.trim();
+            if (String.isNotBlank(trimmed)) result.add(trimmed);
+        }
+        return result;
+    }
+
+    // ─── Nektar DM Persona Detection ────────────────────────────────────────────
+
+    // Decision-maker title keywords — longest/most specific phrases first
+    // so a contains() check on "Managing Director" fires before the broader "Director".
+    // Kept hardcoded because this is a domain heuristic, not Sales Ops config.
     private static final List<String> DM_TITLE_KEYWORDS = new List<String>{
         'Managing Director Investment Banking', 'Director Investment Banking',
         'Senior Managing Director', 'Executive Director', 'Investment Director',
@@ -233,7 +313,7 @@ public with sharing class PipeGenController {
               AND CreatedDate >= :qStart
               AND CreatedDate <= :qEnd
         ]) {
-            if (PIPELINE_STAGES.contains((String)h.NewValue))
+            if (isPipelineStage((String)h.NewValue))
                 progressedThisQtr.add(h.OpportunityId);
         }
 
@@ -241,13 +321,14 @@ public with sharing class PipeGenController {
         qualifyingIds.addAll(progressedThisQtr);
 
         // Initialize stage cards
+        List<String> stageOrder = getStageOrderList();
         Map<String, StageCard> cardMap = new Map<String, StageCard>();
-        for (String s : STAGE_ORDER) {
+        for (String s : stageOrder) {
             StageCard sc  = new StageCard();
             sc.stageName  = s;
             sc.oppCount   = 0;
             sc.amount     = 0;
-            sc.isClosedWon = (s == STAGE_CLOSED_WON);
+            sc.isClosedWon = isClosedWonStage(s);
             cardMap.put(s, sc);
         }
 
@@ -263,17 +344,17 @@ public with sharing class PipeGenController {
                 StageCard sc = cardMap.get(o.StageName);
                 if (sc == null) continue;
                 sc.oppCount++;
-                Decimal val = (o.StageName == STAGE_CLOSED_WON)
+                Decimal val = isClosedWonStage(o.StageName)
                     ? (o.ARR__c != null ? o.ARR__c : 0)
                     : (o.Amount  != null ? o.Amount  : 0);
                 sc.amount += val;
-                if (PIPELINE_STAGES.contains(o.StageName)) pipelineActual += val;
+                if (isPipelineStage(o.StageName)) pipelineActual += val;
             }
         }
 
         qt.pipelineActual = pipelineActual;
         qt.stageCards     = new List<StageCard>();
-        for (String s : STAGE_ORDER) qt.stageCards.add(cardMap.get(s));
+        for (String s : stageOrder) qt.stageCards.add(cardMap.get(s));
         return qt;
     }
 
@@ -340,6 +421,7 @@ public with sharing class PipeGenController {
     private static List<OppRow> buildInFlightOpps(Id userId) {
         List<OppRow> rows = new List<OppRow>();
 
+        Set<String> inFlightStages = getInFlightStageNames();
         List<Opportunity> opps = [
             SELECT Id, Name, StageName, Amount, CloseDate, CreatedDate, LastActivityDate, AccountId, Account.Name,
                 (SELECT Name, Gong__Call_Start__c
@@ -348,7 +430,7 @@ public with sharing class PipeGenController {
                 (SELECT Id FROM OpportunityContactRoles WHERE IsDeleted = false)
             FROM Opportunity
             WHERE OwnerId = :userId
-              AND StageName IN :IN_FLIGHT_STAGES
+              AND StageName IN :inFlightStages
               AND IsClosed = false
               AND Type IN ('New Business', 'Upsell', 'Pilot')
             ORDER BY StageName ASC, CreatedDate ASC
@@ -402,8 +484,7 @@ public with sharing class PipeGenController {
             row.accountId        = o.AccountId;
             row.closeDate        = o.CloseDate;
             row.contactRoleCount = o.OpportunityContactRoles.size();
-            row.staleThreshold   = STALE_THRESHOLDS.containsKey(o.StageName)
-                                    ? STALE_THRESHOLDS.get(o.StageName) : 21;
+            row.staleThreshold   = getStaleThresholdForStage(o.StageName);
 
             // Fall back to CreatedDate when no stage-change history exists
             // (opp was created directly in its current stage)
@@ -508,7 +589,7 @@ public with sharing class PipeGenController {
                 if (c.Completion_Status__c == 'Completed') sc.progCommitsCompleted++;
                 if (c.Target_Opportunity__c != null && oppStages.containsKey(c.Target_Opportunity__c)) {
                     String stage = oppStages.get(c.Target_Opportunity__c);
-                    if (ADVANCED_STAGES.contains(stage)) sc.progOppsAdvanced++;
+                    if (isAdvancedStage(stage)) sc.progOppsAdvanced++;
                     else sc.progOppsStalled++;
                 }
             }
@@ -581,10 +662,10 @@ public with sharing class PipeGenController {
         Set<Id> execAcctIds   = new Set<Id>();
 
         for (Weekly_Commit__c c : commits) {
-            if (c.Commit_Type__c == COMMIT_MEDDPICC) continue;
+            if (isCommitTypeManual(c.Commit_Type__c)) continue;
             if (c.Target_Account__c    != null) targetAcctIds.add(c.Target_Account__c);
             if (c.Target_Opportunity__c != null) targetOppIds.add(c.Target_Opportunity__c);
-            if (c.Commit_Type__c == COMMIT_EXEC_OUTREACH && c.Target_Account__c != null)
+            if (isCommitTypeTaskBased(c.Commit_Type__c) && c.Target_Account__c != null)
                 execAcctIds.add(c.Target_Account__c);
         }
 
@@ -650,7 +731,7 @@ public with sharing class PipeGenController {
             Integer newActual;
             String  newStatus;
 
-            if (c.Commit_Type__c == COMMIT_MEDDPICC) {
+            if (isCommitTypeManual(c.Commit_Type__c)) {
                 newActual = c.Actual_Count__c != null ? c.Actual_Count__c.intValue() : 0;
                 newStatus = deriveStatus(newActual, c.Committed_Count__c);
                 if (newStatus == c.Completion_Status__c) continue;
@@ -659,19 +740,19 @@ public with sharing class PipeGenController {
                 continue;
             }
 
-            if (c.Commit_Type__c == COMMIT_EXEC_OUTREACH && c.Target_Account__c != null) {
+            if (isCommitTypeTaskBased(c.Commit_Type__c) && c.Target_Account__c != null) {
                 Integer h = execHitsByAcct.get(c.Target_Account__c);
                 newActual = h != null ? h : 0;
 
             } else if (c.Motion_Type__c == 'Net New' && c.Target_Account__c != null) {
-                Set<String> mapped   = COMMIT_MEETING_MAP.get(c.Commit_Type__c);
+                Set<String> mapped   = getMeetingTypesForCommit(c.Commit_Type__c);
                 List<String> meetings = meetingsByAcct.get(c.Target_Account__c);
                 newActual = 0;
                 if (meetings != null && mapped != null)
                     for (String mt : meetings) if (mapped.contains(mt)) newActual++;
 
             } else if (c.Motion_Type__c == 'Progression' && c.Target_Opportunity__c != null) {
-                Set<String> mapped    = COMMIT_MEETING_MAP.get(c.Commit_Type__c);
+                Set<String> mapped    = getMeetingTypesForCommit(c.Commit_Type__c);
                 List<String> meetings = meetingsByOpp.get(c.Target_Opportunity__c);
                 newActual = 0;
                 if (meetings != null)
@@ -751,7 +832,7 @@ public with sharing class PipeGenController {
                 if (!o.IsClosed) {
                     openOppCount++;
                     hasOnlyOldCL = false;
-                    if (o.StageName == STAGE_DEMO || o.StageName == STAGE_DISCOVERY)
+                    if (isEarlyStage(o.StageName))
                         earlyStageCount++;
                 } else if (o.StageName == STAGE_CLOSED_LOST && o.CloseDate != null) {
                     if (o.CloseDate >= sixMonthsAgo) hasRecentCL = true;
@@ -867,11 +948,12 @@ public with sharing class PipeGenController {
         // ── In-flight opp count per rep (risk signal) ────────────────────────
         Map<Id, Integer> inFlightByRep = new Map<Id, Integer>();
         for (Id rid : repIds) inFlightByRep.put(rid, 0);
+        Set<String> mgrInFlightStages = getInFlightStageNames();
         for (AggregateResult ar : [
             SELECT OwnerId rid, COUNT(Id) cnt
             FROM   Opportunity
             WHERE  OwnerId IN :repIds
-              AND  StageName IN :IN_FLIGHT_STAGES
+              AND  StageName IN :mgrInFlightStages
               AND  IsClosed   = false
             GROUP BY OwnerId
         ]) { inFlightByRep.put((Id)ar.get('rid'), (Integer)ar.get('cnt')); }
@@ -1010,8 +1092,8 @@ public with sharing class PipeGenController {
                 sc.progCommitsTotal++;
                 if (c.Completion_Status__c == 'Completed') sc.progCommitsCompleted++;
                 String stage = oppStages.get(c.Target_Opportunity__c);
-                if (ADVANCED_STAGES.contains(stage))  sc.progOppsAdvanced++;
-                else if (stage != null)                sc.progOppsStalled++;
+                if (isAdvancedStage(stage))  sc.progOppsAdvanced++;
+                else if (stage != null)      sc.progOppsStalled++;
             }
         }
         sc.progConversionRate = sc.progCommitsTotal > 0

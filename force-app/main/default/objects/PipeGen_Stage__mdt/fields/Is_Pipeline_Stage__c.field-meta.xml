@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Pipeline_Stage__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Counts toward the quarterly pipeline target ($ generated metric).</description>
+    <externalId>false</externalId>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <label>Is Pipeline Stage</label>
+    <type>Checkbox</type>
+</CustomField>

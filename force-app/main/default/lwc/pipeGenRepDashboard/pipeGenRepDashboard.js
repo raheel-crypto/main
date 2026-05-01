@@ -242,7 +242,9 @@ export default class PipeGenRepDashboard extends LightningElement {
 
     get inFlightOppsByStage() {
         const opps = this.data?.inFlightOpps || [];
-        const STAGE_ORDER = ['1 - Qualify', '2 - Discovery', '3 - POV', '4 - Proposal', '5 - Contracting'];
+        // Source stage order from the dashboard payload (CMT-backed PipeGen_Stage__mdt
+        // ordered by Stage_Order__c). Avoids drift between Apex and LWC.
+        const stageOrder = (this.qt?.stageCards || []).map(s => s.stageName);
         const grouped = {};
         opps.forEach(o => {
             const s = o.stageName || 'Other';
@@ -250,7 +252,7 @@ export default class PipeGenRepDashboard extends LightningElement {
             grouped[s].push(o);
         });
         const result = [];
-        STAGE_ORDER.forEach(s => {
+        stageOrder.forEach(s => {
             if (grouped[s]) { result.push({ key: s, label: s, opps: grouped[s] }); delete grouped[s]; }
         });
         Object.keys(grouped).sort().forEach(s => result.push({ key: s, label: s, opps: grouped[s] }));

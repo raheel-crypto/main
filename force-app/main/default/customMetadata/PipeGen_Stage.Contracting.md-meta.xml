@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <label>5 - Contracting</label>
+    <protected>false</protected>
+    <values>
+        <field>Stage_Name__c</field>
+        <value xsi:type="xsd:string">5 - Contracting</value>
+    </values>
+    <values>
+        <field>Stage_Order__c</field>
+        <value xsi:type="xsd:double">5.0</value>
+    </values>
+    <values>
+        <field>Is_In_Flight__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+    <values>
+        <field>Is_Pipeline_Stage__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+    <values>
+        <field>Is_Advanced_Stage__c</field>
+        <value xsi:type="xsd:boolean">true</value>
+    </values>
+    <values>
+        <field>Is_Closed_Won__c</field>
+        <value xsi:type="xsd:boolean">false</value>
+    </values>
+    <values>
+        <field>Stale_Threshold_Days__c</field>
+        <value xsi:type="xsd:double">7.0</value>
+    </values>
+    <values>
+        <field>Card_Color_Class__c</field>
+        <value xsi:type="xsd:string">stage-card--contracting</value>
+    </values>
+</CustomMetadata>

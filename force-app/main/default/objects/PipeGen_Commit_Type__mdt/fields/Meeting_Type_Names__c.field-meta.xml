@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Meeting_Type_Names__c</fullName>
+    <description>Semicolon-separated list of Event.Meeting_Type__c values that verify this commit. Leave blank with Verification Method = Event Meeting Type to allow any meeting type to qualify (used for "Multi-Thread").</description>
+    <externalId>false</externalId>
+    <fieldManageability>SubscriberControlled</fieldManageability>
+    <label>Meeting Type Names</label>
+    <length>500</length>
+    <required>false</required>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>
