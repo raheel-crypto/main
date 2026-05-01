@@ -1,0 +1,28 @@
+<template>
+    <div class={opp.oppCardClass}>
+        <div class="opp-logo-row">
+            <span class={opp.stageBadgeClass}>{opp.stageName}</span>
+            <span class={opp.daysClass}>
+                {opp.daysInStage}d
+                <template lwc:if={opp.isStale}>
+                    <lightning-icon icon-name="utility:warning" size="xx-small" variant="warning"
+                        alternative-text="Stale" title={opp.staleLabel}></lightning-icon>
+                </template>
+            </span>
+        </div>
+        <a href={opp.sfUrl} target="_blank" class="card-name opp-name">{opp.name}</a>
+        <div class="do-acct">{opp.accountName}</div>
+        <div class="opp-amount-large">{opp.amountFormatted}</div>
+        <div class="card-stats">
+            <span class={opp.activityDateClass} title="Last SF activity">
+                <lightning-icon icon-name="utility:event" size="xx-small"></lightning-icon>
+                {opp.lastActivityDateFormatted}
+            </span>
+            <span class={opp.gongDateClass} title="Last Gong call">&#x1F3A7; {opp.lastGongCallDateFormatted}</span>
+            <span class={opp.contactClass} title="Contact roles">
+                <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                {opp.contactRoleCount}
+            </span>
+        </div>
+    </div>
+</template>

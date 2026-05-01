@@ -1,0 +1,112 @@
+<template>
+    <!-- Dashboard mode: read-only display with Salesforce link -->
+    <template lwc:if={isDashboard}>
+        <div class={account.cardClass}>
+            <div class="acct-logo-row">
+                <template lwc:if={account.faviconUrl}>
+                    <img src={account.faviconUrl} alt="" class="acct-favicon" />
+                </template>
+                <template lwc:else>
+                    <div class="acct-avatar" style={account.avatarStyle}>{account.avatarInitial}</div>
+                </template>
+                <a href={account.sfUrl} target="_blank" class="card-sf-link" title="Open in Salesforce">
+                    <lightning-icon icon-name="utility:new_window" size="xx-small"></lightning-icon>
+                </a>
+            </div>
+            <div class="card-name">{account.name}</div>
+            <div class="card-meta">
+                <template lwc:if={account.showStatusPill}>
+                    <span class="pill pill--status">{account.accountStatus}</span>
+                </template>
+            </div>
+            <div class="card-financials">
+                <template lwc:if={account.showArr}>
+                    <span class="fin-item fin-arr">ARR {account.arrFormatted}</span>
+                </template>
+                <template lwc:if={account.tamFormatted}>
+                    <span class="fin-item">TAM {account.tamFormatted}</span>
+                </template>
+            </div>
+            <div class="card-stats">
+                <span title="Contacts">
+                    <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                    {account.contactCount}
+                </span>
+            </div>
+            <div class="card-activity">
+                <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
+                <span class={account.activityClass}>{account.lastActivityDateFormatted}</span>
+            </div>
+            <div class="card-activity">
+                <span class={account.gongClass}>&#x1F3A7; {account.lastGongCallDateFormatted}</span>
+            </div>
+        </div>
+    </template>
+
+    <!-- Selectable mode: clickable targeting card (accounts tab) -->
+    <template lwc:else>
+        <div class={account.cardClass} data-id={account.id} onclick={handleToggle}>
+            <div class="acct-logo-row">
+                <template lwc:if={account.faviconUrl}>
+                    <img src={account.faviconUrl} alt="" class="acct-favicon" />
+                </template>
+                <template lwc:else>
+                    <div class="acct-avatar" style={account.avatarStyle}>{account.avatarInitial}</div>
+                </template>
+                <div class="card-check">
+                    <template lwc:if={account.effectiveTargeted}>
+                        <lightning-icon icon-name="utility:check" size="x-small" alternative-text="Targeted"></lightning-icon>
+                    </template>
+                </div>
+            </div>
+            <div class="card-name">{account.name}</div>
+            <div class="card-meta slds-m-bottom_xx-small">
+                <template lwc:if={account.accountStatus}>
+                    <span class="pill pill--status">{account.accountStatus}</span>
+                </template>
+                <template lwc:if={account.accountTier}>
+                    <span class="pill pill--tier">{account.accountTier}</span>
+                </template>
+            </div>
+            <div class="card-financials">
+                <template lwc:if={account.showArr}>
+                    <span class="fin-item fin-arr">ARR {account.arrFormatted}</span>
+                </template>
+                <template lwc:if={account.tamFormatted}>
+                    <span class="fin-item">TAM {account.tamFormatted}</span>
+                </template>
+            </div>
+            <div class="card-stats">
+                <span title="Contacts">
+                    <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                    {account.contactCount}
+                </span>
+                <span title="Open opps">
+                    <lightning-icon icon-name="utility:opportunity" size="xx-small"></lightning-icon>
+                    {account.openOppCount}
+                </span>
+                <template lwc:if={account.bankerCount}>
+                    <span title="Bankers/Investors">
+                        <lightning-icon icon-name="utility:currency" size="xx-small"></lightning-icon>
+                        {account.bankerCount}
+                    </span>
+                </template>
+            </div>
+            <div class="card-activity">
+                <template lwc:if={account.lastActivityDate}>
+                    <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
+                    {account.activityFmt}
+                </template>
+                <template lwc:else>
+                    <span class="stale-text">No activity</span>
+                </template>
+            </div>
+            <template lwc:if={account.isPending}>
+                <div class="card-pending-label">
+                    <template lwc:if={account.effectiveTargeted}>+ will be targeted</template>
+                    <template lwc:else>click to undo</template>
+                </div>
+            </template>
+        </div>
+    </template>
+</template>

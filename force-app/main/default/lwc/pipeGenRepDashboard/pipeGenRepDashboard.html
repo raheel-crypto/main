@@ -54,11 +54,7 @@
                 <div class="slds-col slds-size_1-of-1">
                     <div class="stage-strip">
                         <template for:each={stageCards} for:item="sc">
-                            <div key={sc.stageName} class={sc.stageCardClass}>
-                                <div class="sc-name">{sc.stageName}</div>
-                                <div class="sc-count">{sc.oppCount} deal{sc.oppCount !== 1 ? 's' : ''}</div>
-                                <div class="sc-amount">{sc.amountFormatted}</div>
-                            </div>
+                            <c-pipe-gen-stage-card key={sc.stageName} stage={sc}></c-pipe-gen-stage-card>
                         </template>
                     </div>
                 </div>
@@ -90,46 +86,7 @@
                                 <template lwc:if={hasAccounts}>
                                     <div class="card-grid">
                                         <template for:each={data.targetAccounts} for:item="acct">
-                                            <div key={acct.id} class={acct.cardClass}>
-                                                <div class="acct-logo-row">
-                                                    <template lwc:if={acct.faviconUrl}>
-                                                        <img src={acct.faviconUrl} alt="" class="acct-favicon" />
-                                                    </template>
-                                                    <template lwc:else>
-                                                        <div class="acct-avatar" style={acct.avatarStyle}>{acct.avatarInitial}</div>
-                                                    </template>
-                                                    <a href={acct.sfUrl} target="_blank" class="card-sf-link" title="Open in Salesforce">
-                                                        <lightning-icon icon-name="utility:new_window" size="xx-small"></lightning-icon>
-                                                    </a>
-                                                </div>
-                                                <div class="card-name">{acct.name}</div>
-                                                <div class="card-meta">
-                                                    <template lwc:if={acct.showStatusPill}>
-                                                        <span class="pill pill--status">{acct.accountStatus}</span>
-                                                    </template>
-                                                </div>
-                                                <div class="card-financials">
-                                                    <template lwc:if={acct.showArr}>
-                                                        <span class="fin-item fin-arr">ARR {acct.arrFormatted}</span>
-                                                    </template>
-                                                    <template lwc:if={acct.tamFormatted}>
-                                                        <span class="fin-item">TAM {acct.tamFormatted}</span>
-                                                    </template>
-                                                </div>
-                                                <div class="card-stats">
-                                                    <span title="Contacts">
-                                                        <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
-                                                        {acct.contactCount}
-                                                    </span>
-                                                </div>
-                                                <div class="card-activity">
-                                                    <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
-                                                    <span class={acct.activityClass}>{acct.lastActivityDateFormatted}</span>
-                                                </div>
-                                                <div class="card-activity">
-                                                    <span class={acct.gongClass}>&#x1F3A7; {acct.lastGongCallDateFormatted}</span>
-                                                </div>
-                                            </div>
+                                            <c-pipe-gen-account-card key={acct.id} account={acct} mode="dashboard"></c-pipe-gen-account-card>
                                         </template>
                                     </div>
                                 </template>
@@ -161,31 +118,7 @@
                                             </div>
                                             <div class="card-grid">
                                                 <template for:each={stageSeg.opps} for:item="opp">
-                                                    <div key={opp.id} class={opp.oppCardClass}>
-                                                        <div class="opp-logo-row">
-                                                            <span class={opp.stageBadgeClass}>{opp.stageName}</span>
-                                                            <span class={opp.daysClass}>
-                                                                {opp.daysInStage}d
-                                                                <template lwc:if={opp.isStale}>
-                                                                    <lightning-icon icon-name="utility:warning" size="xx-small" variant="warning" alternative-text="Stale" title={opp.staleLabel}></lightning-icon>
-                                                                </template>
-                                                            </span>
-                                                        </div>
-                                                        <a href={opp.sfUrl} target="_blank" class="card-name opp-name">{opp.name}</a>
-                                                        <div class="do-acct">{opp.accountName}</div>
-                                                        <div class="opp-amount-large">{opp.amountFormatted}</div>
-                                                        <div class="card-stats">
-                                                            <span class={opp.activityDateClass} title="Last SF activity">
-                                                                <lightning-icon icon-name="utility:event" size="xx-small"></lightning-icon>
-                                                                {opp.lastActivityDateFormatted}
-                                                            </span>
-                                                            <span class={opp.gongDateClass} title="Last Gong call">&#x1F3A7; {opp.lastGongCallDateFormatted}</span>
-                                                            <span class={opp.contactClass} title="Contact roles">
-                                                                <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
-                                                                {opp.contactRoleCount}
-                                                            </span>
-                                                        </div>
-                                                    </div>
+                                                    <c-pipe-gen-opp-card key={opp.id} opp={opp}></c-pipe-gen-opp-card>
                                                 </template>
                                             </div>
                                         </div>
@@ -267,18 +200,10 @@
                                     <template lwc:if={hasNetNewCommits}>
                                         <div class="commit-grid">
                                             <template for:each={netNewCommits} for:item="c">
-                                                <div key={c.Id} class={c.commitCardClass}>
-                                                    <div class="ctile-logo-row">
-                                                        <div class="ctile-acct-name">{c.refName}</div>
-                                                        <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
-                                                    </div>
-                                                    <div class="ctile-type">{c.Commit_Type__c}</div>
-                                                    <div class="ctile-desc">{c.Commit_Description__c}</div>
-                                                    <div class="ctile-footer">
-                                                        <span class="cc-progress">{c.progressLabel}</span>
-                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
-                                                    </div>
-                                                </div>
+                                                <c-pipe-gen-commit-card key={c.Id} commit={c}
+                                                    ondeletecommit={handleDeleteCommit}
+                                                    onmarkdone={handleMarkMEDDPICCComplete}>
+                                                </c-pipe-gen-commit-card>
                                             </template>
                                         </div>
                                     </template>
@@ -296,23 +221,10 @@
                                     <template lwc:if={hasProgressionCommits}>
                                         <div class="commit-grid">
                                             <template for:each={progressionCommits} for:item="c">
-                                                <div key={c.Id} class={c.commitCardClass}>
-                                                    <div class="ctile-logo-row">
-                                                        <div class="ctile-acct-name">{c.refName}</div>
-                                                        <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
-                                                    </div>
-                                                    <div class="ctile-type">{c.Commit_Type__c}</div>
-                                                    <div class="ctile-desc">{c.Commit_Description__c}</div>
-                                                    <div class="ctile-footer">
-                                                        <span class="cc-progress">{c.progressLabel}</span>
-                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
-                                                    </div>
-                                                    <template lwc:if={c.showMarkDone}>
-                                                        <div class="slds-m-top_x-small">
-                                                            <lightning-button label="Mark Done" size="x-small" variant="success" data-id={c.Id} onclick={handleMarkMEDDPICCComplete}></lightning-button>
-                                                        </div>
-                                                    </template>
-                                                </div>
+                                                <c-pipe-gen-commit-card key={c.Id} commit={c}
+                                                    ondeletecommit={handleDeleteCommit}
+                                                    onmarkdone={handleMarkMEDDPICCComplete}>
+                                                </c-pipe-gen-commit-card>
                                             </template>
                                         </div>
                                     </template>
@@ -431,85 +343,9 @@
                                 </div>
                                 <div class="card-grid">
                                     <template for:each={seg.cards} for:item="card">
-                                        <div key={card.id} class={card.cardClass} data-id={card.id} onclick={handleCardToggle}>
-
-                                            <!-- Logo / avatar -->
-                                            <div class="acct-logo-row">
-                                                <template lwc:if={card.faviconUrl}>
-                                                    <img src={card.faviconUrl} alt="" class="acct-favicon" />
-                                                </template>
-                                                <template lwc:else>
-                                                    <div class="acct-avatar" style={card.avatarStyle}>{card.avatarInitial}</div>
-                                                </template>
-                                                <!-- Targeted check -->
-                                                <div class="card-check">
-                                                    <template lwc:if={card.effectiveTargeted}>
-                                                        <lightning-icon icon-name="utility:check" size="x-small" alternative-text="Targeted"></lightning-icon>
-                                                    </template>
-                                                </div>
-                                            </div>
-
-                                            <!-- Name -->
-                                            <div class="card-name">{card.name}</div>
-
-                                            <!-- Pills: status + tier -->
-                                            <div class="card-meta slds-m-bottom_xx-small">
-                                                <template lwc:if={card.accountStatus}>
-                                                    <span class="pill pill--status">{card.accountStatus}</span>
-                                                </template>
-                                                <template lwc:if={card.accountTier}>
-                                                    <span class="pill pill--tier">{card.accountTier}</span>
-                                                </template>
-                                            </div>
-
-                                            <!-- ARR (Customer only) + TAM -->
-                                            <div class="card-financials">
-                                                <template lwc:if={card.showArr}>
-                                                    <span class="fin-item fin-arr">ARR {card.arrFormatted}</span>
-                                                </template>
-                                                <template lwc:if={card.tamFormatted}>
-                                                    <span class="fin-item">TAM {card.tamFormatted}</span>
-                                                </template>
-                                            </div>
-
-                                            <!-- Stats bar -->
-                                            <div class="card-stats">
-                                                <span title="Contacts">
-                                                    <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
-                                                    {card.contactCount}
-                                                </span>
-                                                <span title="Open opps">
-                                                    <lightning-icon icon-name="utility:opportunity" size="xx-small"></lightning-icon>
-                                                    {card.openOppCount}
-                                                </span>
-                                                <template lwc:if={card.bankerCount}>
-                                                    <span title="Bankers/Investors">
-                                                        <lightning-icon icon-name="utility:currency" size="xx-small"></lightning-icon>
-                                                        {card.bankerCount}
-                                                    </span>
-                                                </template>
-                                            </div>
-
-                                            <!-- Last activity -->
-                                            <div class="card-activity">
-                                                <template lwc:if={card.lastActivityDate}>
-                                                    <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
-                                                    {card.activityFmt}
-                                                </template>
-                                                <template lwc:else>
-                                                    <span class="stale-text">No activity</span>
-                                                </template>
-                                            </div>
-
-                                            <!-- Pending indicator -->
-                                            <template lwc:if={card.isPending}>
-                                                <div class="card-pending-label">
-                                                    <template lwc:if={card.effectiveTargeted}>+ will be targeted</template>
-                                                    <template lwc:else>click to undo</template>
-                                                </div>
-                                            </template>
-
-                                        </div>
+                                        <c-pipe-gen-account-card key={card.id} account={card} mode="selectable"
+                                            oncardtoggle={handleCardToggle}>
+                                        </c-pipe-gen-account-card>
                                     </template>
                                 </div>
                             </div>

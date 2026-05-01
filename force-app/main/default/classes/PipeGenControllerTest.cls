@@ -49,7 +49,8 @@ private class PipeGenControllerTest {
             AccountId = accountId,
             StageName = stage,
             CloseDate = Date.today().addDays(30),
-            Amount    = amount
+            Amount    = amount,
+            Type      = 'New Business'
         );
         insert o;
         return o;
@@ -161,20 +162,24 @@ private class PipeGenControllerTest {
     // ─── Stage 1 Opps ────────────────────────────────────────────────────────
 
     @isTest
-    static void testStage1Opps_onlyReturnsOpenStage1() {
+    static void testInFlightOpps_excludesClosedWon() {
         User rep = makeRep(0);
         System.runAs(rep) {
             Account a = makeTargetAccount(rep.Id, 'Test Co');
-            makeOpp(rep.Id, a.Id, 'Open S1',    '1 - Demo',   50000);
-            makeOpp(rep.Id, a.Id, 'Stage 3',    '3 - POV',    50000);
-            makeOpp(rep.Id, a.Id, 'Closed Won', 'Closed Won', 50000);
+            makeOpp(rep.Id, a.Id, 'Demo Deal', '1 - Demo',   50000);
+            makeOpp(rep.Id, a.Id, 'POV Deal',  '3 - POV',    50000);
+            makeOpp(rep.Id, a.Id, 'Won Deal',  'Closed Won', 50000);
 
             Test.startTest();
             PipeGenController.DashboardData d = PipeGenController.getRepDashboardData();
             Test.stopTest();
 
-            System.assertEquals(1, d.inFlightOpps.size());
-            System.assertEquals('Open S1', d.inFlightOpps[0].name);
+            // Demo and POV are both in-flight per PipeGen_Stage__mdt; Closed Won excluded (IsClosed = true)
+            System.assertEquals(2, d.inFlightOpps.size(), 'Demo and POV are in-flight; Closed Won is excluded');
+            Set<String> stageNames = new Set<String>();
+            for (PipeGenController.OppRow r : d.inFlightOpps) stageNames.add(r.stageName);
+            System.assert(stageNames.contains('1 - Demo'), 'Demo should be in-flight');
+            System.assert(stageNames.contains('3 - POV'),  'POV should be in-flight');
         }
     }
 

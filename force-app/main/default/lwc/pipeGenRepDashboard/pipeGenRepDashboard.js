@@ -215,27 +215,11 @@ export default class PipeGenRepDashboard extends LightningElement {
         return `width:${w}%;background-color:hsl(${hue},72%,42%);`;
     }
     get stageCards() {
-        return (this.qt.stageCards || []).map(sc => {
-            let stageCardClass = 'stage-card';
-            if (sc.isClosedWon) {
-                stageCardClass += ' stage-card--won';
-            } else if ((sc.stageName || '').startsWith('5')) {
-                stageCardClass += ' stage-card--contracting';
-            } else if ((sc.stageName || '').startsWith('4')) {
-                stageCardClass += ' stage-card--proposal';
-            } else if ((sc.stageName || '').startsWith('3')) {
-                stageCardClass += ' stage-card--pov';
-            } else if ((sc.stageName || '').startsWith('2')) {
-                stageCardClass += ' stage-card--discovery';
-            } else {
-                stageCardClass += ' stage-card--qualify';
-            }
-            return {
-                ...sc,
-                amountFormatted: CURRENCY.format(sc.amount || 0),
-                stageCardClass
-            };
-        });
+        // Class computation moved to c-pipe-gen-stage-card child component
+        return (this.qt.stageCards || []).map(sc => ({
+            ...sc,
+            amountFormatted: CURRENCY.format(sc.amount || 0)
+        }));
     }
 
     // ─── Computed — opps by stage ────────────────────────────────────────────
@@ -481,7 +465,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     }
 
     async handleDeleteCommit(e) {
-        const id = e.currentTarget.dataset.id;
+        const id = e.detail?.id || e.currentTarget?.dataset?.id;
         try {
             await deleteCommit({ commitId: id });
             this.data = { ...this.data, thisWeekCommits: (this.data.thisWeekCommits || []).filter(c => c.Id !== id) };
@@ -492,7 +476,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     }
 
     async handleMarkMEDDPICCComplete(e) {
-        const id = e.currentTarget.dataset.id;
+        const id = e.detail?.id || e.currentTarget?.dataset?.id;
         try {
             await markCommitComplete({ commitId: id });
             await this.loadData();
@@ -536,7 +520,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     }
 
     handleCardToggle(e) {
-        const id = e.currentTarget.dataset.id;
+        const id = e.detail?.id || e.currentTarget?.dataset?.id;
         this.accountCards = this.accountCards.map(c =>
             c.id === id ? { ...c, effectiveTargeted: !c.effectiveTargeted } : c
         );

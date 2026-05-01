@@ -1,0 +1,21 @@
+<template>
+    <div class={commit.commitCardClass}>
+        <div class="ctile-logo-row">
+            <div class="ctile-acct-name">{commit.refName}</div>
+            <span class={commit.statusDotClass} title={commit.Completion_Status__c}></span>
+        </div>
+        <div class="ctile-type">{commit.Commit_Type__c}</div>
+        <div class="ctile-desc">{commit.Commit_Description__c}</div>
+        <div class="ctile-footer">
+            <span class="cc-progress">{commit.progressLabel}</span>
+            <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse"
+                alternative-text="Remove" data-id={commit.Id} onclick={handleDelete}></lightning-button-icon>
+        </div>
+        <template lwc:if={commit.showMarkDone}>
+            <div class="slds-m-top_x-small">
+                <lightning-button label="Mark Done" size="x-small" variant="success"
+                    data-id={commit.Id} onclick={handleMarkDone}></lightning-button>
+            </div>
+        </template>
+    </div>
+</template>
