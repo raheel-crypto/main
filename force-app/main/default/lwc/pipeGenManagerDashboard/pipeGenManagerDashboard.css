@@ -292,13 +292,37 @@ lightning-button {
     --lwc-buttonBorderRadius: 1.5rem;
 }
 
-/* Readable textarea label on dark background — covers old and new SLDS variable names */
-lightning-textarea {
-    --sds-c-textarea-color-label-text: rgba(255, 255, 255, 0.72);
-    --sds-c-input-label-color-text: rgba(255, 255, 255, 0.72);
-    --lwc-colorTextLabel: rgba(255, 255, 255, 0.72);
-    --sds-c-textarea-color-border: rgba(99, 128, 200, 0.35);
-    --sds-c-input-color-border: rgba(99, 128, 200, 0.35);
+/* Native textarea replacing lightning-textarea for full dark-mode control */
+.mgr-textarea-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    margin-bottom: 0.25rem;
+}
+
+.mgr-textarea {
+    display: block;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(99, 128, 200, 0.35);
+    border-radius: 0.25rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.8rem;
+    padding: 0.4rem 0.5rem;
+    resize: vertical;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.mgr-textarea::placeholder {
+    color: rgba(255, 255, 255, 0.28);
+}
+
+.mgr-textarea:focus {
+    outline: none;
+    border-color: rgba(99, 128, 200, 0.65);
+    box-shadow: 0 0 0 2px rgba(99, 128, 200, 0.15);
 }
 
 .mgr-commit-row {

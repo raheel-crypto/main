@@ -164,15 +164,16 @@
                                                             disabled={c.isSavingFlag}>
                                                         </lightning-button>
                                                     </div>
-                                                    <lightning-textarea
-                                                        label="Manager Note"
-                                                        value={c.pendingNote}
+                                                    <label class="mgr-textarea-label">Manager Note</label>
+                                                    <textarea
+                                                        class="mgr-textarea"
                                                         placeholder="Add a coaching note..."
-                                                        max-length="500"
+                                                        maxlength="500"
                                                         rows="2"
                                                         data-id={c.Id}
-                                                        onchange={handleNoteChange}>
-                                                    </lightning-textarea>
+                                                        oninput={handleNoteChange}
+                                                        value={c.pendingNote}>
+                                                    </textarea>
                                                     <template lwc:if={c.noteDirty}>
                                                         <lightning-button
                                                             label="Save Note"
@@ -230,15 +231,16 @@
                                                             disabled={c.isSavingFlag}>
                                                         </lightning-button>
                                                     </div>
-                                                    <lightning-textarea
-                                                        label="Manager Note"
-                                                        value={c.pendingNote}
+                                                    <label class="mgr-textarea-label">Manager Note</label>
+                                                    <textarea
+                                                        class="mgr-textarea"
                                                         placeholder="Add a coaching note..."
-                                                        max-length="500"
+                                                        maxlength="500"
                                                         rows="2"
                                                         data-id={c.Id}
-                                                        onchange={handleNoteChange}>
-                                                    </lightning-textarea>
+                                                        oninput={handleNoteChange}
+                                                        value={c.pendingNote}>
+                                                    </textarea>
                                                     <template lwc:if={c.noteDirty}>
                                                         <lightning-button
                                                             label="Save Note"

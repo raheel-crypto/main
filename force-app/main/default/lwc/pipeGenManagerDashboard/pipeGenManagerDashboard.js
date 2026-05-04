@@ -163,8 +163,8 @@ export default class PipeGenManagerDashboard extends LightningElement {
     }
 
     handleNoteChange(e) {
-        const id    = e.currentTarget.dataset.id;
-        const value = e.detail.value;
+        const id    = e.target.dataset.id;
+        const value = e.target.value;
         this.reps = this.reps.map(r => ({
             ...r,
             thisWeekCommits: r.thisWeekCommits.map(c => {
