@@ -292,11 +292,13 @@ lightning-button {
     --lwc-buttonBorderRadius: 1.5rem;
 }
 
-/* Readable textarea label on dark background */
+/* Readable textarea label on dark background — covers old and new SLDS variable names */
 lightning-textarea {
     --sds-c-textarea-color-label-text: rgba(255, 255, 255, 0.72);
+    --sds-c-input-label-color-text: rgba(255, 255, 255, 0.72);
     --lwc-colorTextLabel: rgba(255, 255, 255, 0.72);
     --sds-c-textarea-color-border: rgba(99, 128, 200, 0.35);
+    --sds-c-input-color-border: rgba(99, 128, 200, 0.35);
 }
 
 .mgr-commit-row {
