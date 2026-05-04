@@ -33,7 +33,6 @@ export default class PipeGenManagerDashboard extends LightningElement {
     }
 
     enrichRep(rep) {
-        const sc     = rep.lastWeekScorecard || {};
         const target = rep.pipelineTarget || 0;
         const actual = rep.pipelineActual || 0;
         const attPct = target > 0 ? Math.min(100, Math.round((actual / target) * 100)) : 0;
@@ -42,26 +41,34 @@ export default class PipeGenManagerDashboard extends LightningElement {
                        : attPct >=  60 ? 'att-bar-fill att-bar--good'
                        : attPct >=  30 ? 'att-bar-fill att-bar--warn'
                        :                  'att-bar-fill att-bar--low';
+
+        const lwCommits = (rep.lastWeekCommits || []).map(c => this.enrichCommit(c));
+        const lwTotal     = lwCommits.length;
+        const lwCompleted = lwCommits.filter(c => c.Completion_Status__c === 'Completed').length;
+
         return {
             ...rep,
             isExpanded,
-            chevronIcon:        'utility:chevronright',
-            repCardClass:       this.repCardClass(rep, isExpanded),
-            twCompletionClass:  this.twClass(rep.thisWeekCompleted, rep.thisWeekTotal),
-            lwNNLabel:          `${sc.nnCommitsCompleted || 0}/${sc.nnCommitsTotal || 0}`,
-            lwProgLabel:        `${sc.progCommitsCompleted || 0}/${sc.progCommitsTotal || 0}`,
-            hasCommits:         (rep.thisWeekCommits || []).length > 0,
-            thisWeekCommits:    (rep.thisWeekCommits || []).map(c => this.enrichCommit(c)),
-            attainmentPct:      attPct,
-            attainmentBarStyle: `width: ${attPct}%`,
-            attainmentBarClass: barClass,
-            pipelineActualFmt:  CURR.format(actual),
-            pipelineTargetFmt:  CURR.format(target),
-            weeksRemaining:     rep.weeksRemaining || 0,
-            lwOppsCreated:      rep.lwOppsCreated      || 0,
-            qtdOppsCreated:     rep.qtdOppsCreated     || 0,
-            lwOppsToDiscovery:  rep.lwOppsToDiscovery  || 0,
-            qtdOppsToDiscovery: rep.qtdOppsToDiscovery || 0
+            chevronIcon:          'utility:chevronright',
+            repCardClass:         this.repCardClass(rep, isExpanded),
+            twCompletionClass:    this.twClass(rep.thisWeekCompleted, rep.thisWeekTotal),
+            lwCompletionClass:    this.twClass(lwCompleted, lwTotal),
+            lwCompleted,
+            lwTotal,
+            hasCommits:           (rep.thisWeekCommits || []).length > 0,
+            hasLastWeekCommits:   lwCommits.length > 0,
+            thisWeekCommits:      (rep.thisWeekCommits || []).map(c => this.enrichCommit(c)),
+            lastWeekCommits:      lwCommits,
+            attainmentPct:        attPct,
+            attainmentBarStyle:   `width: ${attPct}%`,
+            attainmentBarClass:   barClass,
+            pipelineActualFmt:    CURR.format(actual),
+            pipelineTargetFmt:    CURR.format(target),
+            weeksRemaining:       rep.weeksRemaining || 0,
+            lwOppsCreated:        rep.lwOppsCreated      || 0,
+            qtdOppsCreated:       rep.qtdOppsCreated     || 0,
+            lwOppsToDiscovery:    rep.lwOppsToDiscovery  || 0,
+            qtdOppsToDiscovery:   rep.qtdOppsToDiscovery || 0
         };
     }
 

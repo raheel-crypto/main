@@ -103,6 +103,7 @@ public with sharing class PipeGenController {
         @AuraEnabled public String                 repId;
         @AuraEnabled public String                 repName;
         @AuraEnabled public List<Weekly_Commit__c> thisWeekCommits;
+        @AuraEnabled public List<Weekly_Commit__c> lastWeekCommits;
         @AuraEnabled public ScorecardData          lastWeekScorecard;
         @AuraEnabled public List<String>           riskReasons;
         @AuraEnabled public Boolean                hasRisk;
@@ -869,15 +870,19 @@ public with sharing class PipeGenController {
             ORDER BY Motion_Type__c ASC, CreatedDate ASC
         ]) { twByRep.get(c.Rep__c).add(c); }
 
-        // ── Last week commits (scorecard) ────────────────────────────────────
+        // ── Last week commits (scorecard + display) ──────────────────────────
         Map<Id, List<Weekly_Commit__c>> lwByRep = new Map<Id, List<Weekly_Commit__c>>();
         for (Id rid : repIds) lwByRep.put(rid, new List<Weekly_Commit__c>());
         for (Weekly_Commit__c c : [
-            SELECT Id, Rep__c, Motion_Type__c, Completion_Status__c,
-                   Committed_Count__c, Target_Opportunity__c
+            SELECT Id, Rep__c, Motion_Type__c, Commit_Type__c, Commit_Description__c,
+                   Target_Account__c, Target_Account__r.Name,
+                   Target_Opportunity__c, Target_Opportunity__r.Name,
+                   Committed_Count__c, Actual_Count__c,
+                   Completion_Status__c, Manager_Note__c, At_Risk__c, Notes__c
             FROM   Weekly_Commit__c
             WHERE  Rep__c IN :repIds
               AND  Week_Start_Date__c = :lwStart
+            ORDER BY Motion_Type__c ASC, CreatedDate ASC
         ]) { lwByRep.get(c.Rep__c).add(c); }
 
         // ── In-flight opp count per rep (risk signal) ────────────────────────
@@ -996,6 +1001,7 @@ public with sharing class PipeGenController {
             rs.repId             = rep.Id;
             rs.repName           = rep.Name;
             rs.thisWeekCommits   = twCommits;
+            rs.lastWeekCommits   = lwCommits;
             rs.inFlightOppCount  = inFlight;
             rs.lastWeekScorecard = buildRepScorecard(lwCommits, oppStages);
             rs.riskReasons       = computeRiskReasons(twCommits, inFlight);
