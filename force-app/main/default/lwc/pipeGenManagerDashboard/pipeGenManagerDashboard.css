@@ -216,6 +216,25 @@
     padding: 0.75rem 1rem;
 }
 
+/* Pill-shaped, centered at-risk button */
+.mgr-action-btn-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+
+lightning-button {
+    --sds-c-button-radius-border: 1.5rem;
+    --lwc-buttonBorderRadius: 1.5rem;
+}
+
+/* Readable textarea label on dark background */
+lightning-textarea {
+    --sds-c-textarea-color-label-text: rgba(255, 255, 255, 0.72);
+    --lwc-colorTextLabel: rgba(255, 255, 255, 0.72);
+    --sds-c-textarea-color-border: rgba(99, 128, 200, 0.35);
+}
+
 .mgr-commit-row {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(99, 128, 200, 0.12);
