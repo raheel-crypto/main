@@ -56,225 +56,218 @@
                 </div>
             </div>
 
-            <!-- ── Rep Table ── -->
+            <!-- ── Rep Cards Grid ── -->
             <template lwc:if={hasReps}>
-                <template for:each={reps} for:item="rep">
-                    <div key={rep.repId} class={rep.repCardClass}>
+                <div class="rep-grid">
+                    <template for:each={reps} for:item="rep">
+                        <div key={rep.repId} class={rep.repCardClass}>
 
-                        <!-- Rep Row Header -->
-                        <div class="rep-row" data-id={rep.repId} onclick={handleRepExpand}>
-
-                            <!-- Chevron -->
-                            <div class="rep-chevron">
-                                <lightning-icon
-                                    icon-name={rep.chevronIcon}
-                                    size="x-small">
-                                </lightning-icon>
-                            </div>
-
-                            <!-- Left: name + risk badge + attainment bar -->
-                            <div class="rep-left">
-                                <div class="rep-name-row">
+                            <!-- Card Top: name + attainment bar -->
+                            <div class="card-top">
+                                <div class="card-name-row">
                                     <span class="rep-name">{rep.repName}</span>
                                     <template lwc:if={rep.hasRisk}>
                                         <span class="risk-badge">&#x26A0; Risk</span>
                                     </template>
                                 </div>
-                                <div class="rep-att-row">
-                                    <div class="att-track">
-                                        <div class={rep.attainmentBarClass} style={rep.attainmentBarStyle}></div>
-                                    </div>
+                                <div class="card-att-track">
+                                    <div class={rep.attainmentBarClass} style={rep.attainmentBarStyle}></div>
+                                </div>
+                                <div class="card-att-meta">
                                     <span class="att-label">{rep.pipelineActualFmt} / {rep.pipelineTargetFmt} &bull; {rep.attainmentPct}%</span>
                                     <span class="att-weeks">{rep.weeksRemaining}w left</span>
                                 </div>
                             </div>
 
-                            <!-- Last week completion -->
-                            <div class="rep-stat-col">
-                                <span class="stat-label">Last Week</span>
-                                <span class={rep.lwCompletionClass}>{rep.lwCompleted}/{rep.lwTotal}</span>
+                            <!-- Stats Row: LW / TW / In-Flight -->
+                            <div class="card-stats">
+                                <div class="card-stat">
+                                    <span class="stat-label">Last Week</span>
+                                    <span class={rep.lwCompletionClass}>{rep.lwCompleted}/{rep.lwTotal}</span>
+                                </div>
+                                <div class="card-stat">
+                                    <span class="stat-label">This Week</span>
+                                    <span class={rep.twCompletionClass}>{rep.thisWeekCompleted}/{rep.thisWeekTotal}</span>
+                                </div>
+                                <div class="card-stat">
+                                    <span class="stat-label">In-Flight</span>
+                                    <span class="stat-value">{rep.inFlightOppCount}</span>
+                                </div>
                             </div>
 
-                            <!-- This week progress -->
-                            <div class="rep-stat-col">
-                                <span class="stat-label">This Week</span>
-                                <span class={rep.twCompletionClass}>{rep.thisWeekCompleted}/{rep.thisWeekTotal}</span>
+                            <!-- Metrics Row: Opps Created / To Discovery -->
+                            <div class="card-metrics">
+                                <div class="card-metric">
+                                    <span class="stat-label">Opps Created</span>
+                                    <span class="stat-value">LW&nbsp;{rep.lwOppsCreated} &bull; QTD&nbsp;{rep.qtdOppsCreated}</span>
+                                </div>
+                                <div class="card-metric">
+                                    <span class="stat-label">To Discovery</span>
+                                    <span class="stat-value">LW&nbsp;{rep.lwOppsToDiscovery} &bull; QTD&nbsp;{rep.qtdOppsToDiscovery}</span>
+                                </div>
                             </div>
 
-                            <!-- Opps Created LW / QTD -->
-                            <div class="rep-stat-col slds-hide_small">
-                                <span class="stat-label">Opps Created</span>
-                                <span class="stat-value">LW: {rep.lwOppsCreated} &bull; QTD: {rep.qtdOppsCreated}</span>
+                            <!-- Risk reasons -->
+                            <template lwc:if={rep.hasRisk}>
+                                <div class="risk-reasons">
+                                    <template for:each={rep.riskReasons} for:item="reason">
+                                        <span key={reason} class="risk-reason">&#x25B8; {reason}</span>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- Expand footer -->
+                            <div class="card-expand-btn" role="button" tabindex="0" data-id={rep.repId} onclick={handleRepExpand}>
+                                <lightning-icon icon-name={rep.chevronIcon} size="xx-small" class="card-expand-icon"></lightning-icon>
+                                <span>{rep.expandLabel}</span>
                             </div>
 
-                            <!-- Opps to Discovery LW / QTD -->
-                            <div class="rep-stat-col slds-hide_small">
-                                <span class="stat-label">To Discovery</span>
-                                <span class="stat-value">LW: {rep.lwOppsToDiscovery} &bull; QTD: {rep.qtdOppsToDiscovery}</span>
-                            </div>
+                            <!-- Expanded commit detail -->
+                            <template lwc:if={rep.isExpanded}>
+                                <div class="commit-detail">
 
-                            <!-- In-flight opps -->
-                            <div class="rep-stat-col slds-hide_small">
-                                <span class="stat-label">In-Flight</span>
-                                <span class="stat-value">{rep.inFlightOppCount} opps</span>
-                            </div>
+                                    <!-- ── Last Week ── -->
+                                    <div class="week-section-header">Last Week &mdash; Results</div>
+                                    <template lwc:if={rep.hasLastWeekCommits}>
+                                        <template for:each={rep.lastWeekCommits} for:item="c">
+                                            <div key={c.Id} class={c.mgr_commitRowClass}>
+                                                <div class="slds-grid slds-grid_vertical-align-start slds-wrap">
+                                                    <div class="slds-col slds-size_1-of-1 slds-medium-size_7-of-12">
+                                                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                            <span class={c.statusDotClass}></span>
+                                                            <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
+                                                            <span class="slds-text-body_small slds-m-left_x-small mgr-progress">{c.progressLabel}</span>
+                                                            <template lwc:if={c.At_Risk__c}>
+                                                                <span class="at-risk-chip slds-m-left_x-small">&#x26A0; At Risk</span>
+                                                            </template>
+                                                        </div>
+                                                        <div class="slds-text-body_small slds-m-bottom_xx-small">{c.Commit_Description__c}</div>
+                                                        <template lwc:if={c.Target_Account__r}>
+                                                            <div class="slds-text-body_small commit-target">&#x1F3AF; {c.Target_Account__r.Name}</div>
+                                                        </template>
+                                                        <template lwc:if={c.Target_Opportunity__r}>
+                                                            <div class="slds-text-body_small commit-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
+                                                        </template>
+                                                        <template lwc:if={c.Notes__c}>
+                                                            <div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div>
+                                                        </template>
+                                                    </div>
+                                                    <div class="slds-col slds-size_1-of-1 slds-medium-size_5-of-12 slds-p-left_medium">
+                                                        <div class="mgr-action-btn-row">
+                                                            <lightning-button
+                                                                label={c.atRiskLabel}
+                                                                variant={c.atRiskVariant}
+                                                                icon-name={c.atRiskIcon}
+                                                                size="x-small"
+                                                                data-id={c.Id}
+                                                                data-current={c.At_Risk__c}
+                                                                onclick={handleAtRiskToggle}
+                                                                disabled={c.isSavingFlag}>
+                                                            </lightning-button>
+                                                        </div>
+                                                        <lightning-textarea
+                                                            label="Manager Note"
+                                                            value={c.pendingNote}
+                                                            placeholder="Add a coaching note..."
+                                                            max-length="500"
+                                                            rows="2"
+                                                            data-id={c.Id}
+                                                            onchange={handleNoteChange}>
+                                                        </lightning-textarea>
+                                                        <template lwc:if={c.noteDirty}>
+                                                            <lightning-button
+                                                                label="Save Note"
+                                                                variant="brand"
+                                                                size="x-small"
+                                                                class="slds-m-top_xx-small"
+                                                                data-id={c.Id}
+                                                                onclick={handleNoteSave}
+                                                                disabled={c.isSavingNote}>
+                                                            </lightning-button>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </template>
+                                    <template lwc:else>
+                                        <p class="empty-detail-msg">No commits logged last week.</p>
+                                    </template>
+
+                                    <!-- ── This Week ── -->
+                                    <div class="week-section-header week-section-header--tw">This Week &mdash; Pipeline</div>
+                                    <template lwc:if={rep.hasCommits}>
+                                        <template for:each={rep.thisWeekCommits} for:item="c">
+                                            <div key={c.Id} class={c.mgr_commitRowClass}>
+                                                <div class="slds-grid slds-grid_vertical-align-start slds-wrap">
+                                                    <div class="slds-col slds-size_1-of-1 slds-medium-size_7-of-12">
+                                                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                            <span class={c.statusDotClass}></span>
+                                                            <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
+                                                            <span class="slds-text-body_small slds-m-left_x-small mgr-progress">{c.progressLabel}</span>
+                                                            <template lwc:if={c.At_Risk__c}>
+                                                                <span class="at-risk-chip slds-m-left_x-small">&#x26A0; At Risk</span>
+                                                            </template>
+                                                        </div>
+                                                        <div class="slds-text-body_small slds-m-bottom_xx-small">{c.Commit_Description__c}</div>
+                                                        <template lwc:if={c.Target_Account__r}>
+                                                            <div class="slds-text-body_small commit-target">&#x1F3AF; {c.Target_Account__r.Name}</div>
+                                                        </template>
+                                                        <template lwc:if={c.Target_Opportunity__r}>
+                                                            <div class="slds-text-body_small commit-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
+                                                        </template>
+                                                        <template lwc:if={c.Notes__c}>
+                                                            <div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div>
+                                                        </template>
+                                                    </div>
+                                                    <div class="slds-col slds-size_1-of-1 slds-medium-size_5-of-12 slds-p-left_medium">
+                                                        <div class="mgr-action-btn-row">
+                                                            <lightning-button
+                                                                label={c.atRiskLabel}
+                                                                variant={c.atRiskVariant}
+                                                                icon-name={c.atRiskIcon}
+                                                                size="x-small"
+                                                                data-id={c.Id}
+                                                                data-current={c.At_Risk__c}
+                                                                onclick={handleAtRiskToggle}
+                                                                disabled={c.isSavingFlag}>
+                                                            </lightning-button>
+                                                        </div>
+                                                        <lightning-textarea
+                                                            label="Manager Note"
+                                                            value={c.pendingNote}
+                                                            placeholder="Add a coaching note..."
+                                                            max-length="500"
+                                                            rows="2"
+                                                            data-id={c.Id}
+                                                            onchange={handleNoteChange}>
+                                                        </lightning-textarea>
+                                                        <template lwc:if={c.noteDirty}>
+                                                            <lightning-button
+                                                                label="Save Note"
+                                                                variant="brand"
+                                                                size="x-small"
+                                                                class="slds-m-top_xx-small"
+                                                                data-id={c.Id}
+                                                                onclick={handleNoteSave}
+                                                                disabled={c.isSavingNote}>
+                                                            </lightning-button>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </template>
+                                    <template lwc:else>
+                                        <p class="empty-detail-msg">No commits logged this week yet.</p>
+                                    </template>
+
+                                </div>
+                            </template>
 
                         </div>
-
-                        <!-- Risk reasons (always visible if hasRisk) -->
-                        <template lwc:if={rep.hasRisk}>
-                            <div class="risk-reasons">
-                                <template for:each={rep.riskReasons} for:item="reason">
-                                    <span key={reason} class="risk-reason">&#x25B8; {reason}</span>
-                                </template>
-                            </div>
-                        </template>
-
-                        <!-- Expanded commit detail -->
-                        <template lwc:if={rep.isExpanded}>
-                            <div class="commit-detail">
-
-                                <!-- ── Last Week ── -->
-                                <div class="week-section-header">Last Week &mdash; Results</div>
-                                <template lwc:if={rep.hasLastWeekCommits}>
-                                    <template for:each={rep.lastWeekCommits} for:item="c">
-                                        <div key={c.Id} class={c.mgr_commitRowClass}>
-                                            <div class="slds-grid slds-grid_vertical-align-start slds-wrap">
-                                                <div class="slds-col slds-size_1-of-1 slds-medium-size_7-of-12">
-                                                    <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
-                                                        <span class={c.statusDotClass}></span>
-                                                        <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
-                                                        <span class="slds-text-body_small slds-m-left_x-small mgr-progress">{c.progressLabel}</span>
-                                                        <template lwc:if={c.At_Risk__c}>
-                                                            <span class="at-risk-chip slds-m-left_x-small">&#x26A0; At Risk</span>
-                                                        </template>
-                                                    </div>
-                                                    <div class="slds-text-body_small slds-m-bottom_xx-small">{c.Commit_Description__c}</div>
-                                                    <template lwc:if={c.Target_Account__r}>
-                                                        <div class="slds-text-body_small commit-target">&#x1F3AF; {c.Target_Account__r.Name}</div>
-                                                    </template>
-                                                    <template lwc:if={c.Target_Opportunity__r}>
-                                                        <div class="slds-text-body_small commit-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
-                                                    </template>
-                                                    <template lwc:if={c.Notes__c}>
-                                                        <div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div>
-                                                    </template>
-                                                </div>
-                                                <div class="slds-col slds-size_1-of-1 slds-medium-size_5-of-12 slds-p-left_medium">
-                                                    <div class="mgr-action-btn-row">
-                                                        <lightning-button
-                                                            label={c.atRiskLabel}
-                                                            variant={c.atRiskVariant}
-                                                            icon-name={c.atRiskIcon}
-                                                            size="x-small"
-                                                            data-id={c.Id}
-                                                            data-current={c.At_Risk__c}
-                                                            onclick={handleAtRiskToggle}
-                                                            disabled={c.isSavingFlag}>
-                                                        </lightning-button>
-                                                    </div>
-                                                    <lightning-textarea
-                                                        label="Manager Note"
-                                                        value={c.pendingNote}
-                                                        placeholder="Add a coaching note..."
-                                                        max-length="500"
-                                                        rows="2"
-                                                        data-id={c.Id}
-                                                        onchange={handleNoteChange}>
-                                                    </lightning-textarea>
-                                                    <template lwc:if={c.noteDirty}>
-                                                        <lightning-button
-                                                            label="Save Note"
-                                                            variant="brand"
-                                                            size="x-small"
-                                                            class="slds-m-top_xx-small"
-                                                            data-id={c.Id}
-                                                            onclick={handleNoteSave}
-                                                            disabled={c.isSavingNote}>
-                                                        </lightning-button>
-                                                    </template>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </template>
-                                </template>
-                                <template lwc:else>
-                                    <p class="empty-detail-msg">No commits logged last week.</p>
-                                </template>
-
-                                <!-- ── This Week ── -->
-                                <div class="week-section-header week-section-header--tw">This Week &mdash; Pipeline</div>
-                                <template lwc:if={rep.hasCommits}>
-                                    <template for:each={rep.thisWeekCommits} for:item="c">
-                                        <div key={c.Id} class={c.mgr_commitRowClass}>
-                                            <div class="slds-grid slds-grid_vertical-align-start slds-wrap">
-                                                <div class="slds-col slds-size_1-of-1 slds-medium-size_7-of-12">
-                                                    <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
-                                                        <span class={c.statusDotClass}></span>
-                                                        <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
-                                                        <span class="slds-text-body_small slds-m-left_x-small mgr-progress">{c.progressLabel}</span>
-                                                        <template lwc:if={c.At_Risk__c}>
-                                                            <span class="at-risk-chip slds-m-left_x-small">&#x26A0; At Risk</span>
-                                                        </template>
-                                                    </div>
-                                                    <div class="slds-text-body_small slds-m-bottom_xx-small">{c.Commit_Description__c}</div>
-                                                    <template lwc:if={c.Target_Account__r}>
-                                                        <div class="slds-text-body_small commit-target">&#x1F3AF; {c.Target_Account__r.Name}</div>
-                                                    </template>
-                                                    <template lwc:if={c.Target_Opportunity__r}>
-                                                        <div class="slds-text-body_small commit-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
-                                                    </template>
-                                                    <template lwc:if={c.Notes__c}>
-                                                        <div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div>
-                                                    </template>
-                                                </div>
-                                                <div class="slds-col slds-size_1-of-1 slds-medium-size_5-of-12 slds-p-left_medium">
-                                                    <div class="mgr-action-btn-row">
-                                                        <lightning-button
-                                                            label={c.atRiskLabel}
-                                                            variant={c.atRiskVariant}
-                                                            icon-name={c.atRiskIcon}
-                                                            size="x-small"
-                                                            data-id={c.Id}
-                                                            data-current={c.At_Risk__c}
-                                                            onclick={handleAtRiskToggle}
-                                                            disabled={c.isSavingFlag}>
-                                                        </lightning-button>
-                                                    </div>
-                                                    <lightning-textarea
-                                                        label="Manager Note"
-                                                        value={c.pendingNote}
-                                                        placeholder="Add a coaching note..."
-                                                        max-length="500"
-                                                        rows="2"
-                                                        data-id={c.Id}
-                                                        onchange={handleNoteChange}>
-                                                    </lightning-textarea>
-                                                    <template lwc:if={c.noteDirty}>
-                                                        <lightning-button
-                                                            label="Save Note"
-                                                            variant="brand"
-                                                            size="x-small"
-                                                            class="slds-m-top_xx-small"
-                                                            data-id={c.Id}
-                                                            onclick={handleNoteSave}
-                                                            disabled={c.isSavingNote}>
-                                                        </lightning-button>
-                                                    </template>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </template>
-                                </template>
-                                <template lwc:else>
-                                    <p class="empty-detail-msg">No commits logged this week yet.</p>
-                                </template>
-
-                            </div>
-                        </template>
-
-                    </div>
-                </template>
+                    </template>
+                </div>
             </template>
 
             <template lwc:else>

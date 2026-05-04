@@ -50,6 +50,7 @@ export default class PipeGenManagerDashboard extends LightningElement {
             ...rep,
             isExpanded,
             chevronIcon:          'utility:chevronright',
+            expandLabel:          'View Commits',
             repCardClass:         this.repCardClass(rep, isExpanded),
             twCompletionClass:    this.twClass(rep.thisWeekCompleted, rep.thisWeekTotal),
             lwCompletionClass:    this.twClass(lwCompleted, lwTotal),
@@ -106,7 +107,7 @@ export default class PipeGenManagerDashboard extends LightningElement {
     }
 
     repCardClass(rep, isExpanded) {
-        let cls = 'rep-card slds-m-bottom_x-small';
+        let cls = 'rep-card';
         if (rep.hasRisk)   cls += ' rep-card--risk';
         if (isExpanded)    cls += ' rep-card--expanded';
         return cls;
@@ -155,6 +156,7 @@ export default class PipeGenManagerDashboard extends LightningElement {
                 ...r,
                 isExpanded:   expanded,
                 chevronIcon:  expanded ? 'utility:chevrondown' : 'utility:chevronright',
+                expandLabel:  expanded ? 'Hide Commits' : 'View Commits',
                 repCardClass: this.repCardClass(r, expanded)
             };
         });

@@ -52,6 +52,15 @@
     margin-top: 0.15rem;
 }
 
+/* ── Rep Cards Grid ──────────────────────────────────────────────────────── */
+
+.rep-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+    align-items: start;
+}
+
 /* ── Rep Card ────────────────────────────────────────────────────────────── */
 
 .rep-card {
@@ -62,6 +71,8 @@
     border-radius: 0.625rem;
     overflow: hidden;
     transition: border-color 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
 }
 
 .rep-card--risk {
@@ -73,64 +84,40 @@
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 
-/* ── Rep Row ─────────────────────────────────────────────────────────────── */
+/* ── Card Top (name + attainment bar) ────────────────────────────────────── */
 
-.rep-row {
-    padding: 0.75rem 1rem;
-    cursor: pointer;
-    user-select: none;
+.card-top {
+    padding: 0.875rem 1rem 0.75rem;
+}
+
+.card-name-row {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-}
-
-.rep-row:hover { background: rgba(255, 255, 255, 0.03); }
-
-.rep-chevron {
-    flex-shrink: 0;
-    --lwc-colorTextIconDefault: rgba(255, 255, 255, 0.4);
-}
-
-/* ── Rep Left Section (name + attainment bar) ────────────────────────────── */
-
-.rep-left {
-    flex: 1;
-    min-width: 0;
-}
-
-.rep-name-row {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
 }
 
 .rep-name {
     font-size: 0.9rem;
     font-weight: 600;
     color: #e0e7ff;
-}
-
-.rep-att-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.35rem;
-    flex-wrap: nowrap;
-}
-
-.att-track {
-    width: 120px;
-    flex-shrink: 0;
-    height: 4px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 2px;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-att-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.35rem;
 }
 
 .att-bar-fill {
     height: 100%;
-    border-radius: 2px;
+    border-radius: 3px;
     transition: width 0.3s ease;
     min-width: 2px;
 }
@@ -140,13 +127,16 @@
 .att-bar--warn { background: #fbbf24; }
 .att-bar--low  { background: #f87171; }
 
+.card-att-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .att-label {
     font-size: 0.72rem;
     color: rgba(255, 255, 255, 0.55);
     font-variant-numeric: tabular-nums;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .att-weeks {
@@ -156,13 +146,42 @@
     flex-shrink: 0;
 }
 
-/* ── Stat Columns ────────────────────────────────────────────────────────── */
+/* ── Card Stats (3-column: LW / TW / In-Flight) ──────────────────────────── */
 
-.rep-stat-col {
-    text-align: center;
-    min-width: 80px;
-    flex-shrink: 0;
+.card-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid rgba(99, 128, 200, 0.1);
 }
+
+.card-stat {
+    padding: 0.55rem 0.5rem;
+    text-align: center;
+    border-right: 1px solid rgba(99, 128, 200, 0.1);
+}
+
+.card-stat:last-child {
+    border-right: none;
+}
+
+/* ── Card Metrics (2-column: Opps Created / To Discovery) ────────────────── */
+
+.card-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid rgba(99, 128, 200, 0.08);
+}
+
+.card-metric {
+    padding: 0.5rem 0.65rem;
+    border-right: 1px solid rgba(99, 128, 200, 0.08);
+}
+
+.card-metric:last-child {
+    border-right: none;
+}
+
+/* ── Stat Labels & Values ────────────────────────────────────────────────── */
 
 .stat-label {
     display: block;
@@ -171,6 +190,7 @@
     letter-spacing: 0.07em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.38);
+    margin-bottom: 0.15rem;
 }
 
 .stat-value   { display: block; font-size: 0.78rem; font-weight: 600; color: rgba(255, 255, 255, 0.78); }
@@ -190,13 +210,16 @@
     font-size: 0.63rem;
     font-weight: 700;
     letter-spacing: 0.04em;
+    flex-shrink: 0;
 }
 
 .risk-reasons {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem;
-    padding: 0 1rem 0.5rem 2.75rem;
+    padding: 0.4rem 0.75rem 0.5rem;
+    border-top: 1px solid rgba(245, 158, 11, 0.12);
+    background: rgba(245, 158, 11, 0.04);
 }
 
 .risk-reason {
@@ -206,6 +229,36 @@
     border: 1px solid rgba(245, 158, 11, 0.28);
     border-radius: 0.25rem;
     padding: 0.1rem 0.4rem;
+}
+
+/* ── Expand Button ───────────────────────────────────────────────────────── */
+
+.card-expand-btn {
+    width: 100%;
+    padding: 0.55rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-top: 1px solid rgba(99, 128, 200, 0.1);
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: background 0.12s, color 0.12s;
+    margin-top: auto;
+    user-select: none;
+}
+
+.card-expand-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.card-expand-icon {
+    --lwc-colorTextIconDefault: currentColor;
 }
 
 /* ── Commit Detail Panel ─────────────────────────────────────────────────── */
@@ -286,7 +339,7 @@ lightning-textarea {
     padding: 1rem 0;
 }
 
-/* ── Week Section Headers (inside expanded commit detail) ────────────────── */
+/* ── Week Section Headers ────────────────────────────────────────────────── */
 
 .week-section-header {
     font-size: 0.65rem;
