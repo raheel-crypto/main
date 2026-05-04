@@ -109,6 +109,14 @@ public with sharing class PipeGenController {
         @AuraEnabled public Integer                inFlightOppCount;
         @AuraEnabled public Integer                thisWeekTotal;
         @AuraEnabled public Integer                thisWeekCompleted;
+        @AuraEnabled public Decimal                pipelineTarget;
+        @AuraEnabled public Decimal                pipelineActual;
+        @AuraEnabled public Integer                weeksRemaining;
+        @AuraEnabled public String                 quarter;
+        @AuraEnabled public Integer                lwOppsCreated;
+        @AuraEnabled public Integer                qtdOppsCreated;
+        @AuraEnabled public Integer                lwOppsToDiscovery;
+        @AuraEnabled public Integer                qtdOppsToDiscovery;
     }
 
     // ─── Config ─────────────────────────────────────────────────────────────────
@@ -816,11 +824,19 @@ public with sharing class PipeGenController {
     @AuraEnabled(cacheable=false)
     public static ManagerDashboardData getManagerTeamData() {
         Id   mgr       = UserInfo.getUserId();
-        Date weekStart = getWeekStart(Date.today());
+        Date today     = Date.today();
+        Date weekStart = getWeekStart(today);
         Date lwStart   = weekStart.addDays(-7);
+        Date lwEnd     = weekStart.addDays(-1);
+
+        Integer qStartMonth    = ((today.month() - 1) / 3) * 3 + 1;
+        Date    qStart         = Date.newInstance(today.year(), qStartMonth, 1);
+        Date    qEnd           = qStart.addMonths(3).addDays(-1);
+        String  quarter        = 'Q' + ((qStartMonth / 3) + 1) + ' ' + today.year();
+        Integer weeksRemaining = Math.max(0, today.daysBetween(qEnd) / 7);
 
         List<User> reps = [
-            SELECT Id, Name
+            SELECT Id, Name, Pipe_Gen_Annual_Target__c
             FROM   User
             WHERE  ManagerId = :mgr
               AND  IsActive   = true
@@ -887,6 +903,86 @@ public with sharing class PipeGenController {
             for (Opportunity o : [SELECT Id, StageName FROM Opportunity WHERE Id IN :allOppIds])
                 oppStages.put(o.Id, o.StageName);
 
+        // ── Per-rep opp metrics ──────────────────────────────────────────────
+        Map<Id, Integer> lwCreatedByRep  = new Map<Id, Integer>();
+        Map<Id, Integer> qtdCreatedByRep = new Map<Id, Integer>();
+        for (Id rid : repIds) { lwCreatedByRep.put(rid, 0); qtdCreatedByRep.put(rid, 0); }
+        for (AggregateResult ar : [
+            SELECT OwnerId rid, COUNT(Id) cnt
+            FROM   Opportunity
+            WHERE  OwnerId     IN :repIds
+              AND  CreatedDate >= :lwStart
+              AND  CreatedDate <= :lwEnd
+              AND  StageName   != :STAGE_CLOSED_LOST
+            GROUP BY OwnerId
+        ]) { lwCreatedByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+        for (AggregateResult ar : [
+            SELECT OwnerId rid, COUNT(Id) cnt
+            FROM   Opportunity
+            WHERE  OwnerId     IN :repIds
+              AND  CreatedDate >= :qStart
+              AND  CreatedDate <= :qEnd
+              AND  StageName   != :STAGE_CLOSED_LOST
+            GROUP BY OwnerId
+        ]) { qtdCreatedByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+
+        Map<Id, Integer> lwToDiscoByRep  = new Map<Id, Integer>();
+        Map<Id, Integer> qtdToDiscoByRep = new Map<Id, Integer>();
+        for (Id rid : repIds) { lwToDiscoByRep.put(rid, 0); qtdToDiscoByRep.put(rid, 0); }
+        Set<Id> lwDiscoOppIds = new Set<Id>(), qtdDiscoOppIds = new Set<Id>();
+        for (OpportunityFieldHistory h : [
+            SELECT OpportunityId, CreatedDate
+            FROM   OpportunityFieldHistory
+            WHERE  Field       = 'StageName'
+              AND  NewValue    = :STAGE_DISCOVERY
+              AND  CreatedDate >= :lwStart
+              AND  CreatedDate <= :qEnd
+        ]) {
+            if (h.CreatedDate.date() <= lwEnd) lwDiscoOppIds.add(h.OpportunityId);
+            qtdDiscoOppIds.add(h.OpportunityId);
+        }
+        if (!lwDiscoOppIds.isEmpty())
+            for (AggregateResult ar : [
+                SELECT OwnerId rid, COUNT(Id) cnt FROM Opportunity
+                WHERE Id IN :lwDiscoOppIds AND OwnerId IN :repIds GROUP BY OwnerId
+            ]) { lwToDiscoByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+        if (!qtdDiscoOppIds.isEmpty())
+            for (AggregateResult ar : [
+                SELECT OwnerId rid, COUNT(Id) cnt FROM Opportunity
+                WHERE Id IN :qtdDiscoOppIds AND OwnerId IN :repIds GROUP BY OwnerId
+            ]) { qtdToDiscoByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+
+        // ── QTD pipeline actual per rep ──────────────────────────────────────
+        Map<Id, Decimal> pipelineActualByRep = new Map<Id, Decimal>();
+        for (Id rid : repIds) pipelineActualByRep.put(rid, 0);
+        Set<Id> createdQtd = new Set<Id>();
+        for (Opportunity o : [
+            SELECT Id FROM Opportunity
+            WHERE OwnerId IN :repIds AND CreatedDate >= :qStart
+              AND CreatedDate <= :qEnd AND StageName != :STAGE_CLOSED_LOST
+        ]) { createdQtd.add(o.Id); }
+        Set<Id> progressedPipeline = new Set<Id>();
+        for (OpportunityFieldHistory h : [
+            SELECT OpportunityId, NewValue FROM OpportunityFieldHistory
+            WHERE Field = 'StageName' AND CreatedDate >= :qStart AND CreatedDate <= :qEnd
+        ]) {
+            if (PIPELINE_STAGES.contains((String) h.NewValue)) progressedPipeline.add(h.OpportunityId);
+        }
+        Set<Id> qualifyingIds = new Set<Id>(createdQtd);
+        qualifyingIds.addAll(progressedPipeline);
+        if (!qualifyingIds.isEmpty()) {
+            for (Opportunity o : [
+                SELECT Id, OwnerId, StageName, Amount, ARR__c FROM Opportunity
+                WHERE Id IN :qualifyingIds AND OwnerId IN :repIds AND StageName != :STAGE_CLOSED_LOST
+            ]) {
+                if (!PIPELINE_STAGES.contains(o.StageName)) continue;
+                Decimal val = (o.StageName == STAGE_CLOSED_WON)
+                    ? (o.ARR__c != null ? o.ARR__c : 0)
+                    : (o.Amount != null ? o.Amount : 0);
+                pipelineActualByRep.put(o.OwnerId, pipelineActualByRep.get(o.OwnerId) + val);
+            }
+        }
+
         // ── Build per-rep summaries ───────────────────────────────────────────
         Integer teamTotal = 0, teamCompleted = 0, teamAtRisk = 0, teamNoCommits = 0;
 
@@ -909,6 +1005,17 @@ public with sharing class PipeGenController {
                 if (c.Completion_Status__c == 'Completed') rs.thisWeekCompleted++;
                 if (c.At_Risk__c) teamAtRisk++;
             }
+
+            Decimal annual    = (rep.Pipe_Gen_Annual_Target__c != null) ? rep.Pipe_Gen_Annual_Target__c : 0;
+            rs.pipelineTarget = annual / 4;
+            rs.pipelineActual = pipelineActualByRep.get(rep.Id);
+            rs.weeksRemaining = weeksRemaining;
+            rs.quarter        = quarter;
+            rs.lwOppsCreated      = lwCreatedByRep.get(rep.Id);
+            rs.qtdOppsCreated     = qtdCreatedByRep.get(rep.Id);
+            rs.lwOppsToDiscovery  = lwToDiscoByRep.get(rep.Id);
+            rs.qtdOppsToDiscovery = qtdToDiscoByRep.get(rep.Id);
+
             teamTotal     += twCommits.size();
             teamCompleted += rs.thisWeekCompleted;
             if (twCommits.isEmpty()) teamNoCommits++;

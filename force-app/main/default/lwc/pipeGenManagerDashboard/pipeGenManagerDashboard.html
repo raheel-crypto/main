@@ -16,92 +16,99 @@
     </template>
 
     <template lwc:if={isReady}>
+        <div class="mgr-container">
 
-        <!-- ── Team Summary Band ── -->
-        <div class="mgr-header slds-m-around_medium slds-p-around_large">
-            <div class="slds-grid slds-wrap slds-grid_align-spread slds-grid_vertical-align-center">
-                <div class="slds-col">
-                    <h1 class="mgr-title">Team Pipeline Review &mdash; {weekLabel}</h1>
+            <!-- ── Team Summary Band ── -->
+            <div class="mgr-header">
+                <div class="slds-grid slds-wrap slds-grid_align-spread slds-grid_vertical-align-center">
+                    <div class="slds-col">
+                        <h1 class="mgr-title">Team Pipeline Review &mdash; {weekLabel}</h1>
+                    </div>
+                    <div class="slds-col slds-no-flex">
+                        <lightning-button label="Refresh" icon-name="utility:refresh" onclick={loadData} disabled={isLoading}></lightning-button>
+                    </div>
                 </div>
-                <div class="slds-col slds-no-flex">
-                    <lightning-button label="Refresh" icon-name="utility:refresh" onclick={loadData} disabled={isLoading}></lightning-button>
+                <div class="slds-grid slds-wrap slds-gutters slds-m-top_medium">
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class="summary-value">{summary.totalReps}</div>
+                            <div class="summary-label">Reps</div>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class="summary-value">{summary.totalCommits}</div>
+                            <div class="summary-label">Commits</div>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class={completionRateClass}>{summary.completionRateLabel}</div>
+                            <div class="summary-label">Completed</div>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class={noCommitsClass}>{summary.repsWithNoCommits}</div>
+                            <div class="summary-label">No commits</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <div class="slds-grid slds-wrap slds-gutters slds-m-top_medium">
-                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
-                    <div class="summary-block">
-                        <div class="summary-value">{summary.totalReps}</div>
-                        <div class="summary-label">Reps</div>
-                    </div>
-                </div>
-                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
-                    <div class="summary-block">
-                        <div class="summary-value">{summary.totalCommits}</div>
-                        <div class="summary-label">Commits</div>
-                    </div>
-                </div>
-                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
-                    <div class="summary-block">
-                        <div class={completionRateClass}>{summary.completionRateLabel}</div>
-                        <div class="summary-label">Completed</div>
-                    </div>
-                </div>
-                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
-                    <div class="summary-block">
-                        <div class={noCommitsClass}>{summary.repsWithNoCommits}</div>
-                        <div class="summary-label">No commits</div>
-                    </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- ── Rep Table ── -->
-        <div class="slds-m-around_medium">
+            <!-- ── Rep Table ── -->
             <template lwc:if={hasReps}>
                 <template for:each={reps} for:item="rep">
                     <div key={rep.repId} class={rep.repCardClass}>
 
                         <!-- Rep Row Header -->
-                        <div class="rep-row slds-grid slds-grid_vertical-align-center"
-                             data-id={rep.repId} onclick={handleRepExpand}>
+                        <div class="rep-row" data-id={rep.repId} onclick={handleRepExpand}>
 
                             <!-- Chevron -->
-                            <div class="slds-col slds-no-flex rep-chevron">
+                            <div class="rep-chevron">
                                 <lightning-icon
                                     icon-name={rep.chevronIcon}
-                                    size="x-small"
-                                    class="slds-m-right_x-small">
+                                    size="x-small">
                                 </lightning-icon>
                             </div>
 
-                            <!-- Name + risk -->
-                            <div class="slds-col rep-name-col">
-                                <span class="rep-name">{rep.repName}</span>
-                                <template lwc:if={rep.hasRisk}>
-                                    <span class="risk-badge slds-m-left_x-small">&#x26A0; Risk</span>
-                                </template>
+                            <!-- Left: name + risk badge + attainment bar -->
+                            <div class="rep-left">
+                                <div class="rep-name-row">
+                                    <span class="rep-name">{rep.repName}</span>
+                                    <template lwc:if={rep.hasRisk}>
+                                        <span class="risk-badge">&#x26A0; Risk</span>
+                                    </template>
+                                </div>
+                                <div class="rep-att-row">
+                                    <div class="att-track">
+                                        <div class={rep.attainmentBarClass} style={rep.attainmentBarStyle}></div>
+                                    </div>
+                                    <span class="att-label">{rep.pipelineActualFmt} / {rep.pipelineTargetFmt} &bull; {rep.attainmentPct}%</span>
+                                    <span class="att-weeks">{rep.weeksRemaining}w left</span>
+                                </div>
                             </div>
 
                             <!-- This week progress -->
-                            <div class="slds-col slds-no-flex rep-stat-col">
-                                <span class="stat-label">This week</span>
+                            <div class="rep-stat-col">
+                                <span class="stat-label">This Week</span>
                                 <span class={rep.twCompletionClass}>{rep.thisWeekCompleted}/{rep.thisWeekTotal}</span>
                             </div>
 
-                            <!-- Last week NN -->
-                            <div class="slds-col slds-no-flex rep-stat-col slds-hide_small">
-                                <span class="stat-label">LW Net New</span>
-                                <span class="stat-value">{rep.lwNNLabel}</span>
+                            <!-- Opps Created LW / QTD -->
+                            <div class="rep-stat-col slds-hide_small">
+                                <span class="stat-label">Opps Created</span>
+                                <span class="stat-value">LW: {rep.lwOppsCreated} &bull; QTD: {rep.qtdOppsCreated}</span>
                             </div>
 
-                            <!-- Last week Prog -->
-                            <div class="slds-col slds-no-flex rep-stat-col slds-hide_small">
-                                <span class="stat-label">LW Prog</span>
-                                <span class="stat-value">{rep.lwProgLabel}</span>
+                            <!-- Opps to Discovery LW / QTD -->
+                            <div class="rep-stat-col slds-hide_small">
+                                <span class="stat-label">To Discovery</span>
+                                <span class="stat-value">LW: {rep.lwOppsToDiscovery} &bull; QTD: {rep.qtdOppsToDiscovery}</span>
                             </div>
 
                             <!-- In-flight opps -->
-                            <div class="slds-col slds-no-flex rep-stat-col slds-hide_small">
+                            <div class="rep-stat-col slds-hide_small">
                                 <span class="stat-label">In-Flight</span>
                                 <span class="stat-value">{rep.inFlightOppCount} opps</span>
                             </div>
@@ -110,7 +117,7 @@
 
                         <!-- Risk reasons (always visible if hasRisk) -->
                         <template lwc:if={rep.hasRisk}>
-                            <div class="risk-reasons slds-p-left_large slds-p-bottom_x-small">
+                            <div class="risk-reasons">
                                 <template for:each={rep.riskReasons} for:item="reason">
                                     <span key={reason} class="risk-reason">&#x25B8; {reason}</span>
                                 </template>
@@ -119,7 +126,7 @@
 
                         <!-- Expanded commit detail -->
                         <template lwc:if={rep.isExpanded}>
-                            <div class="commit-detail slds-p-around_medium slds-p-top_x-small">
+                            <div class="commit-detail">
 
                                 <template lwc:if={rep.hasCommits}>
                                     <template for:each={rep.thisWeekCommits} for:item="c">
@@ -206,7 +213,7 @@
                     <p class="empty-detail-msg">No direct reports found. Ensure reps have you set as their Manager in Salesforce.</p>
                 </div>
             </template>
-        </div>
 
+        </div>
     </template>
 </template>
