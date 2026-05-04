@@ -1177,6 +1177,82 @@ private class PipeGenControllerTest {
         }
     }
 
+    @isTest
+    static void testManagerDashboard_pipelineAttainment() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+        // Give rep a $400K annual target → $100K quarterly
+        update new User(Id = rep.Id, Pipe_Gen_Annual_Target__c = 400000);
+
+        Account a = new Account(Name = 'Attain Co', OwnerId = rep.Id);
+        insert a;
+        // Opp created now (this quarter) in a pipeline stage — should count toward pipelineActual
+        insert new Opportunity(Name = 'Disco Opp', OwnerId = rep.Id, AccountId = a.Id,
+            StageName = '2 - Discovery', CloseDate = Date.today().addDays(30), Amount = 60000);
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            PipeGenController.RepSummary rs = d.reps[0];
+            System.assertEquals(100000, rs.pipelineTarget, '$400K annual / 4 = $100K quarterly target');
+            System.assertEquals(60000,  rs.pipelineActual, 'Discovery opp amount counts toward pipeline actual');
+            System.assert(rs.weeksRemaining >= 0, 'Weeks remaining should be non-negative');
+            System.assertNotEquals(null, rs.quarter, 'Quarter label should be populated (e.g. Q2 2026)');
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_qtdOppsCreated() {
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        Account a = new Account(Name = 'Created Co', OwnerId = rep.Id);
+        insert a;
+        // Two opps inserted now — CreatedDate = today, which is within QTD range
+        insert new List<Opportunity>{
+            new Opportunity(Name = 'Opp A', OwnerId = rep.Id, AccountId = a.Id,
+                StageName = '1 - Demo', CloseDate = Date.today().addDays(30), Amount = 10000),
+            new Opportunity(Name = 'Opp B', OwnerId = rep.Id, AccountId = a.Id,
+                StageName = '2 - Discovery', CloseDate = Date.today().addDays(30), Amount = 20000)
+        };
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            PipeGenController.RepSummary rs = d.reps[0];
+            System.assertEquals(2, rs.qtdOppsCreated,
+                'Two opps created this quarter (today) should be counted for QTD');
+            System.assertEquals(0, rs.lwOppsCreated,
+                'No opps created last week — all inserted today');
+        }
+    }
+
+    @isTest
+    static void testManagerDashboard_oppMetricFieldsNonNull() {
+        User mgr = makeRep(0);
+        makeRepUnder(mgr.Id);
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.ManagerDashboardData d = PipeGenController.getManagerTeamData();
+            Test.stopTest();
+
+            PipeGenController.RepSummary rs = d.reps[0];
+            System.assertNotEquals(null, rs.lwOppsCreated,      'lwOppsCreated should not be null');
+            System.assertNotEquals(null, rs.qtdOppsCreated,     'qtdOppsCreated should not be null');
+            System.assertNotEquals(null, rs.lwOppsToDiscovery,  'lwOppsToDiscovery should not be null');
+            System.assertNotEquals(null, rs.qtdOppsToDiscovery, 'qtdOppsToDiscovery should not be null');
+            System.assert(rs.lwOppsCreated      >= 0);
+            System.assert(rs.qtdOppsCreated     >= 0);
+            System.assert(rs.lwOppsToDiscovery  >= 0);
+            System.assert(rs.qtdOppsToDiscovery >= 0);
+        }
+    }
+
     // ─── saveManagerNote ──────────────────────────────────────────────────────
 
     @isTest
