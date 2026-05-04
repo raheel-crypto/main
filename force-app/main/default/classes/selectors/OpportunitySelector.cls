@@ -146,15 +146,17 @@ public with sharing class OpportunitySelector {
             Set<Id> repIds, Date rangeStart, Date rangeEnd, String targetStage) {
         Map<Id, Integer> result = new Map<Id, Integer>();
         for (Id rid : repIds) result.put(rid, 0);
+        // NewValue is not filterable in SOQL, so select it and filter in Apex
         Set<Id> movedOppIds = new Set<Id>();
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId
+            SELECT OpportunityId, NewValue
             FROM   OpportunityFieldHistory
             WHERE  Field       = 'StageName'
-              AND  NewValue    = :targetStage
               AND  CreatedDate >= :rangeStart
               AND  CreatedDate <= :rangeEnd
-        ]) { movedOppIds.add(h.OpportunityId); }
+        ]) {
+            if (targetStage.equals((String) h.NewValue)) movedOppIds.add(h.OpportunityId);
+        }
         if (movedOppIds.isEmpty()) return result;
         for (AggregateResult ar : [
             SELECT OwnerId rid, COUNT(Id) cnt
