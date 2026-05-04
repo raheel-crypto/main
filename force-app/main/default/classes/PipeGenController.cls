@@ -930,14 +930,15 @@ public with sharing class PipeGenController {
         Map<Id, Integer> qtdToDiscoByRep = new Map<Id, Integer>();
         for (Id rid : repIds) { lwToDiscoByRep.put(rid, 0); qtdToDiscoByRep.put(rid, 0); }
         Set<Id> lwDiscoOppIds = new Set<Id>(), qtdDiscoOppIds = new Set<Id>();
+        // NewValue is not filterable in SOQL, so select it and filter in Apex
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId, CreatedDate
+            SELECT OpportunityId, NewValue, CreatedDate
             FROM   OpportunityFieldHistory
             WHERE  Field       = 'StageName'
-              AND  NewValue    = :STAGE_DISCOVERY
               AND  CreatedDate >= :lwStart
               AND  CreatedDate <= :qEnd
         ]) {
+            if (!STAGE_DISCOVERY.equals((String) h.NewValue)) continue;
             if (h.CreatedDate.date() <= lwEnd) lwDiscoOppIds.add(h.OpportunityId);
             qtdDiscoOppIds.add(h.OpportunityId);
         }
