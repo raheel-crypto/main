@@ -126,7 +126,7 @@
                             <template lwc:if={rep.isExpanded}>
                                 <div class="commit-detail">
 
-                                    <!-- ── Last Week ── -->
+                                    <!-- ── Last Week ── (read-only) -->
                                     <div class="week-section-header">Last Week &mdash; Results</div>
                                     <template lwc:if={rep.hasLastWeekCommits}>
                                         <template for:each={rep.lastWeekCommits} for:item="c">
@@ -150,40 +150,8 @@
                                                     <template lwc:if={c.Notes__c}>
                                                         <div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div>
                                                     </template>
-                                                </div>
-                                                <div class="commit-row-actions">
-                                                    <div class="mgr-action-btn-row">
-                                                        <lightning-button
-                                                            label={c.atRiskLabel}
-                                                            variant={c.atRiskVariant}
-                                                            icon-name={c.atRiskIcon}
-                                                            size="x-small"
-                                                            data-id={c.Id}
-                                                            data-current={c.At_Risk__c}
-                                                            onclick={handleAtRiskToggle}
-                                                            disabled={c.isSavingFlag}>
-                                                        </lightning-button>
-                                                    </div>
-                                                    <label class="mgr-textarea-label">Manager Note</label>
-                                                    <textarea
-                                                        class="mgr-textarea"
-                                                        placeholder="Add a coaching note..."
-                                                        maxlength="500"
-                                                        rows="2"
-                                                        data-id={c.Id}
-                                                        oninput={handleNoteChange}
-                                                        value={c.pendingNote}>
-                                                    </textarea>
-                                                    <template lwc:if={c.noteDirty}>
-                                                        <lightning-button
-                                                            label="Save Note"
-                                                            variant="brand"
-                                                            size="x-small"
-                                                            class="slds-m-top_xx-small"
-                                                            data-id={c.Id}
-                                                            onclick={handleNoteSave}
-                                                            disabled={c.isSavingNote}>
-                                                        </lightning-button>
+                                                    <template lwc:if={c.Manager_Note__c}>
+                                                        <div class="slds-text-body_small mgr-note-readonly slds-m-top_xx-small">Mgr: {c.Manager_Note__c}</div>
                                                     </template>
                                                 </div>
                                             </div>

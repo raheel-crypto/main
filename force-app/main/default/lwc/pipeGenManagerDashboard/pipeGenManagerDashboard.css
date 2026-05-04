@@ -270,6 +270,8 @@
 .commit-row-actions {
     border-top: 1px solid rgba(99, 128, 200, 0.1);
     padding-top: 0.5rem;
+    min-width: 0;
+    overflow: hidden;
 }
 
 /* ── Commit Detail Panel ─────────────────────────────────────────────────── */
@@ -308,6 +310,7 @@ lightning-button {
 .mgr-textarea {
     display: block;
     width: 100%;
+    max-width: 100%;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(99, 128, 200, 0.35);
     border-radius: 0.25rem;
@@ -317,6 +320,15 @@ lightning-button {
     resize: vertical;
     box-sizing: border-box;
     font-family: inherit;
+}
+
+.mgr-note-readonly {
+    color: rgba(160, 185, 255, 0.6);
+    font-style: italic;
+    background: rgba(99, 128, 200, 0.08);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.2rem;
+    border-left: 2px solid rgba(99, 128, 200, 0.3);
 }
 
 .mgr-textarea::placeholder {
