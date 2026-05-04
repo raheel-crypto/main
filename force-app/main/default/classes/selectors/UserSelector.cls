@@ -10,7 +10,7 @@ public with sharing class UserSelector {
 
     public static List<User> fetchDirectReports(Id managerId) {
         return [
-            SELECT Id, Name
+            SELECT Id, Name, Pipe_Gen_Annual_Target__c
             FROM   User
             WHERE  ManagerId = :managerId
               AND  IsActive   = true

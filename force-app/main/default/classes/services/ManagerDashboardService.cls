@@ -1,8 +1,19 @@
 public with sharing class ManagerDashboardService {
 
     public static PipeGenController.ManagerDashboardData build(Id managerId) {
-        Date weekStart = PipeGenConfig.getWeekStart(Date.today());
+        Date today     = Date.today();
+        Date weekStart = PipeGenConfig.getWeekStart(today);
         Date lwStart   = weekStart.addDays(-7);
+        Date lwEnd     = weekStart.addDays(-1);
+
+        Integer qStartMonth    = ((today.month() - 1) / 3) * 3 + 1;
+        Date    qStart         = Date.newInstance(today.year(), qStartMonth, 1);
+        Date    qEnd           = qStart.addMonths(3).addDays(-1);
+        String  quarter        = 'Q' + ((qStartMonth / 3) + 1) + ' ' + today.year();
+        Integer weeksRemaining = Math.max(0, today.daysBetween(qEnd) / 7);
+
+        String discoveryStage = '2 - Discovery';
+        String closedLost     = PipeGenConfig.CLOSED_LOST;
 
         List<User> reps = UserSelector.fetchDirectReports(managerId);
 
@@ -35,6 +46,13 @@ public with sharing class ManagerDashboardService {
                 if (c.Target_Opportunity__c != null) allOppIds.add(c.Target_Opportunity__c);
         Map<Id, String> oppStages = OpportunitySelector.fetchStagesByIds(allOppIds);
 
+        // ── Per-rep opp metrics ──────────────────────────────────────────────────
+        Map<Id, Integer> lwCreatedByRep      = OpportunitySelector.fetchCreatedCountByRep(repIds, lwStart, lwEnd, closedLost);
+        Map<Id, Integer> qtdCreatedByRep     = OpportunitySelector.fetchCreatedCountByRep(repIds, qStart, qEnd, closedLost);
+        Map<Id, Integer> lwToDiscoByRep      = OpportunitySelector.fetchMovedToStageCountByRep(repIds, lwStart, lwEnd, discoveryStage);
+        Map<Id, Integer> qtdToDiscoByRep     = OpportunitySelector.fetchMovedToStageCountByRep(repIds, qStart, qEnd, discoveryStage);
+        Map<Id, Decimal> pipelineActualByRep = OpportunitySelector.fetchPipelineActualByRep(repIds, qStart, qEnd);
+
         // ── Per-rep summaries ────────────────────────────────────────────────────
         Integer teamTotal = 0, teamCompleted = 0, teamAtRisk = 0, teamNoCommits = 0;
 
@@ -57,6 +75,20 @@ public with sharing class ManagerDashboardService {
                 if (c.Completion_Status__c == 'Completed') rs.thisWeekCompleted++;
                 if (c.At_Risk__c) teamAtRisk++;
             }
+
+            // Attainment
+            Decimal annual    = (rep.Pipe_Gen_Annual_Target__c != null) ? rep.Pipe_Gen_Annual_Target__c : 0;
+            rs.pipelineTarget = annual / 4;
+            rs.pipelineActual = pipelineActualByRep.get(rep.Id);
+            rs.weeksRemaining = weeksRemaining;
+            rs.quarter        = quarter;
+
+            // Opp metrics
+            rs.lwOppsCreated      = lwCreatedByRep.get(rep.Id);
+            rs.qtdOppsCreated     = qtdCreatedByRep.get(rep.Id);
+            rs.lwOppsToDiscovery  = lwToDiscoByRep.get(rep.Id);
+            rs.qtdOppsToDiscovery = qtdToDiscoByRep.get(rep.Id);
+
             teamTotal     += twCommits.size();
             teamCompleted += rs.thisWeekCompleted;
             if (twCommits.isEmpty()) teamNoCommits++;

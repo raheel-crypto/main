@@ -109,6 +109,14 @@ public with sharing class PipeGenController {
         @AuraEnabled public Integer                inFlightOppCount;
         @AuraEnabled public Integer                thisWeekTotal;
         @AuraEnabled public Integer                thisWeekCompleted;
+        @AuraEnabled public Decimal                pipelineTarget;
+        @AuraEnabled public Decimal                pipelineActual;
+        @AuraEnabled public Integer                weeksRemaining;
+        @AuraEnabled public String                 quarter;
+        @AuraEnabled public Integer                lwOppsCreated;
+        @AuraEnabled public Integer                qtdOppsCreated;
+        @AuraEnabled public Integer                lwOppsToDiscovery;
+        @AuraEnabled public Integer                qtdOppsToDiscovery;
     }
 
     // ─── Config Pass-throughs (used by service classes) ─────────────────────────
