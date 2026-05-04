@@ -287,6 +287,10 @@
     margin-bottom: 0.5rem;
 }
 
+.mgr-action-btn-row lightning-button {
+    display: inline-flex;
+}
+
 lightning-button {
     --sds-c-button-radius-border: 1.5rem;
     --lwc-buttonBorderRadius: 1.5rem;
