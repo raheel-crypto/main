@@ -1,0 +1,72 @@
+query GetAccountDetail($id: ID!) {
+	uiapi {
+		query {
+			Account(where: { Id: { eq: $id } }) {
+				edges {
+					node {
+						Id
+						Name @optional { value displayValue }
+						AccountNumber @optional { value displayValue }
+						Owner @optional {
+							Name @optional { value displayValue }
+						}
+						Phone @optional { value displayValue }
+						Fax @optional { value displayValue }
+						Website @optional { value displayValue }
+						Type @optional { value displayValue }
+						Industry @optional { value displayValue }
+						NumberOfEmployees @optional { value displayValue }
+						AnnualRevenue @optional { value displayValue }
+						Description @optional { value displayValue }
+						Parent @optional {
+							Name @optional { value displayValue }
+						}
+						BillingStreet @optional { value displayValue }
+						BillingCity @optional { value displayValue }
+						BillingState @optional { value displayValue }
+						BillingPostalCode @optional { value displayValue }
+						BillingCountry @optional { value displayValue }
+						CreatedBy @optional {
+							Name @optional { value displayValue }
+						}
+						CreatedDate @optional { value displayValue }
+						LastModifiedBy @optional {
+							Name @optional { value displayValue }
+						}
+						LastModifiedDate @optional { value displayValue }
+						Account_Status__c @optional { value displayValue }
+						Account_Tier__c @optional { value displayValue }
+						Account_Health_Score__c @optional { value displayValue }
+						Segment__c @optional { value displayValue }
+						Region__c @optional { value displayValue }
+						Business_Type__c @optional { value displayValue }
+						ARR__c @optional { value displayValue }
+						MRR__c @optional { value displayValue }
+						AUM__c @optional { value displayValue }
+						TCV__c @optional { value displayValue }
+						Estimated_TAM__c @optional { value displayValue }
+						Number_of_Bankers__c @optional { value displayValue }
+						Post_Sales_Owner__c @optional { value displayValue }
+						GTM_Associate__c @optional { value displayValue }
+						GTM_Associate_Owner__c @optional { value displayValue }
+						GTM_Strategy_Owner__c @optional { value displayValue }
+						Pod__c @optional { value displayValue }
+						Champions__c @optional { value displayValue }
+						NextSteps__c @optional { value displayValue }
+						Notes__c @optional { value displayValue }
+						Running_Notes__c @optional { value displayValue }
+						Renewal_Date__c @optional { value displayValue }
+						Last_PS_Touchpoint__c @optional { value displayValue }
+						Active_Contracts__c @optional { value displayValue }
+						Must_Win__c @optional { value displayValue }
+						Open_NB__c @optional { value displayValue }
+						Closed_NB__c @optional { value displayValue }
+						Open_Renewal__c @optional { value displayValue }
+						of_Opportunities__c @optional { value displayValue }
+						Auto_Renew__c @optional { value displayValue }
+					}
+				}
+			}
+		}
+	}
+}
