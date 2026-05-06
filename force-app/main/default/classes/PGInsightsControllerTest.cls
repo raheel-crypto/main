@@ -311,6 +311,7 @@ private class PGInsightsControllerTest {
             Subject = 'PG Test ' + subtype,
             Status = 'Completed',
             TaskSubtype = subtype,
+            NektarSender__c = 'Us',
             ActivityDate = Date.today()
         );
     }
@@ -319,6 +320,7 @@ private class PGInsightsControllerTest {
         return new Event(
             OwnerId = ownerId,
             Subject = 'PG Test Meeting',
+            NektarSender__c = 'Us',
             ActivityDate = Date.today(),
             ActivityDateTime = DateTime.now(),
             DurationInMinutes = 30

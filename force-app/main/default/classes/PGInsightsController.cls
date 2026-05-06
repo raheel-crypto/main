@@ -540,6 +540,7 @@ public with sharing class PGInsightsController {
                 WHERE OwnerId IN :aes
                   AND Status = 'Completed'
                   AND TaskSubtype IN ('Email', 'Call', 'LinkedIn')
+                  AND NektarSender__c = 'Us'
                   AND CompletedDateTime = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name, TaskSubtype
             ];
@@ -550,6 +551,7 @@ public with sharing class PGInsightsController {
             WHERE OwnerId IN :aes
               AND Status = 'Completed'
               AND TaskSubtype IN ('Email', 'Call', 'LinkedIn')
+              AND NektarSender__c = 'Us'
               AND CompletedDateTime = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name, TaskSubtype
         ];
@@ -561,6 +563,7 @@ public with sharing class PGInsightsController {
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
                 FROM Event
                 WHERE OwnerId IN :aes
+                  AND NektarSender__c = 'Us'
                   AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
@@ -569,6 +572,7 @@ public with sharing class PGInsightsController {
             SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
             FROM Event
             WHERE OwnerId IN :aes
+              AND NektarSender__c = 'Us'
               AND ActivityDate = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name
         ];
