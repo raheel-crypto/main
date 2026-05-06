@@ -75,39 +75,6 @@ public with sharing class AccountARRProcessor {
     }
     
     /**
-     * @description Request wrapper for single-Opportunity Invocable method (Record-Triggered Flow)
-     */
-    public class SingleOppRequest {
-        @InvocableVariable(label='Opportunity ID' description='The Opportunity that triggered ARR processing' required=true)
-        public Id opportunityId;
-    }
-
-    /**
-     * @description Invocable method for Record-Triggered Flow — processes the Account of a single closed Opportunity.
-     * Returns a Result so the Flow can inspect success/failure and route to a fault path or send an alert.
-     */
-    @InvocableMethod(label='Process ARR For Single Opportunity'
-                     description='Calculates ARR and manages Contracts for the Account of a closed Opportunity'
-                     category='Opportunity')
-    public static List<Result> processSingleOpportunity(List<SingleOppRequest> requests) {
-        List<Result> results = new List<Result>();
-
-        if (requests == null || requests.isEmpty()) {
-            Result r = new Result();
-            r.success = false;
-            r.errorMessage = 'No requests provided to processSingleOpportunity';
-            System.debug(LoggingLevel.ERROR, 'ARRProcessor.processSingleOpportunity: ' + r.errorMessage);
-            results.add(r);
-            return results;
-        }
-
-        for (SingleOppRequest req : requests) {
-            results.add(processSingleAccountFromOpportunity(req.opportunityId));
-        }
-        return results;
-    }
-
-    /**
      * @description Processes a single Account when an Opportunity closes.
      * Returns a Result with full error detail so callers can log or surface failures.
      */

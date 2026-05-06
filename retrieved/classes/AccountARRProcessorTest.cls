@@ -320,7 +320,7 @@ private class AccountARRProcessorTest {
     }
     
     /**
-     * @description Test processSingleOpportunity invocable method (for Record-Triggered Flow)
+     * @description Test AccountARRSingleProcessor invocable method (for Record-Triggered Flow)
      */
     @isTest
     static void testProcessSingleAccountFromOpportunity() {
@@ -340,12 +340,12 @@ private class AccountARRProcessorTest {
         );
         insert opp;
 
-        AccountARRProcessor.SingleOppRequest req = new AccountARRProcessor.SingleOppRequest();
+        AccountARRSingleProcessor.Request req = new AccountARRSingleProcessor.Request();
         req.opportunityId = opp.Id;
 
         Test.startTest();
-        List<AccountARRProcessor.Result> results = AccountARRProcessor.processSingleOpportunity(
-            new List<AccountARRProcessor.SingleOppRequest>{ req }
+        List<AccountARRProcessor.Result> results = AccountARRSingleProcessor.processSingleOpportunity(
+            new List<AccountARRSingleProcessor.Request>{ req }
         );
         Test.stopTest();
 
@@ -360,12 +360,12 @@ private class AccountARRProcessorTest {
     }
 
     /**
-     * @description Test processSingleOpportunity with null requests list
+     * @description Test AccountARRSingleProcessor with null requests list
      */
     @isTest
     static void testProcessSingleOpportunity_NullRequests() {
         Test.startTest();
-        List<AccountARRProcessor.Result> results = AccountARRProcessor.processSingleOpportunity(null);
+        List<AccountARRProcessor.Result> results = AccountARRSingleProcessor.processSingleOpportunity(null);
         Test.stopTest();
 
         System.assertEquals(1, results.size(), 'Should return one error result');
