@@ -146,6 +146,9 @@ private class PGInsightsControllerTest {
     }
 
     private static Opportunity buildOpp(Id ownerId, String oppType, Integer offsetDays) {
+        // Pin Stage_1_Start_Date__c to today — week boundaries differ by locale
+        // (en_GB starts Monday, en_US Sunday), so any back-dating risks
+        // landing in LAST_WEEK and breaking THIS_WEEK assertions.
         return new Opportunity(
             Name = 'PG Test ' + oppType + ' ' + offsetDays,
             OwnerId = ownerId,
@@ -153,7 +156,7 @@ private class PGInsightsControllerTest {
             CloseDate = Date.today().addDays(60),
             Type = oppType,
             Stage_1__c = true,
-            Stage_1_Start_Date__c = Date.today().addDays(-offsetDays)
+            Stage_1_Start_Date__c = Date.today()
         );
     }
 

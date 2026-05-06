@@ -143,6 +143,8 @@ public with sharing class PGInsightsController {
         }
 
         // Group by fiscal year/quarter using the stage 1 entry date.
+        // LAST_N_FISCAL_QUARTERS:n covers prior quarters only — explicitly OR
+        // in THIS_FISCAL_QUARTER to include current-quarter data.
         AggregateResult[] aggs = [
             SELECT FISCAL_YEAR(Stage_1_Start_Date__c) fy,
                    FISCAL_QUARTER(Stage_1_Start_Date__c) fq,
@@ -153,7 +155,8 @@ public with sharing class PGInsightsController {
               AND Stage_1_Start_Date__c != NULL
               AND OwnerId IN :aes
               AND Type IN (:NB_TYPE, :EXP_TYPE)
-              AND Stage_1_Start_Date__c = LAST_N_FISCAL_QUARTERS:8
+              AND (Stage_1_Start_Date__c = LAST_N_FISCAL_QUARTERS:8
+                   OR Stage_1_Start_Date__c = THIS_FISCAL_QUARTER)
             GROUP BY FISCAL_YEAR(Stage_1_Start_Date__c),
                      FISCAL_QUARTER(Stage_1_Start_Date__c),
                      Type
