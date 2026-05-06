@@ -47,11 +47,18 @@ to Salesforce, not the local web servers above).
 brew install --cask sf
 ```
 
-Then log in to the Rogo org (browser will open):
+### One-time: log in to the **raheeldev** sandbox
+
+Sandboxes use `test.salesforce.com`, not `login.salesforce.com`. The browser
+will open — sign in with your prod username plus `.raheeldev` on the end
+(e.g. `raheel@rogo.ai.raheeldev`):
 
 ```
-sf org login web --alias rogo
+sf org login web --alias rogo-dev --instance-url https://test.salesforce.com
 ```
+
+(If you ever need to deploy a release to production, log in separately with
+`sf org login web --alias rogo` and target `--target-org rogo`.)
 
 ### One-time: drop Chart.js into the static resource
 
@@ -61,18 +68,18 @@ curl -L -o force-app/main/default/staticresources/ChartJs.js \
     https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js
 ```
 
-### Deploy the LWC + Apex to Salesforce
+### Deploy the LWC + Apex to the sandbox
 
 ```
 cd ~/sf-visualizer
-sf project deploy start --source-dir force-app/main/default --target-org rogo
+sf project deploy start --source-dir force-app/main/default --target-org rogo-dev
 ```
 
-### Run the Apex tests
+### Run the Apex tests in the sandbox
 
 ```
 cd ~/sf-visualizer
-sf apex run test --tests PGInsightsControllerTest --target-org rogo --result-format human --wait 10
+sf apex run test --tests PGInsightsControllerTest --target-org rogo-dev --result-format human --wait 10
 ```
 
 ### Add the component to a Lightning page
