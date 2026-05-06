@@ -1,24 +1,11 @@
 import { LightningElement, wire } from 'lwc';
 import getIndividualOutreach from '@salesforce/apex/PGInsightsController.getIndividualOutreach';
 
-const COLUMNS = [
-    { label: 'Name', fieldName: 'ownerName', type: 'text', sortable: true },
-    { label: 'OB Emails', fieldName: 'emails', type: 'number', sortable: true,
-        cellAttributes: { alignment: 'left' } },
-    { label: 'OB Calls', fieldName: 'calls', type: 'number', sortable: true,
-        cellAttributes: { alignment: 'left' } },
-    { label: 'OB LinkedIn', fieldName: 'linkedin', type: 'number', sortable: true,
-        cellAttributes: { alignment: 'left' } },
-    { label: 'Meetings', fieldName: 'meetings', type: 'number', sortable: true,
-        cellAttributes: { alignment: 'left' } },
-    { label: 'Total OB', fieldName: 'total', type: 'number', sortable: true,
-        cellAttributes: { alignment: 'left' } }
-];
+const SORTABLE = ['emails', 'calls', 'linkedin', 'meetings', 'total', 'ownerName'];
 
 export default class PgIndividualOutreach extends LightningElement {
-    columns = COLUMNS;
-    cwRows;
-    qtdRows;
+    cwRowsRaw;
+    qtdRowsRaw;
 
     cwSortBy = 'total';
     cwSortDir = 'desc';
@@ -27,16 +14,58 @@ export default class PgIndividualOutreach extends LightningElement {
 
     @wire(getIndividualOutreach, { windowLabel: 'CW' })
     wiredCw({ data }) {
-        if (data) this.cwRows = [...data];
+        if (data) this.cwRowsRaw = data;
     }
 
     @wire(getIndividualOutreach, { windowLabel: 'QTD' })
     wiredQtd({ data }) {
-        if (data) this.qtdRows = [...data];
+        if (data) this.qtdRowsRaw = data;
     }
 
-    get cwTotals() { return this.computeTotals(this.cwRows); }
-    get qtdTotals() { return this.computeTotals(this.qtdRows); }
+    get cwRows() {
+        return this.decorateRows(this.cwRowsRaw, this.cwSortBy, this.cwSortDir);
+    }
+
+    get qtdRows() {
+        return this.decorateRows(this.qtdRowsRaw, this.qtdSortBy, this.qtdSortDir);
+    }
+
+    get hasCwRows()  { return this.cwRows.length > 0; }
+    get hasQtdRows() { return this.qtdRows.length > 0; }
+
+    get cwTotals() { return this.computeTotals(this.cwRowsRaw); }
+    get qtdTotals() { return this.computeTotals(this.qtdRowsRaw); }
+
+    decorateRows(rows, sortBy, sortDir) {
+        if (!rows || !rows.length) return [];
+        const max = (key) => Math.max(...rows.map(r => r[key] || 0)) || 1;
+        const m = {
+            emails: max('emails'),
+            calls: max('calls'),
+            linkedin: max('linkedin'),
+            meetings: max('meetings'),
+            total: max('total')
+        };
+        const factor = sortDir === 'asc' ? 1 : -1;
+        const sorted = [...rows].sort((a, b) => {
+            const av = a[sortBy] ?? 0;
+            const bv = b[sortBy] ?? 0;
+            if (typeof av === 'string' || typeof bv === 'string') {
+                return String(av).localeCompare(String(bv)) * factor;
+            }
+            if (av > bv) return 1 * factor;
+            if (av < bv) return -1 * factor;
+            return 0;
+        });
+        return sorted.map(r => ({
+            ...r,
+            emailsBar:   `width: ${((r.emails || 0)   / m.emails)   * 100}%`,
+            callsBar:    `width: ${((r.calls || 0)    / m.calls)    * 100}%`,
+            linkedinBar: `width: ${((r.linkedin || 0) / m.linkedin) * 100}%`,
+            meetingsBar: `width: ${((r.meetings || 0) / m.meetings) * 100}%`,
+            totalBar:    `width: ${((r.total || 0)    / m.total)    * 100}%`
+        }));
+    }
 
     computeTotals(rows) {
         if (!rows || !rows.length) return null;
@@ -51,26 +80,24 @@ export default class PgIndividualOutreach extends LightningElement {
     }
 
     handleCwSort(event) {
-        this.cwSortBy = event.detail.fieldName;
-        this.cwSortDir = event.detail.sortDirection;
-        this.cwRows = this.sortRows(this.cwRows, this.cwSortBy, this.cwSortDir);
+        const field = event.currentTarget.dataset.field;
+        if (!SORTABLE.includes(field)) return;
+        if (this.cwSortBy === field) {
+            this.cwSortDir = this.cwSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.cwSortBy = field;
+            this.cwSortDir = field === 'ownerName' ? 'asc' : 'desc';
+        }
     }
 
     handleQtdSort(event) {
-        this.qtdSortBy = event.detail.fieldName;
-        this.qtdSortDir = event.detail.sortDirection;
-        this.qtdRows = this.sortRows(this.qtdRows, this.qtdSortBy, this.qtdSortDir);
-    }
-
-    sortRows(rows, field, dir) {
-        if (!rows) return rows;
-        const factor = dir === 'asc' ? 1 : -1;
-        return [...rows].sort((a, b) => {
-            const av = a[field] ?? 0;
-            const bv = b[field] ?? 0;
-            if (av > bv) return 1 * factor;
-            if (av < bv) return -1 * factor;
-            return 0;
-        });
+        const field = event.currentTarget.dataset.field;
+        if (!SORTABLE.includes(field)) return;
+        if (this.qtdSortBy === field) {
+            this.qtdSortDir = this.qtdSortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.qtdSortBy = field;
+            this.qtdSortDir = field === 'ownerName' ? 'asc' : 'desc';
+        }
     }
 }

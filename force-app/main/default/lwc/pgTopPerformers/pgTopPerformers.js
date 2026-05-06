@@ -4,11 +4,11 @@ import getTopPerformers from '@salesforce/apex/PGInsightsController.getTopPerfor
 
 const COLUMNS = [
     { label: 'Name', fieldName: 'ownerName', type: 'text' },
-    { label: 'AE NB S1 Count', fieldName: 'nbCount', type: 'number',
+    { label: 'AE NB Stage 2+ Count', fieldName: 'nbCount', type: 'number',
         cellAttributes: { alignment: 'left' } },
-    { label: 'AE Exp S1 Count', fieldName: 'expCount', type: 'number',
+    { label: 'AE Exp Stage 2+ Count', fieldName: 'expCount', type: 'number',
         cellAttributes: { alignment: 'left' } },
-    { label: 'S1 Goal (MTD)', fieldName: 'goal', type: 'number',
+    { label: 'Goal (MTD)', fieldName: 'goal', type: 'number',
         cellAttributes: { alignment: 'left' } },
     { label: 'Attainment',  fieldName: 'attainmentPct', type: 'percent',
         typeAttributes: { maximumFractionDigits: 1 },

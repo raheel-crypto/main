@@ -1,19 +1,19 @@
 <template>
     <lightning-card>
-        <span slot="title">S1 (SQO) Status &amp; Top Performers | QTD</span>
+        <span slot="title">Stage 2+ Status &amp; Top Performers | QTD</span>
 
         <template lwc:if={hasStatus}>
             <div class="slds-grid slds-gutters slds-p-around_small slds-p-bottom_none pg-status">
                 <div class="slds-col">
-                    <div class="pg-status__label">AE NB S1 Count</div>
+                    <div class="pg-status__label">AE NB Stage 2+ Count</div>
                     <div class="pg-status__value">{status.nbCount}</div>
                 </div>
                 <div class="slds-col">
-                    <div class="pg-status__label">AE Exp S1 Count</div>
+                    <div class="pg-status__label">AE Exp Stage 2+ Count</div>
                     <div class="pg-status__value">{status.expCount}</div>
                 </div>
                 <div class="slds-col">
-                    <div class="pg-status__label">S1 Goal (MTD)</div>
+                    <div class="pg-status__label">Goal (MTD)</div>
                     <div class="pg-status__value">{status.goalMTD}</div>
                 </div>
                 <div class="slds-col">

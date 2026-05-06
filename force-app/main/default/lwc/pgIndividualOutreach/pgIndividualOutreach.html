@@ -2,63 +2,147 @@
     <div class="slds-grid slds-gutters slds-wrap">
 
         <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-2 slds-p-around_x-small">
-            <lightning-card>
-                <span slot="title">Individual Outreach (CW)</span>
-                <div class="slds-p-around_small">
-                    <template lwc:if={cwRows}>
-                        <lightning-datatable
-                            key-field="ownerId"
-                            data={cwRows}
-                            columns={columns}
-                            sorted-by={cwSortBy}
-                            sorted-direction={cwSortDir}
-                            onsort={handleCwSort}
-                            hide-checkbox-column
-                            resize-column-disabled>
-                        </lightning-datatable>
+            <article class="pg-card">
+                <header class="pg-card__title">Individual Outreach (CW)</header>
+                <template lwc:if={hasCwRows}>
+                    <table class="pg-table">
+                        <thead>
+                            <tr>
+                                <th class="pg-th pg-th--sortable" data-field="ownerName" onclick={handleCwSort}>Name</th>
+                                <th class="pg-th pg-th--sortable" data-field="emails"   onclick={handleCwSort}>OB Emails</th>
+                                <th class="pg-th pg-th--sortable" data-field="calls"    onclick={handleCwSort}>OB Calls</th>
+                                <th class="pg-th pg-th--sortable" data-field="linkedin" onclick={handleCwSort}>OB LinkedIn</th>
+                                <th class="pg-th pg-th--sortable" data-field="meetings" onclick={handleCwSort}>Meetings</th>
+                                <th class="pg-th pg-th--sortable" data-field="total"    onclick={handleCwSort}>Total OB</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template for:each={cwRows} for:item="row">
+                                <tr key={row.ownerId}>
+                                    <td class="pg-td pg-td--name">{row.ownerName}</td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.emails}</span>
+                                            <span class="pg-bar pg-bar--emails" style={row.emailsBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.calls}</span>
+                                            <span class="pg-bar pg-bar--calls" style={row.callsBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.linkedin}</span>
+                                            <span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.meetings}</span>
+                                            <span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.total}</span>
+                                            <span class="pg-bar pg-bar--total" style={row.totalBar}></span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
                         <template lwc:if={cwTotals}>
-                            <div class="slds-p-top_small slds-text-body_small slds-text-color_weak">
-                                Grand total — Emails {cwTotals.emails}, Calls {cwTotals.calls},
-                                LinkedIn {cwTotals.linkedin}, Meetings {cwTotals.meetings},
-                                Total {cwTotals.total}
-                            </div>
+                            <tfoot>
+                                <tr class="pg-tr--totals">
+                                    <td class="pg-td pg-td--name">Grand total</td>
+                                    <td class="pg-td">{cwTotals.emails}</td>
+                                    <td class="pg-td">{cwTotals.calls}</td>
+                                    <td class="pg-td">{cwTotals.linkedin}</td>
+                                    <td class="pg-td">{cwTotals.meetings}</td>
+                                    <td class="pg-td">{cwTotals.total}</td>
+                                </tr>
+                            </tfoot>
                         </template>
-                    </template>
-                    <template lwc:else>
-                        <lightning-spinner alternative-text="Loading"></lightning-spinner>
-                    </template>
-                </div>
-            </lightning-card>
+                    </table>
+                </template>
+                <template lwc:else>
+                    <div class="pg-empty">No outreach yet this week.</div>
+                </template>
+            </article>
         </div>
 
         <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-2 slds-p-around_x-small">
-            <lightning-card>
-                <span slot="title">Individual Outreach (QTD)</span>
-                <div class="slds-p-around_small">
-                    <template lwc:if={qtdRows}>
-                        <lightning-datatable
-                            key-field="ownerId"
-                            data={qtdRows}
-                            columns={columns}
-                            sorted-by={qtdSortBy}
-                            sorted-direction={qtdSortDir}
-                            onsort={handleQtdSort}
-                            hide-checkbox-column
-                            resize-column-disabled>
-                        </lightning-datatable>
+            <article class="pg-card">
+                <header class="pg-card__title">Individual Outreach (QTD)</header>
+                <template lwc:if={hasQtdRows}>
+                    <table class="pg-table">
+                        <thead>
+                            <tr>
+                                <th class="pg-th pg-th--sortable" data-field="ownerName" onclick={handleQtdSort}>Name</th>
+                                <th class="pg-th pg-th--sortable" data-field="emails"   onclick={handleQtdSort}>OB Emails</th>
+                                <th class="pg-th pg-th--sortable" data-field="calls"    onclick={handleQtdSort}>OB Calls</th>
+                                <th class="pg-th pg-th--sortable" data-field="linkedin" onclick={handleQtdSort}>OB LinkedIn</th>
+                                <th class="pg-th pg-th--sortable" data-field="meetings" onclick={handleQtdSort}>Meetings</th>
+                                <th class="pg-th pg-th--sortable" data-field="total"    onclick={handleQtdSort}>Total OB</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template for:each={qtdRows} for:item="row">
+                                <tr key={row.ownerId}>
+                                    <td class="pg-td pg-td--name">{row.ownerName}</td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.emails}</span>
+                                            <span class="pg-bar pg-bar--emails" style={row.emailsBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.calls}</span>
+                                            <span class="pg-bar pg-bar--calls" style={row.callsBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.linkedin}</span>
+                                            <span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.meetings}</span>
+                                            <span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span>
+                                        </div>
+                                    </td>
+                                    <td class="pg-td">
+                                        <div class="pg-bar-cell">
+                                            <span class="pg-bar-num">{row.total}</span>
+                                            <span class="pg-bar pg-bar--total" style={row.totalBar}></span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
                         <template lwc:if={qtdTotals}>
-                            <div class="slds-p-top_small slds-text-body_small slds-text-color_weak">
-                                Grand total — Emails {qtdTotals.emails}, Calls {qtdTotals.calls},
-                                LinkedIn {qtdTotals.linkedin}, Meetings {qtdTotals.meetings},
-                                Total {qtdTotals.total}
-                            </div>
+                            <tfoot>
+                                <tr class="pg-tr--totals">
+                                    <td class="pg-td pg-td--name">Grand total</td>
+                                    <td class="pg-td">{qtdTotals.emails}</td>
+                                    <td class="pg-td">{qtdTotals.calls}</td>
+                                    <td class="pg-td">{qtdTotals.linkedin}</td>
+                                    <td class="pg-td">{qtdTotals.meetings}</td>
+                                    <td class="pg-td">{qtdTotals.total}</td>
+                                </tr>
+                            </tfoot>
                         </template>
-                    </template>
-                    <template lwc:else>
-                        <lightning-spinner alternative-text="Loading"></lightning-spinner>
-                    </template>
-                </div>
-            </lightning-card>
+                    </table>
+                </template>
+                <template lwc:else>
+                    <div class="pg-empty">No outreach yet this quarter.</div>
+                </template>
+            </article>
         </div>
 
     </div>

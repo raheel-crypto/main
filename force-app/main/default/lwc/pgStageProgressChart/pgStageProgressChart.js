@@ -49,24 +49,24 @@ export default class PgStageProgressChart extends LightningElement {
         const datasets = [
             {
                 type: 'bar',
-                label: 'AE NB S1 Count',
+                label: 'AE NB Stage 2+ Count',
                 backgroundColor: '#06b6d4',
                 data: nb,
-                stack: 'sqo'
+                stack: 'stage2plus'
             },
             {
                 type: 'bar',
-                label: 'AE Exp S1 Count',
+                label: 'AE Exp Stage 2+ Count',
                 backgroundColor: '#ec4899',
                 data: exp,
-                stack: 'sqo'
+                stack: 'stage2plus'
             }
         ];
         if (showGoal) {
             datasets.unshift({
                 type: 'line',
-                label: 'AE Qualified S1 Goal',
-                borderColor: '#fff',
+                label: 'AE Qualified Stage 2+ Goal',
+                borderColor: '#1f2937',
                 backgroundColor: 'transparent',
                 tension: 0.2,
                 pointRadius: 3,
@@ -80,20 +80,20 @@ export default class PgStageProgressChart extends LightningElement {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { labels: { color: '#cbd5e1' } },
+                    legend: { labels: { color: '#475569' } },
                     tooltip: { mode: 'index', intersect: false }
                 },
                 scales: {
                     x: {
                         stacked: true,
-                        ticks: { color: '#cbd5e1' },
-                        grid: { color: 'rgba(255,255,255,0.05)' }
+                        ticks: { color: '#475569' },
+                        grid: { color: 'rgba(15,23,42,0.08)' }
                     },
                     y: {
                         stacked: true,
                         beginAtZero: true,
-                        ticks: { color: '#cbd5e1' },
-                        grid: { color: 'rgba(255,255,255,0.05)' }
+                        ticks: { color: '#475569' },
+                        grid: { color: 'rgba(15,23,42,0.08)' }
                     }
                 }
             }

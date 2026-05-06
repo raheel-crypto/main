@@ -1,0 +1,97 @@
+.pg-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.25rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+}
+
+.pg-card__title {
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.75rem 1rem;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.95rem;
+}
+
+.pg-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    color: #1e293b;
+}
+
+.pg-th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #475569;
+    border-bottom: 1px solid #e2e8f0;
+    background: #ffffff;
+    white-space: nowrap;
+}
+
+.pg-th--sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.pg-th--sortable:hover {
+    color: #0f172a;
+}
+
+.pg-td {
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.pg-td--name {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pg-bar-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 6rem;
+}
+
+.pg-bar-num {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    color: #0f172a;
+    font-weight: 600;
+    min-width: 2.5rem;
+}
+
+.pg-bar {
+    display: inline-block;
+    height: 0.65rem;
+    border-radius: 0.15rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.pg-bar--emails   { background: #06b6d4; }
+.pg-bar--calls    { background: #8b5cf6; }
+.pg-bar--linkedin { background: #ec4899; }
+.pg-bar--meetings { background: #84cc16; }
+.pg-bar--total    { background: #2563eb; }
+
+.pg-tr--totals .pg-td {
+    border-top: 2px solid #cbd5e1;
+    font-weight: 700;
+    background: #f8fafc;
+}
+
+.pg-empty {
+    padding: 1rem;
+    color: #64748b;
+    font-style: italic;
+}
