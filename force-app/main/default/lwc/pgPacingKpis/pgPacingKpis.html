@@ -1,0 +1,71 @@
+<template>
+    <div class="slds-grid slds-gutters slds-wrap">
+
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-p-around_x-small">
+            <div class="pg-panel pg-panel--wow">
+                <div class="pg-panel__heading">
+                    <span class="pg-panel__heading-line">WEEK</span>
+                    <span class="pg-panel__heading-divider">— over —</span>
+                    <span class="pg-panel__heading-line">WEEK</span>
+                </div>
+                <div class="pg-panel__body">
+                    <template lwc:if={wowReady}>
+                        <c-pg-kpi-tile
+                            label="New Business"
+                            value={wowData.newBusiness}
+                            delta={wowData.deltaNB}>
+                        </c-pg-kpi-tile>
+                        <c-pg-kpi-tile
+                            label="Expansion"
+                            value={wowData.expansion}
+                            delta={wowData.deltaExp}>
+                        </c-pg-kpi-tile>
+                        <c-pg-kpi-tile
+                            label="NB % of Total"
+                            value={wowData.nbPctOfTotal}
+                            delta={wowData.deltaPct}
+                            is-percent>
+                        </c-pg-kpi-tile>
+                    </template>
+                    <template lwc:else>
+                        <lightning-spinner alternative-text="Loading"></lightning-spinner>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div class="slds-col slds-size_1-of-1 slds-medium-size_1-of-2 slds-p-around_x-small">
+            <div class="pg-panel pg-panel--mom">
+                <div class="pg-panel__heading">
+                    <span class="pg-panel__heading-line">MONTH</span>
+                    <span class="pg-panel__heading-divider">— over —</span>
+                    <span class="pg-panel__heading-line">MONTH</span>
+                </div>
+                <div class="pg-panel__body">
+                    <template lwc:if={momReady}>
+                        <c-pg-kpi-tile
+                            label="New Business"
+                            value={momData.newBusiness}
+                            delta={momData.deltaNB}>
+                        </c-pg-kpi-tile>
+                        <c-pg-kpi-tile
+                            label="Expansion"
+                            value={momData.expansion}
+                            delta={momData.deltaExp}>
+                        </c-pg-kpi-tile>
+                        <c-pg-kpi-tile
+                            label="NB % of Total"
+                            value={momData.nbPctOfTotal}
+                            delta={momData.deltaPct}
+                            is-percent>
+                        </c-pg-kpi-tile>
+                    </template>
+                    <template lwc:else>
+                        <lightning-spinner alternative-text="Loading"></lightning-spinner>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</template>

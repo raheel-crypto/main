@@ -1,0 +1,16 @@
+.pg-status__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+}
+
+.pg-status__value {
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.pg-status {
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 0.75rem;
+}

@@ -1,0 +1,13 @@
+<template>
+    <lightning-card>
+        <span slot="title" class="pg-chart__title">AE Qualified S1 Progress (SQOs) | QTD</span>
+        <div class="pg-chart__wrap">
+            <canvas class="pg-chart" lwc:dom="manual"></canvas>
+            <template lwc:if={error}>
+                <div class="slds-text-color_error slds-p-around_small">
+                    Could not load chart data.
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

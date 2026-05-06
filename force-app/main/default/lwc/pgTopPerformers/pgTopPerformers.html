@@ -1,0 +1,42 @@
+<template>
+    <lightning-card>
+        <span slot="title">S1 (SQO) Status &amp; Top Performers | QTD</span>
+
+        <template lwc:if={hasStatus}>
+            <div class="slds-grid slds-gutters slds-p-around_small slds-p-bottom_none pg-status">
+                <div class="slds-col">
+                    <div class="pg-status__label">AE NB S1 Count</div>
+                    <div class="pg-status__value">{status.nbCount}</div>
+                </div>
+                <div class="slds-col">
+                    <div class="pg-status__label">AE Exp S1 Count</div>
+                    <div class="pg-status__value">{status.expCount}</div>
+                </div>
+                <div class="slds-col">
+                    <div class="pg-status__label">S1 Goal (MTD)</div>
+                    <div class="pg-status__value">{status.goalMTD}</div>
+                </div>
+                <div class="slds-col">
+                    <div class="pg-status__label">Attainment</div>
+                    <div class="pg-status__value">{status.attainmentPct}%</div>
+                </div>
+            </div>
+        </template>
+
+        <template lwc:if={hasRows}>
+            <div class="slds-p-around_small">
+                <div class="slds-text-heading_small slds-p-bottom_x-small">Top 5 SQO Performers</div>
+                <lightning-datatable
+                    key-field="ownerId"
+                    data={rows}
+                    columns={columns}
+                    hide-checkbox-column
+                    resize-column-disabled>
+                </lightning-datatable>
+            </div>
+        </template>
+        <template lwc:else>
+            <div class="slds-p-around_small slds-text-color_weak">No QTD performers yet.</div>
+        </template>
+    </lightning-card>
+</template>

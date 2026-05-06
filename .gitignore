@@ -4,3 +4,8 @@ dist/
 *.log
 .DS_Store
 .vite/
+
+# SFDX
+.sfdx/
+.sf/
+.localdevserver/

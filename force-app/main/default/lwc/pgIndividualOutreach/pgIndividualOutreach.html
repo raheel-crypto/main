@@ -1,0 +1,65 @@
+<template>
+    <div class="slds-grid slds-gutters slds-wrap">
+
+        <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-2 slds-p-around_x-small">
+            <lightning-card>
+                <span slot="title">Individual Outreach (CW)</span>
+                <div class="slds-p-around_small">
+                    <template lwc:if={cwRows}>
+                        <lightning-datatable
+                            key-field="ownerId"
+                            data={cwRows}
+                            columns={columns}
+                            sorted-by={cwSortBy}
+                            sorted-direction={cwSortDir}
+                            onsort={handleCwSort}
+                            hide-checkbox-column
+                            resize-column-disabled>
+                        </lightning-datatable>
+                        <template lwc:if={cwTotals}>
+                            <div class="slds-p-top_small slds-text-body_small slds-text-color_weak">
+                                Grand total — Emails {cwTotals.emails}, Calls {cwTotals.calls},
+                                LinkedIn {cwTotals.linkedin}, Meetings {cwTotals.meetings},
+                                Total {cwTotals.total}
+                            </div>
+                        </template>
+                    </template>
+                    <template lwc:else>
+                        <lightning-spinner alternative-text="Loading"></lightning-spinner>
+                    </template>
+                </div>
+            </lightning-card>
+        </div>
+
+        <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-2 slds-p-around_x-small">
+            <lightning-card>
+                <span slot="title">Individual Outreach (QTD)</span>
+                <div class="slds-p-around_small">
+                    <template lwc:if={qtdRows}>
+                        <lightning-datatable
+                            key-field="ownerId"
+                            data={qtdRows}
+                            columns={columns}
+                            sorted-by={qtdSortBy}
+                            sorted-direction={qtdSortDir}
+                            onsort={handleQtdSort}
+                            hide-checkbox-column
+                            resize-column-disabled>
+                        </lightning-datatable>
+                        <template lwc:if={qtdTotals}>
+                            <div class="slds-p-top_small slds-text-body_small slds-text-color_weak">
+                                Grand total — Emails {qtdTotals.emails}, Calls {qtdTotals.calls},
+                                LinkedIn {qtdTotals.linkedin}, Meetings {qtdTotals.meetings},
+                                Total {qtdTotals.total}
+                            </div>
+                        </template>
+                    </template>
+                    <template lwc:else>
+                        <lightning-spinner alternative-text="Loading"></lightning-spinner>
+                    </template>
+                </div>
+            </lightning-card>
+        </div>
+
+    </div>
+</template>

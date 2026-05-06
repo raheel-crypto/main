@@ -1,0 +1,24 @@
+.pg-app {
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100%;
+    border-radius: 0.25rem;
+}
+
+.pg-app__header {
+    background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 0.25rem 0.25rem 0 0;
+}
+
+.pg-app__title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    color: #fff;
+}
+
+.pg-app__subtitle {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    margin-top: 0.25rem;
+}

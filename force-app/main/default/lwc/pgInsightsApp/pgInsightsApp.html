@@ -1,0 +1,28 @@
+<template>
+    <div class="pg-app">
+        <div class="pg-app__header slds-p-around_small">
+            <h1 class="pg-app__title">PG Insights</h1>
+            <p class="pg-app__subtitle">AE Pipeline Generation Pacing &amp; Outreach</p>
+        </div>
+
+        <lightning-tabset variant="scoped" active-tab-value={activeTab}>
+            <lightning-tab label="Quarter Recap" value="recap">
+                <div class="slds-p-around_small">
+                    <c-pg-pacing-kpis></c-pg-pacing-kpis>
+                </div>
+                <div class="slds-p-horizontal_small">
+                    <c-pg-stage-progress-chart></c-pg-stage-progress-chart>
+                </div>
+                <div class="slds-p-around_small">
+                    <c-pg-top-performers></c-pg-top-performers>
+                </div>
+            </lightning-tab>
+
+            <lightning-tab label="Individual Outreach" value="outreach">
+                <div class="slds-p-around_small">
+                    <c-pg-individual-outreach></c-pg-individual-outreach>
+                </div>
+            </lightning-tab>
+        </lightning-tabset>
+    </div>
+</template>

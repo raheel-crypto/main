@@ -1,0 +1,17 @@
+# Salesforce metadata that should never be deployed/retrieved
+**/jsconfig.json
+**/.eslintrc.json
+**/__tests__/**
+**/staticresources/README.md
+
+# Project-level files unrelated to Salesforce
+node_modules/
+client/
+server/
+mcp-server/
+package.json
+package-lock.json
+tsconfig.json
+.env
+.env.example
+README.md

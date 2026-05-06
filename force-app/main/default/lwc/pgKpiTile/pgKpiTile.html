@@ -1,0 +1,9 @@
+<template>
+    <div class="pg-tile">
+        <div class="pg-tile__label">{label}</div>
+        <div class="pg-tile__value">{formattedValue}</div>
+        <template lwc:if={hasDelta}>
+            <div class={deltaClass}>{deltaDisplay}</div>
+        </template>
+    </div>
+</template>

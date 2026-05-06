@@ -1,0 +1,14 @@
+.pg-chart__wrap {
+    position: relative;
+    height: 18rem;
+    padding: 0.5rem 1rem 1rem;
+}
+
+.pg-chart {
+    width: 100%;
+    height: 100%;
+}
+
+.pg-chart__title {
+    font-weight: 700;
+}
