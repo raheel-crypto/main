@@ -75,30 +75,93 @@ public with sharing class AccountARRProcessor {
     }
     
     /**
-     * @description Processes a single Account when an Opportunity closes (called by Record-Triggered Flow)
-     * @param opportunityId The Opportunity that triggered the process
+     * @description Request wrapper for single-Opportunity Invocable method (Record-Triggered Flow)
      */
-    public static void processSingleAccountFromOpportunity(Id opportunityId) {
-        if (opportunityId == null) {
-            System.debug('OpportunityId is null, cannot process');
-            return;
+    public class SingleOppRequest {
+        @InvocableVariable(label='Opportunity ID' description='The Opportunity that triggered ARR processing' required=true)
+        public Id opportunityId;
+    }
+
+    /**
+     * @description Invocable method for Record-Triggered Flow — processes the Account of a single closed Opportunity.
+     * Returns a Result so the Flow can inspect success/failure and route to a fault path or send an alert.
+     */
+    @InvocableMethod(label='Process ARR For Single Opportunity'
+                     description='Calculates ARR and manages Contracts for the Account of a closed Opportunity'
+                     category='Opportunity')
+    public static List<Result> processSingleOpportunity(List<SingleOppRequest> requests) {
+        List<Result> results = new List<Result>();
+
+        if (requests == null || requests.isEmpty()) {
+            Result r = new Result();
+            r.success = false;
+            r.errorMessage = 'No requests provided to processSingleOpportunity';
+            System.debug(LoggingLevel.ERROR, 'ARRProcessor.processSingleOpportunity: ' + r.errorMessage);
+            results.add(r);
+            return results;
         }
-        
-        // Get the Opportunity and its Account
-        List<Opportunity> opps = [
-            SELECT Id, AccountId 
-            FROM Opportunity 
-            WHERE Id = :opportunityId 
-            LIMIT 1
-        ];
-        
-        if (opps.isEmpty() || opps[0].AccountId == null) {
-            System.debug('Opportunity not found or has no Account: ' + opportunityId);
-            return;
+
+        for (SingleOppRequest req : requests) {
+            results.add(processSingleAccountFromOpportunity(req.opportunityId));
         }
-        
-        Set<Id> accountIds = new Set<Id>{ opps[0].AccountId };
-        processAccountsInternal(accountIds);
+        return results;
+    }
+
+    /**
+     * @description Processes a single Account when an Opportunity closes.
+     * Returns a Result with full error detail so callers can log or surface failures.
+     */
+    public static Result processSingleAccountFromOpportunity(Id opportunityId) {
+        Result result = new Result();
+
+        try {
+            if (opportunityId == null) {
+                result.success = false;
+                result.errorMessage = 'processSingleAccountFromOpportunity called with null opportunityId';
+                System.debug(LoggingLevel.ERROR, 'ARRProcessor: ' + result.errorMessage);
+                return result;
+            }
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor: starting single-opp processing for Opportunity ' + opportunityId);
+
+            List<Opportunity> opps = [
+                SELECT Id, Name, AccountId, Account.Name, StageName, Type
+                FROM Opportunity
+                WHERE Id = :opportunityId
+                LIMIT 1
+            ];
+
+            if (opps.isEmpty()) {
+                result.success = false;
+                result.errorMessage = 'Opportunity not found: ' + opportunityId;
+                System.debug(LoggingLevel.ERROR, 'ARRProcessor: ' + result.errorMessage);
+                return result;
+            }
+
+            if (opps[0].AccountId == null) {
+                result.success = false;
+                result.errorMessage = 'Opportunity ' + opps[0].Name + ' (' + opportunityId + ') has no Account — cannot process ARR';
+                System.debug(LoggingLevel.ERROR, 'ARRProcessor: ' + result.errorMessage);
+                return result;
+            }
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor: Opportunity "' + opps[0].Name + '" (Type=' + opps[0].Type + ') — processing Account "' + opps[0].Account.Name + '" (' + opps[0].AccountId + ')');
+
+            result = processAccountsInternal(new Set<Id>{ opps[0].AccountId });
+
+            if (!result.success) {
+                System.debug(LoggingLevel.ERROR, 'ARRProcessor: processAccountsInternal failed for Opportunity ' + opportunityId + ' / Account ' + opps[0].AccountId + ' — ' + result.errorMessage);
+            } else {
+                System.debug(LoggingLevel.INFO, 'ARRProcessor: completed for Opportunity ' + opportunityId + ' — accountsProcessed=' + result.accountsProcessed + ', contractsCreated=' + result.contractsCreated + ', contractsUpdated=' + result.contractsUpdated);
+            }
+
+        } catch (Exception e) {
+            result.success = false;
+            result.errorMessage = 'Unhandled exception processing Opportunity ' + opportunityId + ': ' + e.getMessage() + ' | Line ' + e.getLineNumber() + ' | Stack: ' + e.getStackTraceString();
+            System.debug(LoggingLevel.ERROR, 'ARRProcessor: ' + result.errorMessage);
+        }
+
+        return result;
     }
     
     /**
@@ -108,38 +171,58 @@ public with sharing class AccountARRProcessor {
      */
     private static Result processAccountsInternal(Set<Id> accountIds) {
         Result result = new Result();
-        
+
         try {
             if (accountIds == null || accountIds.isEmpty()) {
                 result.success = false;
                 result.errorMessage = 'No Account IDs provided';
+                System.debug(LoggingLevel.ERROR, 'ARRProcessor.processAccountsInternal: ' + result.errorMessage);
                 return result;
             }
-            
-            // Step 1: Query Accounts
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 1: querying ' + accountIds.size() + ' Account(s): ' + accountIds);
+
             Map<Id, Account> accountsMap = new Map<Id, Account>([
-                SELECT Id, 
+                SELECT Id,
+                       Name,
                        Account_Status__c,
                        ARR__c,
                        Renewal_Date__c
                 FROM Account
                 WHERE Id IN :accountIds
             ]);
-            
-            // Step 2: Query all closed-won Opportunities for these Accounts
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 1 result: found ' + accountsMap.size() + ' of ' + accountIds.size() + ' Account(s)');
+
+            if (accountsMap.size() < accountIds.size()) {
+                Set<Id> missing = new Set<Id>(accountIds);
+                missing.removeAll(accountsMap.keySet());
+                System.debug(LoggingLevel.WARN, 'ARRProcessor: Account IDs not found (deleted or inaccessible): ' + missing);
+            }
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 2: querying closed-won Opportunities');
             Map<Id, List<Opportunity>> oppsByAccount = OpportunityDataAccess.getClosedWonByAccount(accountIds);
-            
-            // Step 3: Calculate ARR for each Account and collect Contract operations
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 2 result: Opportunities found for ' + oppsByAccount.size() + ' Account(s)');
+
             List<Contract> allContractsToCreate = new List<Contract>();
             List<Contract> allContractsToUpdate = new List<Contract>();
             Map<Id, Account> accountsToUpdate = new Map<Id, Account>();
-            
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 3: calculating ARR per Account');
+
             for (Id accountId : accountIds) {
                 Account acc = accountsMap.get(accountId);
+
+                if (acc == null) {
+                    System.debug(LoggingLevel.WARN, 'ARRProcessor: skipping Account ' + accountId + ' — not found in query results (inaccessible or deleted)');
+                    result.errorMessage += 'Account ' + accountId + ' not found or inaccessible; ';
+                    continue;
+                }
+
                 List<Opportunity> opps = oppsByAccount.get(accountId);
-                
+
                 if (opps == null || opps.isEmpty()) {
-                    // No opportunities, set ARR to 0 if not a Customer
+                    System.debug(LoggingLevel.INFO, 'ARRProcessor: Account "' + acc.Name + '" (' + accountId + ') has no closed-won Opps — status=' + acc.Account_Status__c);
                     if (acc.Account_Status__c != 'Customer') {
                         acc.ARR__c = 0;
                         acc.Renewal_Date__c = null;
@@ -147,22 +230,23 @@ public with sharing class AccountARRProcessor {
                     }
                     continue;
                 }
-                
-                // Calculate ARR for this Account
+
+                System.debug(LoggingLevel.INFO, 'ARRProcessor: Account "' + acc.Name + '" (' + accountId + ') has ' + opps.size() + ' Opp(s) — status=' + acc.Account_Status__c);
+
                 ARRCalculator.ARRResult arrResult = ARRCalculator.calculateAccountARR(acc, opps);
-                
-                // Update Account fields
+
+                System.debug(LoggingLevel.INFO, 'ARRProcessor: ARR result for "' + acc.Name + '" — totalARR=' + arrResult.totalARR + ', renewalDate=' + arrResult.renewalDate + ', contractsToCreate=' + arrResult.contractsToCreate.size() + ', contractsToUpdate=' + arrResult.contractsToUpdate.size());
+
                 if (acc.Account_Status__c == 'Customer') {
                     acc.ARR__c = arrResult.totalARR;
                     acc.Renewal_Date__c = arrResult.renewalDate;
                 } else {
-                    // Former Customer - set to 0
                     acc.ARR__c = 0;
                     acc.Renewal_Date__c = null;
+                    System.debug(LoggingLevel.INFO, 'ARRProcessor: "' + acc.Name + '" is Former Customer — ARR set to 0');
                 }
                 accountsToUpdate.put(acc.Id, acc);
-                
-                // Collect Contract operations
+
                 if (!arrResult.contractsToCreate.isEmpty()) {
                     allContractsToCreate.addAll(arrResult.contractsToCreate);
                 }
@@ -170,55 +254,69 @@ public with sharing class AccountARRProcessor {
                     allContractsToUpdate.addAll(arrResult.contractsToUpdate);
                 }
             }
-            
-            // Step 4: Update existing Contracts first
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 4: updating ' + allContractsToUpdate.size() + ' existing Contract(s)');
             if (!allContractsToUpdate.isEmpty()) {
                 List<Id> updatedIds = ContractService.updateContracts(allContractsToUpdate);
                 result.contractsUpdated = updatedIds.size();
+                System.debug(LoggingLevel.INFO, 'ARRProcessor Step 4 result: ' + result.contractsUpdated + ' Contract(s) updated successfully');
             }
-            
-            // Step 5: Create new Contracts
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 5: creating ' + allContractsToCreate.size() + ' new Contract(s)');
             Set<Id> createdContractIds = new Set<Id>();
             if (!allContractsToCreate.isEmpty()) {
                 Map<Id, Id> oppToContractMap = ContractService.createContracts(allContractsToCreate);
                 result.contractsCreated = oppToContractMap.size();
                 createdContractIds.addAll(oppToContractMap.values());
-                
-                // Step 6: Link Contracts to Opportunities
+                System.debug(LoggingLevel.INFO, 'ARRProcessor Step 5 result: ' + result.contractsCreated + ' of ' + allContractsToCreate.size() + ' Contract(s) created');
+
                 if (!oppToContractMap.isEmpty()) {
-                    ContractService.linkContractsToOpportunities(oppToContractMap);
+                    System.debug(LoggingLevel.INFO, 'ARRProcessor Step 6: linking Contracts to Opportunities');
+                    List<Id> linkedIds = ContractService.linkContractsToOpportunities(oppToContractMap);
+                    System.debug(LoggingLevel.INFO, 'ARRProcessor Step 6 result: ' + linkedIds.size() + ' Opportunity link(s) updated');
                 }
-                
-                // Step 7: Activate newly created Contracts
+
                 if (!createdContractIds.isEmpty()) {
-                    ContractService.activateContracts(createdContractIds);
+                    System.debug(LoggingLevel.INFO, 'ARRProcessor Step 7: activating ' + createdContractIds.size() + ' Contract(s)');
+                    List<Id> activatedIds = ContractService.activateContracts(createdContractIds);
+                    System.debug(LoggingLevel.INFO, 'ARRProcessor Step 7 result: ' + activatedIds.size() + ' Contract(s) activated');
                 }
             }
-            
-            // Step 8: Update Accounts with calculated ARR
+
+            System.debug(LoggingLevel.INFO, 'ARRProcessor Step 8: updating ' + accountsToUpdate.size() + ' Account(s) with calculated ARR');
             if (!accountsToUpdate.isEmpty()) {
                 Database.SaveResult[] updateResults = Database.update(accountsToUpdate.values(), false);
-                
-                for (Database.SaveResult sr : updateResults) {
-                    if (sr.isSuccess()) {
+
+                for (Integer i = 0; i < updateResults.size(); i++) {
+                    if (updateResults[i].isSuccess()) {
                         result.accountsProcessed++;
                     } else {
-                        for (Database.Error err : sr.getErrors()) {
-                            result.errorMessage += 'Account update error: ' + err.getMessage() + '; ';
+                        Account failedAcc = accountsToUpdate.values()[i];
+                        for (Database.Error err : updateResults[i].getErrors()) {
+                            String errDetail = 'Account "' + failedAcc.Name + '" (' + failedAcc.Id + ') update failed: [' + err.getStatusCode() + '] ' + err.getMessage() + ' (fields: ' + String.join(err.getFields(), ', ') + '); ';
+                            result.errorMessage += errDetail;
+                            System.debug(LoggingLevel.ERROR, 'ARRProcessor Step 8: ' + errDetail);
                         }
                     }
                 }
+
+                System.debug(LoggingLevel.INFO, 'ARRProcessor Step 8 result: ' + result.accountsProcessed + ' Account(s) updated successfully');
             }
-            
-            // Set overall success
+
             result.success = (result.errorMessage == '');
-            
+
+            if (!result.success) {
+                System.debug(LoggingLevel.ERROR, 'ARRProcessor: completed with errors — ' + result.errorMessage);
+            } else {
+                System.debug(LoggingLevel.INFO, 'ARRProcessor: all steps completed successfully');
+            }
+
         } catch (Exception e) {
             result.success = false;
-            result.errorMessage = 'Exception: ' + e.getMessage() + ' | Stack: ' + e.getStackTraceString();
-            System.debug('Error in processAccountsInternal: ' + result.errorMessage);
+            result.errorMessage = 'Unhandled exception: ' + e.getMessage() + ' | Line ' + e.getLineNumber() + ' | Stack: ' + e.getStackTraceString();
+            System.debug(LoggingLevel.ERROR, 'ARRProcessor.processAccountsInternal: ' + result.errorMessage);
         }
-        
+
         return result;
     }
 }

@@ -320,14 +320,13 @@ private class AccountARRProcessorTest {
     }
     
     /**
-     * @description Test processSingleAccountFromOpportunity method (for Record-Triggered Flow)
+     * @description Test processSingleOpportunity invocable method (for Record-Triggered Flow)
      */
     @isTest
     static void testProcessSingleAccountFromOpportunity() {
-        // Create test data
         Account acc = new Account(Name = 'Single Opp Test', Account_Status__c = 'Customer');
         insert acc;
-        
+
         Opportunity opp = new Opportunity(
             Name = 'Single Test Opp',
             AccountId = acc.Id,
@@ -340,18 +339,38 @@ private class AccountARRProcessorTest {
             Contract_End_Date__c = Date.today().addDays(365)
         );
         insert opp;
-        
+
+        AccountARRProcessor.SingleOppRequest req = new AccountARRProcessor.SingleOppRequest();
+        req.opportunityId = opp.Id;
+
         Test.startTest();
-        AccountARRProcessor.processSingleAccountFromOpportunity(opp.Id);
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processSingleOpportunity(
+            new List<AccountARRProcessor.SingleOppRequest>{ req }
+        );
         Test.stopTest();
-        
-        // Verify Account updated
+
+        System.assertEquals(1, results.size(), 'Should return one result');
+        System.assertEquals(true, results[0].success, 'Processing should succeed: ' + results[0].errorMessage);
+
         Account updatedAcc = [SELECT ARR__c FROM Account WHERE Id = :acc.Id];
         System.assertEquals(25000, updatedAcc.ARR__c, 'Account ARR should be updated');
-        
-        // Verify Contract created
+
         List<Contract> contracts = [SELECT Id FROM Contract WHERE AccountId = :acc.Id];
         System.assertEquals(1, contracts.size(), 'Should create 1 Contract');
+    }
+
+    /**
+     * @description Test processSingleOpportunity with null requests list
+     */
+    @isTest
+    static void testProcessSingleOpportunity_NullRequests() {
+        Test.startTest();
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processSingleOpportunity(null);
+        Test.stopTest();
+
+        System.assertEquals(1, results.size(), 'Should return one error result');
+        System.assertEquals(false, results[0].success, 'Should fail with null requests');
+        System.assert(results[0].errorMessage.contains('No requests'), 'Should have descriptive error message');
     }
     
     /**
