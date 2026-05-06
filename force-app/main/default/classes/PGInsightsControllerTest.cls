@@ -159,6 +159,33 @@ private class PGInsightsControllerTest {
     }
 
     @IsTest
+    static void getTopPerformersByPod_groupsAEsByPod() {
+        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        Test.startTest();
+        List<PGInsightsController.PodPerformers> pods =
+            PGInsightsController.getTopPerformersByPod(5);
+        Test.stopTest();
+
+        Map<String, PGInsightsController.PodPerformers> byPod =
+            new Map<String, PGInsightsController.PodPerformers>();
+        for (PGInsightsController.PodPerformers p : pods) byPod.put(p.pod, p);
+
+        // ENT 1 has ae1 (6 opps), ENT 2 has ae2 (3 opps), MM/HV has ae3 (1 opp).
+        System.assert(byPod.containsKey('ENT 1'), 'ENT 1 pod present');
+        System.assert(byPod.containsKey('ENT 2'), 'ENT 2 pod present');
+        System.assert(byPod.containsKey('MM/HV'), 'MM/HV pod present');
+
+        PGInsightsController.PodPerformers ent1 = byPod.get('ENT 1');
+        System.assertEquals(1, ent1.rows.size(), 'ENT 1 has one performer');
+        System.assertEquals(6, ent1.totalNb + ent1.totalExp, 'ENT 1 totals 6 stage-2+ opps');
+        System.assert(ent1.totalGoalMTD > 0, 'ENT 1 inherits ae1 prorated quota');
+
+        PGInsightsController.PodPerformers ent2 = byPod.get('ENT 2');
+        System.assertEquals(3, ent2.totalNb + ent2.totalExp, 'ENT 2 totals 3 stage-2+ opps');
+        System.assertEquals(0, ent2.totalGoalMTD, 'ENT 2 has no quota set; falls back to 0');
+    }
+
+    @IsTest
     static void getConversionHeatmap_computesPerOwnerConversions() {
         // Mock varied stage progressions across the seeded opps.
         Set<Id> aeIds = computeTestAeIds();

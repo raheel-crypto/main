@@ -9,7 +9,7 @@ export default class PgStageProgressChart extends LightningElement {
     rows = [];
     error;
 
-    @wire(getStageProgressByQuarter, { numQuarters: 8 })
+    @wire(getStageProgressByQuarter, { numQuarters: 6 })
     wiredRows({ data, error }) {
         if (data) {
             this.rows = data;
@@ -46,18 +46,31 @@ export default class PgStageProgressChart extends LightningElement {
         const goal = this.rows.map(r => r.goal || 0);
         const showGoal = goal.some(v => v > 0);
 
+        const ctx = canvas.getContext('2d');
+        const h = canvas.height || 260;
+        const nbGradient = ctx.createLinearGradient(0, 0, 0, h);
+        nbGradient.addColorStop(0, '#0ea5e9');
+        nbGradient.addColorStop(1, '#082f49');
+        const expGradient = ctx.createLinearGradient(0, 0, 0, h);
+        expGradient.addColorStop(0, '#f43f5e');
+        expGradient.addColorStop(1, '#500724');
+
         const datasets = [
             {
                 type: 'bar',
                 label: 'AE NB Stage 2+ Count',
-                backgroundColor: '#06b6d4',
+                backgroundColor: nbGradient,
+                borderRadius: 4,
+                borderSkipped: false,
                 data: nb,
                 stack: 'stage2plus'
             },
             {
                 type: 'bar',
                 label: 'AE Exp Stage 2+ Count',
-                backgroundColor: '#ec4899',
+                backgroundColor: expGradient,
+                borderRadius: 4,
+                borderSkipped: false,
                 data: exp,
                 stack: 'stage2plus'
             }
@@ -66,10 +79,12 @@ export default class PgStageProgressChart extends LightningElement {
             datasets.unshift({
                 type: 'line',
                 label: 'AE Qualified Stage 2+ Goal',
-                borderColor: '#1f2937',
+                borderColor: '#0f172a',
                 backgroundColor: 'transparent',
+                borderDash: [4, 4],
                 tension: 0.2,
                 pointRadius: 3,
+                pointBackgroundColor: '#0f172a',
                 data: goal
             });
         }

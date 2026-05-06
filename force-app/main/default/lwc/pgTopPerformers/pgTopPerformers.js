@@ -1,34 +1,21 @@
 import { LightningElement, wire } from 'lwc';
 import getS1StatusQTD from '@salesforce/apex/PGInsightsController.getS1StatusQTD';
-import getTopPerformers from '@salesforce/apex/PGInsightsController.getTopPerformers';
+import getTopPerformersByPod from '@salesforce/apex/PGInsightsController.getTopPerformersByPod';
 
-const COLUMNS = [
-    { label: 'Name', fieldName: 'ownerName', type: 'text' },
-    { label: 'AE NB Stage 2+ Count', fieldName: 'nbCount', type: 'number',
-        cellAttributes: { alignment: 'left' } },
-    { label: 'AE Exp Stage 2+ Count', fieldName: 'expCount', type: 'number',
-        cellAttributes: { alignment: 'left' } },
-    { label: 'Goal (MTD)', fieldName: 'goal', type: 'number',
-        cellAttributes: { alignment: 'left' } },
-    { label: 'Attainment',  fieldName: 'attainmentPct', type: 'percent',
-        typeAttributes: { maximumFractionDigits: 1 },
-        cellAttributes: { alignment: 'left' } }
-];
+const POD_CLASS = {
+    'ENT 1': 'pg-pod pg-pod--ent1',
+    'ENT 2': 'pg-pod pg-pod--ent2',
+    'MM/HV': 'pg-pod pg-pod--mmhv',
+    'NV':    'pg-pod pg-pod--nv'
+};
 
 export default class PgTopPerformers extends LightningElement {
-    columns = COLUMNS;
-    rows;
+    rawPods;
     status;
 
-    @wire(getTopPerformers, { topN: 5 })
-    wiredRows({ data, error }) {
-        if (data) {
-            // lightning-datatable percent type expects 0..1 range
-            this.rows = data.map(r => ({
-                ...r,
-                attainmentPct: (r.attainmentPct || 0) / 100
-            }));
-        }
+    @wire(getTopPerformersByPod, { topN: 5 })
+    wiredPods({ data }) {
+        if (data) this.rawPods = data;
     }
 
     @wire(getS1StatusQTD)
@@ -36,11 +23,42 @@ export default class PgTopPerformers extends LightningElement {
         if (data) {
             this.status = {
                 ...data,
-                attainmentPct: (data.attainmentPct || 0).toFixed(2)
+                attainmentPct: (data.attainmentPct || 0).toFixed(2),
+                goalMTDFmt: this.fmtNum(data.goalMTD)
             };
         }
     }
 
-    get hasRows() { return this.rows && this.rows.length > 0; }
     get hasStatus() { return !!this.status; }
+    get hasPods()   { return !!(this.rawPods && this.rawPods.length); }
+
+    get pods() {
+        if (!this.rawPods) return [];
+        return this.rawPods.map(p => {
+            const rows = (p.rows || []).map((r, i) => ({
+                ...r,
+                rank: i + 1,
+                totalCount: (r.nbCount || 0) + (r.expCount || 0),
+                attainmentDisplay: r.goal > 0
+                    ? `${(r.attainmentPct || 0).toFixed(0)}%`
+                    : '—'
+            }));
+            return {
+                ...p,
+                cardClass: POD_CLASS[p.pod] || 'pg-pod',
+                totalCount: (p.totalNb || 0) + (p.totalExp || 0),
+                goalMTDFmt: this.fmtNum(p.totalGoalMTD),
+                attainmentDisplay: `${(p.attainmentPct || 0).toFixed(0)}%`,
+                rows,
+                empty: rows.length === 0
+            };
+        });
+    }
+
+    fmtNum(n) {
+        if (n == null) return '0';
+        const v = Number(n);
+        if (!Number.isFinite(v)) return '0';
+        return v >= 100 ? Math.round(v).toString() : v.toFixed(1);
+    }
 }

@@ -1,16 +1,201 @@
+/* ---- Overall status card -------------------------------------------------- */
+
+.pg-status-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+}
+
+.pg-status-card__title {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #f8fafc;
+    padding: 0.6rem 1rem;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
 .pg-status__label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: #6b7280;
+    color: #64748b;
+    font-weight: 600;
 }
 
 .pg-status__value {
-    font-size: 1.25rem;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.1;
+    margin-top: 0.25rem;
+}
+
+/* ---- Pod cards ------------------------------------------------------------ */
+
+.pg-pods {
+    align-items: stretch;
+}
+
+.pg-pod {
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.pg-pod__header {
+    color: #f8fafc;
+    padding: 0.9rem 1.1rem 1rem;
+    position: relative;
+    overflow: hidden;
+}
+
+.pg-pod__header::after {
+    content: '';
+    position: absolute;
+    top: -40%;
+    right: -20%;
+    width: 60%;
+    height: 160%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 70%);
+    pointer-events: none;
+}
+
+.pg-pod--ent1 .pg-pod__header {
+    background:
+        radial-gradient(ellipse at top left, rgba(165, 180, 252, 0.35), transparent 60%),
+        linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+}
+
+.pg-pod--ent2 .pg-pod__header {
+    background:
+        radial-gradient(ellipse at top left, rgba(253, 230, 138, 0.32), transparent 60%),
+        linear-gradient(135deg, #7c2d12 0%, #9a3412 50%, #c2410c 100%);
+}
+
+.pg-pod--mmhv .pg-pod__header {
+    background:
+        radial-gradient(ellipse at top left, rgba(167, 243, 208, 0.32), transparent 60%),
+        linear-gradient(135deg, #134e4a 0%, #115e59 50%, #0d9488 100%);
+}
+
+.pg-pod--nv .pg-pod__header {
+    background:
+        radial-gradient(ellipse at top left, rgba(251, 207, 232, 0.32), transparent 60%),
+        linear-gradient(135deg, #500724 0%, #831843 50%, #be185d 100%);
+}
+
+.pg-pod__name {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.85;
+}
+
+.pg-pod__totals {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.pg-pod__count {
+    font-size: 1.85rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.pg-pod__sep,
+.pg-pod__goal {
+    font-size: 1rem;
+    font-weight: 500;
+    opacity: 0.75;
+}
+
+.pg-pod__pct {
+    margin-left: auto;
+    font-size: 1rem;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.18);
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    backdrop-filter: blur(4px);
+}
+
+.pg-pod__sublabel {
+    font-size: 0.65rem;
+    margin-top: 0.5rem;
+    opacity: 0.7;
+    letter-spacing: 0.04em;
+}
+
+.pg-pod__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    flex: 1;
+}
+
+.pg-pod__row {
+    display: grid;
+    grid-template-columns: 1.5rem 1fr auto auto;
+    gap: 0.75rem;
+    padding: 0.55rem 1.1rem;
+    align-items: center;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.85rem;
+    color: #1e293b;
+}
+
+.pg-pod__row:last-child {
+    border-bottom: none;
+}
+
+.pg-pod__rank {
+    color: #94a3b8;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+}
+
+.pg-pod__rep {
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.pg-pod__rep-count {
+    font-variant-numeric: tabular-nums;
     font-weight: 700;
 }
 
-.pg-status {
-    border-bottom: 1px solid #e5e7eb;
-    padding-bottom: 0.75rem;
+.pg-pod__rep-pct {
+    font-variant-numeric: tabular-nums;
+    color: #475569;
+    font-weight: 600;
+    min-width: 3rem;
+    text-align: right;
+}
+
+.pg-pod__empty {
+    padding: 1rem 1.1rem;
+    color: #94a3b8;
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
+.pg-empty {
+    padding: 1rem;
+    color: #64748b;
+    font-style: italic;
 }

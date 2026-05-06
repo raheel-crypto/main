@@ -38,6 +38,7 @@ public with sharing class PGInsightsController {
     // ---- Per-transaction caches ------------------------------------------------------
 
     private static Set<Id>            aeUserIdsCache;
+    private static Map<String, Set<Id>> aeUserIdsByPodCache;
     private static Map<Id, DateTime>  firstStage2PlusCache;
     private static Map<Id, Opportunity> oppDetailsCache;
     private static Integer            fiscalStartMonthCache;
@@ -82,6 +83,15 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Integer nbCount;
         @AuraEnabled public Integer expCount;
         @AuraEnabled public Decimal goal;
+        @AuraEnabled public Decimal attainmentPct;
+    }
+
+    public class PodPerformers {
+        @AuraEnabled public String pod;
+        @AuraEnabled public List<PerformerRow> rows;
+        @AuraEnabled public Integer totalNb;
+        @AuraEnabled public Integer totalExp;
+        @AuraEnabled public Decimal totalGoalMTD;
         @AuraEnabled public Decimal attainmentPct;
     }
 
@@ -290,6 +300,95 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
+    public static List<PodPerformers> getTopPerformersByPod(Integer topN) {
+        Integer n = (topN == null || topN <= 0) ? 5 : topN;
+        Date qStart = startOfCurrentFiscalQuarter();
+        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
+
+        Set<Id> qIds = new Set<Id>();
+        for (Id oid : firstDates.keySet()) {
+            if (firstDates.get(oid).date() >= qStart) qIds.add(oid);
+        }
+        Map<Id, Opportunity> opps = getOppDetails(qIds);
+        Map<Id, Decimal[]> quotas = getQuotasForCurrentQuarter();
+        Decimal proration = mtdProration();
+
+        Map<String, Set<Id>> aesByPod = getAeUserIdsByPod();
+        Map<Id, String> podByAe = new Map<Id, String>();
+        for (String pod : aesByPod.keySet()) {
+            for (Id aeId : aesByPod.get(pod)) podByAe.put(aeId, pod);
+        }
+
+        Map<String, Map<Id, PerformerRow>> rowsByPod = new Map<String, Map<Id, PerformerRow>>();
+        for (String pod : aesByPod.keySet()) rowsByPod.put(pod, new Map<Id, PerformerRow>());
+
+        for (Id oid : qIds) {
+            Opportunity o = opps.get(oid);
+            if (o == null || (o.Type != NB_TYPE && o.Type != EXP_TYPE)) continue;
+            String pod = podByAe.get(o.OwnerId);
+            if (pod == null) continue;
+            Map<Id, PerformerRow> bucket = rowsByPod.get(pod);
+            PerformerRow row = bucket.get(o.OwnerId);
+            if (row == null) {
+                row = new PerformerRow();
+                row.ownerId = o.OwnerId;
+                row.ownerName = o.Owner != null ? o.Owner.Name : null;
+                row.nbCount = 0;
+                row.expCount = 0;
+                Decimal[] g = quotas.get(o.OwnerId);
+                Decimal quarterly = g == null ? 0 : g[0] + g[1];
+                row.goal = quarterly * proration;
+                bucket.put(o.OwnerId, row);
+            }
+            if (o.Type == NB_TYPE) row.nbCount  += 1;
+            else                   row.expCount += 1;
+        }
+
+        List<PodPerformers> result = new List<PodPerformers>();
+        List<String> sortedPods = new List<String>(aesByPod.keySet());
+        sortedPods.sort();
+        for (String pod : sortedPods) {
+            PodPerformers pp = new PodPerformers();
+            pp.pod = pod;
+
+            // Pod totals: sum across the pod's quotas (not just top N rows)
+            // and across all stage-2+ counts seen for the pod's AEs.
+            Integer totalNb = 0, totalExp = 0;
+            for (PerformerRow row : rowsByPod.get(pod).values()) {
+                totalNb  += row.nbCount;
+                totalExp += row.expCount;
+            }
+            Decimal totalGoalMTD = 0;
+            for (Id aeId : aesByPod.get(pod)) {
+                Decimal[] g = quotas.get(aeId);
+                if (g != null) totalGoalMTD += (g[0] + g[1]) * proration;
+            }
+            pp.totalNb = totalNb;
+            pp.totalExp = totalExp;
+            pp.totalGoalMTD = totalGoalMTD;
+            pp.attainmentPct = totalGoalMTD == 0 ? 0
+                : ((totalNb + totalExp) / totalGoalMTD) * 100;
+
+            // Per-rep attainment + sort + trim to top N.
+            List<PerformerRow> sorted = new List<PerformerRow>();
+            for (PerformerRow row : rowsByPod.get(pod).values()) {
+                row.attainmentPct = row.goal == 0 ? 0
+                    : ((row.nbCount + row.expCount) / row.goal) * 100;
+                sorted.add(row);
+            }
+            sorted.sort(new PerformerComparator());
+            if (sorted.size() > n) {
+                List<PerformerRow> trimmed = new List<PerformerRow>();
+                for (Integer i = 0; i < n; i++) trimmed.add(sorted[i]);
+                sorted = trimmed;
+            }
+            pp.rows = sorted;
+            result.add(pp);
+        }
+        return result;
+    }
+
+    @AuraEnabled(cacheable=true)
     public static List<OutreachRow> getIndividualOutreach(String windowLabel) {
         Set<Id> aes = getAeUserIds();
         List<OutreachRow> result = new List<OutreachRow>();
@@ -398,14 +497,26 @@ public with sharing class PGInsightsController {
 
     // ---- Private helpers -------------------------------------------------------------
 
+    private static Map<String, Set<Id>> getAeUserIdsByPod() {
+        if (aeUserIdsByPodCache != null) return aeUserIdsByPodCache;
+        Map<String, Set<Id>> out = new Map<String, Set<Id>>();
+        for (User u : [
+            SELECT Id, Title, Pod__c FROM User
+            WHERE IsActive = TRUE AND Pod__c IN :AE_PODS
+        ]) {
+            if (u.Title != null && u.Title.containsIgnoreCase('BDR')) continue;
+            if (!out.containsKey(u.Pod__c)) out.put(u.Pod__c, new Set<Id>());
+            out.get(u.Pod__c).add(u.Id);
+        }
+        aeUserIdsByPodCache = out;
+        return out;
+    }
+
     private static Set<Id> getAeUserIds() {
         if (aeUserIdsCache != null) return aeUserIdsCache;
         Set<Id> ids = new Set<Id>();
-        for (User u : [
-            SELECT Id, Title FROM User
-            WHERE IsActive = TRUE AND Pod__c IN :AE_PODS
-        ]) {
-            if (u.Title == null || !u.Title.containsIgnoreCase('BDR')) ids.add(u.Id);
+        for (Set<Id> podIds : getAeUserIdsByPod().values()) {
+            ids.addAll(podIds);
         }
         aeUserIdsCache = ids;
         return ids;
