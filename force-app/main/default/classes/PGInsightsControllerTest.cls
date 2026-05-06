@@ -328,7 +328,10 @@ private class PGInsightsControllerTest {
             OwnerId = ownerId,
             StageName = stageName,
             CloseDate = Date.today().addDays(60),
-            Type = oppType
+            Type = oppType,
+            // Controller filters Booked_By_Role__c LIKE 'AE%' to scope to
+            // AE-sourced pipeline.
+            Booked_By_Role__c = 'AE - ENT'
         );
     }
 

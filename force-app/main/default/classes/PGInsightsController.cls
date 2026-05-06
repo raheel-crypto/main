@@ -436,6 +436,7 @@ public with sharing class PGInsightsController {
             FROM Opportunity
             WHERE OwnerId IN :aes
               AND Type IN (:NB_TYPE, :EXP_TYPE)
+              AND Booked_By_Role__c LIKE 'AE%'
         ]);
         if (opps.isEmpty()) return result;
 
@@ -542,6 +543,7 @@ public with sharing class PGInsightsController {
             SELECT Id FROM Opportunity
             WHERE OwnerId IN :aes
               AND Type IN (:NB_TYPE, :EXP_TYPE)
+              AND Booked_By_Role__c LIKE 'AE%'
         ]) {
             aeOppIds.add(o.Id);
         }
