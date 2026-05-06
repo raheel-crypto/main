@@ -158,14 +158,14 @@ private class PGInsightsControllerTest {
     }
 
     private static Task buildTask(Id ownerId, String subtype, String meetingType) {
+        // CompletedDateTime is read-only; Salesforce auto-sets it when Status='Completed'.
         return new Task(
             OwnerId = ownerId,
             Subject = 'PG Test ' + subtype,
             Status = 'Completed',
             TaskSubtype = subtype,
             Meeting_Type__c = meetingType,
-            ActivityDate = Date.today(),
-            CompletedDateTime = System.now()
+            ActivityDate = Date.today()
         );
     }
 }

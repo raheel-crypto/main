@@ -186,9 +186,11 @@ public with sharing class PGInsightsController {
         rows.addAll(byKey.values());
         // Trim to requested window (most recent N).
         if (rows.size() > n) {
-            rows = new List<QuarterRow>(
-                rows.subList(rows.size() - n, rows.size())
-            );
+            List<QuarterRow> trimmed = new List<QuarterRow>();
+            for (Integer i = rows.size() - n; i < rows.size(); i++) {
+                trimmed.add(rows[i]);
+            }
+            rows = trimmed;
         }
         return rows;
     }
@@ -270,7 +272,11 @@ public with sharing class PGInsightsController {
         // Sort desc by attainment, fall back to total count when goals are unset.
         result.sort(new PerformerComparator());
         if (result.size() > n) {
-            result = new List<PerformerRow>(result.subList(0, n));
+            List<PerformerRow> trimmed = new List<PerformerRow>();
+            for (Integer i = 0; i < n; i++) {
+                trimmed.add(result[i]);
+            }
+            result = trimmed;
         }
         return result;
     }
