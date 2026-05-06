@@ -42,6 +42,14 @@ public with sharing class PGInsightsController {
     private static Map<Id, Opportunity> oppDetailsCache;
     private static Integer            fiscalStartMonthCache;
 
+    // Test seam: this org's test context does not auto-create OpportunityHistory
+    // on opp insert (verified via diagnostic test — Hist=0 even after a clean
+    // insert of stage-2 opps), and OpportunityHistory is a read-only object
+    // so direct DML isn't allowed. Tests assign this map to bypass the
+    // history query while leaving the production code path untouched.
+    @TestVisible
+    private static Map<Id, DateTime>  mockFirstStage2PlusByOpp;
+
     // ---- Result wrappers -------------------------------------------------------------
 
     public class PacingKpis {
@@ -289,6 +297,7 @@ public with sharing class PGInsightsController {
     }
 
     private static Map<Id, DateTime> getFirstStage2PlusByOpp() {
+        if (mockFirstStage2PlusByOpp != null) return mockFirstStage2PlusByOpp;
         if (firstStage2PlusCache != null) return firstStage2PlusCache;
         Set<Id> aes = getAeUserIds();
         Map<Id, DateTime> out = new Map<Id, DateTime>();
