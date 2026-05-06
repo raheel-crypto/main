@@ -498,21 +498,20 @@ private class AccountARRProcessorTest {
     }
 
     /**
-     * @description Test getARRValue fallback to ARR__c field when Annual_Recurring_Revenue__c is null
+     * @description Test getARRValue when both ARR fields are null - returns 0
      */
     @isTest
-    static void testARRCalculator_ARRFieldFallback() {
-        Account acc = new Account(Name = 'ARR Field Fallback Test', Account_Status__c = 'Customer');
+    static void testARRCalculator_BothARRFieldsNull() {
+        Account acc = new Account(Name = 'Zero ARR Test', Account_Status__c = 'Customer');
         insert acc;
 
         Opportunity opp = new Opportunity(
-            Name = 'ARR Field Opp',
+            Name = 'Zero ARR Opp',
             AccountId = acc.Id,
             StageName = 'Closed Won',
             CloseDate = Date.today(),
             Type = 'New Business',
-            Amount = 15000,
-            ARR__c = 15000,
+            Amount = 0,
             Contract_Start_Date__c = Date.today(),
             Contract_End_Date__c = Date.today().addDays(365)
         );
@@ -527,7 +526,7 @@ private class AccountARRProcessorTest {
 
         System.assertEquals(true, results[0].success, 'Processing should succeed: ' + results[0].errorMessage);
         Account updatedAcc = [SELECT ARR__c FROM Account WHERE Id = :acc.Id];
-        System.assertEquals(15000, updatedAcc.ARR__c, 'ARR should be read from ARR__c field');
+        System.assertEquals(0, updatedAcc.ARR__c, 'ARR should be 0 when both ARR fields are null');
     }
 
     /**
