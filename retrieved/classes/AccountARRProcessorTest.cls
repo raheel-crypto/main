@@ -389,12 +389,301 @@ private class AccountARRProcessorTest {
     @isTest
     static void testOpportunityDataAccess() {
         Account acc = [SELECT Id FROM Account WHERE Name = 'Test Customer Account 1' LIMIT 1];
-        
+
         Test.startTest();
         Map<Id, List<Opportunity>> oppsByAccount = OpportunityDataAccess.getClosedWonByAccount(new Set<Id>{ acc.Id });
         Test.stopTest();
-        
+
         System.assert(oppsByAccount.containsKey(acc.Id), 'Should return Opportunities for Account');
         System.assertEquals(1, oppsByAccount.get(acc.Id).size(), 'Should return 1 Opportunity');
+    }
+
+    /**
+     * @description Test Downsell opportunity type - ARR stays at prior value, renewal date updates
+     */
+    @isTest
+    static void testARRCalculator_Downsell() {
+        Account acc = new Account(Name = 'Downsell Test Account', Account_Status__c = 'Customer');
+        insert acc;
+
+        List<Opportunity> opps = new List<Opportunity>{
+            new Opportunity(
+                Name = 'New Business Before Downsell',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today().addDays(-60),
+                Type = 'New Business',
+                Amount = 50000,
+                Annual_Recurring_Revenue__c = 50000,
+                Contract_Start_Date__c = Date.today().addDays(-60),
+                Contract_End_Date__c = Date.today().addDays(305)
+            ),
+            new Opportunity(
+                Name = 'Downsell Opp',
+                AccountId = acc.Id,
+                StageName = 'Closed Won',
+                CloseDate = Date.today().addDays(-30),
+                Type = 'Downsell',
+                Amount = 10000,
+                Annual_Recurring_Revenue__c = 10000,
+                Contract_Start_Date__c = Date.today().addDays(-30),
+                Contract_End_Date__c = Date.today().addDays(340)
+            )
+        };
+        insert opps;
+
+        AccountARRProcessor.Request req = new AccountARRProcessor.Request();
+        req.accountIds = new List<Id>{ acc.Id };
+
+        Test.startTest();
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processAccountBatch(new List<AccountARRProcessor.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals(true, results[0].success, 'Processing should succeed: ' + results[0].errorMessage);
+        Account updatedAcc = [SELECT ARR__c, Renewal_Date__c FROM Account WHERE Id = :acc.Id];
+        System.assertEquals(50000, updatedAcc.ARR__c, 'ARR should remain at New Business value after Downsell');
+        System.assertNotEquals(null, updatedAcc.Renewal_Date__c, 'Renewal date should be set from Downsell');
+    }
+
+    /**
+     * @description Test opportunity already linked to a Contract - triggers ContractAggregate/update path
+     */
+    @isTest
+    static void testARRCalculator_ExistingContract() {
+        Account acc = new Account(Name = 'Existing Contract Test', Account_Status__c = 'Customer');
+        insert acc;
+
+        Contract existingContract = new Contract(
+            AccountId = acc.Id,
+            Status = 'Draft',
+            StartDate = Date.today().addDays(-60),
+            ContractTerm = 12,
+            ARR__c = 30000
+        );
+        insert existingContract;
+        existingContract.Status = 'Activated';
+        update existingContract;
+
+        Opportunity opp = new Opportunity(
+            Name = 'Existing Contract Opp',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today().addDays(-60),
+            Type = 'New Business',
+            Amount = 30000,
+            Annual_Recurring_Revenue__c = 30000,
+            ContractId = existingContract.Id,
+            Contract_Start_Date__c = Date.today().addDays(-60),
+            Contract_End_Date__c = Date.today().addDays(305),
+            License_Fees__c = 20000,
+            Platform_Connection_Fee__c = 5000,
+            Professional_Service_Fees__c = 5000
+        );
+        insert opp;
+
+        AccountARRProcessor.Request req = new AccountARRProcessor.Request();
+        req.accountIds = new List<Id>{ acc.Id };
+
+        Test.startTest();
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processAccountBatch(new List<AccountARRProcessor.Request>{ req });
+        Test.stopTest();
+
+        AccountARRProcessor.Result result = results[0];
+        System.assertEquals(true, result.success, 'Processing should succeed: ' + result.errorMessage);
+        System.assertEquals(0, result.contractsCreated, 'Should not create new Contract');
+        System.assertEquals(1, result.contractsUpdated, 'Should update existing Contract');
+
+        Contract updatedContract = [SELECT ARR__c FROM Contract WHERE Id = :existingContract.Id];
+        System.assertEquals(30000, updatedContract.ARR__c, 'Contract ARR should be updated');
+    }
+
+    /**
+     * @description Test getARRValue fallback to ARR__c field when Annual_Recurring_Revenue__c is null
+     */
+    @isTest
+    static void testARRCalculator_ARRFieldFallback() {
+        Account acc = new Account(Name = 'ARR Field Fallback Test', Account_Status__c = 'Customer');
+        insert acc;
+
+        Opportunity opp = new Opportunity(
+            Name = 'ARR Field Opp',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Type = 'New Business',
+            Amount = 15000,
+            ARR__c = 15000,
+            Contract_Start_Date__c = Date.today(),
+            Contract_End_Date__c = Date.today().addDays(365)
+        );
+        insert opp;
+
+        AccountARRProcessor.Request req = new AccountARRProcessor.Request();
+        req.accountIds = new List<Id>{ acc.Id };
+
+        Test.startTest();
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processAccountBatch(new List<AccountARRProcessor.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals(true, results[0].success, 'Processing should succeed: ' + results[0].errorMessage);
+        Account updatedAcc = [SELECT ARR__c FROM Account WHERE Id = :acc.Id];
+        System.assertEquals(15000, updatedAcc.ARR__c, 'ARR should be read from ARR__c field');
+    }
+
+    /**
+     * @description Test buildNewContract with null Contract_Start_Date__c, Contract_End_Date__c, and Contract_Length_Mos__c
+     */
+    @isTest
+    static void testARRCalculator_NullContractDates() {
+        Account acc = new Account(Name = 'Null Dates Test', Account_Status__c = 'Customer');
+        insert acc;
+
+        Opportunity opp = new Opportunity(
+            Name = 'Null Dates Opp',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Type = 'New Business',
+            Amount = 20000,
+            Annual_Recurring_Revenue__c = 20000
+        );
+        insert opp;
+
+        AccountARRProcessor.Request req = new AccountARRProcessor.Request();
+        req.accountIds = new List<Id>{ acc.Id };
+
+        Test.startTest();
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processAccountBatch(new List<AccountARRProcessor.Request>{ req });
+        Test.stopTest();
+
+        AccountARRProcessor.Result result = results[0];
+        System.assertEquals(true, result.success, 'Should succeed with null dates');
+        System.assertEquals(1, result.contractsCreated, 'Should create Contract');
+
+        List<Contract> contracts = [SELECT StartDate, ContractTerm FROM Contract WHERE AccountId = :acc.Id];
+        System.assertEquals(1, contracts.size(), 'Should create 1 Contract');
+        System.assertEquals(Date.today(), contracts[0].StartDate, 'Start date should default to CloseDate');
+        System.assertEquals(12, contracts[0].ContractTerm, 'Contract term should default to 12');
+    }
+
+    /**
+     * @description Test OpportunityDataAccess.getOpportunitiesByContract
+     */
+    @isTest
+    static void testOpportunityDataAccess_GetByContract() {
+        Account acc = new Account(Name = 'Contract Query Test', Account_Status__c = 'Customer');
+        insert acc;
+
+        Contract con = new Contract(
+            AccountId = acc.Id,
+            Status = 'Draft',
+            StartDate = Date.today(),
+            ContractTerm = 12
+        );
+        insert con;
+        con.Status = 'Activated';
+        update con;
+
+        Opportunity opp = new Opportunity(
+            Name = 'Contract Query Opp',
+            AccountId = acc.Id,
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Type = 'New Business',
+            Amount = 10000,
+            Annual_Recurring_Revenue__c = 10000,
+            ContractId = con.Id,
+            Contract_Start_Date__c = Date.today(),
+            Contract_End_Date__c = Date.today().addDays(365)
+        );
+        insert opp;
+
+        Test.startTest();
+        Map<Id, List<Opportunity>> result = OpportunityDataAccess.getOpportunitiesByContract(new Set<Id>{ con.Id });
+        Test.stopTest();
+
+        System.assert(result.containsKey(con.Id), 'Should return Opportunities for Contract');
+        System.assertEquals(1, result.get(con.Id).size(), 'Should return 1 Opportunity');
+    }
+
+    /**
+     * @description Test OpportunityDataAccess null and empty inputs
+     */
+    @isTest
+    static void testOpportunityDataAccess_EmptyInputs() {
+        Test.startTest();
+        System.assertEquals(0, OpportunityDataAccess.getClosedWonByAccount(null).size(), 'Should return empty map for null');
+        System.assertEquals(0, OpportunityDataAccess.getClosedWonByAccount(new Set<Id>()).size(), 'Should return empty map for empty set');
+        System.assertEquals(0, OpportunityDataAccess.getOpportunitiesByContract(null).size(), 'Should return empty map for null');
+        System.assertEquals(0, OpportunityDataAccess.getOpportunitiesByContract(new Set<Id>()).size(), 'Should return empty map for empty set');
+        Test.stopTest();
+    }
+
+    /**
+     * @description Test ContractService null and empty inputs for all methods
+     */
+    @isTest
+    static void testContractService_NullEmpty() {
+        Test.startTest();
+        System.assertEquals(0, ContractService.createContracts(null).size(), 'createContracts null should return empty');
+        System.assertEquals(0, ContractService.createContracts(new List<Contract>()).size(), 'createContracts empty should return empty');
+        System.assertEquals(0, ContractService.updateContracts(null).size(), 'updateContracts null should return empty');
+        System.assertEquals(0, ContractService.updateContracts(new List<Contract>()).size(), 'updateContracts empty should return empty');
+        System.assertEquals(0, ContractService.activateContracts(null).size(), 'activateContracts null should return empty');
+        System.assertEquals(0, ContractService.activateContracts(new Set<Id>()).size(), 'activateContracts empty should return empty');
+        System.assertEquals(0, ContractService.linkContractsToOpportunities(null).size(), 'linkContractsToOpportunities null should return empty');
+        System.assertEquals(0, ContractService.linkContractsToOpportunities(new Map<Id, Id>()).size(), 'linkContractsToOpportunities empty should return empty');
+        Test.stopTest();
+    }
+
+    /**
+     * @description Test processSingleAccountFromOpportunity with null ID (no exception)
+     */
+    @isTest
+    static void testProcessSingleAccount_NullId() {
+        Test.startTest();
+        AccountARRProcessor.processSingleAccountFromOpportunity(null);
+        Test.stopTest();
+        System.assert(true, 'No exception should be thrown for null opportunityId');
+    }
+
+    /**
+     * @description Test Customer account with no Opportunities - ARR not modified
+     */
+    @isTest
+    static void testCustomerAccount_NoOpportunities() {
+        Account acc = new Account(Name = 'Customer No Opps', Account_Status__c = 'Customer', ARR__c = 0);
+        insert acc;
+
+        AccountARRProcessor.Request req = new AccountARRProcessor.Request();
+        req.accountIds = new List<Id>{ acc.Id };
+
+        Test.startTest();
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processAccountBatch(new List<AccountARRProcessor.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals(true, results[0].success, 'Processing should succeed');
+        System.assertEquals(0, results[0].accountsProcessed, 'Customer with no opps should not be counted');
+    }
+
+    /**
+     * @description Test Former Customer with no Opportunities - ARR set to 0
+     */
+    @isTest
+    static void testFormerCustomerAccount_NoOpportunities() {
+        Account acc = new Account(Name = 'Former Customer No Opps', Account_Status__c = 'Former Customer', ARR__c = 25000);
+        insert acc;
+
+        AccountARRProcessor.Request req = new AccountARRProcessor.Request();
+        req.accountIds = new List<Id>{ acc.Id };
+
+        Test.startTest();
+        List<AccountARRProcessor.Result> results = AccountARRProcessor.processAccountBatch(new List<AccountARRProcessor.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals(true, results[0].success, 'Processing should succeed');
+        Account updatedAcc = [SELECT ARR__c, Renewal_Date__c FROM Account WHERE Id = :acc.Id];
+        System.assertEquals(0, updatedAcc.ARR__c, 'Former Customer ARR should be set to 0');
+        System.assertEquals(null, updatedAcc.Renewal_Date__c, 'Former Customer Renewal Date should be null');
     }
 }
