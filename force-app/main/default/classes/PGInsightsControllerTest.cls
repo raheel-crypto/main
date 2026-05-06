@@ -34,25 +34,18 @@ private class PGInsightsControllerTest {
         for (User u : users) uByAlias.put(u.Alias, u.Id);
 
         System.runAs(loader) {
-            // Insert opps in Stage 1, then advance to Stage 2 so OpportunityHistory
-            // captures the transition with today's CreatedDate.
+            // Insert opps directly at the target stage. OpportunityHistory is
+            // auto-created on insert with that StageName, so we don't need a
+            // separate stage-advance update (which was returning 0 rows in
+            // sandbox tests, possibly due to a packaged trigger interfering).
             List<Opportunity> opps = new List<Opportunity>();
-            for (Integer i = 0; i < 4; i++) opps.add(buildOpp(uByAlias.get('ae1'), 'New Business', i));
-            for (Integer i = 0; i < 2; i++) opps.add(buildOpp(uByAlias.get('ae1'), 'Upsell',       i));
-            for (Integer i = 0; i < 3; i++) opps.add(buildOpp(uByAlias.get('ae2'), 'New Business', i));
-            for (Integer i = 0; i < 1; i++) opps.add(buildOpp(uByAlias.get('ae3'), 'New Business', i));
+            for (Integer i = 0; i < 4; i++) opps.add(buildOpp(uByAlias.get('ae1'), 'New Business', '2 - Discovery'));
+            for (Integer i = 0; i < 2; i++) opps.add(buildOpp(uByAlias.get('ae1'), 'Upsell',       '2 - Discovery'));
+            for (Integer i = 0; i < 3; i++) opps.add(buildOpp(uByAlias.get('ae2'), 'New Business', '2 - Discovery'));
+            for (Integer i = 0; i < 1; i++) opps.add(buildOpp(uByAlias.get('ae3'), 'New Business', '2 - Discovery'));
             // One opp stays in Stage 1 forever — should NOT count anywhere.
-            Opportunity stillStage1 = buildOpp(uByAlias.get('ae1'), 'New Business', 99);
-            opps.add(stillStage1);
+            opps.add(buildOpp(uByAlias.get('ae1'), 'New Business', '1 - Demo'));
             insert opps;
-
-            List<Opportunity> toAdvance = new List<Opportunity>();
-            for (Opportunity o : opps) {
-                if (o == stillStage1) continue;
-                o.StageName = '2 - Discovery';
-                toAdvance.add(o);
-            }
-            update toAdvance;
 
             // Tasks: outbound activity for the AEs and one BDR (BDR excluded).
             List<Task> tasks = new List<Task>();
@@ -71,6 +64,50 @@ private class PGInsightsControllerTest {
             };
             insert events;
         }
+    }
+
+    @IsTest
+    static void diag_seedDataMatchesExpectations() {
+        // Surfaces the actual seeded state with rich messages so any failure
+        // identifies whether AEs, opps, or OpportunityHistory are the problem.
+        Set<String> pods = new Set<String>{'ENT 1','ENT 2','MM/HV','NV'};
+        List<User> rawAes = [SELECT Id, Title FROM User WHERE Pod__c IN :pods AND IsActive = TRUE];
+        Set<Id> aeIds = new Set<Id>();
+        for (User u : rawAes) {
+            if (u.Title == null || !u.Title.containsIgnoreCase('BDR')) aeIds.add(u.Id);
+        }
+
+        List<Opportunity> aeOpps = [
+            SELECT Id, Type, StageName, OwnerId FROM Opportunity WHERE OwnerId IN :aeIds
+        ];
+        Set<Id> aeOppIds = new Map<Id, Opportunity>(aeOpps).keySet();
+
+        Integer typeNB = 0, typeExp = 0;
+        for (Opportunity o : aeOpps) {
+            if (o.Type == 'New Business') typeNB++;
+            else if (o.Type == 'Upsell') typeExp++;
+        }
+
+        Integer histTotal = aeOppIds.isEmpty() ? 0 :
+            [SELECT COUNT() FROM OpportunityHistory WHERE OpportunityId IN :aeOppIds];
+        Integer histStage2Plus = aeOppIds.isEmpty() ? 0 :
+            [SELECT COUNT() FROM OpportunityHistory
+             WHERE OpportunityId IN :aeOppIds
+               AND StageName IN ('2 - Discovery','3 - POV','4 - Proposal','5 - Contracting','Closed Won')];
+
+        String diag = '[AEs=' + aeIds.size()
+            + ' AEOpps=' + aeOpps.size()
+            + ' NB=' + typeNB
+            + ' Exp=' + typeExp
+            + ' Hist=' + histTotal
+            + ' HistStage2+=' + histStage2Plus + ']';
+
+        System.assertEquals(3, aeIds.size(), 'Expected 3 AEs ' + diag);
+        System.assertEquals(11, aeOpps.size(), 'Expected 11 AE-owned opps (10 stage 2+, 1 stage 1) ' + diag);
+        System.assertEquals(8, typeNB, 'Expected 8 NB opps ' + diag);
+        System.assertEquals(2, typeExp, 'Expected 2 Upsell opps ' + diag);
+        System.assert(histStage2Plus >= 10,
+            'Expected at least 10 stage-2+ history rows ' + diag);
     }
 
     @IsTest
@@ -188,11 +225,11 @@ private class PGInsightsControllerTest {
         );
     }
 
-    private static Opportunity buildOpp(Id ownerId, String oppType, Integer offsetDays) {
+    private static Opportunity buildOpp(Id ownerId, String oppType, String stageName) {
         return new Opportunity(
-            Name = 'PG Test ' + oppType + ' ' + offsetDays,
+            Name = 'PG Test ' + oppType + ' ' + stageName,
             OwnerId = ownerId,
-            StageName = '1 - Demo',
+            StageName = stageName,
             CloseDate = Date.today().addDays(60),
             Type = oppType
         );
