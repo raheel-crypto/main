@@ -120,6 +120,33 @@ public with sharing class PipeGenController {
         @AuraEnabled public Integer                qtdOppsToDiscovery;
     }
 
+    public class ManagerSummary {
+        @AuraEnabled public String           managerId;
+        @AuraEnabled public String           managerName;
+        @AuraEnabled public List<RepSummary> reps;
+        @AuraEnabled public Integer          totalReps;
+        @AuraEnabled public Integer          repsAtRisk;
+        @AuraEnabled public Integer          thisWeekTotal;
+        @AuraEnabled public Integer          thisWeekCompleted;
+        @AuraEnabled public Integer          lwTotal;
+        @AuraEnabled public Integer          lwCompleted;
+        @AuraEnabled public Decimal          pipelineActual;
+        @AuraEnabled public Decimal          pipelineTarget;
+        @AuraEnabled public Integer          lwOppsCreated;
+        @AuraEnabled public Integer          qtdOppsCreated;
+        @AuraEnabled public Integer          lwOppsToDiscovery;
+        @AuraEnabled public Integer          qtdOppsToDiscovery;
+        @AuraEnabled public Integer          inFlightTotal;
+        @AuraEnabled public Boolean          hasRisk;
+    }
+
+    public class VPDashboardData {
+        @AuraEnabled public Boolean              isVP;
+        @AuraEnabled public List<ManagerSummary> managers;
+        @AuraEnabled public List<RepSummary>     reps;
+        @AuraEnabled public TeamSummary          teamSummary;
+    }
+
     // ─── Config ─────────────────────────────────────────────────────────────────
 
     private static final String STAGE_DEMO        = '1 - Demo';
@@ -822,42 +849,169 @@ public with sharing class PipeGenController {
 
     // ─── Manager Dashboard ───────────────────────────────────────────────────────
 
+    private class DateParams {
+        Date    weekStart, lwStart, lwEnd, qStart, qEnd;
+        String  quarter;
+        Integer weeksRemaining;
+    }
+
+    private static DateParams getDateParams() {
+        Date today          = Date.today();
+        DateParams dp       = new DateParams();
+        dp.weekStart        = getWeekStart(today);
+        dp.lwStart          = dp.weekStart.addDays(-7);
+        dp.lwEnd            = dp.weekStart.addDays(-1);
+        Integer qStartMonth = ((today.month() - 1) / 3) * 3 + 1;
+        dp.qStart           = Date.newInstance(today.year(), qStartMonth, 1);
+        dp.qEnd             = dp.qStart.addMonths(3).addDays(-1);
+        dp.quarter          = 'Q' + ((qStartMonth / 3) + 1) + ' ' + today.year();
+        dp.weeksRemaining   = Math.max(0, today.daysBetween(dp.qEnd) / 7);
+        return dp;
+    }
+
     @AuraEnabled(cacheable=false)
     public static ManagerDashboardData getManagerTeamData() {
-        Id   mgr       = UserInfo.getUserId();
-        Date today     = Date.today();
-        Date weekStart = getWeekStart(today);
-        Date lwStart   = weekStart.addDays(-7);
-        Date lwEnd     = weekStart.addDays(-1);
-
-        Integer qStartMonth    = ((today.month() - 1) / 3) * 3 + 1;
-        Date    qStart         = Date.newInstance(today.year(), qStartMonth, 1);
-        Date    qEnd           = qStart.addMonths(3).addDays(-1);
-        String  quarter        = 'Q' + ((qStartMonth / 3) + 1) + ' ' + today.year();
-        Integer weeksRemaining = Math.max(0, today.daysBetween(qEnd) / 7);
-
         List<User> reps = [
             SELECT Id, Name, Pipe_Gen_Annual_Target__c
             FROM   User
-            WHERE  ManagerId = :mgr
-              AND  IsActive   = true
+            WHERE  ManagerId = :UserInfo.getUserId()
+              AND  IsActive  = true
             ORDER BY Name
         ];
-        ManagerDashboardData result = new ManagerDashboardData();
+        DateParams dp          = getDateParams();
+        ManagerDashboardData r = new ManagerDashboardData();
+        r.reps        = buildRepSummaries(reps, dp);
+        r.teamSummary = buildTeamSummary(r.reps);
+        return r;
+    }
+
+    @AuraEnabled(cacheable=false)
+    public static VPDashboardData getVPDashboardData() {
+        Id         currentUserId = UserInfo.getUserId();
+        DateParams dp            = getDateParams();
+
+        List<User> directReports = [
+            SELECT Id, Name, Pipe_Gen_Annual_Target__c
+            FROM   User
+            WHERE  ManagerId = :currentUserId AND IsActive = true
+            ORDER BY Name
+        ];
+
+        VPDashboardData result = new VPDashboardData();
+        result.managers    = new List<ManagerSummary>();
         result.reps        = new List<RepSummary>();
         result.teamSummary = new TeamSummary();
-        result.teamSummary.totalReps         = reps.size();
-        result.teamSummary.totalCommits      = 0;
-        result.teamSummary.completedCommits  = 0;
-        result.teamSummary.atRiskCommitCount = 0;
-        result.teamSummary.repsWithNoCommits = 0;
-        if (reps.isEmpty()) return result;
+        if (directReports.isEmpty()) { result.isVP = false; return result; }
 
+        Set<Id>    directReportIds = new Map<Id, User>(directReports).keySet();
+        List<User> subReps         = [
+            SELECT Id, Name, ManagerId, Pipe_Gen_Annual_Target__c
+            FROM   User
+            WHERE  ManagerId IN :directReportIds AND IsActive = true
+            ORDER BY Name
+        ];
+
+        if (!subReps.isEmpty()) {
+            // ── VP mode ──────────────────────────────────────────────────────
+            result.isVP = true;
+            List<RepSummary>     allRs  = buildRepSummaries(subReps, dp);
+            Map<Id, RepSummary>  rsById = new Map<Id, RepSummary>();
+            for (RepSummary rs : allRs) rsById.put(rs.repId, rs);
+
+            Map<Id, List<RepSummary>> repsByMgr = new Map<Id, List<RepSummary>>();
+            for (User u : subReps) {
+                if (!repsByMgr.containsKey(u.ManagerId)) repsByMgr.put(u.ManagerId, new List<RepSummary>());
+                RepSummary rs = rsById.get(u.Id);
+                if (rs != null) repsByMgr.get(u.ManagerId).add(rs);
+            }
+
+            for (User mgr : directReports) {
+                List<RepSummary> mgrReps = repsByMgr.containsKey(mgr.Id)
+                    ? repsByMgr.get(mgr.Id) : new List<RepSummary>();
+                ManagerSummary ms    = new ManagerSummary();
+                ms.managerId         = mgr.Id;
+                ms.managerName       = mgr.Name;
+                ms.reps              = mgrReps;
+                ms.totalReps         = mgrReps.size();
+                ms.repsAtRisk        = 0;
+                ms.thisWeekTotal     = 0; ms.thisWeekCompleted = 0;
+                ms.lwTotal           = 0; ms.lwCompleted        = 0;
+                ms.pipelineActual    = 0; ms.pipelineTarget     = 0;
+                ms.lwOppsCreated     = 0; ms.qtdOppsCreated     = 0;
+                ms.lwOppsToDiscovery = 0; ms.qtdOppsToDiscovery = 0;
+                ms.inFlightTotal     = 0;
+                for (RepSummary rs : mgrReps) {
+                    if (rs.hasRisk) ms.repsAtRisk++;
+                    ms.thisWeekTotal     += rs.thisWeekTotal;
+                    ms.thisWeekCompleted += rs.thisWeekCompleted;
+                    Integer lwDone = 0;
+                    if (rs.lastWeekCommits != null) {
+                        ms.lwTotal += rs.lastWeekCommits.size();
+                        for (Weekly_Commit__c c : rs.lastWeekCommits)
+                            if (c.Completion_Status__c == 'Completed') lwDone++;
+                    }
+                    ms.lwCompleted       += lwDone;
+                    ms.pipelineActual    += (rs.pipelineActual    != null ? rs.pipelineActual    : 0);
+                    ms.pipelineTarget    += (rs.pipelineTarget    != null ? rs.pipelineTarget    : 0);
+                    ms.lwOppsCreated     += (rs.lwOppsCreated     != null ? rs.lwOppsCreated     : 0);
+                    ms.qtdOppsCreated    += (rs.qtdOppsCreated    != null ? rs.qtdOppsCreated    : 0);
+                    ms.lwOppsToDiscovery += (rs.lwOppsToDiscovery != null ? rs.lwOppsToDiscovery : 0);
+                    ms.qtdOppsToDiscovery+= (rs.qtdOppsToDiscovery!= null ? rs.qtdOppsToDiscovery: 0);
+                    ms.inFlightTotal     += (rs.inFlightOppCount  != null ? rs.inFlightOppCount  : 0);
+                }
+                ms.hasRisk = ms.repsAtRisk > 0;
+                result.managers.add(ms);
+            }
+            result.teamSummary = buildTeamSummaryFromManagers(result.managers);
+
+        } else {
+            // ── Manager mode ─────────────────────────────────────────────────
+            result.isVP        = false;
+            result.reps        = buildRepSummaries(directReports, dp);
+            result.teamSummary = buildTeamSummary(result.reps);
+        }
+        return result;
+    }
+
+    private static TeamSummary buildTeamSummary(List<RepSummary> reps) {
+        TeamSummary ts = new TeamSummary();
+        ts.totalReps = reps.size(); ts.totalCommits = 0; ts.completedCommits = 0;
+        ts.atRiskCommitCount = 0;  ts.repsWithNoCommits = 0;
+        for (RepSummary rs : reps) {
+            ts.totalCommits     += rs.thisWeekTotal;
+            ts.completedCommits += rs.thisWeekCompleted;
+            if (rs.thisWeekTotal == 0) ts.repsWithNoCommits++;
+            for (Weekly_Commit__c c : rs.thisWeekCommits)
+                if (c.At_Risk__c) ts.atRiskCommitCount++;
+        }
+        return ts;
+    }
+
+    private static TeamSummary buildTeamSummaryFromManagers(List<ManagerSummary> managers) {
+        TeamSummary ts = new TeamSummary();
+        ts.totalReps = 0; ts.totalCommits = 0; ts.completedCommits = 0;
+        ts.atRiskCommitCount = 0; ts.repsWithNoCommits = 0;
+        for (ManagerSummary ms : managers) {
+            ts.totalReps        += ms.totalReps;
+            ts.totalCommits     += ms.thisWeekTotal;
+            ts.completedCommits += ms.thisWeekCompleted;
+            for (RepSummary rs : ms.reps) {
+                if (rs.thisWeekTotal == 0) ts.repsWithNoCommits++;
+                for (Weekly_Commit__c c : rs.thisWeekCommits)
+                    if (c.At_Risk__c) ts.atRiskCommitCount++;
+            }
+        }
+        return ts;
+    }
+
+    private static List<RepSummary> buildRepSummaries(List<User> reps, DateParams dp) {
+        List<RepSummary> result = new List<RepSummary>();
+        if (reps.isEmpty()) return result;
         Set<Id> repIds = new Map<Id, User>(reps).keySet();
 
-        // ── This week commits (one query for whole team) ─────────────────────
         Map<Id, List<Weekly_Commit__c>> twByRep = new Map<Id, List<Weekly_Commit__c>>();
-        for (Id rid : repIds) twByRep.put(rid, new List<Weekly_Commit__c>());
+        Map<Id, List<Weekly_Commit__c>> lwByRep = new Map<Id, List<Weekly_Commit__c>>();
+        for (Id rid : repIds) { twByRep.put(rid, new List<Weekly_Commit__c>()); lwByRep.put(rid, new List<Weekly_Commit__c>()); }
         for (Weekly_Commit__c c : [
             SELECT Id, Rep__c, Motion_Type__c, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
@@ -865,14 +1019,9 @@ public with sharing class PipeGenController {
                    Committed_Count__c, Actual_Count__c,
                    Completion_Status__c, Manager_Note__c, At_Risk__c, Notes__c
             FROM   Weekly_Commit__c
-            WHERE  Rep__c IN :repIds
-              AND  Week_Start_Date__c = :weekStart
+            WHERE  Rep__c IN :repIds AND Week_Start_Date__c = :dp.weekStart
             ORDER BY Motion_Type__c ASC, CreatedDate ASC
         ]) { twByRep.get(c.Rep__c).add(c); }
-
-        // ── Last week commits (scorecard + display) ──────────────────────────
-        Map<Id, List<Weekly_Commit__c>> lwByRep = new Map<Id, List<Weekly_Commit__c>>();
-        for (Id rid : repIds) lwByRep.put(rid, new List<Weekly_Commit__c>());
         for (Weekly_Commit__c c : [
             SELECT Id, Rep__c, Motion_Type__c, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
@@ -880,97 +1029,76 @@ public with sharing class PipeGenController {
                    Committed_Count__c, Actual_Count__c,
                    Completion_Status__c, Manager_Note__c, At_Risk__c, Notes__c
             FROM   Weekly_Commit__c
-            WHERE  Rep__c IN :repIds
-              AND  Week_Start_Date__c = :lwStart
+            WHERE  Rep__c IN :repIds AND Week_Start_Date__c = :dp.lwStart
             ORDER BY Motion_Type__c ASC, CreatedDate ASC
         ]) { lwByRep.get(c.Rep__c).add(c); }
 
-        // ── In-flight opp count per rep (risk signal) ────────────────────────
         Map<Id, Integer> inFlightByRep = new Map<Id, Integer>();
         for (Id rid : repIds) inFlightByRep.put(rid, 0);
         for (AggregateResult ar : [
-            SELECT OwnerId rid, COUNT(Id) cnt
-            FROM   Opportunity
-            WHERE  OwnerId IN :repIds
-              AND  StageName IN :IN_FLIGHT_STAGES
-              AND  IsClosed   = false
+            SELECT OwnerId rid, COUNT(Id) cnt FROM Opportunity
+            WHERE OwnerId IN :repIds AND StageName IN :IN_FLIGHT_STAGES AND IsClosed = false
             GROUP BY OwnerId
         ]) { inFlightByRep.put((Id)ar.get('rid'), (Integer)ar.get('cnt')); }
 
-        // ── Opp stages for last-week scorecard ───────────────────────────────
         Set<Id> allOppIds = new Set<Id>();
         for (List<Weekly_Commit__c> lst : lwByRep.values())
             for (Weekly_Commit__c c : lst)
                 if (c.Target_Opportunity__c != null) allOppIds.add(c.Target_Opportunity__c);
-
         Map<Id, String> oppStages = new Map<Id, String>();
         if (!allOppIds.isEmpty())
             for (Opportunity o : [SELECT Id, StageName FROM Opportunity WHERE Id IN :allOppIds])
                 oppStages.put(o.Id, o.StageName);
 
-        // ── Per-rep opp metrics ──────────────────────────────────────────────
         Map<Id, Integer> lwCreatedByRep  = new Map<Id, Integer>();
         Map<Id, Integer> qtdCreatedByRep = new Map<Id, Integer>();
         for (Id rid : repIds) { lwCreatedByRep.put(rid, 0); qtdCreatedByRep.put(rid, 0); }
         for (AggregateResult ar : [
-            SELECT OwnerId rid, COUNT(Id) cnt
-            FROM   Opportunity
-            WHERE  OwnerId     IN :repIds
-              AND  CreatedDate >= :lwStart
-              AND  CreatedDate <= :lwEnd
-              AND  StageName   != :STAGE_CLOSED_LOST
-            GROUP BY OwnerId
-        ]) { lwCreatedByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+            SELECT OwnerId rid, COUNT(Id) cnt FROM Opportunity
+            WHERE OwnerId IN :repIds AND CreatedDate >= :dp.lwStart AND CreatedDate <= :dp.lwEnd
+              AND StageName != :STAGE_CLOSED_LOST GROUP BY OwnerId
+        ]) { lwCreatedByRep.put((Id)ar.get('rid'), (Integer)ar.get('cnt')); }
         for (AggregateResult ar : [
-            SELECT OwnerId rid, COUNT(Id) cnt
-            FROM   Opportunity
-            WHERE  OwnerId     IN :repIds
-              AND  CreatedDate >= :qStart
-              AND  CreatedDate <= :qEnd
-              AND  StageName   != :STAGE_CLOSED_LOST
-            GROUP BY OwnerId
-        ]) { qtdCreatedByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+            SELECT OwnerId rid, COUNT(Id) cnt FROM Opportunity
+            WHERE OwnerId IN :repIds AND CreatedDate >= :dp.qStart AND CreatedDate <= :dp.qEnd
+              AND StageName != :STAGE_CLOSED_LOST GROUP BY OwnerId
+        ]) { qtdCreatedByRep.put((Id)ar.get('rid'), (Integer)ar.get('cnt')); }
 
         Map<Id, Integer> lwToDiscoByRep  = new Map<Id, Integer>();
         Map<Id, Integer> qtdToDiscoByRep = new Map<Id, Integer>();
         for (Id rid : repIds) { lwToDiscoByRep.put(rid, 0); qtdToDiscoByRep.put(rid, 0); }
         Set<Id> lwDiscoOppIds = new Set<Id>(), qtdDiscoOppIds = new Set<Id>();
-        // NewValue is not filterable in SOQL, so select it and filter in Apex
         for (OpportunityFieldHistory h : [
-            SELECT OpportunityId, NewValue, CreatedDate
-            FROM   OpportunityFieldHistory
-            WHERE  Field       = 'StageName'
-              AND  CreatedDate >= :lwStart
-              AND  CreatedDate <= :qEnd
+            SELECT OpportunityId, NewValue, CreatedDate FROM OpportunityFieldHistory
+            WHERE Field = 'StageName' AND CreatedDate >= :dp.lwStart AND CreatedDate <= :dp.qEnd
         ]) {
             if (!STAGE_DISCOVERY.equals((String) h.NewValue)) continue;
-            if (h.CreatedDate.date() <= lwEnd) lwDiscoOppIds.add(h.OpportunityId);
+            if (h.CreatedDate.date() <= dp.lwEnd) lwDiscoOppIds.add(h.OpportunityId);
             qtdDiscoOppIds.add(h.OpportunityId);
         }
         if (!lwDiscoOppIds.isEmpty())
             for (AggregateResult ar : [
                 SELECT OwnerId rid, COUNT(Id) cnt FROM Opportunity
                 WHERE Id IN :lwDiscoOppIds AND OwnerId IN :repIds GROUP BY OwnerId
-            ]) { lwToDiscoByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+            ]) { lwToDiscoByRep.put((Id)ar.get('rid'), (Integer)ar.get('cnt')); }
         if (!qtdDiscoOppIds.isEmpty())
             for (AggregateResult ar : [
                 SELECT OwnerId rid, COUNT(Id) cnt FROM Opportunity
                 WHERE Id IN :qtdDiscoOppIds AND OwnerId IN :repIds GROUP BY OwnerId
-            ]) { qtdToDiscoByRep.put((Id) ar.get('rid'), (Integer) ar.get('cnt')); }
+            ]) { qtdToDiscoByRep.put((Id)ar.get('rid'), (Integer)ar.get('cnt')); }
 
-        // ── QTD pipeline actual per rep ──────────────────────────────────────
         Map<Id, Decimal> pipelineActualByRep = new Map<Id, Decimal>();
         for (Id rid : repIds) pipelineActualByRep.put(rid, 0);
         Set<Id> createdQtd = new Set<Id>();
         for (Opportunity o : [
             SELECT Id FROM Opportunity
-            WHERE OwnerId IN :repIds AND CreatedDate >= :qStart
-              AND CreatedDate <= :qEnd AND StageName != :STAGE_CLOSED_LOST
+            WHERE OwnerId IN :repIds AND CreatedDate >= :dp.qStart
+              AND CreatedDate <= :dp.qEnd AND StageName != :STAGE_CLOSED_LOST
         ]) { createdQtd.add(o.Id); }
         Set<Id> progressedPipeline = new Set<Id>();
         for (OpportunityFieldHistory h : [
             SELECT OpportunityId, NewValue FROM OpportunityFieldHistory
-            WHERE Field = 'StageName' AND CreatedDate >= :qStart AND CreatedDate <= :qEnd
+            WHERE Field = 'StageName' AND CreatedDate >= :dp.qStart AND CreatedDate <= :dp.qEnd
         ]) {
             if (PIPELINE_STAGES.contains((String) h.NewValue)) progressedPipeline.add(h.OpportunityId);
         }
@@ -984,19 +1112,15 @@ public with sharing class PipeGenController {
                 if (!PIPELINE_STAGES.contains(o.StageName)) continue;
                 Decimal val = (o.StageName == STAGE_CLOSED_WON)
                     ? (o.ARR__c != null ? o.ARR__c : 0)
-                    : (o.Amount != null ? o.Amount : 0);
+                    : (o.Amount  != null ? o.Amount  : 0);
                 pipelineActualByRep.put(o.OwnerId, pipelineActualByRep.get(o.OwnerId) + val);
             }
         }
-
-        // ── Build per-rep summaries ───────────────────────────────────────────
-        Integer teamTotal = 0, teamCompleted = 0, teamAtRisk = 0, teamNoCommits = 0;
 
         for (User rep : reps) {
             List<Weekly_Commit__c> twCommits = twByRep.get(rep.Id);
             List<Weekly_Commit__c> lwCommits = lwByRep.get(rep.Id);
             Integer inFlight = inFlightByRep.get(rep.Id);
-
             RepSummary rs        = new RepSummary();
             rs.repId             = rep.Id;
             rs.repName           = rep.Name;
@@ -1008,33 +1132,19 @@ public with sharing class PipeGenController {
             rs.hasRisk           = !rs.riskReasons.isEmpty();
             rs.thisWeekTotal     = twCommits.size();
             rs.thisWeekCompleted = 0;
-            for (Weekly_Commit__c c : twCommits) {
+            for (Weekly_Commit__c c : twCommits)
                 if (c.Completion_Status__c == 'Completed') rs.thisWeekCompleted++;
-                if (c.At_Risk__c) teamAtRisk++;
-            }
-
             Decimal annual    = (rep.Pipe_Gen_Annual_Target__c != null) ? rep.Pipe_Gen_Annual_Target__c : 0;
             rs.pipelineTarget = annual / 4;
             rs.pipelineActual = pipelineActualByRep.get(rep.Id);
-            rs.weeksRemaining = weeksRemaining;
-            rs.quarter        = quarter;
+            rs.weeksRemaining = dp.weeksRemaining;
+            rs.quarter        = dp.quarter;
             rs.lwOppsCreated      = lwCreatedByRep.get(rep.Id);
             rs.qtdOppsCreated     = qtdCreatedByRep.get(rep.Id);
             rs.lwOppsToDiscovery  = lwToDiscoByRep.get(rep.Id);
             rs.qtdOppsToDiscovery = qtdToDiscoByRep.get(rep.Id);
-
-            teamTotal     += twCommits.size();
-            teamCompleted += rs.thisWeekCompleted;
-            if (twCommits.isEmpty()) teamNoCommits++;
-
-            result.reps.add(rs);
+            result.add(rs);
         }
-
-        result.teamSummary.totalReps         = reps.size();
-        result.teamSummary.totalCommits      = teamTotal;
-        result.teamSummary.completedCommits  = teamCompleted;
-        result.teamSummary.atRiskCommitCount = teamAtRisk;
-        result.teamSummary.repsWithNoCommits = teamNoCommits;
         return result;
     }
 
