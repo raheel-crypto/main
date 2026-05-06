@@ -296,12 +296,30 @@ public with sharing class PGInsightsController {
             firstStage2PlusCache = out;
             return out;
         }
+
+        // Two-step query: relationship filters on OpportunityHistory
+        // (Opportunity.OwnerId / Opportunity.Type) behave inconsistently in
+        // some test contexts and in orgs with packaged trigger interference.
+        // Pull the AE-owned NB/Upsell opp IDs first, then aggregate history
+        // by direct OpportunityId IN clause.
+        Set<Id> aeOppIds = new Set<Id>();
+        for (Opportunity o : [
+            SELECT Id FROM Opportunity
+            WHERE OwnerId IN :aes
+              AND Type IN (:NB_TYPE, :EXP_TYPE)
+        ]) {
+            aeOppIds.add(o.Id);
+        }
+        if (aeOppIds.isEmpty()) {
+            firstStage2PlusCache = out;
+            return out;
+        }
+
         for (AggregateResult ar : [
             SELECT OpportunityId oid, MIN(CreatedDate) firstDt
             FROM OpportunityHistory
             WHERE StageName IN :STAGE_2_PLUS
-              AND Opportunity.OwnerId IN :aes
-              AND Opportunity.Type IN (:NB_TYPE, :EXP_TYPE)
+              AND OpportunityId IN :aeOppIds
             GROUP BY OpportunityId
         ]) {
             out.put((Id) ar.get('oid'), (DateTime) ar.get('firstDt'));
