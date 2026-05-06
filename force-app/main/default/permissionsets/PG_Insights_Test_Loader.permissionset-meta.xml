@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>PG Insights Test Loader</label>
+    <description>Grants the Bypass_Validations custom permission so PGInsightsControllerTest can seed Opportunity / Task / Event data without tripping production validation rules.</description>
+    <customPermissions>
+        <enabled>true</enabled>
+        <name>Bypass_Validations</name>
+    </customPermissions>
+</PermissionSet>
