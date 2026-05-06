@@ -1253,6 +1253,125 @@ private class PipeGenControllerTest {
         }
     }
 
+    // ─── getVPDashboardData ───────────────────────────────────────────────────
+
+    @isTest
+    static void testVPDashboard_managerModeWhenNoManagersBelow() {
+        // Caller's direct reports are reps (not managers) → isVP = false
+        User mgr = makeRep(0);
+        User rep = makeRepUnder(mgr.Id);
+
+        insert new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'Commit', Committed_Count__c = 1,
+            Completion_Status__c = 'Not Started');
+
+        System.runAs(mgr) {
+            Test.startTest();
+            PipeGenController.VPDashboardData d = PipeGenController.getVPDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(false, d.isVP,         'No managers below — should be manager mode');
+            System.assertEquals(1,     d.reps.size(),  'Manager mode should return direct rep list');
+            System.assertEquals(0,     d.managers.size(), 'Manager mode — managers list should be empty');
+            System.assertEquals(rep.Id, d.reps[0].repId, 'Direct report Id should match');
+        }
+    }
+
+    @isTest
+    static void testVPDashboard_vpModeWhenManagersBelow() {
+        // Three-tier hierarchy: vp → mgr → rep
+        User vp  = makeRep(0);
+        User mgr = makeRepUnder(vp.Id);
+        User rep = makeRepUnder(mgr.Id);
+
+        insert new Weekly_Commit__c(Rep__c = rep.Id, Week_Start_Date__c = thisWeekStart(),
+            Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+            Commit_Description__c = 'VP-visible commit', Committed_Count__c = 1,
+            Completion_Status__c = 'Completed');
+
+        System.runAs(vp) {
+            Test.startTest();
+            PipeGenController.VPDashboardData d = PipeGenController.getVPDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(true,  d.isVP,            'Direct reports are managers — should be VP mode');
+            System.assertEquals(1,     d.managers.size(), 'One manager under the VP');
+            System.assertEquals(0,     d.reps.size(),     'VP mode — flat reps list should be empty');
+
+            PipeGenController.ManagerSummary ms = d.managers[0];
+            System.assertEquals(mgr.Id, ms.managerId, 'Manager Id should match');
+            System.assertEquals(1,      ms.totalReps, 'Manager has one rep');
+            System.assertEquals(1,      ms.reps.size(), 'Nested reps list should contain the rep');
+            System.assertEquals(rep.Id, ms.reps[0].repId, 'Nested rep Id should match');
+        }
+    }
+
+    @isTest
+    static void testVPDashboard_vpModeTeamSummaryAggregates() {
+        // Two managers, each with one rep
+        User vp   = makeRep(0);
+        User mgr1 = makeRepUnder(vp.Id);
+        User mgr2 = makeRepUnder(vp.Id);
+        User rep1 = makeRepUnder(mgr1.Id);
+        User rep2 = makeRepUnder(mgr2.Id);
+
+        Date tw = thisWeekStart();
+        insert new List<Weekly_Commit__c>{
+            new Weekly_Commit__c(Rep__c = rep1.Id, Week_Start_Date__c = tw,
+                Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+                Commit_Description__c = 'Rep1 done', Committed_Count__c = 1,
+                Completion_Status__c = 'Completed'),
+            new Weekly_Commit__c(Rep__c = rep2.Id, Week_Start_Date__c = tw,
+                Motion_Type__c = 'Net New', Commit_Type__c = 'First Meeting Booked',
+                Commit_Description__c = 'Rep2 open', Committed_Count__c = 1,
+                Completion_Status__c = 'Not Started')
+        };
+
+        System.runAs(vp) {
+            Test.startTest();
+            PipeGenController.VPDashboardData d = PipeGenController.getVPDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(2,  d.managers.size(),            'Two managers under VP');
+            System.assertEquals(2,  d.teamSummary.totalReps,      'Two reps total across both managers');
+            System.assertEquals(2,  d.teamSummary.totalCommits,   'Two commits total');
+            System.assertEquals(1,  d.teamSummary.completedCommits, 'One completed commit');
+        }
+    }
+
+    @isTest
+    static void testVPDashboard_vpModeManagerRiskRollup() {
+        // Manager should show hasRisk = true if any nested rep is at risk
+        User vp  = makeRep(0);
+        User mgr = makeRepUnder(vp.Id);
+        makeRepUnder(mgr.Id); // rep with no commits → at risk
+
+        System.runAs(vp) {
+            Test.startTest();
+            PipeGenController.VPDashboardData d = PipeGenController.getVPDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(true, d.managers[0].hasRisk,    'Manager should surface risk when rep is at risk');
+            System.assertEquals(1,    d.managers[0].repsAtRisk, 'One rep at risk under this manager');
+        }
+    }
+
+    @isTest
+    static void testVPDashboard_emptyWhenNoDirectReports() {
+        User vp = makeRep(0); // no one reports to this user
+
+        System.runAs(vp) {
+            Test.startTest();
+            PipeGenController.VPDashboardData d = PipeGenController.getVPDashboardData();
+            Test.stopTest();
+
+            System.assertEquals(false, d.isVP,          'No direct reports — not a VP');
+            System.assertEquals(0,     d.reps.size(),   'No reps');
+            System.assertEquals(0,     d.managers.size(), 'No managers');
+        }
+    }
+
     // ─── saveManagerNote ──────────────────────────────────────────────────────
 
     @isTest
