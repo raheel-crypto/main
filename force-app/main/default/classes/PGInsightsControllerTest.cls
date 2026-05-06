@@ -162,6 +162,9 @@ private class PGInsightsControllerTest {
             OwnerId = ownerId,
             StageName = '1 - Demo',
             CloseDate = Date.today().addDays(60),
+            // Validation rule "Enter Amount before moving to Discovery" requires
+            // Amount to be set before the opp can be advanced to Stage 2.
+            Amount = 10000,
             Type = oppType
         );
     }
