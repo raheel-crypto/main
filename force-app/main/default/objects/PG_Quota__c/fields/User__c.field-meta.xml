@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>User__c</fullName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <description>The Account Executive this quota applies to.</description>
+    <label>Account Executive</label>
+    <referenceTo>User</referenceTo>
+    <relationshipLabel>PG Quotas</relationshipLabel>
+    <relationshipName>PG_Quotas</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

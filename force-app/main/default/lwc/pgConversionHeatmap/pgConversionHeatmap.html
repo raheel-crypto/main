@@ -1,0 +1,38 @@
+<template>
+    <article class="pg-card">
+        <header class="pg-card__title">Conversion Rates by AE | All Time</header>
+        <template lwc:if={hasRows}>
+            <div class="pg-heatmap__wrap">
+                <table class="pg-heatmap">
+                    <thead>
+                        <tr>
+                            <th class="pg-heatmap__th-name">Manager</th>
+                            <th class="pg-heatmap__th-name">AE</th>
+                            <th>Demo → Discovery</th>
+                            <th>Discovery → POV</th>
+                            <th>POV → Proposal</th>
+                            <th>Proposal → Contracting</th>
+                            <th>Contracting → Closed Won</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template for:each={rows} for:item="row">
+                            <tr key={row.ownerId}>
+                                <td class="pg-heatmap__td-name">{row.managerName}</td>
+                                <td class="pg-heatmap__td-name">{row.ownerName}</td>
+                                <td class={row.demoToDiscoClass} title="Reached Discovery">{row.demoToDiscoFmt}</td>
+                                <td class={row.discoToPovClass} title="Reached POV">{row.discoToPovFmt}</td>
+                                <td class={row.povToProposalClass} title="Reached Proposal">{row.povToProposalFmt}</td>
+                                <td class={row.proposalToContractingClass} title="Reached Contracting">{row.proposalToContractingFmt}</td>
+                                <td class={row.contractingToWonClass} title="Reached Closed Won">{row.contractingToWonFmt}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+        <template lwc:else>
+            <div class="pg-empty">No conversion data available yet.</div>
+        </template>
+    </article>
+</template>

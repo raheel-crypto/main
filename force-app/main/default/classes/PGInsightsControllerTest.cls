@@ -2,7 +2,7 @@
 private class PGInsightsControllerTest {
 
     private static final String LOADER_PERMSET = 'PG_Insights_Test_Loader';
-    private static final Set<String> TEST_AE_PODS = new Set<String>{'ENT 1', 'ENT 2', 'MM/HV', 'NV'};
+    private static final Set<String> TEST_AE_PODS = new Set<String>{'ENT 1', 'ENT 2', 'MM/HV'};
 
     @TestSetup
     static void setupData() {
@@ -55,6 +55,28 @@ private class PGInsightsControllerTest {
                 buildEvent(uByAlias.get('ae2'))
             };
             insert events;
+
+            // Quotas: ae1 has goals; ae2/ae3 do not (tests fallback to 0).
+            // Computed using the org's FiscalYearStartMonth so the row lines up
+            // with PGInsightsController.fiscalYearAndQuarter(today).
+            Date today = Date.today();
+            Organization org = [SELECT FiscalYearStartMonth FROM Organization LIMIT 1];
+            Integer startMonth = org.FiscalYearStartMonth;
+            Integer monthOffset = today.month() - startMonth;
+            if (monthOffset < 0) monthOffset += 12;
+            Integer fq = (monthOffset / 3) + 1;
+            Integer fy = (startMonth == 1)
+                ? today.year()
+                : (today.month() >= startMonth ? today.year() + 1 : today.year());
+            insert new List<PG_Quota__c>{
+                new PG_Quota__c(
+                    User__c = uByAlias.get('ae1'),
+                    Fiscal_Year__c = fy,
+                    Fiscal_Quarter__c = fq,
+                    NB_Goal__c = 10,
+                    Exp_Goal__c = 4
+                )
+            };
         }
     }
 
@@ -120,6 +142,7 @@ private class PGInsightsControllerTest {
         Test.stopTest();
         System.assertEquals(8, s.nbCount,  'QTD NB count');
         System.assertEquals(2, s.expCount, 'QTD Exp count');
+        System.assert(s.goalMTD > 0, 'Goal MTD prorated from PG_Quota__c (ae1 has 14 quarterly)');
     }
 
     @IsTest
@@ -131,6 +154,48 @@ private class PGInsightsControllerTest {
         Test.stopTest();
         System.assertEquals(3, rows.size(), 'Three AEs with stage 2+ opps; BDR excluded');
         System.assertEquals(6, rows[0].nbCount + rows[0].expCount, 'AE One leads (6 opps)');
+        System.assert(rows[0].goal > 0, 'Top performer has prorated goal from PG_Quota__c');
+        System.assertEquals(0, rows[1].goal, 'Other AEs without quota fall back to 0');
+    }
+
+    @IsTest
+    static void getConversionHeatmap_computesPerOwnerConversions() {
+        // Mock varied stage progressions across the seeded opps.
+        Set<Id> aeIds = computeTestAeIds();
+        Map<Id, Opportunity> opps = new Map<Id, Opportunity>([
+            SELECT Id FROM Opportunity WHERE OwnerId IN :aeIds
+        ]);
+        List<Id> oppIds = new List<Id>(opps.keySet());
+        Map<Id, Set<String>> mock = new Map<Id, Set<String>>();
+        Integer i = 0;
+        for (Id oid : oppIds) {
+            Integer mod = Math.mod(i, 4);
+            if (mod == 0) {
+                mock.put(oid, new Set<String>{'1 - Demo','2 - Discovery','3 - POV','4 - Proposal','5 - Contracting','Closed Won'});
+            } else if (mod == 1) {
+                mock.put(oid, new Set<String>{'1 - Demo','2 - Discovery','3 - POV'});
+            } else if (mod == 2) {
+                mock.put(oid, new Set<String>{'1 - Demo','2 - Discovery'});
+            } else {
+                mock.put(oid, new Set<String>{'1 - Demo'});
+            }
+            i++;
+        }
+        PGInsightsController.mockStagesByOpp = mock;
+
+        Test.startTest();
+        List<PGInsightsController.HeatmapRow> rows =
+            PGInsightsController.getConversionHeatmap();
+        Test.stopTest();
+
+        System.assertEquals(3, rows.size(), 'One row per AE that has at least one opp at Stage 1+');
+        Boolean foundFullFunnel = false;
+        for (PGInsightsController.HeatmapRow r : rows) {
+            // Every AE has at least one opp at Demo (rank 1) so demoCount > 0.
+            System.assert(r.demoCount > 0, 'demoCount populated for ' + r.ownerName);
+            if (r.contractingToWon != null && r.contractingToWon > 0) foundFullFunnel = true;
+        }
+        System.assert(foundFullFunnel, 'At least one AE has an opp that reached Closed Won');
     }
 
     @IsTest

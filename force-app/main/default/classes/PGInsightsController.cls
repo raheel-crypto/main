@@ -17,7 +17,7 @@ public with sharing class PGInsightsController {
     // ---- Org-specific configuration --------------------------------------------------
 
     private static final Set<String> AE_PODS = new Set<String>{
-        'ENT 1', 'ENT 2', 'MM/HV', 'NV'
+        'ENT 1', 'ENT 2', 'MM/HV'
     };
 
     private static final String NB_TYPE  = 'New Business';
@@ -95,6 +95,34 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Integer total;
     }
 
+    public class HeatmapRow {
+        @AuraEnabled public Id ownerId;
+        @AuraEnabled public String ownerName;
+        @AuraEnabled public String managerName;
+        // Conversion percentages for each transition (0-100).
+        @AuraEnabled public Decimal demoToDisco;
+        @AuraEnabled public Decimal discoToPov;
+        @AuraEnabled public Decimal povToProposal;
+        @AuraEnabled public Decimal proposalToContracting;
+        @AuraEnabled public Decimal contractingToWon;
+        // Underlying counts (opps that ever reached this stage or beyond).
+        @AuraEnabled public Integer demoCount;
+        @AuraEnabled public Integer discoveryCount;
+        @AuraEnabled public Integer povCount;
+        @AuraEnabled public Integer proposalCount;
+        @AuraEnabled public Integer contractingCount;
+        @AuraEnabled public Integer wonCount;
+    }
+
+    private static final Map<String, Integer> STAGE_RANK = new Map<String, Integer>{
+        '1 - Demo'        => 1,
+        '2 - Discovery'   => 2,
+        '3 - POV'         => 3,
+        '4 - Proposal'    => 4,
+        '5 - Contracting' => 5,
+        'Closed Won'      => 6
+    };
+
     // ---- @AuraEnabled API ------------------------------------------------------------
 
     @AuraEnabled(cacheable=true)
@@ -165,6 +193,12 @@ public with sharing class PGInsightsController {
             else                   row.expCount += 1;
         }
 
+        // Overlay quarterly goals from PG_Quota__c (sum across AEs per quarter).
+        Map<Integer, Decimal> quarterGoals = getQuarterGoals();
+        for (Integer key : byKey.keySet()) {
+            if (quarterGoals.containsKey(key)) byKey.get(key).goal = quarterGoals.get(key);
+        }
+
         List<Integer> sortedKeys = new List<Integer>(byKey.keySet());
         sortedKeys.sort();
         List<QuarterRow> rows = new List<QuarterRow>();
@@ -182,7 +216,7 @@ public with sharing class PGInsightsController {
         S1Status s = new S1Status();
         s.nbCount = 0;
         s.expCount = 0;
-        s.goalMTD = DEFAULT_QUARTERLY_GOAL;
+        s.goalMTD = 0;
         s.attainmentPct = 0;
 
         Date qStart = startOfCurrentFiscalQuarter();
@@ -195,6 +229,12 @@ public with sharing class PGInsightsController {
         Map<String, Integer> counts = countByType(qIds, opps);
         s.nbCount = counts.get(NB_TYPE);
         s.expCount = counts.get(EXP_TYPE);
+
+        // Sum current-quarter quotas across all AEs and prorate by days into quarter.
+        Map<Id, Decimal[]> quotas = getQuotasForCurrentQuarter();
+        Decimal totalQuarterly = 0;
+        for (Decimal[] g : quotas.values()) totalQuarterly += g[0] + g[1];
+        s.goalMTD = totalQuarterly * mtdProration();
         s.attainmentPct = s.goalMTD == 0 ? 0 : ((s.nbCount + s.expCount) / s.goalMTD) * 100;
         return s;
     }
@@ -211,6 +251,9 @@ public with sharing class PGInsightsController {
         }
         Map<Id, Opportunity> opps = getOppDetails(qIds);
 
+        Map<Id, Decimal[]> quotas = getQuotasForCurrentQuarter();
+        Decimal proration = mtdProration();
+
         Map<Id, PerformerRow> byOwner = new Map<Id, PerformerRow>();
         for (Id oid : qIds) {
             Opportunity o = opps.get(oid);
@@ -222,7 +265,9 @@ public with sharing class PGInsightsController {
                 row.ownerName = o.Owner != null ? o.Owner.Name : null;
                 row.nbCount = 0;
                 row.expCount = 0;
-                row.goal = DEFAULT_QUARTERLY_GOAL;
+                Decimal[] g = quotas.get(o.OwnerId);
+                Decimal quarterly = g == null ? 0 : g[0] + g[1];
+                row.goal = quarterly * proration;
                 byOwner.put(o.OwnerId, row);
             }
             if (o.Type == NB_TYPE) row.nbCount  += 1;
@@ -278,6 +323,76 @@ public with sharing class PGInsightsController {
             if (row.ownerName != null) result.add(row);
         }
         result.sort(new OutreachComparator());
+        return result;
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static List<HeatmapRow> getConversionHeatmap() {
+        Set<Id> aes = getAeUserIds();
+        List<HeatmapRow> result = new List<HeatmapRow>();
+        if (aes.isEmpty()) return result;
+
+        Map<Id, Opportunity> opps = new Map<Id, Opportunity>([
+            SELECT Id, OwnerId, Owner.Name, Owner.Manager.Name
+            FROM Opportunity
+            WHERE OwnerId IN :aes
+              AND Type IN (:NB_TYPE, :EXP_TYPE)
+        ]);
+        if (opps.isEmpty()) return result;
+
+        Map<Id, Set<String>> stagesByOpp = getStagesByOpp(opps.keySet());
+
+        // Group max-rank-reached per owner.
+        Map<Id, List<Integer>> ranksByOwner = new Map<Id, List<Integer>>();
+        Map<Id, Opportunity> sampleByOwner = new Map<Id, Opportunity>();
+        for (Opportunity o : opps.values()) {
+            Set<String> stages = stagesByOpp.get(o.Id);
+            if (stages == null || stages.isEmpty()) continue;
+            Integer maxRank = 0;
+            for (String s : stages) {
+                Integer r = STAGE_RANK.get(s);
+                if (r != null && r > maxRank) maxRank = r;
+            }
+            if (maxRank == 0) continue;
+            if (!ranksByOwner.containsKey(o.OwnerId)) {
+                ranksByOwner.put(o.OwnerId, new List<Integer>());
+                sampleByOwner.put(o.OwnerId, o);
+            }
+            ranksByOwner.get(o.OwnerId).add(maxRank);
+        }
+
+        for (Id ownerId : ranksByOwner.keySet()) {
+            Opportunity sample = sampleByOwner.get(ownerId);
+            HeatmapRow row = new HeatmapRow();
+            row.ownerId = ownerId;
+            row.ownerName = sample.Owner != null ? sample.Owner.Name : null;
+            row.managerName = (sample.Owner != null && sample.Owner.Manager != null)
+                ? sample.Owner.Manager.Name : null;
+
+            Integer atOrAbove1 = 0, atOrAbove2 = 0, atOrAbove3 = 0,
+                    atOrAbove4 = 0, atOrAbove5 = 0, atOrAbove6 = 0;
+            for (Integer r : ranksByOwner.get(ownerId)) {
+                if (r >= 1) atOrAbove1++;
+                if (r >= 2) atOrAbove2++;
+                if (r >= 3) atOrAbove3++;
+                if (r >= 4) atOrAbove4++;
+                if (r >= 5) atOrAbove5++;
+                if (r >= 6) atOrAbove6++;
+            }
+            row.demoCount        = atOrAbove1;
+            row.discoveryCount   = atOrAbove2;
+            row.povCount         = atOrAbove3;
+            row.proposalCount    = atOrAbove4;
+            row.contractingCount = atOrAbove5;
+            row.wonCount         = atOrAbove6;
+            row.demoToDisco           = pct(atOrAbove2, atOrAbove1);
+            row.discoToPov            = pct(atOrAbove3, atOrAbove2);
+            row.povToProposal         = pct(atOrAbove4, atOrAbove3);
+            row.proposalToContracting = pct(atOrAbove5, atOrAbove4);
+            row.contractingToWon      = pct(atOrAbove6, atOrAbove5);
+            result.add(row);
+        }
+        result.sort(new HeatmapComparator());
         return result;
     }
 
@@ -459,12 +574,119 @@ public with sharing class PGInsightsController {
         ];
     }
 
+    private static Map<Id, Decimal[]> getQuotasForCurrentQuarter() {
+        Set<Id> aes = getAeUserIds();
+        Map<Id, Decimal[]> out = new Map<Id, Decimal[]>();
+        if (aes.isEmpty()) return out;
+        Map<String, Integer> fyfq = fiscalYearAndQuarter(Date.today());
+        Integer fy = fyfq.get('fy');
+        Integer fq = fyfq.get('fq');
+        for (PG_Quota__c q : [
+            SELECT User__c, NB_Goal__c, Exp_Goal__c
+            FROM PG_Quota__c
+            WHERE User__c IN :aes
+              AND Fiscal_Year__c = :fy
+              AND Fiscal_Quarter__c = :fq
+        ]) {
+            out.put(q.User__c, new Decimal[]{
+                q.NB_Goal__c == null ? 0 : q.NB_Goal__c,
+                q.Exp_Goal__c == null ? 0 : q.Exp_Goal__c
+            });
+        }
+        return out;
+    }
+
+    private static Map<Integer, Decimal> getQuarterGoals() {
+        Set<Id> aes = getAeUserIds();
+        Map<Integer, Decimal> out = new Map<Integer, Decimal>();
+        if (aes.isEmpty()) return out;
+        for (PG_Quota__c q : [
+            SELECT Fiscal_Year__c, Fiscal_Quarter__c, NB_Goal__c, Exp_Goal__c
+            FROM PG_Quota__c
+            WHERE User__c IN :aes
+        ]) {
+            if (q.Fiscal_Year__c == null || q.Fiscal_Quarter__c == null) continue;
+            Integer key = q.Fiscal_Year__c.intValue() * 10 + q.Fiscal_Quarter__c.intValue();
+            Decimal total = (q.NB_Goal__c == null ? 0 : q.NB_Goal__c)
+                          + (q.Exp_Goal__c == null ? 0 : q.Exp_Goal__c);
+            Decimal existing = out.get(key);
+            out.put(key, (existing == null ? 0 : existing) + total);
+        }
+        return out;
+    }
+
+    private static Decimal mtdProration() {
+        Date qStart = startOfCurrentFiscalQuarter();
+        Date qEnd = qStart.addMonths(3).addDays(-1);
+        Date today = Date.today();
+        Integer daysElapsed = today.daysBetween(qStart) * -1 + 1;
+        Integer totalDays = qEnd.daysBetween(qStart) * -1 + 1;
+        if (totalDays <= 0) return 1;
+        if (daysElapsed > totalDays) daysElapsed = totalDays;
+        return Decimal.valueOf(daysElapsed) / Decimal.valueOf(totalDays);
+    }
+
+    private static Map<String, Integer> fiscalYearAndQuarter(Date d) {
+        Integer startMonth = getFiscalStartMonth();
+        Integer monthOffset = d.month() - startMonth;
+        if (monthOffset < 0) monthOffset += 12;
+        Integer fq = (monthOffset / 3) + 1;
+        Integer fy;
+        if (startMonth == 1) fy = d.year();
+        else fy = (d.month() >= startMonth) ? d.year() + 1 : d.year();
+        return new Map<String, Integer>{'fy' => fy, 'fq' => fq};
+    }
+
+    @TestVisible
+    private static Map<Id, Set<String>> mockStagesByOpp;
+
+    private static Map<Id, Set<String>> getStagesByOpp(Set<Id> oppIds) {
+        if (mockStagesByOpp != null) return mockStagesByOpp;
+        Map<Id, Set<String>> out = new Map<Id, Set<String>>();
+        if (oppIds == null || oppIds.isEmpty()) return out;
+        for (OpportunityHistory h : [
+            SELECT OpportunityId, StageName
+            FROM OpportunityHistory
+            WHERE OpportunityId IN :oppIds
+              AND StageName IN :STAGE_RANK.keySet()
+        ]) {
+            Set<String> s = out.get(h.OpportunityId);
+            if (s == null) {
+                s = new Set<String>();
+                out.put(h.OpportunityId, s);
+            }
+            s.add(h.StageName);
+        }
+        return out;
+    }
+
+    private static Decimal pct(Integer numerator, Integer denominator) {
+        if (denominator == null || denominator == 0) return 0;
+        return (Decimal.valueOf(numerator) / Decimal.valueOf(denominator)) * 100;
+    }
+
+    private class HeatmapComparator implements Comparator<HeatmapRow> {
+        public Integer compare(HeatmapRow a, HeatmapRow b) {
+            String aMgr = a.managerName == null ? '' : a.managerName;
+            String bMgr = b.managerName == null ? '' : b.managerName;
+            Integer cmp = aMgr.compareTo(bMgr);
+            if (cmp != 0) return cmp;
+            String aName = a.ownerName == null ? '' : a.ownerName;
+            String bName = b.ownerName == null ? '' : b.ownerName;
+            return aName.compareTo(bName);
+        }
+    }
+
     private class PerformerComparator implements Comparator<PerformerRow> {
         public Integer compare(PerformerRow a, PerformerRow b) {
-            Decimal aScore = a.goal > 0 ? a.attainmentPct : a.nbCount + a.expCount;
-            Decimal bScore = b.goal > 0 ? b.attainmentPct : b.nbCount + b.expCount;
-            if (bScore > aScore) return 1;
-            if (bScore < aScore) return -1;
+            // Primary: total Stage 2+ count desc; tiebreak by attainment desc
+            // (mixing pct and count in one score gives nonsensical orderings
+            // when some reps have a goal set and others don't).
+            Integer aTotal = a.nbCount + a.expCount;
+            Integer bTotal = b.nbCount + b.expCount;
+            if (bTotal != aTotal) return bTotal > aTotal ? 1 : -1;
+            if (b.attainmentPct > a.attainmentPct) return 1;
+            if (b.attainmentPct < a.attainmentPct) return -1;
             return 0;
         }
     }

@@ -89,3 +89,23 @@ After deploy, in Salesforce Setup:
 1. Setup → **Lightning App Builder** → **New** → App Page → "PG Insights"
 2. Drag the **PG Insights** component from the left panel onto the page
 3. Save → Activate → choose the sales profiles that should see it
+
+### Populate quotas (required for Goal / Attainment columns)
+
+Goals live on the `PG_Quota__c` custom object — one row per AE per fiscal
+quarter. Until rows exist, the dashboard shows `Goal (MTD) = 0` and
+`Attainment = 0%`.
+
+Quickest way to bulk-load (per quarter):
+
+1. Setup → **Object Manager** → **PG Quota** → **Tab** (create one if missing)
+2. App Launcher → **PG Quotas** → **New**, then enter:
+   - **Account Executive**: lookup to the AE
+   - **Fiscal Year**: e.g. `2026`
+   - **Fiscal Quarter**: `1`-`4`
+   - **NB Goal**: New Business Stage 2+ count target for the quarter
+   - **Exp Goal**: Upsell Stage 2+ count target for the quarter
+3. Repeat per AE for the current quarter, or use Data Loader for bulk upload
+
+The dashboard prorates the quarterly goal by days-into-quarter for the MTD
+figure, so partial-quarter attainment scales linearly.
