@@ -335,10 +335,17 @@ skipping deals.
 **Universe:**
 
 - AE owns the opp
-- AE-sourced (`Booked_By_Role__c LIKE 'AE%'`)
 - Type IN ('New Business', 'Upsell')
 - All-time (no date filter on history). The percentages drift slowly with
   new data.
+
+**Note: the AE-sourced filter (`Booked_By_Role__c LIKE 'AE%'`) is
+intentionally NOT applied here**, even though every other Opportunity-driven
+widget uses it. Conversion is about what an AE does with the deals they
+own; whether the deal was originally booked by an AE, an Integration
+partner, or a GTM Associate doesn't change the rep's responsibility to
+move it through stages. Pipeline-generation widgets care about sourcing,
+the heatmap doesn't.
 
 **Columns (5 transitions):**
 

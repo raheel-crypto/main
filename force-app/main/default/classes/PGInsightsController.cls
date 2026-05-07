@@ -402,12 +402,16 @@ public with sharing class PGInsightsController {
         List<HeatmapRow> result = new List<HeatmapRow>();
         if (aes.isEmpty()) return result;
 
+        // Heatmap shows progression on every NB/Upsell opp the AE owns,
+        // regardless of who originally booked it. Pipeline GENERATION metrics
+        // elsewhere on the dashboard apply Booked_By_Role__c LIKE 'AE%' to
+        // scope to AE-sourced deals — but conversion is about what the AE
+        // does with the deals they're handed, so that filter is omitted here.
         Map<Id, Opportunity> opps = new Map<Id, Opportunity>([
             SELECT Id, OwnerId, Owner.Name, Owner.Manager.Name
             FROM Opportunity
             WHERE OwnerId IN :aes
               AND Type IN (:NB_TYPE, :EXP_TYPE)
-              AND Booked_By_Role__c LIKE 'AE%'
         ]);
         if (opps.isEmpty()) return result;
 
