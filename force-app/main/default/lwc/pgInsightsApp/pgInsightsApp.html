@@ -7,9 +7,11 @@
 
         <lightning-tabset variant="scoped" active-tab-value={activeTab}>
             <lightning-tab label="Quarter Recap" value="recap">
-                <div class="slds-p-around_small">
-                    <c-pg-pacing-kpis></c-pg-pacing-kpis>
-                </div>
+                <template lwc:if={showPacingKpis}>
+                    <div class="slds-p-around_small">
+                        <c-pg-pacing-kpis></c-pg-pacing-kpis>
+                    </div>
+                </template>
                 <div class="slds-p-horizontal_small">
                     <c-pg-stage-progress-chart></c-pg-stage-progress-chart>
                 </div>

@@ -3,10 +3,10 @@ import getS1StatusQTD from '@salesforce/apex/PGInsightsController.getS1StatusQTD
 import getTopPerformersByPod from '@salesforce/apex/PGInsightsController.getTopPerformersByPod';
 
 const POD_CLASS = {
-    'ENT 1': 'pg-pod pg-pod--ent1',
-    'ENT 2': 'pg-pod pg-pod--ent2',
-    'MM/HV': 'pg-pod pg-pod--mmhv',
-    'NV':    'pg-pod pg-pod--nv'
+    'Buyside': 'pg-pod pg-pod--buyside',
+    'IB1':     'pg-pod pg-pod--ib1',
+    'IB2':     'pg-pod pg-pod--ib2',
+    'MM':      'pg-pod pg-pod--mm'
 };
 
 export default class PgTopPerformers extends LightningElement {

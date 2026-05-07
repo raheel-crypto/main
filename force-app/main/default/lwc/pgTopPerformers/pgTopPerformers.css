@@ -70,28 +70,28 @@
     pointer-events: none;
 }
 
-.pg-pod--ent1 .pg-pod__header {
+.pg-pod--buyside .pg-pod__header {
+    background:
+        radial-gradient(ellipse at top left, rgba(251, 207, 232, 0.32), transparent 60%),
+        linear-gradient(135deg, #500724 0%, #831843 50%, #be185d 100%);
+}
+
+.pg-pod--ib1 .pg-pod__header {
     background:
         radial-gradient(ellipse at top left, rgba(165, 180, 252, 0.35), transparent 60%),
         linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
 }
 
-.pg-pod--ent2 .pg-pod__header {
-    background:
-        radial-gradient(ellipse at top left, rgba(253, 230, 138, 0.32), transparent 60%),
-        linear-gradient(135deg, #7c2d12 0%, #9a3412 50%, #c2410c 100%);
-}
-
-.pg-pod--mmhv .pg-pod__header {
+.pg-pod--ib2 .pg-pod__header {
     background:
         radial-gradient(ellipse at top left, rgba(167, 243, 208, 0.32), transparent 60%),
         linear-gradient(135deg, #134e4a 0%, #115e59 50%, #0d9488 100%);
 }
 
-.pg-pod--nv .pg-pod__header {
+.pg-pod--mm .pg-pod__header {
     background:
-        radial-gradient(ellipse at top left, rgba(251, 207, 232, 0.32), transparent 60%),
-        linear-gradient(135deg, #500724 0%, #831843 50%, #be185d 100%);
+        radial-gradient(ellipse at top left, rgba(253, 230, 138, 0.32), transparent 60%),
+        linear-gradient(135deg, #7c2d12 0%, #9a3412 50%, #c2410c 100%);
 }
 
 .pg-pod__name {

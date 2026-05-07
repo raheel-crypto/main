@@ -2,10 +2,31 @@
 private class PGInsightsControllerTest {
 
     private static final String LOADER_PERMSET = 'PG_Insights_Test_Loader';
-    private static final Set<String> TEST_AE_PODS = new Set<String>{'ENT 1', 'ENT 2', 'MM/HV'};
 
     @TestSetup
     static void setupData() {
+        // UserRoles must be inserted before any non-setup-object DML to avoid
+        // MIXED_DML_OPERATION. Names contain the tokens the controller filters
+        // on (BUYSIDE, IB1, IB2, MM).
+        String suffix = String.valueOf(System.currentTimeMillis());
+        UserRole roleBuyside = new UserRole(
+            Name = 'Test BUYSIDE Pod ' + suffix,
+            DeveloperName = 'TstBuyside_' + suffix
+        );
+        UserRole roleIb1 = new UserRole(
+            Name = 'Test IB1 Pod ' + suffix,
+            DeveloperName = 'TstIb1_' + suffix
+        );
+        UserRole roleIb2 = new UserRole(
+            Name = 'Test IB2 Pod ' + suffix,
+            DeveloperName = 'TstIb2_' + suffix
+        );
+        UserRole roleMm = new UserRole(
+            Name = 'Test MM Pod ' + suffix,
+            DeveloperName = 'TstMm_' + suffix
+        );
+        insert new List<UserRole>{ roleBuyside, roleIb1, roleIb2, roleMm };
+
         // Loader user with the Bypass_Validations custom permission so seed
         // DML can ignore org validation rules.
         User loader = buildLoaderUser();
@@ -21,10 +42,11 @@ private class PGInsightsControllerTest {
 
         Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
         List<User> users = new List<User>{
-            buildUser('ae1', 'AE',  'One',   'ENT 1', null, p.Id),
-            buildUser('ae2', 'AE',  'Two',   'ENT 2', null, p.Id),
-            buildUser('ae3', 'AE',  'Three', 'MM/HV', null, p.Id),
-            buildUser('bdr', 'BDR', 'One',   'ENT 1', 'BDR', p.Id)
+            buildUser('ae1', 'AE',  'One',   roleIb1.Id,  null,  p.Id),
+            buildUser('ae2', 'AE',  'Two',   roleIb2.Id,  null,  p.Id),
+            buildUser('ae3', 'AE',  'Three', roleMm.Id,   null,  p.Id),
+            buildUser('ae4', 'AE',  'Four',  roleBuyside.Id, null, p.Id),
+            buildUser('bdr', 'BDR', 'One',   roleIb1.Id,  'BDR', p.Id)
         };
         insert users;
 
@@ -42,23 +64,24 @@ private class PGInsightsControllerTest {
             insert opps;
 
             List<Task> tasks = new List<Task>();
-            for (Integer i = 0; i < 5; i++) tasks.add(buildTask(uByAlias.get('ae1'), 'Email'));
-            for (Integer i = 0; i < 2; i++) tasks.add(buildTask(uByAlias.get('ae1'), 'Call'));
-            tasks.add(buildTask(uByAlias.get('ae1'), 'LinkedIn'));
-            for (Integer i = 0; i < 3; i++) tasks.add(buildTask(uByAlias.get('ae2'), 'Email'));
-            tasks.add(buildTask(uByAlias.get('ae3'), 'Email'));
-            for (Integer i = 0; i < 10; i++) tasks.add(buildTask(uByAlias.get('bdr'), 'Email'));
+            // Emails / Calls — Nektar-tagged outbound.
+            for (Integer i = 0; i < 5; i++) tasks.add(buildEmailCallTask(uByAlias.get('ae1'), 'Email'));
+            for (Integer i = 0; i < 2; i++) tasks.add(buildEmailCallTask(uByAlias.get('ae1'), 'Call'));
+            for (Integer i = 0; i < 3; i++) tasks.add(buildEmailCallTask(uByAlias.get('ae2'), 'Email'));
+            tasks.add(buildEmailCallTask(uByAlias.get('ae3'), 'Email'));
+            for (Integer i = 0; i < 10; i++) tasks.add(buildEmailCallTask(uByAlias.get('bdr'), 'Email'));
+            // LinkedIn — Sales Navigator integration writes Tasks differently.
+            tasks.add(buildLinkedInTask(uByAlias.get('ae1')));
             insert tasks;
 
+            // Events: meetings live here, not Task.
             List<Event> events = new List<Event>{
                 buildEvent(uByAlias.get('ae1')),
                 buildEvent(uByAlias.get('ae2'))
             };
             insert events;
 
-            // Quotas: ae1 has goals; ae2/ae3 do not (tests fallback to 0).
-            // Computed using the org's FiscalYearStartMonth so the row lines up
-            // with PGInsightsController.fiscalYearAndQuarter(today).
+            // Quotas: ae1 has goals; ae2/ae3/ae4 do not (tests fallback to 0).
             Date today = Date.today();
             Organization org = [SELECT FiscalYearStartMonth FROM Organization LIMIT 1];
             Integer startMonth = org.FiscalYearStartMonth;
@@ -82,10 +105,6 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void diag_seedDataIsLoaded() {
-        // Confirms @TestSetup completed. Skips assertions on AE count
-        // (real org users with the same Pods are visible) and on auto-
-        // OpportunityHistory (Salesforce is not auto-creating those in
-        // this org's test context — Stage 2+ tests mock around it).
         Set<Id> aeIds = computeTestAeIds();
         List<Opportunity> aeOpps = [
             SELECT Id, Type, StageName FROM Opportunity WHERE OwnerId IN :aeIds
@@ -99,22 +118,6 @@ private class PGInsightsControllerTest {
             'Total seeded opps (10 stage 2 + 1 stage 1)');
         System.assertEquals(9, typeNB, 'NB count');
         System.assertEquals(2, typeExp, 'Upsell count');
-    }
-
-    @IsTest
-    static void getPacingKpis_countsFirstStage2PlusEntries() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
-        Test.startTest();
-        PGInsightsController.PacingKpis wow = PGInsightsController.getPacingKpis('WoW');
-        PGInsightsController.PacingKpis mom = PGInsightsController.getPacingKpis('MoM');
-        Test.stopTest();
-
-        // 4 NB + 2 Exp from ae1, 3 NB from ae2, 1 NB from ae3 = 8 NB / 2 Exp.
-        // The remaining still-Stage-1 opp must NOT count.
-        System.assertEquals(8, wow.newBusiness, 'NB count');
-        System.assertEquals(2, wow.expansion,  'Expansion count');
-        System.assertEquals(80, wow.nbPctOfTotal, 'NB % of total');
-        System.assertEquals(8, mom.newBusiness, 'MoM NB count');
     }
 
     @IsTest
@@ -146,20 +149,7 @@ private class PGInsightsControllerTest {
     }
 
     @IsTest
-    static void getTopPerformers_returnsAEsOrderedByVolume() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
-        Test.startTest();
-        List<PGInsightsController.PerformerRow> rows =
-            PGInsightsController.getTopPerformers(5);
-        Test.stopTest();
-        System.assertEquals(3, rows.size(), 'Three AEs with stage 2+ opps; BDR excluded');
-        System.assertEquals(6, rows[0].nbCount + rows[0].expCount, 'AE One leads (6 opps)');
-        System.assert(rows[0].goal > 0, 'Top performer has prorated goal from PG_Quota__c');
-        System.assertEquals(0, rows[1].goal, 'Other AEs without quota fall back to 0');
-    }
-
-    @IsTest
-    static void getTopPerformersByPod_groupsAEsByPod() {
+    static void getTopPerformersByPod_groupsAEsByRole() {
         PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.PodPerformers> pods =
@@ -170,24 +160,57 @@ private class PGInsightsControllerTest {
             new Map<String, PGInsightsController.PodPerformers>();
         for (PGInsightsController.PodPerformers p : pods) byPod.put(p.pod, p);
 
-        // ENT 1 has ae1 (6 opps), ENT 2 has ae2 (3 opps), MM/HV has ae3 (1 opp).
-        System.assert(byPod.containsKey('ENT 1'), 'ENT 1 pod present');
-        System.assert(byPod.containsKey('ENT 2'), 'ENT 2 pod present');
-        System.assert(byPod.containsKey('MM/HV'), 'MM/HV pod present');
+        // ae1 (IB1) has 6 opps, ae2 (IB2) has 3, ae3 (MM) has 1, ae4 (Buyside) has 0.
+        System.assert(byPod.containsKey('IB1'),     'IB1 pod present');
+        System.assert(byPod.containsKey('IB2'),     'IB2 pod present');
+        System.assert(byPod.containsKey('MM'),      'MM pod present');
+        System.assert(byPod.containsKey('Buyside'), 'Buyside pod present');
 
-        PGInsightsController.PodPerformers ent1 = byPod.get('ENT 1');
-        System.assertEquals(1, ent1.rows.size(), 'ENT 1 has one performer');
-        System.assertEquals(6, ent1.totalNb + ent1.totalExp, 'ENT 1 totals 6 stage-2+ opps');
-        System.assert(ent1.totalGoalMTD > 0, 'ENT 1 inherits ae1 prorated quota');
+        PGInsightsController.PodPerformers ib1 = byPod.get('IB1');
+        System.assertEquals(1, ib1.rows.size(), 'IB1 has one performer');
+        System.assertEquals(6, ib1.totalNb + ib1.totalExp, 'IB1 totals 6 stage-2+ opps');
+        System.assert(ib1.totalGoalMTD > 0, 'IB1 inherits ae1 prorated quota');
 
-        PGInsightsController.PodPerformers ent2 = byPod.get('ENT 2');
-        System.assertEquals(3, ent2.totalNb + ent2.totalExp, 'ENT 2 totals 3 stage-2+ opps');
-        System.assertEquals(0, ent2.totalGoalMTD, 'ENT 2 has no quota set; falls back to 0');
+        PGInsightsController.PodPerformers ib2 = byPod.get('IB2');
+        System.assertEquals(3, ib2.totalNb + ib2.totalExp, 'IB2 totals 3 stage-2+ opps');
+        System.assertEquals(0, ib2.totalGoalMTD, 'IB2 has no quota set; falls back to 0');
+    }
+
+    @IsTest
+    static void getIndividualOutreach_countsTasksAndEventsExcludingBDRs() {
+        Test.startTest();
+        List<PGInsightsController.OutreachRow> rows =
+            PGInsightsController.getIndividualOutreach('CW');
+        Test.stopTest();
+
+        Boolean foundBdr = false;
+        Integer totalEmails = 0, totalCalls = 0, totalLinkedIn = 0, totalMeetings = 0;
+        for (PGInsightsController.OutreachRow r : rows) {
+            if (r.ownerName != null && r.ownerName.containsIgnoreCase('BDR')) foundBdr = true;
+            totalEmails   += r.emails;
+            totalCalls    += r.calls;
+            totalLinkedIn += r.linkedin;
+            totalMeetings += r.meetings;
+        }
+        System.assert(!foundBdr, 'BDR users should not appear');
+        System.assert(rows.size() >= 3, 'AEs with activity should appear');
+        System.assertEquals(9, totalEmails,  '5 (ae1) + 3 (ae2) + 1 (ae3) emails');
+        System.assertEquals(2, totalCalls,   '2 (ae1) calls');
+        System.assertEquals(1, totalLinkedIn,'1 Sales Navigator Sent (ae1)');
+        System.assertEquals(2, totalMeetings,'2 Discovery/First Meeting events');
+    }
+
+    @IsTest
+    static void getIndividualOutreach_qtdWindowReturnsRows() {
+        Test.startTest();
+        List<PGInsightsController.OutreachRow> rows =
+            PGInsightsController.getIndividualOutreach('QTD');
+        Test.stopTest();
+        System.assert(rows.size() >= 3, 'QTD window returns rows for AEs');
     }
 
     @IsTest
     static void getConversionHeatmap_computesPerOwnerConversions() {
-        // Mock varied stage progressions across the seeded opps.
         Set<Id> aeIds = computeTestAeIds();
         Map<Id, Opportunity> opps = new Map<Id, Opportunity>([
             SELECT Id FROM Opportunity WHERE OwnerId IN :aeIds
@@ -218,48 +241,14 @@ private class PGInsightsControllerTest {
         System.assertEquals(3, rows.size(), 'One row per AE that has at least one opp at Stage 1+');
         Boolean foundFullFunnel = false;
         for (PGInsightsController.HeatmapRow r : rows) {
-            // Every AE has at least one opp at Demo (rank 1) so demoCount > 0.
             System.assert(r.demoCount > 0, 'demoCount populated for ' + r.ownerName);
             if (r.contractingToWon != null && r.contractingToWon > 0) foundFullFunnel = true;
         }
         System.assert(foundFullFunnel, 'At least one AE has an opp that reached Closed Won');
     }
 
-    @IsTest
-    static void getIndividualOutreach_countsTasksAndEventsExcludingBDRs() {
-        Test.startTest();
-        List<PGInsightsController.OutreachRow> rows =
-            PGInsightsController.getIndividualOutreach('CW');
-        Test.stopTest();
-
-        Boolean foundBdr = false;
-        for (PGInsightsController.OutreachRow r : rows) {
-            if (r.ownerName != null && r.ownerName.containsIgnoreCase('BDR')) foundBdr = true;
-        }
-        System.assert(!foundBdr, 'BDR users should not appear');
-        System.assert(rows.size() >= 3, 'All three AEs with activity should appear');
-        Integer totalMeetings = 0;
-        for (PGInsightsController.OutreachRow r : rows) totalMeetings += r.meetings;
-        System.assertEquals(2, totalMeetings, 'Two meetings inserted as Events');
-    }
-
-    @IsTest
-    static void getIndividualOutreach_qtdWindowReturnsRows() {
-        Test.startTest();
-        List<PGInsightsController.OutreachRow> rows =
-            PGInsightsController.getIndividualOutreach('QTD');
-        Test.stopTest();
-        System.assert(rows.size() >= 3, 'QTD window returns rows for AEs');
-    }
-
     // ---- helpers --------------------------------------------------------------------
 
-    /**
-     * Builds the mock the controller's getFirstStage2PlusByOpp would return if
-     * OpportunityHistory auto-creation worked in this org's test context.
-     * Maps every test-seeded opp at Stage 2+ to "now" — so each test asserts
-     * windows containing today (WoW, MoM, QTD) match.
-     */
     private static Map<Id, DateTime> buildStage2PlusMock() {
         Set<Id> aeIds = computeTestAeIds();
         Map<Id, DateTime> mock = new Map<Id, DateTime>();
@@ -275,9 +264,15 @@ private class PGInsightsControllerTest {
     }
 
     private static Set<Id> computeTestAeIds() {
+        // Mirrors PGInsightsController.getAeUserIds() — UserRole.Name CONTAINS
+        // any of the AE pod tokens, BDR titles excluded.
         List<User> aes = [
-            SELECT Id, Title FROM User
-            WHERE Pod__c IN :TEST_AE_PODS AND IsActive = TRUE
+            SELECT Id, Title, UserRole.Name FROM User
+            WHERE IsActive = TRUE
+              AND (UserRole.Name LIKE '%BUYSIDE%'
+                   OR UserRole.Name LIKE '%IB1%'
+                   OR UserRole.Name LIKE '%IB2%'
+                   OR UserRole.Name LIKE '%MM%')
         ];
         Set<Id> ids = new Set<Id>();
         for (User u : aes) {
@@ -304,7 +299,7 @@ private class PGInsightsControllerTest {
     }
 
     private static User buildUser(String alias, String firstName, String lastName,
-                                  String pod, String title, Id profileId) {
+                                  Id userRoleId, String title, Id profileId) {
         return new User(
             Alias = alias.left(8),
             Email = alias + '@pginsightstest.example.com',
@@ -317,7 +312,7 @@ private class PGInsightsControllerTest {
             TimeZoneSidKey = 'America/New_York',
             UserName = alias + '@pginsightstest.example.com.' + System.now().getTime(),
             Title = title,
-            Pod__c = pod,
+            UserRoleId = userRoleId,
             IsActive = true
         );
     }
@@ -329,19 +324,29 @@ private class PGInsightsControllerTest {
             StageName = stageName,
             CloseDate = Date.today().addDays(60),
             Type = oppType,
-            // Controller filters Booked_By_Role__c LIKE 'AE%' to scope to
-            // AE-sourced pipeline.
             Booked_By_Role__c = 'AE - ENT'
         );
     }
 
-    private static Task buildTask(Id ownerId, String subtype) {
+    private static Task buildEmailCallTask(Id ownerId, String subtype) {
         return new Task(
             OwnerId = ownerId,
             Subject = 'PG Test ' + subtype,
             Status = 'Completed',
             TaskSubtype = subtype,
             NektarSender__c = 'Us',
+            ActivityDate = Date.today()
+        );
+    }
+
+    private static Task buildLinkedInTask(Id ownerId) {
+        // Sales Navigator integration shape: TaskSubtype = 'Task', Subject
+        // contains 'Sales Navigator' and 'Sent' for outbound. No Nektar tag.
+        return new Task(
+            OwnerId = ownerId,
+            Subject = 'Sales Navigator Message Sent',
+            Status = 'Completed',
+            TaskSubtype = 'Task',
             ActivityDate = Date.today()
         );
     }

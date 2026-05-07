@@ -16,8 +16,19 @@ public with sharing class PGInsightsController {
 
     // ---- Org-specific configuration --------------------------------------------------
 
-    private static final Set<String> AE_PODS = new Set<String>{
-        'ENT 1', 'ENT 2', 'MM/HV'
+    // AEs are grouped by UserRole.Name CONTAINS one of these tokens
+    // (case-insensitive). Order matters for derivePodFromRole — first match
+    // wins, so put the more-specific tokens first if any overlap is possible.
+    private static final List<String> POD_TOKENS = new List<String>{
+        'BUYSIDE', 'IB1', 'IB2', 'MM'
+    };
+
+    // Display label per token. Keep keys aligned with POD_TOKENS.
+    private static final Map<String, String> POD_LABEL_BY_TOKEN = new Map<String, String>{
+        'BUYSIDE' => 'Buyside',
+        'IB1' => 'IB1',
+        'IB2' => 'IB2',
+        'MM'  => 'MM'
     };
 
     private static final String NB_TYPE  = 'New Business';
@@ -250,56 +261,6 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<PerformerRow> getTopPerformers(Integer topN) {
-        Integer n = (topN == null || topN <= 0) ? 5 : topN;
-        Date qStart = startOfCurrentFiscalQuarter();
-        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
-
-        Set<Id> qIds = new Set<Id>();
-        for (Id oid : firstDates.keySet()) {
-            if (firstDates.get(oid).date() >= qStart) qIds.add(oid);
-        }
-        Map<Id, Opportunity> opps = getOppDetails(qIds);
-
-        Map<Id, Decimal[]> quotas = getQuotasForCurrentQuarter();
-        Decimal proration = mtdProration();
-
-        Map<Id, PerformerRow> byOwner = new Map<Id, PerformerRow>();
-        for (Id oid : qIds) {
-            Opportunity o = opps.get(oid);
-            if (o == null || (o.Type != NB_TYPE && o.Type != EXP_TYPE)) continue;
-            PerformerRow row = byOwner.get(o.OwnerId);
-            if (row == null) {
-                row = new PerformerRow();
-                row.ownerId = o.OwnerId;
-                row.ownerName = o.Owner != null ? o.Owner.Name : null;
-                row.nbCount = 0;
-                row.expCount = 0;
-                Decimal[] g = quotas.get(o.OwnerId);
-                Decimal quarterly = g == null ? 0 : g[0] + g[1];
-                row.goal = quarterly * proration;
-                byOwner.put(o.OwnerId, row);
-            }
-            if (o.Type == NB_TYPE) row.nbCount  += 1;
-            else                   row.expCount += 1;
-        }
-
-        List<PerformerRow> result = new List<PerformerRow>();
-        for (PerformerRow row : byOwner.values()) {
-            row.attainmentPct = row.goal == 0 ? 0
-                : ((row.nbCount + row.expCount) / row.goal) * 100;
-            result.add(row);
-        }
-        result.sort(new PerformerComparator());
-        if (result.size() > n) {
-            List<PerformerRow> trimmed = new List<PerformerRow>();
-            for (Integer i = 0; i < n; i++) trimmed.add(result[i]);
-            result = trimmed;
-        }
-        return result;
-    }
-
-    @AuraEnabled(cacheable=true)
     public static List<PodPerformers> getTopPerformersByPod(Integer topN) {
         Integer n = (topN == null || topN <= 0) ? 5 : topN;
         Date qStart = startOfCurrentFiscalQuarter();
@@ -396,8 +357,8 @@ public with sharing class PGInsightsController {
 
         Map<Id, OutreachRow> byOwner = new Map<Id, OutreachRow>();
 
-        // Tasks: emails, calls, LinkedIn touches
-        for (AggregateResult ar : queryTaskAggregates(aes, windowLabel)) {
+        // Emails + Calls (Nektar-tagged outbound)
+        for (AggregateResult ar : queryEmailCallAggregates(aes, windowLabel)) {
             Id oid = (Id) ar.get('oid');
             String oname = (String) ar.get('oname');
             String subtype = (String) ar.get('st');
@@ -405,7 +366,17 @@ public with sharing class PGInsightsController {
             OutreachRow row = ensureRow(byOwner, oid, oname);
             if (subtype == 'Email')         row.emails   = cnt;
             else if (subtype == 'Call')     row.calls    = cnt;
-            else if (subtype == 'LinkedIn') row.linkedin = cnt;
+        }
+
+        // LinkedIn — Sales Navigator integration writes Tasks differently
+        // (TaskSubtype = 'Task', Subject contains 'Sales Navigator' and 'Sent'
+        // for outbound). No Nektar tagging on these.
+        for (AggregateResult ar : queryLinkedInAggregates(aes, windowLabel)) {
+            Id oid = (Id) ar.get('oid');
+            String oname = (String) ar.get('oname');
+            Integer cnt = (Integer) ar.get('cnt');
+            OutreachRow row = ensureRow(byOwner, oid, oname);
+            row.linkedin = cnt;
         }
 
         // Meetings live on the standard Event object.
@@ -502,15 +473,30 @@ public with sharing class PGInsightsController {
         if (aeUserIdsByPodCache != null) return aeUserIdsByPodCache;
         Map<String, Set<Id>> out = new Map<String, Set<Id>>();
         for (User u : [
-            SELECT Id, Title, Pod__c FROM User
-            WHERE IsActive = TRUE AND Pod__c IN :AE_PODS
+            SELECT Id, Title, UserRole.Name FROM User
+            WHERE IsActive = TRUE
+              AND (UserRole.Name LIKE '%BUYSIDE%'
+                   OR UserRole.Name LIKE '%IB1%'
+                   OR UserRole.Name LIKE '%IB2%'
+                   OR UserRole.Name LIKE '%MM%')
         ]) {
             if (u.Title != null && u.Title.containsIgnoreCase('BDR')) continue;
-            if (!out.containsKey(u.Pod__c)) out.put(u.Pod__c, new Set<Id>());
-            out.get(u.Pod__c).add(u.Id);
+            String pod = derivePodFromRole(u.UserRole != null ? u.UserRole.Name : null);
+            if (pod == null) continue;
+            if (!out.containsKey(pod)) out.put(pod, new Set<Id>());
+            out.get(pod).add(u.Id);
         }
         aeUserIdsByPodCache = out;
         return out;
+    }
+
+    private static String derivePodFromRole(String roleName) {
+        if (String.isBlank(roleName)) return null;
+        String upper = roleName.toUpperCase();
+        for (String token : POD_TOKENS) {
+            if (upper.contains(token)) return POD_LABEL_BY_TOKEN.get(token);
+        }
+        return null;
     }
 
     private static Set<Id> getAeUserIds() {
@@ -645,14 +631,14 @@ public with sharing class PGInsightsController {
         return 'FY' + fy + '-Q' + fq;
     }
 
-    private static List<AggregateResult> queryTaskAggregates(Set<Id> aes, String windowLabel) {
+    private static List<AggregateResult> queryEmailCallAggregates(Set<Id> aes, String windowLabel) {
         if (windowLabel == 'CW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
                 FROM Task
                 WHERE OwnerId IN :aes
                   AND Status = 'Completed'
-                  AND TaskSubtype IN ('Email', 'Call', 'LinkedIn')
+                  AND TaskSubtype IN ('Email', 'Call')
                   AND NektarSender__c = 'Us'
                   AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name, TaskSubtype
@@ -663,10 +649,38 @@ public with sharing class PGInsightsController {
             FROM Task
             WHERE OwnerId IN :aes
               AND Status = 'Completed'
-              AND TaskSubtype IN ('Email', 'Call', 'LinkedIn')
+              AND TaskSubtype IN ('Email', 'Call')
               AND NektarSender__c = 'Us'
               AND ActivityDate = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name, TaskSubtype
+        ];
+    }
+
+    private static List<AggregateResult> queryLinkedInAggregates(Set<Id> aes, String windowLabel) {
+        // LinkedIn touches via Sales Navigator integration: TaskSubtype is the
+        // generic 'Task' (not 'LinkedIn'), Subject contains 'Sales Navigator'
+        // and 'Sent' for outbound. Nektar does not tag these.
+        if (windowLabel == 'CW') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
+                FROM Task
+                WHERE OwnerId IN :aes
+                  AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%'
+                  AND Subject LIKE '%Sent%'
+                  AND ActivityDate = THIS_WEEK
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        return [
+            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
+            FROM Task
+            WHERE OwnerId IN :aes
+              AND TaskSubtype = 'Task'
+              AND Subject LIKE '%Sales Navigator%'
+              AND Subject LIKE '%Sent%'
+              AND ActivityDate = THIS_FISCAL_QUARTER
+            GROUP BY OwnerId, Owner.Name
         ];
     }
 

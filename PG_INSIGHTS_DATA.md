@@ -16,12 +16,22 @@ here so the per-widget sections can stay focused on what's specific.
 An active Salesforce User is an "AE" for dashboard purposes if all of:
 
 - `User.IsActive = TRUE`
-- `User.Pod__c IN ('ENT 1', 'ENT 2', 'MM/HV')`
+- `User.UserRole.Name` contains one of `BUYSIDE`, `IB1`, `IB2`, `MM`
+  (case-insensitive substring match)
 - `User.Title` does not contain `BDR` (case-insensitive). Untitled users
-  in those pods are included.
+  with a matching role are included.
 
-The **NV** pod is currently excluded — pod composition is in flux. Re-add
-when the team confirms.
+The pod a user belongs to is derived from their role name (first matching
+token wins, evaluated in the order `BUYSIDE`, `IB1`, `IB2`, `MM`):
+
+| Role name contains | Pod label |
+|---|---|
+| `BUYSIDE` | Buyside |
+| `IB1` | IB1 |
+| `IB2` | IB2 |
+| `MM` | MM |
+
+The previous `User.Pod__c` field is no longer used for dashboard scoping.
 
 ### What counts as a New Business or Expansion opportunity
 
@@ -92,6 +102,14 @@ A Task is "completed" if `Status = 'Completed'`.
 ---
 
 ## Quarter Recap tab
+
+### Feature flag: WoW / MoM panels
+
+The Week-over-Week and Month-over-Month panels are **hidden by default**.
+To re-enable them, edit the Lightning App Page in App Builder, select the
+PG Insights component, and check **Show Week/Month KPIs**. No redeploy
+required. The panels and their Apex still ship with the package; only the
+visibility is gated.
 
 ### Week-over-Week (WoW) panel
 
@@ -178,9 +196,11 @@ Attainment is shown as 0%.
 
 **Question answered:** which reps are leading their pod this quarter?
 
-**Layout:** three cards in a row (ENT 1 indigo gradient, ENT 2 amber, MM/HV
-teal). Each card shows pod-level totals at the top and the top 5 reps in
-that pod below.
+**Layout:** four cards in a row, one per pod, each with its own gradient
+header — Buyside (rose/pink), IB1 (indigo), IB2 (teal), MM (amber). On
+medium screens the cards wrap to a 2×2 grid; on small screens they stack.
+Each card shows pod-level totals at the top and the top 5 reps in that
+pod below.
 
 **Pod-level metrics (header of each card):**
 
@@ -236,9 +256,16 @@ and inflate the current-period count.
 |---|---|---|
 | OB Emails | `Task` | `TaskSubtype = 'Email'` AND `Status = 'Completed'` AND `NektarSender__c = 'Us'` AND `ActivityDate` in window |
 | OB Calls | `Task` | `TaskSubtype = 'Call'` AND `Status = 'Completed'` AND `NektarSender__c = 'Us'` AND `ActivityDate` in window |
-| OB LinkedIn | `Task` | `TaskSubtype = 'LinkedIn'` AND `Status = 'Completed'` AND `NektarSender__c = 'Us'` AND `ActivityDate` in window |
+| OB LinkedIn | `Task` | `TaskSubtype = 'Task'` AND `Subject LIKE '%Sales Navigator%'` AND `Subject LIKE '%Sent%'` AND `ActivityDate` in window |
 | Meetings | `Event` | `NektarSender__c = 'Us'` AND `NektarStatus__c = 'completed'` AND `Meeting_Type__c IN ('Discovery', 'First Meeting')` AND `ActivityDate` in window |
 | Total OB | computed | sum of the above four |
+
+**LinkedIn is filtered differently.** Sales Navigator integration writes
+its activity as generic `Task` records (`TaskSubtype = 'Task'`, not
+`'LinkedIn'`) and does not flow through Nektar, so neither the
+`TaskSubtype = 'LinkedIn'` nor `NektarSender__c = 'Us'` filters apply.
+Outbound is identified by the Subject containing both `Sales Navigator`
+and `Sent`.
 
 **Why Meetings is so narrow:** Events on an AE's calendar include
 internal 1:1s, all-hands, customer reviews, deal-progression syncs,
@@ -391,8 +418,11 @@ The controller has a `@TestVisible` mock seam (`mockFirstStage2PlusByOpp`
 and `mockStagesByOpp`) so tests can inject a hand-crafted history map
 without depending on auto-creation. Production code path is untouched.
 
-**NV pod excluded.** Per direction, NV pod is not included in the AE
-filter while team composition is being finalized. Re-add when settled.
+**Pod definition is role-name-based, not Pod__c.** AEs are grouped by
+substring match on `User.UserRole.Name`. Users in the relevant role
+hierarchies but with `Title` containing `BDR` are excluded. Users whose
+role name doesn't match any of the four tokens are not considered AEs by
+the dashboard.
 
 **No conversion-heatmap date filter.** All-time scope means the
 percentages move slowly and a long-departed rep stays on the heatmap
