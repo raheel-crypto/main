@@ -636,15 +636,20 @@ public with sharing class PGInsightsController {
     }
 
     private static List<AggregateResult> queryEmailCallAggregates(Set<Id> aes, String windowLabel) {
+        // Emails are Nektar-tagged ('NektarSender__c = Us' = outbound); Call
+        // records in this org have all Nektar fields null, so calls are
+        // identified by TaskSubtype alone.
         if (windowLabel == 'CW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
                 FROM Task
                 WHERE OwnerId IN :aes
                   AND Status = 'Completed'
-                  AND TaskSubtype IN ('Email', 'Call')
-                  AND NektarSender__c = 'Us'
                   AND ActivityDate = THIS_WEEK
+                  AND (
+                      (TaskSubtype = 'Email' AND NektarSender__c = 'Us')
+                      OR TaskSubtype = 'Call'
+                  )
                 GROUP BY OwnerId, Owner.Name, TaskSubtype
             ];
         }
@@ -653,9 +658,11 @@ public with sharing class PGInsightsController {
             FROM Task
             WHERE OwnerId IN :aes
               AND Status = 'Completed'
-              AND TaskSubtype IN ('Email', 'Call')
-              AND NektarSender__c = 'Us'
               AND ActivityDate = THIS_FISCAL_QUARTER
+              AND (
+                  (TaskSubtype = 'Email' AND NektarSender__c = 'Us')
+                  OR TaskSubtype = 'Call'
+              )
             GROUP BY OwnerId, Owner.Name, TaskSubtype
         ];
     }

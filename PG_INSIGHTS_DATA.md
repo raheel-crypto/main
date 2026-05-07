@@ -255,7 +255,7 @@ and inflate the current-period count.
 | Column | Source | Filters |
 |---|---|---|
 | OB Emails | `Task` | `TaskSubtype = 'Email'` AND `Status = 'Completed'` AND `NektarSender__c = 'Us'` AND `ActivityDate` in window |
-| OB Calls | `Task` | `TaskSubtype = 'Call'` AND `Status = 'Completed'` AND `NektarSender__c = 'Us'` AND `ActivityDate` in window |
+| OB Calls | `Task` | `TaskSubtype = 'Call'` AND `Status = 'Completed'` AND `ActivityDate` in window. **No Nektar filter** — Call records in this org have all Nektar fields null, so `TaskSubtype` alone identifies them. |
 | OB LinkedIn | `Task` | `TaskSubtype = 'Task'` AND `Subject LIKE '%Sales Navigator%'` AND `Subject LIKE '%Sent%'` AND `ActivityDate` in window |
 | Meetings | `Event` | `NektarSender__c = 'Us'` AND `NektarStatus__c = 'completed'` AND `Meeting_Type__c IN ('Discovery', 'First Meeting')` AND `ActivityDate` in window |
 | Total OB | computed | sum of the above four |
