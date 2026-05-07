@@ -351,6 +351,8 @@ private class PGInsightsControllerTest {
             OwnerId = ownerId,
             Subject = 'PG Test Meeting',
             NektarSender__c = 'Us',
+            NektarStatus__c = 'completed',
+            Meeting_Type__c = 'Discovery',
             ActivityDate = Date.today(),
             ActivityDateTime = DateTime.now(),
             DurationInMinutes = 30

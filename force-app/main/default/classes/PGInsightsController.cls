@@ -671,12 +671,17 @@ public with sharing class PGInsightsController {
     }
 
     private static List<AggregateResult> queryEventMeetings(Set<Id> aes, String windowLabel) {
+        // Pipe-gen specific: only Discovery / First Meeting that actually
+        // happened (NektarStatus = completed). Excludes internal calendar
+        // items, deal-progression check-ins, and canceled/missed meetings.
         if (windowLabel == 'CW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
                 FROM Event
                 WHERE OwnerId IN :aes
                   AND NektarSender__c = 'Us'
+                  AND NektarStatus__c = 'completed'
+                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
                   AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
@@ -686,6 +691,8 @@ public with sharing class PGInsightsController {
             FROM Event
             WHERE OwnerId IN :aes
               AND NektarSender__c = 'Us'
+              AND NektarStatus__c = 'completed'
+              AND Meeting_Type__c IN ('Discovery', 'First Meeting')
               AND ActivityDate = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name
         ];
