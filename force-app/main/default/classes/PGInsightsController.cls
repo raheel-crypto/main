@@ -654,7 +654,7 @@ public with sharing class PGInsightsController {
                   AND Status = 'Completed'
                   AND TaskSubtype IN ('Email', 'Call', 'LinkedIn')
                   AND NektarSender__c = 'Us'
-                  AND CompletedDateTime = THIS_WEEK
+                  AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name, TaskSubtype
             ];
         }
@@ -665,7 +665,7 @@ public with sharing class PGInsightsController {
               AND Status = 'Completed'
               AND TaskSubtype IN ('Email', 'Call', 'LinkedIn')
               AND NektarSender__c = 'Us'
-              AND CompletedDateTime = THIS_FISCAL_QUARTER
+              AND ActivityDate = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name, TaskSubtype
         ];
     }
