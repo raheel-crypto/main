@@ -332,6 +332,67 @@ private class PGInsightsControllerTest {
     // ---- Phase D: heatmap groupings + drill-down ----------------------------------
 
     @IsTest
+    static void getAeUserIds_excludesCsmAndGtmTitles() {
+        // Insert two extra users with matching pod role names but non-AE
+        // titles. They should NOT appear in the AE outreach roster.
+        UserRole role = [
+            SELECT Id FROM UserRole WHERE Name LIKE 'Test IB1%' LIMIT 1
+        ];
+        Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        List<User> nonAes = new List<User>{
+            buildUser('csm1', 'CSM', 'Person', role.Id, 'CSM - MM', p.Id),
+            buildUser('gtm1', 'GTM', 'Person', role.Id, 'GTM Strategy', p.Id)
+        };
+        insert nonAes;
+
+        // Outreach query reads getAeUserIds via getAeUserIdsByPod — give the
+        // non-AEs an outbound task each and verify they don't appear.
+        User loader = [SELECT Id FROM User WHERE Username LIKE 'pg-loader%' LIMIT 1];
+        System.runAs(loader) {
+            insert new List<Task>{
+                buildEmailCallTask(nonAes[0].Id, 'Email'),
+                buildEmailCallTask(nonAes[1].Id, 'Email')
+            };
+        }
+
+        Test.startTest();
+        List<PGInsightsController.OutreachRow> rows =
+            PGInsightsController.getIndividualOutreach('CW');
+        Test.stopTest();
+
+        for (PGInsightsController.OutreachRow r : rows) {
+            String name = r.ownerName == null ? '' : r.ownerName;
+            System.assert(!name.contains('CSM'),
+                'CSM-titled user should not appear in outreach roster');
+            System.assert(!name.contains('GTM'),
+                'GTM-titled user should not appear in outreach roster');
+        }
+    }
+
+    @IsTest
+    static void getConversionHeatmap_includesAmountWeightedFields() {
+        PGInsightsController.mockStagesByOpp = buildSimpleStagesMock();
+        Test.startTest();
+        List<PGInsightsController.HeatmapRow> rows =
+            PGInsightsController.getConversionHeatmap('AE', false);
+        Test.stopTest();
+
+        // Every row should carry the amount-weighted conversion fields.
+        Boolean foundAmountField = false;
+        for (PGInsightsController.HeatmapRow r : rows) {
+            if (r.demoToDiscoAmount != null) {
+                foundAmountField = true;
+                // Count and amount conversion are equal here only because
+                // every test opp has the same Amount; the math path differs.
+                System.assertEquals(r.demoToDisco, r.demoToDiscoAmount,
+                    'Equal-Amount opps yield equal count and amount conversions');
+                break;
+            }
+        }
+        System.assert(foundAmountField, 'At least one row populated demoToDiscoAmount');
+    }
+
+    @IsTest
     static void getConversionHeatmap_byPodGroupsAEs() {
         PGInsightsController.mockStagesByOpp = buildSimpleStagesMock();
         Test.startTest();

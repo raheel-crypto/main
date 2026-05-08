@@ -4,6 +4,10 @@
             <span>Conversion Rates | All Time</span>
             <div class="pg-heatmap__controls">
                 <div class="pg-mini-toggle">
+                    <button type="button" class={countToggleClass}  onclick={handleSelectCount}># of opps</button>
+                    <button type="button" class={amountToggleClass} onclick={handleSelectAmount}>$ pipeline</button>
+                </div>
+                <div class="pg-mini-toggle">
                     <button type="button" class={aeToggleClass}  onclick={handleSelectAE}>By AE</button>
                     <button type="button" class={podToggleClass} onclick={handleSelectPod}>By Pod</button>
                 </div>

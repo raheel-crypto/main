@@ -18,8 +18,15 @@ An active Salesforce User is an "AE" for dashboard purposes if all of:
 - `User.IsActive = TRUE`
 - `User.UserRole.Name` contains one of `BUYSIDE`, `IB1`, `IB2`, `MM`
   (case-insensitive substring match)
-- `User.Title` does not contain `BDR` (case-insensitive). Untitled users
-  with a matching role are included.
+- `User.Title` does not contain any of: `BDR`, `SDR`, `CSM`,
+  `customer success`, `post-sales`, `post sales`, `GTM`, `integration`,
+  `strategy`, `solutions consultant`, `sales engineer`, `analyst`
+  (case-insensitive). Untitled users with a matching role are still
+  included — some real AEs have empty Title fields.
+
+The non-AE title list catches CSMs / GTM associates / post-sales
+specialists / integration leads who otherwise leak in via shared pod
+role hierarchies. Add tokens here as new edge cases surface.
 
 The pod a user belongs to is derived from their role name (first matching
 token wins, evaluated in the order `BUYSIDE`, `IB1`, `IB2`, `MM`):
@@ -186,7 +193,10 @@ creation? Two views available via an in-card toggle:
 
 **Visualization:** stacked bar chart, one bar per bucket. NB stack on
 bottom (cyan-to-navy gradient), Expansion stack on top (rose-to-burgundy).
-Dashed dark goal line in quarter view; tooltip shows total and breakdown.
+Dashed dark goal line in quarter view. Stack totals are drawn above each
+bar — count-formatted (`12`) or `$`-formatted (`$1.2M`) per the active
+metric — so totals are visible without hovering. Hover tooltip still
+shows the per-stack breakdown.
 
 **Bucket value (count mode):** count of opps owned by an AE, AE-sourced
 (`Booked_By_Role__c LIKE 'AE%'`), Type IN (`'New Business'`, `'Pilot'`,
@@ -248,15 +258,15 @@ pod below.
 **Per-rep rows (top 5 in pod):**
 
 - Counted opps = same Stage 2+ universe, attributed by `Opportunity.OwnerId`
-- Per-rep goal = that AE's `(NB_Goal__c + Exp_Goal__c)` for the current
-  quarter, prorated. AEs without a quota row see `0` and a `—` for
-  attainment.
-- Sort: total count desc; tiebreak by attainment % desc.
-- Trimmed to top 5 per pod.
-
-The sort by count (not attainment) was a deliberate choice — mixing
-percent and count in one score gave nonsensical orderings when some reps
-had goals set and others didn't.
+- Per-rep goal = that AE's `(NB_Goal__c + Exp_Goal__c)` (count mode) or
+  `(NB_Amount_Goal__c + Exp_Amount_Goal__c)` (amount mode) for the
+  current quarter, prorated. AEs without a quota row see `0` and a `—`
+  for attainment.
+- **Sort responds to the active # vs $ toggle.** Count mode sorts by
+  total Stage 2+ count desc; amount mode sorts by NB+Exp amount desc.
+- Apex returns up to 50 rows per pod (no pre-trim); the LWC re-sorts by
+  metric and trims to top 5. Same row could be ranked differently
+  between the two views without dropping candidates on the metric flip.
 
 ---
 
@@ -346,11 +356,16 @@ Zero values render no bar. The leader in each column has a full-width bar.
 ### Conversion Rates heatmap
 
 **Question answered:** at each stage transition, what fraction of *settled*
-deals converted? Two view modes via an in-card toggle:
+deals converted? Three independent toggles in the card header:
 
-- **By AE** (default) — one row per AE. Manager column shown.
-- **By Pod** — rows aggregated to pod level. Optional **Combine IB1 + IB2**
-  checkbox collapses both IB pods into a single `IB` row.
+- **# of opps / $ pipeline** — `# of opps` (default) computes count-based
+  conversions; `$ pipeline` computes amount-weighted conversions where
+  numerator and denominator are sums of `Opportunity.Amount` instead of
+  counts. The Apex always returns both shapes; LWC switches client-side.
+- **By AE / By Pod** — `By AE` (default) one row per AE with the Manager
+  column shown; `By Pod` aggregates to pod level.
+- **Combine IB1 + IB2** (Pod mode only) — collapses both IB pods into a
+  single `IB` row.
 
 **Math:** for each group and each transition X→Y:
 

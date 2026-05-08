@@ -13,6 +13,7 @@ const TRANSITION_LABELS = {
 export default class PgConversionHeatmap extends LightningElement {
     grouping = 'AE';        // 'AE' | 'Pod'
     combineIB = false;
+    metric = 'count';       // 'count' | 'amount'
     rawRows;
     error;
 
@@ -30,29 +31,46 @@ export default class PgConversionHeatmap extends LightningElement {
 
     get aeToggleClass()  { return 'pg-mini-toggle__btn' + (this.grouping === 'AE'  ? ' pg-mini-toggle__btn--active' : ''); }
     get podToggleClass() { return 'pg-mini-toggle__btn' + (this.grouping === 'Pod' ? ' pg-mini-toggle__btn--active' : ''); }
+    get countToggleClass()  { return 'pg-mini-toggle__btn' + (this.metric === 'count'  ? ' pg-mini-toggle__btn--active' : ''); }
+    get amountToggleClass() { return 'pg-mini-toggle__btn' + (this.metric === 'amount' ? ' pg-mini-toggle__btn--active' : ''); }
     get isPodMode()      { return this.grouping === 'Pod'; }
+    get isAmount()       { return this.metric === 'amount'; }
 
     handleSelectAE()  { this.grouping = 'AE';  }
     handleSelectPod() { this.grouping = 'Pod'; }
+    handleSelectCount()  { this.metric = 'count';  }
+    handleSelectAmount() { this.metric = 'amount'; }
     handleToggleCombineIB(event) { this.combineIB = event.target.checked; }
 
     get rows() {
         if (!this.rawRows) return [];
-        return this.rawRows.map(r => ({
-            ...r,
-            // Stable group key for drilldown: ownerId in AE mode, ownerName (pod label) in Pod mode.
-            groupKey: this.isPodMode ? r.ownerName : r.ownerId,
-            demoToDiscoFmt:           this.fmt(r.demoToDisco),
-            discoToPovFmt:            this.fmt(r.discoToPov),
-            povToProposalFmt:         this.fmt(r.povToProposal),
-            proposalToContractingFmt: this.fmt(r.proposalToContracting),
-            contractingToWonFmt:      this.fmt(r.contractingToWon),
-            demoToDiscoClass:           this.cellClass(r.demoToDisco),
-            discoToPovClass:            this.cellClass(r.discoToPov),
-            povToProposalClass:         this.cellClass(r.povToProposal),
-            proposalToContractingClass: this.cellClass(r.proposalToContracting),
-            contractingToWonClass:      this.cellClass(r.contractingToWon)
-        }));
+        const isAmt = this.isAmount;
+        const pickD2D = r => isAmt ? r.demoToDiscoAmount           : r.demoToDisco;
+        const pickD2P = r => isAmt ? r.discoToPovAmount            : r.discoToPov;
+        const pickP2P = r => isAmt ? r.povToProposalAmount         : r.povToProposal;
+        const pickPr2C= r => isAmt ? r.proposalToContractingAmount : r.proposalToContracting;
+        const pickC2W = r => isAmt ? r.contractingToWonAmount      : r.contractingToWon;
+        return this.rawRows.map(r => {
+            const d2d = pickD2D(r);
+            const d2p = pickD2P(r);
+            const p2p = pickP2P(r);
+            const pr2c = pickPr2C(r);
+            const c2w = pickC2W(r);
+            return {
+                ...r,
+                groupKey: this.isPodMode ? r.ownerName : r.ownerId,
+                demoToDiscoFmt:           this.fmt(d2d),
+                discoToPovFmt:            this.fmt(d2p),
+                povToProposalFmt:         this.fmt(p2p),
+                proposalToContractingFmt: this.fmt(pr2c),
+                contractingToWonFmt:      this.fmt(c2w),
+                demoToDiscoClass:           this.cellClass(d2d),
+                discoToPovClass:            this.cellClass(d2p),
+                povToProposalClass:         this.cellClass(p2p),
+                proposalToContractingClass: this.cellClass(pr2c),
+                contractingToWonClass:      this.cellClass(c2w)
+            };
+        });
     }
 
     get hasRows() { return this.rows.length > 0; }

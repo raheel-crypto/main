@@ -148,11 +148,46 @@ export default class PgStageProgressChart extends LightningElement {
             });
         }
 
+        // Custom plugin: draw stack totals above each bar so users don't
+        // have to hover. Captures fmtTick + bar-dataset indices via closure.
+        const barDatasetIndices = datasets
+            .map((d, i) => d.type === 'bar' ? i : -1)
+            .filter(i => i >= 0);
+        const totalLabelsPlugin = {
+            id: 'pgStackTotals',
+            afterDatasetsDraw(chart) {
+                if (!barDatasetIndices.length) return;
+                const ctx = chart.ctx;
+                const lastIdx = barDatasetIndices[barDatasetIndices.length - 1];
+                const meta = chart.getDatasetMeta(lastIdx);
+                if (!meta || !meta.data) return;
+                ctx.save();
+                ctx.font = '600 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                ctx.fillStyle = '#0f172a';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'bottom';
+                for (let i = 0; i < meta.data.length; i++) {
+                    const elem = meta.data[i];
+                    if (!elem) continue;
+                    let total = 0;
+                    for (const idx of barDatasetIndices) {
+                        const v = chart.data.datasets[idx].data[i];
+                        total += Number(v) || 0;
+                    }
+                    if (total <= 0) continue;
+                    ctx.fillText(fmtTick(total), elem.x, elem.y - 4);
+                }
+                ctx.restore();
+            }
+        };
+
         this.chart = new window.Chart(canvas.getContext('2d'), {
             data: { labels, datasets },
+            plugins: [totalLabelsPlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: { padding: { top: 22 } },
                 plugins: {
                     legend: { labels: { color: '#475569' } },
                     tooltip: {

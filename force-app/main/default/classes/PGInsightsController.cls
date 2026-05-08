@@ -172,12 +172,19 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Id ownerId;
         @AuraEnabled public String ownerName;
         @AuraEnabled public String managerName;
-        // Conversion percentages for each transition (0-100).
+        // Count-based conversion percentages (0-100).
         @AuraEnabled public Decimal demoToDisco;
         @AuraEnabled public Decimal discoToPov;
         @AuraEnabled public Decimal povToProposal;
         @AuraEnabled public Decimal proposalToContracting;
         @AuraEnabled public Decimal contractingToWon;
+        // Amount-weighted conversion percentages (0-100). Same denominator
+        // semantics as count, but values are sums of Opportunity.Amount.
+        @AuraEnabled public Decimal demoToDiscoAmount;
+        @AuraEnabled public Decimal discoToPovAmount;
+        @AuraEnabled public Decimal povToProposalAmount;
+        @AuraEnabled public Decimal proposalToContractingAmount;
+        @AuraEnabled public Decimal contractingToWonAmount;
         // Underlying counts (opps that ever reached this stage or beyond).
         @AuraEnabled public Integer demoCount;
         @AuraEnabled public Integer discoveryCount;
@@ -423,7 +430,9 @@ public with sharing class PGInsightsController {
 
     @AuraEnabled(cacheable=true)
     public static List<PodPerformers> getTopPerformersByPod(Integer topN) {
-        Integer n = (topN == null || topN <= 0) ? 5 : topN;
+        // topN is honored only as a soft cap (default no trim) so the LWC can
+        // re-sort by # or $ client-side and still show the right top-N.
+        Integer cap = (topN == null || topN <= 0) ? 50 : topN;
         Date qStart = startOfCurrentFiscalQuarter();
         Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
 
@@ -522,9 +531,9 @@ public with sharing class PGInsightsController {
                 sorted.add(row);
             }
             sorted.sort(new PerformerComparator());
-            if (sorted.size() > n) {
+            if (sorted.size() > cap) {
                 List<PerformerRow> trimmed = new List<PerformerRow>();
-                for (Integer i = 0; i < n; i++) trimmed.add(sorted[i]);
+                for (Integer i = 0; i < cap; i++) trimmed.add(sorted[i]);
                 sorted = trimmed;
             }
             pp.rows = sorted;
@@ -700,7 +709,7 @@ public with sharing class PGInsightsController {
         // scope to AE-sourced deals — but conversion is about what the AE
         // does with the deals they're handed, so that filter is omitted here.
         Map<Id, Opportunity> opps = new Map<Id, Opportunity>([
-            SELECT Id, OwnerId, Owner.Name, Owner.Manager.Name, IsClosed, StageName
+            SELECT Id, OwnerId, Owner.Name, Owner.Manager.Name, IsClosed, StageName, Amount
             FROM Opportunity
             WHERE OwnerId IN :aes
               AND Type IN :ALL_DASHBOARD_TYPES
@@ -722,9 +731,14 @@ public with sharing class PGInsightsController {
         }
 
         // Per-group: reached[N] / eligible[N] arrays indexed by stage rank.
-        Map<String, Integer[]>      reachedByGroup  = new Map<String, Integer[]>();
-        Map<String, Integer[]>      eligibleByGroup = new Map<String, Integer[]>();
-        Map<String, Opportunity>    sampleByGroup   = new Map<String, Opportunity>();
+        // Parallel *Amt arrays sum Opportunity.Amount instead of opp count
+        // so the LWC can switch between count-based and $-weighted
+        // conversions without a re-call.
+        Map<String, Integer[]>      reachedByGroup     = new Map<String, Integer[]>();
+        Map<String, Integer[]>      eligibleByGroup    = new Map<String, Integer[]>();
+        Map<String, Decimal[]>      reachedAmtByGroup  = new Map<String, Decimal[]>();
+        Map<String, Decimal[]>      eligibleAmtByGroup = new Map<String, Decimal[]>();
+        Map<String, Opportunity>    sampleByGroup      = new Map<String, Opportunity>();
 
         for (Opportunity o : opps.values()) {
             Set<String> stages = stagesByOpp.get(o.Id);
@@ -747,28 +761,43 @@ public with sharing class PGInsightsController {
 
             Integer[] reached  = reachedByGroup.get(groupKey);
             Integer[] eligible = eligibleByGroup.get(groupKey);
+            Decimal[] reachedAmt  = reachedAmtByGroup.get(groupKey);
+            Decimal[] eligibleAmt = eligibleAmtByGroup.get(groupKey);
             if (reached == null) {
-                reached  = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
-                eligible = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
+                reached     = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
+                eligible    = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
+                reachedAmt  = new Decimal[]{ 0, 0, 0, 0, 0, 0, 0 };
+                eligibleAmt = new Decimal[]{ 0, 0, 0, 0, 0, 0, 0 };
                 reachedByGroup.put(groupKey, reached);
                 eligibleByGroup.put(groupKey, eligible);
+                reachedAmtByGroup.put(groupKey, reachedAmt);
+                eligibleAmtByGroup.put(groupKey, eligibleAmt);
                 sampleByGroup.put(groupKey, o);
             }
+            Decimal amt = o.Amount == null ? 0 : o.Amount;
             for (Integer N = 1; N <= 6; N++) {
-                if (maxRank >= N) reached[N]++;
-                if (maxRank > N || (maxRank == N && o.IsClosed)) eligible[N]++;
+                if (maxRank >= N) {
+                    reached[N]++;
+                    reachedAmt[N] += amt;
+                }
+                if (maxRank > N || (maxRank == N && o.IsClosed)) {
+                    eligible[N]++;
+                    eligibleAmt[N] += amt;
+                }
             }
         }
 
         for (String groupKey : reachedByGroup.keySet()) {
             Integer[] reached  = reachedByGroup.get(groupKey);
             Integer[] eligible = eligibleByGroup.get(groupKey);
+            Decimal[] reachedAmt  = reachedAmtByGroup.get(groupKey);
+            Decimal[] eligibleAmt = eligibleAmtByGroup.get(groupKey);
             Opportunity sample = sampleByGroup.get(groupKey);
 
             HeatmapRow row = new HeatmapRow();
             if (mode == 'Pod') {
                 row.ownerId     = null;
-                row.ownerName   = groupKey;          // pod label as the row name
+                row.ownerName   = groupKey;
                 row.managerName = null;
             } else {
                 row.ownerId     = sample.OwnerId;
@@ -788,13 +817,42 @@ public with sharing class PGInsightsController {
             row.povToProposal         = pct(reached[4], eligible[3]);
             row.proposalToContracting = pct(reached[5], eligible[4]);
             row.contractingToWon      = pct(reached[6], eligible[5]);
+            row.demoToDiscoAmount           = pctDecimal(reachedAmt[2], eligibleAmt[1]);
+            row.discoToPovAmount            = pctDecimal(reachedAmt[3], eligibleAmt[2]);
+            row.povToProposalAmount         = pctDecimal(reachedAmt[4], eligibleAmt[3]);
+            row.proposalToContractingAmount = pctDecimal(reachedAmt[5], eligibleAmt[4]);
+            row.contractingToWonAmount      = pctDecimal(reachedAmt[6], eligibleAmt[5]);
             result.add(row);
         }
         result.sort(new HeatmapComparator());
         return result;
     }
 
+    private static Decimal pctDecimal(Decimal numerator, Decimal denominator) {
+        if (denominator == null || denominator == 0) return null;
+        return (numerator / denominator) * 100;
+    }
+
     // ---- Private helpers -------------------------------------------------------------
+
+    // Title substrings (case-insensitive) that disqualify a user from
+    // counting as an AE even if their UserRole.Name matches a pod token.
+    // Catches CSMs, GTM associates, integration roles, strategy, and BDRs
+    // who would otherwise leak in via shared pod role hierarchies.
+    private static final List<String> NON_AE_TITLE_TOKENS = new List<String>{
+        'bdr',
+        'sdr',
+        'csm',
+        'customer success',
+        'post-sales',
+        'post sales',
+        'gtm',
+        'integration',
+        'strategy',
+        'solutions consultant',
+        'sales engineer',
+        'analyst'
+    };
 
     private static Map<String, Set<Id>> getAeUserIdsByPod() {
         if (aeUserIdsByPodCache != null) return aeUserIdsByPodCache;
@@ -807,7 +865,7 @@ public with sharing class PGInsightsController {
                    OR UserRole.Name LIKE '%IB2%'
                    OR UserRole.Name LIKE '%MM%')
         ]) {
-            if (u.Title != null && u.Title.containsIgnoreCase('BDR')) continue;
+            if (isNonAeTitle(u.Title)) continue;
             String pod = derivePodFromRole(u.UserRole != null ? u.UserRole.Name : null);
             if (pod == null) continue;
             if (!out.containsKey(pod)) out.put(pod, new Set<Id>());
@@ -815,6 +873,15 @@ public with sharing class PGInsightsController {
         }
         aeUserIdsByPodCache = out;
         return out;
+    }
+
+    private static Boolean isNonAeTitle(String title) {
+        if (String.isBlank(title)) return false;
+        String t = title.toLowerCase();
+        for (String token : NON_AE_TITLE_TOKENS) {
+            if (t.contains(token)) return true;
+        }
+        return false;
     }
 
     private static String derivePodFromRole(String roleName) {

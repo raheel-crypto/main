@@ -9,13 +9,17 @@ const POD_CLASS = {
     'MM':      'pg-pod pg-pod--mm'
 };
 
+const TOP_N = 5;
+
 export default class PgTopPerformers extends LightningElement {
     @api metric = 'count'; // 'count' | 'amount'
 
     rawPods;
     rawStatus;
 
-    @wire(getTopPerformersByPod, { topN: 5 })
+    // Pull the full pod rosters (Apex caps at 50) so the LWC can re-sort
+    // by # or $ without dropping candidates on the metric flip.
+    @wire(getTopPerformersByPod, { topN: 50 })
     wiredPods({ data }) {
         if (data) this.rawPods = data;
     }
@@ -55,25 +59,33 @@ export default class PgTopPerformers extends LightningElement {
 
     get pods() {
         if (!this.rawPods) return [];
+        const isAmt = this.isAmount;
+        const repTotal = (r) => isAmt
+            ? (r.nbAmount || 0) + (r.expAmount || 0)
+            : (r.nbCount  || 0) + (r.expCount  || 0);
+
         return this.rawPods.map(p => {
-            const isAmt = this.isAmount;
             const podCount = isAmt
                 ? (p.totalNbAmount || 0) + (p.totalExpAmount || 0)
                 : (p.totalNb || 0) + (p.totalExp || 0);
             const podGoal = isAmt ? p.totalAmountGoalMTD : p.totalGoalMTD;
             const podAttainmentPct = isAmt ? p.amountAttainmentPct : p.attainmentPct;
 
-            const rows = (p.rows || []).map((r, i) => {
-                const repCount = isAmt
-                    ? (r.nbAmount || 0) + (r.expAmount || 0)
-                    : (r.nbCount || 0) + (r.expCount || 0);
+            // Re-sort by the active metric, then trim to top N. Apex returns
+            // up to 50 rows pre-sorted by count so we can resort without losing
+            // candidates when the metric flips to $.
+            const sorted = [...(p.rows || [])].sort((a, b) => repTotal(b) - repTotal(a));
+            const trimmed = sorted.slice(0, TOP_N);
+
+            const rows = trimmed.map((r, i) => {
+                const repValue = repTotal(r);
                 const repGoal = isAmt ? r.amountGoal : r.goal;
                 const repAttPct = isAmt ? r.amountAttainmentPct : r.attainmentPct;
                 return {
                     ownerId: r.ownerId,
                     ownerName: r.ownerName,
                     rank: i + 1,
-                    totalDisplay: isAmt ? this.fmtCurrency(repCount) : repCount,
+                    totalDisplay: isAmt ? this.fmtCurrency(repValue) : repValue,
                     attainmentDisplay: repGoal > 0
                         ? `${(repAttPct || 0).toFixed(0)}%`
                         : '—'
