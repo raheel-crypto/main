@@ -77,7 +77,9 @@ export default class PgConversionHeatmap extends LightningElement {
 
     fmt(val) {
         if (val == null) return 'N/A';
-        return Math.round(val) + '%';
+        const n = Number(val);
+        if (!Number.isFinite(n)) return 'N/A';
+        return Math.round(n) + '%';
     }
 
     cellClass(val) {
