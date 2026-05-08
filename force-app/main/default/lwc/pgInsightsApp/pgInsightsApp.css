@@ -23,3 +23,47 @@
     color: #cbd5e1;
     margin-top: 0.25rem;
 }
+
+.pg-toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.pg-toggle__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #475569;
+    font-weight: 600;
+}
+
+.pg-toggle {
+    display: inline-flex;
+    background: #e2e8f0;
+    border-radius: 9999px;
+    padding: 0.15rem;
+    border: 1px solid #cbd5e1;
+}
+
+.pg-toggle__btn {
+    border: 0;
+    background: transparent;
+    color: #475569;
+    padding: 0.3rem 0.85rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pg-toggle__btn:hover {
+    color: #0f172a;
+}
+
+.pg-toggle__btn--active {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #f8fafc;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+}

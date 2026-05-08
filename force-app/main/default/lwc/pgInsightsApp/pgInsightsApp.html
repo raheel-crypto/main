@@ -7,16 +7,23 @@
 
         <lightning-tabset variant="scoped" active-tab-value={activeTab}>
             <lightning-tab label="Quarter Recap" value="recap">
+                <div class="pg-toggle-row slds-p-horizontal_small slds-p-top_small">
+                    <span class="pg-toggle__label">Show as:</span>
+                    <div class="pg-toggle">
+                        <button type="button" class={countToggleClass}  onclick={handleSelectCount}># of opps</button>
+                        <button type="button" class={amountToggleClass} onclick={handleSelectAmount}>$ pipeline</button>
+                    </div>
+                </div>
                 <template lwc:if={showPacingKpis}>
                     <div class="slds-p-around_small">
-                        <c-pg-pacing-kpis></c-pg-pacing-kpis>
+                        <c-pg-pacing-kpis metric={metric}></c-pg-pacing-kpis>
                     </div>
                 </template>
                 <div class="slds-p-horizontal_small">
-                    <c-pg-stage-progress-chart></c-pg-stage-progress-chart>
+                    <c-pg-stage-progress-chart metric={metric}></c-pg-stage-progress-chart>
                 </div>
                 <div class="slds-p-around_small">
-                    <c-pg-top-performers></c-pg-top-performers>
+                    <c-pg-top-performers metric={metric}></c-pg-top-performers>
                 </div>
             </lightning-tab>
 

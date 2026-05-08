@@ -77,12 +77,20 @@ public with sharing class PGInsightsController {
 
     public class PacingKpis {
         @AuraEnabled public String windowLabel;
+        // Counts
         @AuraEnabled public Integer newBusiness;
         @AuraEnabled public Integer expansion;
         @AuraEnabled public Decimal nbPctOfTotal;
         @AuraEnabled public Integer deltaNB;
         @AuraEnabled public Integer deltaExp;
         @AuraEnabled public Decimal deltaPct;
+        // Amounts ($)
+        @AuraEnabled public Decimal newBusinessAmount;
+        @AuraEnabled public Decimal expansionAmount;
+        @AuraEnabled public Decimal nbAmtPctOfTotal;
+        @AuraEnabled public Decimal deltaNBAmount;
+        @AuraEnabled public Decimal deltaExpAmount;
+        @AuraEnabled public Decimal deltaAmtPct;
     }
 
     public class QuarterRow {
@@ -90,6 +98,9 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Integer nbCount;
         @AuraEnabled public Integer expCount;
         @AuraEnabled public Decimal goal;
+        @AuraEnabled public Decimal nbAmount;
+        @AuraEnabled public Decimal expAmount;
+        @AuraEnabled public Decimal amountGoal;
     }
 
     public class S1Status {
@@ -97,6 +108,10 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Integer expCount;
         @AuraEnabled public Decimal goalMTD;
         @AuraEnabled public Decimal attainmentPct;
+        @AuraEnabled public Decimal nbAmount;
+        @AuraEnabled public Decimal expAmount;
+        @AuraEnabled public Decimal amountGoalMTD;
+        @AuraEnabled public Decimal amountAttainmentPct;
     }
 
     public class PerformerRow {
@@ -106,6 +121,10 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Integer expCount;
         @AuraEnabled public Decimal goal;
         @AuraEnabled public Decimal attainmentPct;
+        @AuraEnabled public Decimal nbAmount;
+        @AuraEnabled public Decimal expAmount;
+        @AuraEnabled public Decimal amountGoal;
+        @AuraEnabled public Decimal amountAttainmentPct;
     }
 
     public class PodPerformers {
@@ -115,6 +134,10 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Integer totalExp;
         @AuraEnabled public Decimal totalGoalMTD;
         @AuraEnabled public Decimal attainmentPct;
+        @AuraEnabled public Decimal totalNbAmount;
+        @AuraEnabled public Decimal totalExpAmount;
+        @AuraEnabled public Decimal totalAmountGoalMTD;
+        @AuraEnabled public Decimal amountAttainmentPct;
     }
 
     public class OutreachRow {
@@ -183,8 +206,10 @@ public with sharing class PGInsightsController {
         }
 
         Map<Id, Opportunity> opps = getOppDetails(unionIds(currIds, priorIds));
-        Map<String, Integer> curr  = countByType(currIds, opps);
-        Map<String, Integer> prior = countByType(priorIds, opps);
+        Map<String, Integer> curr      = countByType(currIds,  opps);
+        Map<String, Integer> prior     = countByType(priorIds, opps);
+        Map<String, Decimal> currAmt   = amountByType(currIds,  opps);
+        Map<String, Decimal> priorAmt  = amountByType(priorIds, opps);
 
         PacingKpis k = new PacingKpis();
         k.windowLabel  = windowLabel;
@@ -197,6 +222,16 @@ public with sharing class PGInsightsController {
         Integer priorTotal = prior.get(NB_TYPE) + prior.get(EXP_TYPE);
         Decimal priorPct   = priorTotal == 0 ? 0 : (Decimal.valueOf(prior.get(NB_TYPE)) / priorTotal) * 100;
         k.deltaPct = k.nbPctOfTotal - priorPct;
+
+        k.newBusinessAmount = currAmt.get(NB_TYPE);
+        k.expansionAmount   = currAmt.get(EXP_TYPE);
+        Decimal totalAmt    = k.newBusinessAmount + k.expansionAmount;
+        k.nbAmtPctOfTotal   = totalAmt == 0 ? 0 : (k.newBusinessAmount / totalAmt) * 100;
+        k.deltaNBAmount     = k.newBusinessAmount - priorAmt.get(NB_TYPE);
+        k.deltaExpAmount    = k.expansionAmount   - priorAmt.get(EXP_TYPE);
+        Decimal priorAmtTotal = priorAmt.get(NB_TYPE) + priorAmt.get(EXP_TYPE);
+        Decimal priorAmtPct   = priorAmtTotal == 0 ? 0 : (priorAmt.get(NB_TYPE) / priorAmtTotal) * 100;
+        k.deltaAmtPct = k.nbAmtPctOfTotal - priorAmtPct;
         return k;
     }
 
@@ -218,19 +253,32 @@ public with sharing class PGInsightsController {
             if (row == null) {
                 row = new QuarterRow();
                 row.fiscalLabel = fiscalLabelFor(d);
-                row.nbCount  = 0;
-                row.expCount = 0;
-                row.goal     = DEFAULT_QUARTERLY_GOAL;
+                row.nbCount    = 0;
+                row.expCount   = 0;
+                row.goal       = DEFAULT_QUARTERLY_GOAL;
+                row.nbAmount   = 0;
+                row.expAmount  = 0;
+                row.amountGoal = 0;
                 byKey.put(sortKey, row);
             }
-            if (bucket == NB_TYPE) row.nbCount  += 1;
-            else                   row.expCount += 1;
+            Decimal amt = o.Amount == null ? 0 : o.Amount;
+            if (bucket == NB_TYPE) {
+                row.nbCount  += 1;
+                row.nbAmount += amt;
+            } else {
+                row.expCount  += 1;
+                row.expAmount += amt;
+            }
         }
 
         // Overlay quarterly goals from PG_Quota__c (sum across AEs per quarter).
-        Map<Integer, Decimal> quarterGoals = getQuarterGoals();
+        Map<Integer, Decimal[]> quarterGoals = getQuarterGoals();
         for (Integer key : byKey.keySet()) {
-            if (quarterGoals.containsKey(key)) byKey.get(key).goal = quarterGoals.get(key);
+            Decimal[] g = quarterGoals.get(key);
+            if (g != null) {
+                byKey.get(key).goal       = g[0];
+                byKey.get(key).amountGoal = g[1];
+            }
         }
 
         List<Integer> sortedKeys = new List<Integer>(byKey.keySet());
@@ -252,6 +300,10 @@ public with sharing class PGInsightsController {
         s.expCount = 0;
         s.goalMTD = 0;
         s.attainmentPct = 0;
+        s.nbAmount = 0;
+        s.expAmount = 0;
+        s.amountGoalMTD = 0;
+        s.amountAttainmentPct = 0;
 
         Date qStart = startOfCurrentFiscalQuarter();
         Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
@@ -261,15 +313,24 @@ public with sharing class PGInsightsController {
         }
         Map<Id, Opportunity> opps = getOppDetails(qIds);
         Map<String, Integer> counts = countByType(qIds, opps);
-        s.nbCount = counts.get(NB_TYPE);
-        s.expCount = counts.get(EXP_TYPE);
+        Map<String, Decimal> amounts = amountByType(qIds, opps);
+        s.nbCount   = counts.get(NB_TYPE);
+        s.expCount  = counts.get(EXP_TYPE);
+        s.nbAmount  = amounts.get(NB_TYPE);
+        s.expAmount = amounts.get(EXP_TYPE);
 
         // Sum current-quarter quotas across all AEs and prorate by days into quarter.
         Map<Id, Decimal[]> quotas = getQuotasForCurrentQuarter();
-        Decimal totalQuarterly = 0;
-        for (Decimal[] g : quotas.values()) totalQuarterly += g[0] + g[1];
-        s.goalMTD = totalQuarterly * mtdProration();
-        s.attainmentPct = s.goalMTD == 0 ? 0 : ((s.nbCount + s.expCount) / s.goalMTD) * 100;
+        Decimal totalCountGoal = 0, totalAmtGoal = 0;
+        for (Decimal[] g : quotas.values()) {
+            totalCountGoal += g[0] + g[1];
+            totalAmtGoal   += g[2] + g[3];
+        }
+        Decimal proration = mtdProration();
+        s.goalMTD             = totalCountGoal * proration;
+        s.amountGoalMTD       = totalAmtGoal   * proration;
+        s.attainmentPct       = s.goalMTD       == 0 ? 0 : ((s.nbCount  + s.expCount)  / s.goalMTD)       * 100;
+        s.amountAttainmentPct = s.amountGoalMTD == 0 ? 0 : ((s.nbAmount + s.expAmount) / s.amountGoalMTD) * 100;
         return s;
     }
 
@@ -311,13 +372,23 @@ public with sharing class PGInsightsController {
                 row.ownerName = o.Owner != null ? o.Owner.Name : null;
                 row.nbCount = 0;
                 row.expCount = 0;
+                row.nbAmount = 0;
+                row.expAmount = 0;
                 Decimal[] g = quotas.get(o.OwnerId);
-                Decimal quarterly = g == null ? 0 : g[0] + g[1];
-                row.goal = quarterly * proration;
+                Decimal countQuarterly = g == null ? 0 : g[0] + g[1];
+                Decimal amtQuarterly   = g == null ? 0 : g[2] + g[3];
+                row.goal       = countQuarterly * proration;
+                row.amountGoal = amtQuarterly   * proration;
                 bucket.put(o.OwnerId, row);
             }
-            if (typeBucket == NB_TYPE) row.nbCount  += 1;
-            else                       row.expCount += 1;
+            Decimal amt = o.Amount == null ? 0 : o.Amount;
+            if (typeBucket == NB_TYPE) {
+                row.nbCount  += 1;
+                row.nbAmount += amt;
+            } else {
+                row.expCount  += 1;
+                row.expAmount += amt;
+            }
         }
 
         List<PodPerformers> result = new List<PodPerformers>();
@@ -327,29 +398,40 @@ public with sharing class PGInsightsController {
             PodPerformers pp = new PodPerformers();
             pp.pod = pod;
 
-            // Pod totals: sum across the pod's quotas (not just top N rows)
-            // and across all stage-2+ counts seen for the pod's AEs.
             Integer totalNb = 0, totalExp = 0;
+            Decimal totalNbAmt = 0, totalExpAmt = 0;
             for (PerformerRow row : rowsByPod.get(pod).values()) {
-                totalNb  += row.nbCount;
-                totalExp += row.expCount;
+                totalNb     += row.nbCount;
+                totalExp    += row.expCount;
+                totalNbAmt  += row.nbAmount;
+                totalExpAmt += row.expAmount;
             }
-            Decimal totalGoalMTD = 0;
+            Decimal totalCountGoal = 0, totalAmtGoal = 0;
             for (Id aeId : aesByPod.get(pod)) {
                 Decimal[] g = quotas.get(aeId);
-                if (g != null) totalGoalMTD += (g[0] + g[1]) * proration;
+                if (g != null) {
+                    totalCountGoal += (g[0] + g[1]) * proration;
+                    totalAmtGoal   += (g[2] + g[3]) * proration;
+                }
             }
-            pp.totalNb = totalNb;
-            pp.totalExp = totalExp;
-            pp.totalGoalMTD = totalGoalMTD;
-            pp.attainmentPct = totalGoalMTD == 0 ? 0
-                : ((totalNb + totalExp) / totalGoalMTD) * 100;
+            pp.totalNb              = totalNb;
+            pp.totalExp             = totalExp;
+            pp.totalNbAmount        = totalNbAmt;
+            pp.totalExpAmount       = totalExpAmt;
+            pp.totalGoalMTD         = totalCountGoal;
+            pp.totalAmountGoalMTD   = totalAmtGoal;
+            pp.attainmentPct        = totalCountGoal == 0 ? 0
+                : ((totalNb + totalExp) / totalCountGoal) * 100;
+            pp.amountAttainmentPct  = totalAmtGoal == 0 ? 0
+                : ((totalNbAmt + totalExpAmt) / totalAmtGoal) * 100;
 
             // Per-rep attainment + sort + trim to top N.
             List<PerformerRow> sorted = new List<PerformerRow>();
             for (PerformerRow row : rowsByPod.get(pod).values()) {
                 row.attainmentPct = row.goal == 0 ? 0
                     : ((row.nbCount + row.expCount) / row.goal) * 100;
+                row.amountAttainmentPct = row.amountGoal == 0 ? 0
+                    : ((row.nbAmount + row.expAmount) / row.amountGoal) * 100;
                 sorted.add(row);
             }
             sorted.sort(new PerformerComparator());
@@ -587,7 +669,7 @@ public with sharing class PGInsightsController {
     private static Map<Id, Opportunity> getOppDetails(Set<Id> ids) {
         if (ids == null || ids.isEmpty()) return new Map<Id, Opportunity>();
         return new Map<Id, Opportunity>([
-            SELECT Id, Type, OwnerId, Owner.Name FROM Opportunity WHERE Id IN :ids
+            SELECT Id, Type, Amount, OwnerId, Owner.Name FROM Opportunity WHERE Id IN :ids
         ]);
     }
 
@@ -605,6 +687,19 @@ public with sharing class PGInsightsController {
             if (o == null) continue;
             String bucket = bucketForType(o.Type);
             if (bucket != null) out.put(bucket, out.get(bucket) + 1);
+        }
+        return out;
+    }
+
+    private static Map<String, Decimal> amountByType(Set<Id> oppIds, Map<Id, Opportunity> opps) {
+        Map<String, Decimal> out = new Map<String, Decimal>{NB_TYPE => 0, EXP_TYPE => 0};
+        for (Id oid : oppIds) {
+            Opportunity o = opps.get(oid);
+            if (o == null) continue;
+            String bucket = bucketForType(o.Type);
+            if (bucket == null) continue;
+            Decimal amt = o.Amount == null ? 0 : o.Amount;
+            out.put(bucket, out.get(bucket) + amt);
         }
         return out;
     }
@@ -760,6 +855,7 @@ public with sharing class PGInsightsController {
         ];
     }
 
+    // Index 0 = NB count goal, 1 = Exp count goal, 2 = NB amount goal, 3 = Exp amount goal.
     private static Map<Id, Decimal[]> getQuotasForCurrentQuarter() {
         Set<Id> aes = getAeUserIds();
         Map<Id, Decimal[]> out = new Map<Id, Decimal[]>();
@@ -768,35 +864,47 @@ public with sharing class PGInsightsController {
         Integer fy = fyfq.get('fy');
         Integer fq = fyfq.get('fq');
         for (PG_Quota__c q : [
-            SELECT User__c, NB_Goal__c, Exp_Goal__c
+            SELECT User__c, NB_Goal__c, Exp_Goal__c, NB_Amount_Goal__c, Exp_Amount_Goal__c
             FROM PG_Quota__c
             WHERE User__c IN :aes
               AND Fiscal_Year__c = :fy
               AND Fiscal_Quarter__c = :fq
         ]) {
             out.put(q.User__c, new Decimal[]{
-                q.NB_Goal__c == null ? 0 : q.NB_Goal__c,
-                q.Exp_Goal__c == null ? 0 : q.Exp_Goal__c
+                q.NB_Goal__c          == null ? 0 : q.NB_Goal__c,
+                q.Exp_Goal__c         == null ? 0 : q.Exp_Goal__c,
+                q.NB_Amount_Goal__c   == null ? 0 : q.NB_Amount_Goal__c,
+                q.Exp_Amount_Goal__c  == null ? 0 : q.Exp_Amount_Goal__c
             });
         }
         return out;
     }
 
-    private static Map<Integer, Decimal> getQuarterGoals() {
+    // Index 0 = total count goal, 1 = total amount goal.
+    private static Map<Integer, Decimal[]> getQuarterGoals() {
         Set<Id> aes = getAeUserIds();
-        Map<Integer, Decimal> out = new Map<Integer, Decimal>();
+        Map<Integer, Decimal[]> out = new Map<Integer, Decimal[]>();
         if (aes.isEmpty()) return out;
         for (PG_Quota__c q : [
-            SELECT Fiscal_Year__c, Fiscal_Quarter__c, NB_Goal__c, Exp_Goal__c
+            SELECT Fiscal_Year__c, Fiscal_Quarter__c,
+                   NB_Goal__c, Exp_Goal__c,
+                   NB_Amount_Goal__c, Exp_Amount_Goal__c
             FROM PG_Quota__c
             WHERE User__c IN :aes
         ]) {
             if (q.Fiscal_Year__c == null || q.Fiscal_Quarter__c == null) continue;
             Integer key = q.Fiscal_Year__c.intValue() * 10 + q.Fiscal_Quarter__c.intValue();
-            Decimal total = (q.NB_Goal__c == null ? 0 : q.NB_Goal__c)
-                          + (q.Exp_Goal__c == null ? 0 : q.Exp_Goal__c);
-            Decimal existing = out.get(key);
-            out.put(key, (existing == null ? 0 : existing) + total);
+            Decimal countTotal = (q.NB_Goal__c == null ? 0 : q.NB_Goal__c)
+                               + (q.Exp_Goal__c == null ? 0 : q.Exp_Goal__c);
+            Decimal amtTotal   = (q.NB_Amount_Goal__c == null ? 0 : q.NB_Amount_Goal__c)
+                               + (q.Exp_Amount_Goal__c == null ? 0 : q.Exp_Amount_Goal__c);
+            Decimal[] existing = out.get(key);
+            if (existing == null) {
+                out.put(key, new Decimal[]{ countTotal, amtTotal });
+            } else {
+                existing[0] += countTotal;
+                existing[1] += amtTotal;
+            }
         }
         return out;
     }

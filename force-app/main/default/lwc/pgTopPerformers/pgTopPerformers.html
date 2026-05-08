@@ -4,20 +4,20 @@
             <header class="pg-status-card__title">Stage 2+ Status | QTD</header>
             <div class="slds-grid slds-gutters slds-p-around_small pg-status-card__body">
                 <div class="slds-col">
-                    <div class="pg-status__label">AE NB Stage 2+</div>
-                    <div class="pg-status__value">{status.nbCount}</div>
+                    <div class="pg-status__label">{status.nbLabel}</div>
+                    <div class="pg-status__value">{status.nbDisplay}</div>
                 </div>
                 <div class="slds-col">
-                    <div class="pg-status__label">AE Exp Stage 2+</div>
-                    <div class="pg-status__value">{status.expCount}</div>
+                    <div class="pg-status__label">{status.expLabel}</div>
+                    <div class="pg-status__value">{status.expDisplay}</div>
                 </div>
                 <div class="slds-col">
                     <div class="pg-status__label">Goal (MTD)</div>
-                    <div class="pg-status__value">{status.goalMTDFmt}</div>
+                    <div class="pg-status__value">{status.goalDisplay}</div>
                 </div>
                 <div class="slds-col">
                     <div class="pg-status__label">Attainment</div>
-                    <div class="pg-status__value">{status.attainmentPct}%</div>
+                    <div class="pg-status__value">{status.attainmentDisplay}</div>
                 </div>
             </div>
         </article>
@@ -31,19 +31,19 @@
                         <header class="pg-pod__header">
                             <div class="pg-pod__name">{pod.pod}</div>
                             <div class="pg-pod__totals">
-                                <span class="pg-pod__count">{pod.totalCount}</span>
+                                <span class="pg-pod__count">{pod.totalDisplay}</span>
                                 <span class="pg-pod__sep">/</span>
-                                <span class="pg-pod__goal">{pod.goalMTDFmt}</span>
+                                <span class="pg-pod__goal">{pod.goalDisplay}</span>
                                 <span class="pg-pod__pct">{pod.attainmentDisplay}</span>
                             </div>
-                            <div class="pg-pod__sublabel">Stage 2+ count / Goal MTD · Attainment</div>
+                            <div class="pg-pod__sublabel">Stage 2+ / Goal MTD · Attainment</div>
                         </header>
                         <ol class="pg-pod__list">
                             <template for:each={pod.rows} for:item="row">
                                 <li key={row.ownerId} class="pg-pod__row">
                                     <span class="pg-pod__rank">{row.rank}</span>
                                     <span class="pg-pod__rep">{row.ownerName}</span>
-                                    <span class="pg-pod__rep-count">{row.totalCount}</span>
+                                    <span class="pg-pod__rep-count">{row.totalDisplay}</span>
                                     <span class="pg-pod__rep-pct">{row.attainmentDisplay}</span>
                                 </li>
                             </template>

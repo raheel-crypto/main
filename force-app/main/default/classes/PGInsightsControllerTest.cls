@@ -97,7 +97,9 @@ private class PGInsightsControllerTest {
                     Fiscal_Year__c = fy,
                     Fiscal_Quarter__c = fq,
                     NB_Goal__c = 10,
-                    Exp_Goal__c = 4
+                    Exp_Goal__c = 4,
+                    NB_Amount_Goal__c = 200000,
+                    Exp_Amount_Goal__c = 80000
                 )
             };
         }

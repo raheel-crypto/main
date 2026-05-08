@@ -1,9 +1,17 @@
-import { LightningElement, wire } from 'lwc';
+import { LightningElement, api, wire } from 'lwc';
 import { loadScript } from 'lightning/platformResourceLoader';
 import ChartJs from '@salesforce/resourceUrl/ChartJs';
 import getStageProgressByQuarter from '@salesforce/apex/PGInsightsController.getStageProgressByQuarter';
 
 export default class PgStageProgressChart extends LightningElement {
+    @api metric = 'count'; // 'count' | 'amount'
+
+    get title() {
+        return this.metric === 'amount'
+            ? 'AE Qualified Stage 2+ Pipeline ($) | Last 6 Quarters'
+            : 'AE Qualified Stage 2+ Progress | Last 6 Quarters';
+    }
+
     chart;
     chartJsLoaded = false;
     rows = [];
@@ -20,15 +28,24 @@ export default class PgStageProgressChart extends LightningElement {
         }
     }
 
+    // Re-render when the parent toggles the metric prop. LWC reactive
+    // properties don't trigger renderedCallback automatically when the prop
+    // is consumed only inside renderChart; explicit re-render covers it.
     renderedCallback() {
-        if (this.chartJsLoaded) return;
-        this.chartJsLoaded = true;
-        loadScript(this, ChartJs)
-            .then(() => this.renderChart())
-            .catch(err => {
-                this.chartJsLoaded = false;
-                this.error = err;
-            });
+        if (!this.chartJsLoaded) {
+            this.chartJsLoaded = true;
+            loadScript(this, ChartJs)
+                .then(() => this.renderChart())
+                .catch(err => {
+                    this.chartJsLoaded = false;
+                    this.error = err;
+                });
+            return;
+        }
+        if (this._lastMetric !== this.metric) {
+            this._lastMetric = this.metric;
+            this.renderChart();
+        }
     }
 
     renderChart() {
@@ -40,11 +57,17 @@ export default class PgStageProgressChart extends LightningElement {
             this.chart.destroy();
         }
 
+        const isAmount = this.metric === 'amount';
         const labels = this.rows.map(r => r.fiscalLabel);
-        const nb = this.rows.map(r => r.nbCount || 0);
-        const exp = this.rows.map(r => r.expCount || 0);
-        const goal = this.rows.map(r => r.goal || 0);
+        const nb   = this.rows.map(r => (isAmount ? r.nbAmount   : r.nbCount)   || 0);
+        const exp  = this.rows.map(r => (isAmount ? r.expAmount  : r.expCount)  || 0);
+        const goal = this.rows.map(r => (isAmount ? r.amountGoal : r.goal)      || 0);
         const showGoal = goal.some(v => v > 0);
+        const fmtTick = isAmount
+            ? (v) => v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M`
+                  : v >= 1_000     ? `$${(v / 1_000).toFixed(0)}K`
+                                   : `$${v}`
+            : (v) => v;
 
         const ctx = canvas.getContext('2d');
         const h = canvas.height || 260;
@@ -55,10 +78,14 @@ export default class PgStageProgressChart extends LightningElement {
         expGradient.addColorStop(0, '#f43f5e');
         expGradient.addColorStop(1, '#500724');
 
+        const nbLabel  = isAmount ? 'AE NB Stage 2+ ($)'  : 'AE NB Stage 2+ Count';
+        const expLabel = isAmount ? 'AE Exp Stage 2+ ($)' : 'AE Exp Stage 2+ Count';
+        const goalLabel = isAmount ? 'AE Stage 2+ Amount Goal' : 'AE Qualified Stage 2+ Goal';
+
         const datasets = [
             {
                 type: 'bar',
-                label: 'AE NB Stage 2+ Count',
+                label: nbLabel,
                 backgroundColor: nbGradient,
                 borderRadius: 4,
                 borderSkipped: false,
@@ -67,7 +94,7 @@ export default class PgStageProgressChart extends LightningElement {
             },
             {
                 type: 'bar',
-                label: 'AE Exp Stage 2+ Count',
+                label: expLabel,
                 backgroundColor: expGradient,
                 borderRadius: 4,
                 borderSkipped: false,
@@ -78,7 +105,7 @@ export default class PgStageProgressChart extends LightningElement {
         if (showGoal) {
             datasets.unshift({
                 type: 'line',
-                label: 'AE Qualified Stage 2+ Goal',
+                label: goalLabel,
                 borderColor: '#0f172a',
                 backgroundColor: 'transparent',
                 borderDash: [4, 4],
@@ -96,7 +123,13 @@ export default class PgStageProgressChart extends LightningElement {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: { labels: { color: '#475569' } },
-                    tooltip: { mode: 'index', intersect: false }
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${fmtTick(ctx.parsed.y)}`
+                        }
+                    }
                 },
                 scales: {
                     x: {
@@ -107,7 +140,7 @@ export default class PgStageProgressChart extends LightningElement {
                     y: {
                         stacked: true,
                         beginAtZero: true,
-                        ticks: { color: '#475569' },
+                        ticks: { color: '#475569', callback: fmtTick },
                         grid: { color: 'rgba(15,23,42,0.08)' }
                     }
                 }

@@ -1,6 +1,6 @@
 <template>
     <lightning-card>
-        <span slot="title" class="pg-chart__title">AE Qualified Stage 2+ Progress | QTD</span>
+        <span slot="title" class="pg-chart__title">{title}</span>
         <div class="pg-chart__wrap">
             <canvas class="pg-chart" lwc:dom="manual"></canvas>
             <template lwc:if={error}>
