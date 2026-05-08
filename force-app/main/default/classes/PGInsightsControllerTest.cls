@@ -332,6 +332,38 @@ private class PGInsightsControllerTest {
     // ---- Phase D: heatmap groupings + drill-down ----------------------------------
 
     @IsTest
+    static void getAeUserIds_excludesCsmRoleNamePrefix() {
+        // A user whose UserRole.Name starts with 'CSM' (and contains a pod
+        // token like 'MM') should be filtered out — that's how Charlotte
+        // Norris and Josh Karchmer were leaking in despite null Titles.
+        String suffix = String.valueOf(System.currentTimeMillis());
+        UserRole csmRole = new UserRole(
+            Name = 'CSM - Test ' + suffix,
+            DeveloperName = 'CsmTest_' + suffix
+        );
+        insert csmRole;
+
+        Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        User csmUser = buildUser('csmrole', 'CSM', 'Role', csmRole.Id, null, p.Id);
+        insert csmUser;
+
+        User loader = [SELECT Id FROM User WHERE Username LIKE 'pg-loader%' LIMIT 1];
+        System.runAs(loader) {
+            insert new List<Task>{ buildEmailCallTask(csmUser.Id, 'Email') };
+        }
+
+        Test.startTest();
+        List<PGInsightsController.OutreachRow> rows =
+            PGInsightsController.getIndividualOutreach('CW');
+        Test.stopTest();
+
+        for (PGInsightsController.OutreachRow r : rows) {
+            System.assertNotEquals(csmUser.Id, r.ownerId,
+                'CSM-prefixed role users must be excluded from the AE roster');
+        }
+    }
+
+    @IsTest
     static void getAeUserIds_excludesCsmAndGtmTitles() {
         // Insert two extra users with matching pod role names but non-AE
         // titles. They should NOT appear in the AE outreach roster.

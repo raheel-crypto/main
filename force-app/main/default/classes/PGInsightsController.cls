@@ -837,8 +837,8 @@ public with sharing class PGInsightsController {
 
     // Title substrings (case-insensitive) that disqualify a user from
     // counting as an AE even if their UserRole.Name matches a pod token.
-    // Catches CSMs, GTM associates, integration roles, strategy, and BDRs
-    // who would otherwise leak in via shared pod role hierarchies.
+    // Catches GTM associates, integration roles, strategy, and BDRs who
+    // would otherwise leak in via shared pod role hierarchies.
     private static final List<String> NON_AE_TITLE_TOKENS = new List<String>{
         'bdr',
         'sdr',
@@ -854,6 +854,13 @@ public with sharing class PGInsightsController {
         'analyst'
     };
 
+    // Role-name prefixes (case-insensitive) that mark a non-AE role even
+    // when the name contains a pod token (e.g. 'CSM - MM' matches the MM
+    // pod filter but the user is a CSM, not an AE).
+    private static final List<String> NON_AE_ROLE_PREFIXES = new List<String>{
+        'CSM'
+    };
+
     private static Map<String, Set<Id>> getAeUserIdsByPod() {
         if (aeUserIdsByPodCache != null) return aeUserIdsByPodCache;
         Map<String, Set<Id>> out = new Map<String, Set<Id>>();
@@ -866,7 +873,9 @@ public with sharing class PGInsightsController {
                    OR UserRole.Name LIKE '%MM%')
         ]) {
             if (isNonAeTitle(u.Title)) continue;
-            String pod = derivePodFromRole(u.UserRole != null ? u.UserRole.Name : null);
+            String roleName = u.UserRole != null ? u.UserRole.Name : null;
+            if (isNonAeRoleName(roleName)) continue;
+            String pod = derivePodFromRole(roleName);
             if (pod == null) continue;
             if (!out.containsKey(pod)) out.put(pod, new Set<Id>());
             out.get(pod).add(u.Id);
@@ -880,6 +889,15 @@ public with sharing class PGInsightsController {
         String t = title.toLowerCase();
         for (String token : NON_AE_TITLE_TOKENS) {
             if (t.contains(token)) return true;
+        }
+        return false;
+    }
+
+    private static Boolean isNonAeRoleName(String roleName) {
+        if (String.isBlank(roleName)) return false;
+        String upper = roleName.trim().toUpperCase();
+        for (String prefix : NON_AE_ROLE_PREFIXES) {
+            if (upper.startsWith(prefix.toUpperCase())) return true;
         }
         return false;
     }

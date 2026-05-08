@@ -18,15 +18,19 @@ An active Salesforce User is an "AE" for dashboard purposes if all of:
 - `User.IsActive = TRUE`
 - `User.UserRole.Name` contains one of `BUYSIDE`, `IB1`, `IB2`, `MM`
   (case-insensitive substring match)
+- `User.UserRole.Name` does **not** start with `CSM` (case-insensitive).
+  The org has roles like `CSM - MM` that match the pod-token check but
+  are customer-success roles, not AE territory roles.
 - `User.Title` does not contain any of: `BDR`, `SDR`, `CSM`,
   `customer success`, `post-sales`, `post sales`, `GTM`, `integration`,
   `strategy`, `solutions consultant`, `sales engineer`, `analyst`
   (case-insensitive). Untitled users with a matching role are still
   included — some real AEs have empty Title fields.
 
-The non-AE title list catches CSMs / GTM associates / post-sales
-specialists / integration leads who otherwise leak in via shared pod
-role hierarchies. Add tokens here as new edge cases surface.
+Both the role-prefix exclusion list (`NON_AE_ROLE_PREFIXES`) and the
+title token list (`NON_AE_TITLE_TOKENS`) live as constants on
+`PGInsightsController.cls`. Add tokens / prefixes there as new edge
+cases surface.
 
 The pod a user belongs to is derived from their role name (first matching
 token wins, evaluated in the order `BUYSIDE`, `IB1`, `IB2`, `MM`):
