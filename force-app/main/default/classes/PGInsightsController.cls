@@ -143,6 +143,8 @@ public with sharing class PGInsightsController {
     public class OutreachRow {
         @AuraEnabled public Id ownerId;
         @AuraEnabled public String ownerName;
+        @AuraEnabled public Id managerId;
+        @AuraEnabled public String managerName;
         @AuraEnabled public Integer emails;
         @AuraEnabled public Integer calls;
         @AuraEnabled public Integer linkedin;
@@ -553,6 +555,18 @@ public with sharing class PGInsightsController {
             Integer cnt = (Integer) ar.get('cnt');
             OutreachRow row = ensureRow(byOwner, oid, oname);
             row.meetings = cnt;
+        }
+
+        // Enrich rows with manager info so the LWC can group by manager.
+        if (!byOwner.isEmpty()) {
+            for (User u : [
+                SELECT Id, ManagerId, Manager.Name FROM User WHERE Id IN :byOwner.keySet()
+            ]) {
+                OutreachRow row = byOwner.get(u.Id);
+                if (row == null) continue;
+                row.managerId = u.ManagerId;
+                row.managerName = u.Manager != null ? u.Manager.Name : null;
+            }
         }
 
         for (OutreachRow row : byOwner.values()) {

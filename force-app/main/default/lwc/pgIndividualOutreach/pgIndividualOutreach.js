@@ -12,6 +12,8 @@ export default class PgIndividualOutreach extends LightningElement {
     qtdSortBy = 'total';
     qtdSortDir = 'desc';
 
+    groupByManager = false;
+
     @wire(getIndividualOutreach, { windowLabel: 'CW' })
     wiredCw({ data }) {
         if (data) this.cwRowsRaw = data;
@@ -22,6 +24,8 @@ export default class PgIndividualOutreach extends LightningElement {
         if (data) this.qtdRowsRaw = data;
     }
 
+    handleToggleGroup(event) { this.groupByManager = event.target.checked; }
+
     get cwRows() {
         return this.decorateRows(this.cwRowsRaw, this.cwSortBy, this.cwSortDir);
     }
@@ -30,11 +34,47 @@ export default class PgIndividualOutreach extends LightningElement {
         return this.decorateRows(this.qtdRowsRaw, this.qtdSortBy, this.qtdSortDir);
     }
 
+    get cwGroups() {
+        return this.groupByManager ? this.buildGroups(this.cwRows) : null;
+    }
+
+    get qtdGroups() {
+        return this.groupByManager ? this.buildGroups(this.qtdRows) : null;
+    }
+
     get hasCwRows()  { return this.cwRows.length > 0; }
     get hasQtdRows() { return this.qtdRows.length > 0; }
 
     get cwTotals() { return this.computeTotals(this.cwRowsRaw); }
     get qtdTotals() { return this.computeTotals(this.qtdRowsRaw); }
+
+    buildGroups(rows) {
+        if (!rows || !rows.length) return [];
+        const buckets = new Map();
+        for (const r of rows) {
+            const key = r.managerId || '__unmanaged__';
+            const display = r.managerName || 'No Manager';
+            let b = buckets.get(key);
+            if (!b) {
+                b = {
+                    key,
+                    managerName: display,
+                    rows: [],
+                    emailsSum: 0, callsSum: 0, linkedinSum: 0, meetingsSum: 0, totalSum: 0
+                };
+                buckets.set(key, b);
+            }
+            b.rows.push(r);
+            b.emailsSum   += r.emails || 0;
+            b.callsSum    += r.calls || 0;
+            b.linkedinSum += r.linkedin || 0;
+            b.meetingsSum += r.meetings || 0;
+            b.totalSum    += r.total || 0;
+        }
+        const groups = Array.from(buckets.values());
+        groups.sort((a, b) => b.totalSum - a.totalSum);
+        return groups;
+    }
 
     decorateRows(rows, sortBy, sortDir) {
         if (!rows || !rows.length) return [];

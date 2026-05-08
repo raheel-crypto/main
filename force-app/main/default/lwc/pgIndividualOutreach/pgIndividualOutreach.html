@@ -1,4 +1,11 @@
 <template>
+    <div class="pg-outreach-toolbar slds-p-horizontal_x-small slds-p-bottom_x-small">
+        <label class="pg-checkbox">
+            <input type="checkbox" checked={groupByManager} onchange={handleToggleGroup} />
+            <span>Group rows by manager</span>
+        </label>
+    </div>
+
     <div class="slds-grid slds-gutters slds-wrap">
 
         <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-2 slds-p-around_x-small">
@@ -17,50 +24,39 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template for:each={cwRows} for:item="row">
-                                <tr key={row.ownerId}>
-                                    <td class="pg-td pg-td--name">{row.ownerName}</td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.emails}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--emails" style={row.emailsBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.calls}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--calls" style={row.callsBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.linkedin}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.meetings}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.total}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--total" style={row.totalBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                </tr>
+                            <template lwc:if={groupByManager}>
+                                <template for:each={cwGroups} for:item="g">
+                                    <tr key={g.key} class="pg-tr--group">
+                                        <td class="pg-td pg-td--name pg-td--group">{g.managerName}</td>
+                                        <td class="pg-td pg-td--group">{g.emailsSum}</td>
+                                        <td class="pg-td pg-td--group">{g.callsSum}</td>
+                                        <td class="pg-td pg-td--group">{g.linkedinSum}</td>
+                                        <td class="pg-td pg-td--group">{g.meetingsSum}</td>
+                                        <td class="pg-td pg-td--group">{g.totalSum}</td>
+                                    </tr>
+                                    <template for:each={g.rows} for:item="row">
+                                        <tr key={row.ownerId}>
+                                            <td class="pg-td pg-td--name pg-td--indent">{row.ownerName}</td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.emails}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--emails" style={row.emailsBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.calls}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--calls" style={row.callsBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.linkedin}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.meetings}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.total}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--total" style={row.totalBar}></span></span></div></td>
+                                        </tr>
+                                    </template>
+                                </template>
+                            </template>
+                            <template lwc:else>
+                                <template for:each={cwRows} for:item="row">
+                                    <tr key={row.ownerId}>
+                                        <td class="pg-td pg-td--name">{row.ownerName}</td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.emails}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--emails" style={row.emailsBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.calls}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--calls" style={row.callsBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.linkedin}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.meetings}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.total}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--total" style={row.totalBar}></span></span></div></td>
+                                    </tr>
+                                </template>
                             </template>
                         </tbody>
                         <template lwc:if={cwTotals}>
@@ -99,50 +95,39 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template for:each={qtdRows} for:item="row">
-                                <tr key={row.ownerId}>
-                                    <td class="pg-td pg-td--name">{row.ownerName}</td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.emails}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--emails" style={row.emailsBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.calls}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--calls" style={row.callsBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.linkedin}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.meetings}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="pg-td">
-                                        <div class="pg-bar-cell">
-                                            <span class="pg-bar-num">{row.total}</span>
-                                            <span class="pg-bar-track">
-                                                <span class="pg-bar pg-bar--total" style={row.totalBar}></span>
-                                            </span>
-                                        </div>
-                                    </td>
-                                </tr>
+                            <template lwc:if={groupByManager}>
+                                <template for:each={qtdGroups} for:item="g">
+                                    <tr key={g.key} class="pg-tr--group">
+                                        <td class="pg-td pg-td--name pg-td--group">{g.managerName}</td>
+                                        <td class="pg-td pg-td--group">{g.emailsSum}</td>
+                                        <td class="pg-td pg-td--group">{g.callsSum}</td>
+                                        <td class="pg-td pg-td--group">{g.linkedinSum}</td>
+                                        <td class="pg-td pg-td--group">{g.meetingsSum}</td>
+                                        <td class="pg-td pg-td--group">{g.totalSum}</td>
+                                    </tr>
+                                    <template for:each={g.rows} for:item="row">
+                                        <tr key={row.ownerId}>
+                                            <td class="pg-td pg-td--name pg-td--indent">{row.ownerName}</td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.emails}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--emails" style={row.emailsBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.calls}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--calls" style={row.callsBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.linkedin}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.meetings}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span></span></div></td>
+                                            <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.total}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--total" style={row.totalBar}></span></span></div></td>
+                                        </tr>
+                                    </template>
+                                </template>
+                            </template>
+                            <template lwc:else>
+                                <template for:each={qtdRows} for:item="row">
+                                    <tr key={row.ownerId}>
+                                        <td class="pg-td pg-td--name">{row.ownerName}</td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.emails}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--emails" style={row.emailsBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.calls}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--calls" style={row.callsBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.linkedin}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--linkedin" style={row.linkedinBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.meetings}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--meetings" style={row.meetingsBar}></span></span></div></td>
+                                        <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.total}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--total" style={row.totalBar}></span></span></div></td>
+                                    </tr>
+                                </template>
                             </template>
                         </tbody>
                         <template lwc:if={qtdTotals}>
