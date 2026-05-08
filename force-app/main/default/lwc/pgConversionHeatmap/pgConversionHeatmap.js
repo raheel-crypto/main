@@ -20,23 +20,24 @@ export default class PgConversionHeatmap extends LightningElement {
             povToProposalFmt:         this.fmt(r.povToProposal),
             proposalToContractingFmt: this.fmt(r.proposalToContracting),
             contractingToWonFmt:      this.fmt(r.contractingToWon),
-            demoToDiscoClass:           this.cellClass(r.demoToDisco, r.demoCount),
-            discoToPovClass:            this.cellClass(r.discoToPov, r.discoveryCount),
-            povToProposalClass:         this.cellClass(r.povToProposal, r.povCount),
-            proposalToContractingClass: this.cellClass(r.proposalToContracting, r.proposalCount),
-            contractingToWonClass:      this.cellClass(r.contractingToWon, r.contractingCount)
+            demoToDiscoClass:           this.cellClass(r.demoToDisco),
+            discoToPovClass:            this.cellClass(r.discoToPov),
+            povToProposalClass:         this.cellClass(r.povToProposal),
+            proposalToContractingClass: this.cellClass(r.proposalToContracting),
+            contractingToWonClass:      this.cellClass(r.contractingToWon)
         }));
     }
 
     get hasRows() { return this.rows.length > 0; }
 
     fmt(val) {
-        if (val == null) return '—';
+        // Apex returns null when there are no settled deals to convert
+        // (open deals at that stage are excluded from the denominator).
+        if (val == null) return 'N/A';
         return Math.round(val) + '%';
     }
 
-    cellClass(val, denom) {
-        if (denom == null || denom === 0) return 'pg-cell pg-cell--empty';
+    cellClass(val) {
         if (val == null) return 'pg-cell pg-cell--empty';
         if (val >= 75) return 'pg-cell pg-cell--green';
         if (val >= 50) return 'pg-cell pg-cell--lime';

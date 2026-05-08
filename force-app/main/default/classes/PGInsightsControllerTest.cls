@@ -253,11 +253,12 @@ private class PGInsightsControllerTest {
         Set<Id> aeIds = computeTestAeIds();
         Map<Id, DateTime> mock = new Map<Id, DateTime>();
         DateTime now = DateTime.now();
+        Set<String> bucketableTypes = new Set<String>{'New Business', 'Upsell', 'Pilot'};
         for (Opportunity o : [
             SELECT Id, StageName, Type FROM Opportunity WHERE OwnerId IN :aeIds
         ]) {
             if (o.StageName == '1 - Demo') continue;
-            if (o.Type != 'New Business' && o.Type != 'Upsell') continue;
+            if (!bucketableTypes.contains(o.Type)) continue;
             mock.put(o.Id, now);
         }
         return mock;

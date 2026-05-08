@@ -33,6 +33,17 @@ public with sharing class PGInsightsController {
 
     private static final String NB_TYPE  = 'New Business';
     private static final String EXP_TYPE = 'Upsell';
+    private static final String PILOT_TYPE = 'Pilot';
+
+    // Pilots are pre-NB pipeline; rolled up with New Business in count/$
+    // metrics (NB column on the dashboard includes them).
+    private static final Set<String> NB_TYPES_FOR_BUCKETING = new Set<String>{
+        NB_TYPE, PILOT_TYPE
+    };
+
+    private static final Set<String> ALL_DASHBOARD_TYPES = new Set<String>{
+        NB_TYPE, PILOT_TYPE, EXP_TYPE
+    };
 
     // Any of these StageName values count as "Stage 2 or beyond".
     private static final Set<String> STAGE_2_PLUS = new Set<String>{
@@ -198,7 +209,9 @@ public with sharing class PGInsightsController {
         Map<Integer, QuarterRow> byKey = new Map<Integer, QuarterRow>();
         for (Id oid : firstDates.keySet()) {
             Opportunity o = opps.get(oid);
-            if (o == null || (o.Type != NB_TYPE && o.Type != EXP_TYPE)) continue;
+            if (o == null) continue;
+            String bucket = bucketForType(o.Type);
+            if (bucket == null) continue;
             Date d = firstDates.get(oid).date();
             Integer sortKey = fiscalSortKey(d);
             QuarterRow row = byKey.get(sortKey);
@@ -210,7 +223,7 @@ public with sharing class PGInsightsController {
                 row.goal     = DEFAULT_QUARTERLY_GOAL;
                 byKey.put(sortKey, row);
             }
-            if (o.Type == NB_TYPE) row.nbCount  += 1;
+            if (bucket == NB_TYPE) row.nbCount  += 1;
             else                   row.expCount += 1;
         }
 
@@ -285,7 +298,9 @@ public with sharing class PGInsightsController {
 
         for (Id oid : qIds) {
             Opportunity o = opps.get(oid);
-            if (o == null || (o.Type != NB_TYPE && o.Type != EXP_TYPE)) continue;
+            if (o == null) continue;
+            String typeBucket = bucketForType(o.Type);
+            if (typeBucket == null) continue;
             String pod = podByAe.get(o.OwnerId);
             if (pod == null) continue;
             Map<Id, PerformerRow> bucket = rowsByPod.get(pod);
@@ -301,8 +316,8 @@ public with sharing class PGInsightsController {
                 row.goal = quarterly * proration;
                 bucket.put(o.OwnerId, row);
             }
-            if (o.Type == NB_TYPE) row.nbCount  += 1;
-            else                   row.expCount += 1;
+            if (typeBucket == NB_TYPE) row.nbCount  += 1;
+            else                       row.expCount += 1;
         }
 
         List<PodPerformers> result = new List<PodPerformers>();
@@ -408,63 +423,77 @@ public with sharing class PGInsightsController {
         // scope to AE-sourced deals — but conversion is about what the AE
         // does with the deals they're handed, so that filter is omitted here.
         Map<Id, Opportunity> opps = new Map<Id, Opportunity>([
-            SELECT Id, OwnerId, Owner.Name, Owner.Manager.Name
+            SELECT Id, OwnerId, Owner.Name, Owner.Manager.Name, IsClosed, StageName
             FROM Opportunity
             WHERE OwnerId IN :aes
-              AND Type IN (:NB_TYPE, :EXP_TYPE)
+              AND Type IN :ALL_DASHBOARD_TYPES
         ]);
         if (opps.isEmpty()) return result;
 
         Map<Id, Set<String>> stagesByOpp = getStagesByOpp(opps.keySet());
 
-        // Group max-rank-reached per owner.
-        Map<Id, List<Integer>> ranksByOwner = new Map<Id, List<Integer>>();
+        // For each owner, build two parallel arrays indexed by stage rank:
+        //   reached[N]  = count of opps that ever reached rank N (numerator)
+        //   eligible[N] = count of opps that "settled" the N -> N+1 decision,
+        //                 i.e. either advanced past N, or closed at exactly N
+        //                 without advancing. Open deals currently sitting at
+        //                 exactly rank N are excluded from eligible[N] so we
+        //                 don't penalize a rep with N/A vs 0% when their
+        //                 deals are still in flight at that stage.
+        // Conversion N -> N+1 = pct(reached[N+1], eligible[N]). When
+        // eligible[N] is 0, pct() returns null and the LWC renders "N/A".
+        Map<Id, Integer[]> reachedByOwner  = new Map<Id, Integer[]>();
+        Map<Id, Integer[]> eligibleByOwner = new Map<Id, Integer[]>();
         Map<Id, Opportunity> sampleByOwner = new Map<Id, Opportunity>();
+
         for (Opportunity o : opps.values()) {
             Set<String> stages = stagesByOpp.get(o.Id);
-            if (stages == null || stages.isEmpty()) continue;
             Integer maxRank = 0;
-            for (String s : stages) {
-                Integer r = STAGE_RANK.get(s);
-                if (r != null && r > maxRank) maxRank = r;
+            if (stages != null) {
+                for (String s : stages) {
+                    Integer r = STAGE_RANK.get(s);
+                    if (r != null && r > maxRank) maxRank = r;
+                }
             }
             if (maxRank == 0) continue;
-            if (!ranksByOwner.containsKey(o.OwnerId)) {
-                ranksByOwner.put(o.OwnerId, new List<Integer>());
+
+            Integer[] reached  = reachedByOwner.get(o.OwnerId);
+            Integer[] eligible = eligibleByOwner.get(o.OwnerId);
+            if (reached == null) {
+                reached  = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
+                eligible = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
+                reachedByOwner.put(o.OwnerId, reached);
+                eligibleByOwner.put(o.OwnerId, eligible);
                 sampleByOwner.put(o.OwnerId, o);
             }
-            ranksByOwner.get(o.OwnerId).add(maxRank);
+            for (Integer N = 1; N <= 6; N++) {
+                if (maxRank >= N) reached[N]++;
+                if (maxRank > N || (maxRank == N && o.IsClosed)) eligible[N]++;
+            }
         }
 
-        for (Id ownerId : ranksByOwner.keySet()) {
+        for (Id ownerId : reachedByOwner.keySet()) {
+            Integer[] reached  = reachedByOwner.get(ownerId);
+            Integer[] eligible = eligibleByOwner.get(ownerId);
             Opportunity sample = sampleByOwner.get(ownerId);
+
             HeatmapRow row = new HeatmapRow();
-            row.ownerId = ownerId;
-            row.ownerName = sample.Owner != null ? sample.Owner.Name : null;
+            row.ownerId     = ownerId;
+            row.ownerName   = sample.Owner != null ? sample.Owner.Name : null;
             row.managerName = (sample.Owner != null && sample.Owner.Manager != null)
                 ? sample.Owner.Manager.Name : null;
 
-            Integer atOrAbove1 = 0, atOrAbove2 = 0, atOrAbove3 = 0,
-                    atOrAbove4 = 0, atOrAbove5 = 0, atOrAbove6 = 0;
-            for (Integer r : ranksByOwner.get(ownerId)) {
-                if (r >= 1) atOrAbove1++;
-                if (r >= 2) atOrAbove2++;
-                if (r >= 3) atOrAbove3++;
-                if (r >= 4) atOrAbove4++;
-                if (r >= 5) atOrAbove5++;
-                if (r >= 6) atOrAbove6++;
-            }
-            row.demoCount        = atOrAbove1;
-            row.discoveryCount   = atOrAbove2;
-            row.povCount         = atOrAbove3;
-            row.proposalCount    = atOrAbove4;
-            row.contractingCount = atOrAbove5;
-            row.wonCount         = atOrAbove6;
-            row.demoToDisco           = pct(atOrAbove2, atOrAbove1);
-            row.discoToPov            = pct(atOrAbove3, atOrAbove2);
-            row.povToProposal         = pct(atOrAbove4, atOrAbove3);
-            row.proposalToContracting = pct(atOrAbove5, atOrAbove4);
-            row.contractingToWon      = pct(atOrAbove6, atOrAbove5);
+            row.demoCount        = reached[1];
+            row.discoveryCount   = reached[2];
+            row.povCount         = reached[3];
+            row.proposalCount    = reached[4];
+            row.contractingCount = reached[5];
+            row.wonCount         = reached[6];
+            row.demoToDisco           = pct(reached[2], eligible[1]);
+            row.discoToPov            = pct(reached[3], eligible[2]);
+            row.povToProposal         = pct(reached[4], eligible[3]);
+            row.proposalToContracting = pct(reached[5], eligible[4]);
+            row.contractingToWon      = pct(reached[6], eligible[5]);
             result.add(row);
         }
         result.sort(new HeatmapComparator());
@@ -532,7 +561,7 @@ public with sharing class PGInsightsController {
         for (Opportunity o : [
             SELECT Id FROM Opportunity
             WHERE OwnerId IN :aes
-              AND Type IN (:NB_TYPE, :EXP_TYPE)
+              AND Type IN :ALL_DASHBOARD_TYPES
               AND Booked_By_Role__c LIKE 'AE%'
         ]) {
             aeOppIds.add(o.Id);
@@ -574,9 +603,17 @@ public with sharing class PGInsightsController {
         for (Id oid : oppIds) {
             Opportunity o = opps.get(oid);
             if (o == null) continue;
-            if (out.containsKey(o.Type)) out.put(o.Type, out.get(o.Type) + 1);
+            String bucket = bucketForType(o.Type);
+            if (bucket != null) out.put(bucket, out.get(bucket) + 1);
         }
         return out;
+    }
+
+    // Pilot opps roll up under New Business for dashboard bucketing.
+    private static String bucketForType(String oppType) {
+        if (oppType == EXP_TYPE) return EXP_TYPE;
+        if (NB_TYPES_FOR_BUCKETING.contains(oppType)) return NB_TYPE;
+        return null;
     }
 
     private static OutreachRow ensureRow(Map<Id, OutreachRow> byOwner, Id ownerId, String ownerName) {
@@ -810,7 +847,9 @@ public with sharing class PGInsightsController {
     }
 
     private static Decimal pct(Integer numerator, Integer denominator) {
-        if (denominator == null || denominator == 0) return 0;
+        // Returns null when there's nothing eligible to convert — caller
+        // shows "N/A". A literal 0% means "had a chance and didn't convert".
+        if (denominator == null || denominator == 0) return null;
         return (Decimal.valueOf(numerator) / Decimal.valueOf(denominator)) * 100;
     }
 
