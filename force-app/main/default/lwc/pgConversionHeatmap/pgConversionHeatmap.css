@@ -214,6 +214,50 @@
     color: #1e293b;
 }
 
-.pg-drill__row--reached td {
-    background: #f0fdf4;
+/* Summary band above the drill-down table. */
+.pg-drill__summary {
+    padding: 0.85rem 1.25rem;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
 }
+
+.pg-drill__summary-headline {
+    font-size: 0.95rem;
+    color: #0f172a;
+}
+
+.pg-drill__pills {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.pg-drill__pill {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.18rem 0.55rem;
+    border-radius: 9999px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.pg-drill__pill--won             { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+.pg-drill__pill--open            { background: #dbeafe; color: #1e3a8a; border-color: #93c5fd; }
+.pg-drill__pill--lost-progressed { background: #f3f4f6; color: #374151; border-color: #d1d5db; }
+.pg-drill__pill--lost-source     { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.pg-drill__pill--in-flight       { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+
+.pg-drill__table-wrap {
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Per-category row tints — muted so the table stays readable. */
+.pg-drill__row--won            td { background: #f0fdf4; }
+.pg-drill__row--open           td { background: #eff6ff; }
+.pg-drill__row--lost-progressed td { background: #f9fafb; }
+.pg-drill__row--lost-source    td { background: #fef2f2; }
+.pg-drill__row--in-flight      td { background: #fffbeb; color: #78350f; font-style: italic; }

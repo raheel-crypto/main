@@ -160,6 +160,12 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Date closeDate;
         @AuraEnabled public Boolean isClosed;
         @AuraEnabled public Boolean reachedTarget;
+        // One of: CLOSED_WON, OPEN_LATER_STAGE, CLOSED_LOST_PROGRESSED,
+        // CLOSED_LOST_AT_SOURCE, IN_FLIGHT_AT_SOURCE.
+        @AuraEnabled public String category;
+        // Highest stage rank reached, expressed as the stage label (e.g.
+        // '4 - Proposal'). Used for "Closed Lost peaked at..." display.
+        @AuraEnabled public String highestStageReached;
     }
 
     public class HeatmapRow {
@@ -188,6 +194,15 @@ public with sharing class PGInsightsController {
         '4 - Proposal'    => 4,
         '5 - Contracting' => 5,
         'Closed Won'      => 6
+    };
+
+    private static final Map<Integer, String> STAGE_LABEL_BY_RANK = new Map<Integer, String>{
+        1 => '1 - Demo',
+        2 => '2 - Discovery',
+        3 => '3 - POV',
+        4 => '4 - Proposal',
+        5 => '5 - Contracting',
+        6 => 'Closed Won'
     };
 
     // ---- @AuraEnabled API ------------------------------------------------------------
@@ -626,11 +641,28 @@ public with sharing class PGInsightsController {
                     if (r != null && r > maxRank) maxRank = r;
                 }
             }
-            if (maxRank == 0) continue;
+            // Only include opps that at least reached the source stage.
+            if (maxRank < fromRank) continue;
 
-            // Eligible for fromRank denominator?
-            Boolean eligible = (maxRank > fromRank) || (maxRank == fromRank && o.IsClosed);
-            if (!eligible) continue;
+            // Categorize. Five buckets:
+            //  - CLOSED_WON           : current StageName is Closed Won
+            //  - OPEN_LATER_STAGE     : open, advanced past the source stage
+            //  - CLOSED_LOST_PROGRESSED : Closed Lost after advancing past source
+            //  - CLOSED_LOST_AT_SOURCE  : Closed Lost without advancing
+            //  - IN_FLIGHT_AT_SOURCE  : open, currently at exactly the source
+            //                           stage. NOT counted in conversion %.
+            String category;
+            if (o.StageName == 'Closed Won') {
+                category = 'CLOSED_WON';
+            } else if (o.StageName == 'Closed Lost') {
+                category = (maxRank > fromRank)
+                    ? 'CLOSED_LOST_PROGRESSED'
+                    : 'CLOSED_LOST_AT_SOURCE';
+            } else {
+                category = (maxRank > fromRank)
+                    ? 'OPEN_LATER_STAGE'
+                    : 'IN_FLIGHT_AT_SOURCE';
+            }
 
             HeatmapCellOpp row = new HeatmapCellOpp();
             row.oppId = o.Id;
@@ -640,10 +672,11 @@ public with sharing class PGInsightsController {
             row.closeDate = o.CloseDate;
             row.isClosed = o.IsClosed;
             row.reachedTarget = (maxRank >= fromRank + 1);
+            row.category = category;
+            row.highestStageReached = STAGE_LABEL_BY_RANK.get(maxRank);
             out.add(row);
         }
 
-        // Sort: reached-target first (descending stage), then non-reached.
         out.sort(new HeatmapCellComparator());
         return out;
     }
@@ -1140,14 +1173,19 @@ public with sharing class PGInsightsController {
         return (Decimal.valueOf(numerator) / Decimal.valueOf(denominator)) * 100;
     }
 
+    private static final Map<String, Integer> CATEGORY_ORDER = new Map<String, Integer>{
+        'CLOSED_WON'             => 0,
+        'OPEN_LATER_STAGE'       => 1,
+        'CLOSED_LOST_PROGRESSED' => 2,
+        'CLOSED_LOST_AT_SOURCE'  => 3,
+        'IN_FLIGHT_AT_SOURCE'    => 4
+    };
+
     private class HeatmapCellComparator implements Comparator<HeatmapCellOpp> {
         public Integer compare(HeatmapCellOpp a, HeatmapCellOpp b) {
-            // Reached-target first, then by stage descending, then by amount desc.
-            if (a.reachedTarget != b.reachedTarget) return a.reachedTarget ? -1 : 1;
-            String aStage = a.stageName == null ? '' : a.stageName;
-            String bStage = b.stageName == null ? '' : b.stageName;
-            Integer cmp = bStage.compareTo(aStage);
-            if (cmp != 0) return cmp;
+            Integer aOrd = CATEGORY_ORDER.containsKey(a.category) ? CATEGORY_ORDER.get(a.category) : 99;
+            Integer bOrd = CATEGORY_ORDER.containsKey(b.category) ? CATEGORY_ORDER.get(b.category) : 99;
+            if (aOrd != bOrd) return aOrd - bOrd;
             Decimal aAmt = a.amount == null ? 0 : a.amount;
             Decimal bAmt = b.amount == null ? 0 : b.amount;
             if (bAmt > aAmt) return 1;

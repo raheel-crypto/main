@@ -73,28 +73,45 @@
                     </div>
                 </template>
                 <template lwc:else>
-                    <table class="pg-drill__table">
-                        <thead>
-                            <tr>
-                                <th>Opportunity</th>
-                                <th>Stage</th>
-                                <th>Amount</th>
-                                <th>Close Date</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template for:each={drillRows} for:item="r">
-                                <tr key={r.oppId} class={r.rowClass}>
-                                    <td>{r.name}</td>
-                                    <td>{r.stageName}</td>
-                                    <td>{r.amountFmt}</td>
-                                    <td>{r.closeDateFmt}</td>
-                                    <td>{r.statusLabel}</td>
+                    <template lwc:if={drillSummary}>
+                        <div class="pg-drill__summary">
+                            <span class="pg-drill__summary-headline">
+                                <strong>{drillSummary.advanced}</strong>/<strong>{drillSummary.settled}</strong>
+                                settled deals advanced ({drillSummary.pct})
+                            </span>
+                            <span class="pg-drill__pills">
+                                <span class="pg-drill__pill pg-drill__pill--won">{drillSummary.won} Closed Won</span>
+                                <span class="pg-drill__pill pg-drill__pill--open">{drillSummary.openLater} Open · later stage</span>
+                                <span class="pg-drill__pill pg-drill__pill--lost-progressed">{drillSummary.lostProgressed} Lost · progressed</span>
+                                <span class="pg-drill__pill pg-drill__pill--lost-source">{drillSummary.lostSource} Lost · didn’t advance</span>
+                                <span class="pg-drill__pill pg-drill__pill--in-flight">{drillSummary.inFlight} In flight (not counted)</span>
+                            </span>
+                        </div>
+                    </template>
+                    <div class="pg-drill__table-wrap">
+                        <table class="pg-drill__table">
+                            <thead>
+                                <tr>
+                                    <th>Opportunity</th>
+                                    <th>Stage</th>
+                                    <th>Amount</th>
+                                    <th>Close Date</th>
+                                    <th>Status</th>
                                 </tr>
-                            </template>
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                <template for:each={drillRows} for:item="r">
+                                    <tr key={r.oppId} class={r.rowClass}>
+                                        <td>{r.name}</td>
+                                        <td>{r.stageName}</td>
+                                        <td>{r.amountFmt}</td>
+                                        <td>{r.closeDateFmt}</td>
+                                        <td>{r.statusLabel}</td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
                 </template>
             </div>
         </section>

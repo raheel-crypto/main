@@ -445,6 +445,57 @@ private class PGInsightsControllerTest {
     }
 
     @IsTest
+    static void getHeatmapCellOpps_categorizesByOutcome() {
+        Set<Id> aeIds = computeTestAeIds();
+        Id ae1Id = null;
+        for (User u : [SELECT Id, Alias FROM User WHERE Id IN :aeIds]) {
+            if (u.Alias == 'ae1') { ae1Id = u.Id; break; }
+        }
+
+        User loader = [SELECT Id FROM User WHERE Username LIKE 'pg-loader%' LIMIT 1];
+        List<Opportunity> testOpps;
+        System.runAs(loader) {
+            testOpps = new List<Opportunity>{
+                new Opportunity(Name='Won',                 OwnerId=ae1Id, StageName='Closed Won',    CloseDate=Date.today(),            Type='New Business', Amount=10000, Booked_By_Role__c='AE - ENT'),
+                new Opportunity(Name='Open later',          OwnerId=ae1Id, StageName='4 - Proposal',  CloseDate=Date.today().addDays(30), Type='New Business', Amount=10000, Booked_By_Role__c='AE - ENT'),
+                new Opportunity(Name='Lost progressed',     OwnerId=ae1Id, StageName='Closed Lost',   CloseDate=Date.today(),            Type='New Business', Amount=10000, Booked_By_Role__c='AE - ENT'),
+                new Opportunity(Name='Lost at source',      OwnerId=ae1Id, StageName='Closed Lost',   CloseDate=Date.today(),            Type='New Business', Amount=10000, Booked_By_Role__c='AE - ENT'),
+                new Opportunity(Name='In flight at source', OwnerId=ae1Id, StageName='2 - Discovery', CloseDate=Date.today().addDays(30), Type='New Business', Amount=10000, Booked_By_Role__c='AE - ENT')
+            };
+            insert testOpps;
+        }
+
+        // Stage histories per intended outcome.
+        Map<Id, Set<String>> mock = new Map<Id, Set<String>>();
+        mock.put(testOpps[0].Id, new Set<String>{'1 - Demo','2 - Discovery','3 - POV','4 - Proposal','5 - Contracting','Closed Won'});
+        mock.put(testOpps[1].Id, new Set<String>{'1 - Demo','2 - Discovery','3 - POV','4 - Proposal'});
+        mock.put(testOpps[2].Id, new Set<String>{'1 - Demo','2 - Discovery','3 - POV'});
+        mock.put(testOpps[3].Id, new Set<String>{'1 - Demo','2 - Discovery'});
+        mock.put(testOpps[4].Id, new Set<String>{'1 - Demo','2 - Discovery'});
+        PGInsightsController.mockStagesByOpp = mock;
+
+        Test.startTest();
+        // fromRank = 2 (Discovery -> POV) exercises every category.
+        List<PGInsightsController.HeatmapCellOpp> rows =
+            PGInsightsController.getHeatmapCellOpps(String.valueOf(ae1Id), 2, 'AE', false);
+        Test.stopTest();
+
+        Map<String, String> categoryByName = new Map<String, String>();
+        for (PGInsightsController.HeatmapCellOpp r : rows) categoryByName.put(r.name, r.category);
+        System.assertEquals('CLOSED_WON',             categoryByName.get('Won'),                 'Closed Won');
+        System.assertEquals('OPEN_LATER_STAGE',       categoryByName.get('Open later'),          'Open · later stage');
+        System.assertEquals('CLOSED_LOST_PROGRESSED', categoryByName.get('Lost progressed'),     'Closed Lost progressed');
+        System.assertEquals('CLOSED_LOST_AT_SOURCE',  categoryByName.get('Lost at source'),      'Closed Lost at source');
+        System.assertEquals('IN_FLIGHT_AT_SOURCE',    categoryByName.get('In flight at source'), 'In flight at source');
+
+        // highestStageReached populated.
+        for (PGInsightsController.HeatmapCellOpp r : rows) {
+            System.assertNotEquals(null, r.highestStageReached,
+                'highestStageReached set for ' + r.name);
+        }
+    }
+
+    @IsTest
     static void getHeatmapCellOpps_byPodReturnsAllPodAEs() {
         PGInsightsController.mockStagesByOpp = buildSimpleStagesMock();
         Test.startTest();

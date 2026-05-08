@@ -432,14 +432,27 @@ The faded-gray `N/A` treatment is important — it lets you distinguish
 "0% real conversion" from "no settled deals at that stage yet to convert"
 at a glance.
 
-**Drill-down popup:** click any cell to open a modal showing the
-underlying deals that contributed to that cell's denominator. Each row
-shows opportunity name, current stage, amount, close date, and a status
-label — `Advanced` (green-tinted, in numerator), `Closed without
-advancing` (in denominator but not numerator), or `Open at stage` (won't
-appear unless backend filter logic is changed). Backed by a separate
-`getHeatmapCellOpps` Apex method that takes the same `groupBy` and
-`combineIB` settings the heatmap uses.
+**Drill-down popup:** click any cell to open a modal showing every
+opportunity that touched the source stage, grouped into five outcome
+categories so a 42% conversion isn't just a list of Closed Won deals:
+
+| Category | Meaning | Counts toward |
+|---|---|---|
+| `CLOSED_WON` | Current `StageName = 'Closed Won'` | Numerator + denominator |
+| `OPEN_LATER_STAGE` | Open and currently at a stage past the source (e.g. drilling Demo→Discovery on a deal currently at Proposal) | Numerator + denominator |
+| `CLOSED_LOST_PROGRESSED` | Current `StageName = 'Closed Lost'`, max rank reached > source rank (advanced past source, then lost) | Numerator + denominator |
+| `CLOSED_LOST_AT_SOURCE` | Current `StageName = 'Closed Lost'`, max rank reached = source rank (closed without ever advancing) | Denominator only |
+| `IN_FLIGHT_AT_SOURCE` | Open, currently sitting at exactly the source stage | **Neither.** Shown for context — counted as undecided. |
+
+The modal header summarizes counts as colored pills + a headline like
+`12 / 17 settled deals advanced (71%)`, so the conversion number on the
+cell is decomposed at a glance. Per-row coloring matches the pill colors
+(green for won, blue for open later, gray for lost progressed, red for
+lost at source, faded yellow italic for in-flight at source).
+
+Backed by `getHeatmapCellOpps(groupKey, fromRank, groupBy, combineIB)`.
+Sorted: won → open later → lost progressed → lost at source → in flight,
+then by amount descending within each category.
 
 ---
 

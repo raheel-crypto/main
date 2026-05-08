@@ -92,12 +92,67 @@ export default class PgConversionHeatmap extends LightningElement {
                     ...o,
                     amountFmt: this.fmtCurrency(o.amount),
                     closeDateFmt: this.fmtDate(o.closeDate),
-                    rowClass: o.reachedTarget ? 'pg-drill__row pg-drill__row--reached' : 'pg-drill__row',
-                    statusLabel: o.reachedTarget ? 'Advanced' : (o.isClosed ? 'Closed without advancing' : 'Open at stage')
+                    rowClass: this.rowClassForCategory(o.category),
+                    statusLabel: this.statusLabelFor(o)
                 }));
                 this.drillLoading = false;
             })
             .catch(() => { this.drillLoading = false; });
+    }
+
+    statusLabelFor(o) {
+        switch (o.category) {
+            case 'CLOSED_WON':
+                return 'Closed Won';
+            case 'OPEN_LATER_STAGE':
+                return `Open · ${o.stageName}`;
+            case 'CLOSED_LOST_PROGRESSED':
+                return `Closed Lost (peaked at ${o.highestStageReached || '—'})`;
+            case 'CLOSED_LOST_AT_SOURCE':
+                return 'Closed Lost (didn’t advance)';
+            case 'IN_FLIGHT_AT_SOURCE':
+                return `Open · ${o.stageName} (not counted)`;
+            default:
+                return o.stageName || '';
+        }
+    }
+
+    rowClassForCategory(cat) {
+        switch (cat) {
+            case 'CLOSED_WON':             return 'pg-drill__row pg-drill__row--won';
+            case 'OPEN_LATER_STAGE':       return 'pg-drill__row pg-drill__row--open';
+            case 'CLOSED_LOST_PROGRESSED': return 'pg-drill__row pg-drill__row--lost-progressed';
+            case 'CLOSED_LOST_AT_SOURCE':  return 'pg-drill__row pg-drill__row--lost-source';
+            case 'IN_FLIGHT_AT_SOURCE':    return 'pg-drill__row pg-drill__row--in-flight';
+            default:                       return 'pg-drill__row';
+        }
+    }
+
+    get drillSummary() {
+        if (!this.drillRows || !this.drillRows.length) return null;
+        const counts = {
+            CLOSED_WON: 0,
+            OPEN_LATER_STAGE: 0,
+            CLOSED_LOST_PROGRESSED: 0,
+            CLOSED_LOST_AT_SOURCE: 0,
+            IN_FLIGHT_AT_SOURCE: 0
+        };
+        for (const r of this.drillRows) {
+            if (counts[r.category] != null) counts[r.category]++;
+        }
+        const advanced = counts.CLOSED_WON + counts.OPEN_LATER_STAGE + counts.CLOSED_LOST_PROGRESSED;
+        const settled  = advanced + counts.CLOSED_LOST_AT_SOURCE;
+        const pct = settled === 0 ? null : Math.round((advanced / settled) * 100);
+        return {
+            advanced,
+            settled,
+            inFlight: counts.IN_FLIGHT_AT_SOURCE,
+            pct: pct == null ? 'N/A' : `${pct}%`,
+            won:           counts.CLOSED_WON,
+            openLater:     counts.OPEN_LATER_STAGE,
+            lostProgressed: counts.CLOSED_LOST_PROGRESSED,
+            lostSource:    counts.CLOSED_LOST_AT_SOURCE
+        };
     }
 
     closeDrill() { this.drillOpen = false; }
