@@ -236,6 +236,66 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
+    public static List<QuarterRow> getStageProgressByWeek() {
+        // Weekly buckets for the current fiscal quarter only. Used by the
+        // chart's "Per Week (this Q)" view. Goals aren't applied per week —
+        // the chart skips the goal line in this view.
+        Date qStart = startOfCurrentFiscalQuarter();
+        Date today = Date.today();
+
+        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
+        Map<Id, Opportunity> opps = getOppDetails(firstDates.keySet());
+
+        // Build week buckets up to today, aligned to qStart.
+        Map<Integer, QuarterRow> byKey = new Map<Integer, QuarterRow>();
+        Integer currentWeekIndex = today.daysBetween(qStart) * -1 / 7;
+        for (Integer i = 0; i <= currentWeekIndex; i++) {
+            Date wkStart = qStart.addDays(i * 7);
+            Date wkEnd   = wkStart.addDays(6);
+            QuarterRow r = new QuarterRow();
+            r.fiscalLabel = formatWeekLabel(wkStart);
+            r.nbCount    = 0;
+            r.expCount   = 0;
+            r.goal       = 0;
+            r.nbAmount   = 0;
+            r.expAmount  = 0;
+            r.amountGoal = 0;
+            byKey.put(i, r);
+        }
+
+        for (Id oid : firstDates.keySet()) {
+            Opportunity o = opps.get(oid);
+            if (o == null) continue;
+            String bucket = bucketForType(o.Type);
+            if (bucket == null) continue;
+            Date d = firstDates.get(oid).date();
+            if (d < qStart || d > today) continue;
+            Integer wkIdx = d.daysBetween(qStart) * -1 / 7;
+            QuarterRow row = byKey.get(wkIdx);
+            if (row == null) continue;
+            Decimal amt = o.Amount == null ? 0 : o.Amount;
+            if (bucket == NB_TYPE) {
+                row.nbCount  += 1;
+                row.nbAmount += amt;
+            } else {
+                row.expCount  += 1;
+                row.expAmount += amt;
+            }
+        }
+
+        List<Integer> sortedKeys = new List<Integer>(byKey.keySet());
+        sortedKeys.sort();
+        List<QuarterRow> rows = new List<QuarterRow>();
+        for (Integer k : sortedKeys) rows.add(byKey.get(k));
+        return rows;
+    }
+
+    private static String formatWeekLabel(Date wkStart) {
+        // Compact "M/d" label, e.g. "5/4".
+        return wkStart.month() + '/' + wkStart.day();
+    }
+
+    @AuraEnabled(cacheable=true)
     public static List<QuarterRow> getStageProgressByQuarter(Integer numQuarters) {
         Integer n = (numQuarters == null || numQuarters <= 0) ? 8 : numQuarters;
         Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();

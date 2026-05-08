@@ -12,3 +12,30 @@
 .pg-chart__title {
     font-weight: 700;
 }
+
+.pg-mini-toggle {
+    display: inline-flex;
+    background: #e2e8f0;
+    border-radius: 9999px;
+    padding: 0.15rem;
+    border: 1px solid #cbd5e1;
+}
+
+.pg-mini-toggle__btn {
+    border: 0;
+    background: transparent;
+    color: #475569;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    cursor: pointer;
+}
+
+.pg-mini-toggle__btn:hover { color: #0f172a; }
+
+.pg-mini-toggle__btn--active {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #f8fafc;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+}

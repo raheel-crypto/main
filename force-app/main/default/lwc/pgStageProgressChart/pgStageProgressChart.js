@@ -2,11 +2,30 @@ import { LightningElement, api, wire } from 'lwc';
 import { loadScript } from 'lightning/platformResourceLoader';
 import ChartJs from '@salesforce/resourceUrl/ChartJs';
 import getStageProgressByQuarter from '@salesforce/apex/PGInsightsController.getStageProgressByQuarter';
+import getStageProgressByWeek    from '@salesforce/apex/PGInsightsController.getStageProgressByWeek';
 
 export default class PgStageProgressChart extends LightningElement {
     @api metric = 'count'; // 'count' | 'amount'
 
+    grouping = 'week'; // 'week' | 'quarter'
+
+    get isWeekView() { return this.grouping === 'week'; }
+    get weekToggleClass() {
+        return 'pg-mini-toggle__btn' + (this.isWeekView    ? ' pg-mini-toggle__btn--active' : '');
+    }
+    get quarterToggleClass() {
+        return 'pg-mini-toggle__btn' + (!this.isWeekView   ? ' pg-mini-toggle__btn--active' : '');
+    }
+
+    handleSelectWeek()    { this.grouping = 'week';    }
+    handleSelectQuarter() { this.grouping = 'quarter'; }
+
     get title() {
+        if (this.isWeekView) {
+            return this.metric === 'amount'
+                ? 'AE Qualified Stage 2+ Pipeline ($) | Per Week (this Q)'
+                : 'AE Qualified Stage 2+ Progress | Per Week (this Q)';
+        }
         return this.metric === 'amount'
             ? 'AE Qualified Stage 2+ Pipeline ($) | Last 6 Quarters'
             : 'AE Qualified Stage 2+ Progress | Last 6 Quarters';
@@ -14,18 +33,30 @@ export default class PgStageProgressChart extends LightningElement {
 
     chart;
     chartJsLoaded = false;
-    rows = [];
+    rowsByQuarter = [];
+    rowsByWeek = [];
     error;
 
     @wire(getStageProgressByQuarter, { numQuarters: 6 })
-    wiredRows({ data, error }) {
+    wiredQuarter({ data, error }) {
         if (data) {
-            this.rows = data;
+            this.rowsByQuarter = data;
             this.renderChart();
         }
-        if (error) {
-            this.error = error;
+        if (error) this.error = error;
+    }
+
+    @wire(getStageProgressByWeek)
+    wiredWeek({ data, error }) {
+        if (data) {
+            this.rowsByWeek = data;
+            this.renderChart();
         }
+        if (error) this.error = error;
+    }
+
+    get rows() {
+        return this.isWeekView ? this.rowsByWeek : this.rowsByQuarter;
     }
 
     // Re-render when the parent toggles the metric prop. LWC reactive
@@ -42,8 +73,9 @@ export default class PgStageProgressChart extends LightningElement {
                 });
             return;
         }
-        if (this._lastMetric !== this.metric) {
+        if (this._lastMetric !== this.metric || this._lastGrouping !== this.grouping) {
             this._lastMetric = this.metric;
+            this._lastGrouping = this.grouping;
             this.renderChart();
         }
     }
