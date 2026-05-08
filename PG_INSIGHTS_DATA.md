@@ -109,13 +109,13 @@ April 2025 sits in `FY2026-Q1`.
 If the fiscal year starts in January (calendar-aligned), `FY` matches the
 calendar year.
 
-### MTD proration
+### QTD proration
 
-Goal-related widgets that show a "Goal (MTD)" prorate the quarterly goal
+Goal-related widgets that show a "Goal (QTD)" prorate the quarterly goal
 linearly by days elapsed:
 
 ```
-mtdGoal = quarterlyGoal × (days_elapsed_in_quarter / total_days_in_quarter)
+qtdGoal = quarterlyGoal × (days_elapsed_in_quarter / total_days_in_quarter)
 ```
 
 Where `days_elapsed_in_quarter` is inclusive of both today and the quarter
@@ -230,14 +230,14 @@ acceptable since the quarter genuinely has no goal set.
 - AE NB Stage 2+ — total count of opps reaching Stage 2+ this fiscal
   quarter, Type = New Business
 - AE Exp Stage 2+ — same with Type = Upsell
-- Goal (MTD) — sum of `(NB_Goal__c + Exp_Goal__c)` across every AE's
+- Goal (QTD) — sum of `(NB_Goal__c + Exp_Goal__c)` across every AE's
   current-quarter `PG_Quota__c` row, prorated by days into quarter
-- Attainment — `(NB + Exp) / Goal MTD × 100`
+- Attainment — `(NB + Exp) / Goal QTD × 100`
 
 **Filters:** same universe as the chart, scoped to entries where the first
 Stage 2+ history row's `CreatedDate >= startOfCurrentFiscalQuarter()`.
 
-If no PG_Quota__c rows exist for the current quarter, Goal MTD is 0 and
+If no PG_Quota__c rows exist for the current quarter, Goal QTD is 0 and
 Attainment is shown as 0%.
 
 ### Top Performers by Pod
@@ -254,9 +254,9 @@ pod below.
 
 - Total count = sum of NB + Expansion Stage 2+ this quarter for that pod's
   AEs
-- Goal (MTD) = sum of every AE in that pod's `(NB_Goal__c + Exp_Goal__c)`
+- Goal (QTD) = sum of every AE in that pod's `(NB_Goal__c + Exp_Goal__c)`
   for the current quarter, prorated. AEs without a quota row contribute 0.
-- Attainment = `(total count) / (Goal MTD) × 100`. Shown in a pill on the
+- Attainment = `(total count) / (Goal QTD) × 100`. Shown in a pill on the
   header.
 
 **Per-rep rows (top 5 in pod):**
@@ -492,7 +492,7 @@ One row per AE per fiscal quarter, holding their goals (count, $, or both):
 | `Exp_Amount_Goal__c` | Number(18,2) | Upsell Stage 2+ **$ amount** target for the quarter |
 | (Name) | AutoNumber | `PGQ-{0000}` |
 
-Goal MTD = `(<count goals or amount goals>) × proration` where proration
+Goal QTD = `(<count goals or amount goals>) × proration` where proration
 is days into quarter / total days in quarter. The toggle on Quarter Recap
 picks which pair of fields to read.
 

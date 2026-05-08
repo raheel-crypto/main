@@ -49,7 +49,7 @@ export default class PgTopPerformers extends LightningElement {
             return {
                 nbDisplay:           this.fmtCurrency(s.nbAmount),
                 expDisplay:          this.fmtCurrency(s.expAmount),
-                goalDisplay:         this.fmtCurrency(s.amountGoalMTD),
+                goalDisplay:         this.fmtCurrency(s.amountGoalQTD),
                 attainmentDisplay:   this.fmtPct(s.amountAttainmentPct, 1),
                 nbLabel:             'AE NB Stage 2+ ($)',
                 expLabel:            'AE Exp Stage 2+ ($)'
@@ -58,7 +58,7 @@ export default class PgTopPerformers extends LightningElement {
         return {
             nbDisplay:           s.nbCount,
             expDisplay:          s.expCount,
-            goalDisplay:         this.fmtNum(s.goalMTD),
+            goalDisplay:         this.fmtNum(s.goalQTD),
             attainmentDisplay:   this.fmtPct(s.attainmentPct, 1),
             nbLabel:             'AE NB Stage 2+',
             expLabel:            'AE Exp Stage 2+'
@@ -76,7 +76,7 @@ export default class PgTopPerformers extends LightningElement {
             const podCount = isAmt
                 ? Number(p.totalNbAmount || 0) + Number(p.totalExpAmount || 0)
                 : Number(p.totalNb || 0) + Number(p.totalExp || 0);
-            const podGoal = Number(isAmt ? p.totalAmountGoalMTD : p.totalGoalMTD);
+            const podGoal = Number(isAmt ? p.totalAmountGoalQTD : p.totalGoalQTD);
             const podAttainmentPct = isAmt ? p.amountAttainmentPct : p.attainmentPct;
 
             const sorted = [...(p.rows || [])].sort((a, b) => repTotal(b) - repTotal(a));

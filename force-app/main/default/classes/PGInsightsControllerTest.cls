@@ -147,7 +147,7 @@ private class PGInsightsControllerTest {
         Test.stopTest();
         System.assertEquals(8, s.nbCount,  'QTD NB count');
         System.assertEquals(2, s.expCount, 'QTD Exp count');
-        System.assert(s.goalMTD > 0, 'Goal MTD prorated from PG_Quota__c (ae1 has 14 quarterly)');
+        System.assert(s.goalQTD > 0, 'Goal QTD prorated from PG_Quota__c (ae1 has 14 quarterly)');
     }
 
     @IsTest
@@ -171,11 +171,11 @@ private class PGInsightsControllerTest {
         PGInsightsController.PodPerformers ib1 = byPod.get('IB1');
         System.assertEquals(1, ib1.rows.size(), 'IB1 has one performer');
         System.assertEquals(6, ib1.totalNb + ib1.totalExp, 'IB1 totals 6 stage-2+ opps');
-        System.assert(ib1.totalGoalMTD > 0, 'IB1 inherits ae1 prorated quota');
+        System.assert(ib1.totalGoalQTD > 0, 'IB1 inherits ae1 prorated quota');
 
         PGInsightsController.PodPerformers ib2 = byPod.get('IB2');
         System.assertEquals(3, ib2.totalNb + ib2.totalExp, 'IB2 totals 3 stage-2+ opps');
-        System.assertEquals(0, ib2.totalGoalMTD, 'IB2 has no quota set; falls back to 0');
+        System.assertEquals(0, ib2.totalGoalQTD, 'IB2 has no quota set; falls back to 0');
     }
 
     @IsTest
@@ -274,8 +274,8 @@ private class PGInsightsControllerTest {
         System.assertEquals(400000, s.nbAmount,  'QTD NB amount');
         System.assertEquals(100000, s.expAmount, 'QTD Exp amount');
         // ae1 has NB $200K + Exp $80K quarterly amount goal; prorated.
-        System.assert(s.amountGoalMTD > 0,
-            'Amount goal MTD prorated from PG_Quota__c amount fields');
+        System.assert(s.amountGoalQTD > 0,
+            'Amount goal QTD prorated from PG_Quota__c amount fields');
         System.assert(s.amountAttainmentPct > 0,
             'Amount attainment % computed from goal + actuals');
     }
@@ -296,7 +296,7 @@ private class PGInsightsControllerTest {
         PGInsightsController.PodPerformers ib1 = byPod.get('IB1');
         System.assertEquals(200000, ib1.totalNbAmount,  'IB1 NB amount');
         System.assertEquals(100000, ib1.totalExpAmount, 'IB1 Exp amount');
-        System.assert(ib1.totalAmountGoalMTD > 0, 'IB1 inherits amount quota');
+        System.assert(ib1.totalAmountGoalQTD > 0, 'IB1 inherits amount quota');
 
         PGInsightsController.PerformerRow leader = ib1.rows[0];
         System.assertEquals(200000, leader.nbAmount,  'Leader NB amount');

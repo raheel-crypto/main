@@ -12,7 +12,7 @@
                     <div class="pg-status__value">{status.expDisplay}</div>
                 </div>
                 <div class="slds-col">
-                    <div class="pg-status__label">Goal (MTD)</div>
+                    <div class="pg-status__label">Goal (QTD)</div>
                     <div class="pg-status__value">{status.goalDisplay}</div>
                 </div>
                 <div class="slds-col">
@@ -36,7 +36,7 @@
                                 <span class="pg-pod__goal">{pod.goalDisplay}</span>
                                 <span class="pg-pod__pct">{pod.attainmentDisplay}</span>
                             </div>
-                            <div class="pg-pod__sublabel">Stage 2+ / Goal MTD · Attainment</div>
+                            <div class="pg-pod__sublabel">Stage 2+ / Goal QTD · Attainment</div>
                         </header>
                         <ol class="pg-pod__list">
                             <template for:each={pod.rows} for:item="row">

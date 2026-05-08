@@ -106,11 +106,11 @@ public with sharing class PGInsightsController {
     public class S1Status {
         @AuraEnabled public Integer nbCount;
         @AuraEnabled public Integer expCount;
-        @AuraEnabled public Decimal goalMTD;
+        @AuraEnabled public Decimal goalQTD;
         @AuraEnabled public Decimal attainmentPct;
         @AuraEnabled public Decimal nbAmount;
         @AuraEnabled public Decimal expAmount;
-        @AuraEnabled public Decimal amountGoalMTD;
+        @AuraEnabled public Decimal amountGoalQTD;
         @AuraEnabled public Decimal amountAttainmentPct;
     }
 
@@ -132,11 +132,11 @@ public with sharing class PGInsightsController {
         @AuraEnabled public List<PerformerRow> rows;
         @AuraEnabled public Integer totalNb;
         @AuraEnabled public Integer totalExp;
-        @AuraEnabled public Decimal totalGoalMTD;
+        @AuraEnabled public Decimal totalGoalQTD;
         @AuraEnabled public Decimal attainmentPct;
         @AuraEnabled public Decimal totalNbAmount;
         @AuraEnabled public Decimal totalExpAmount;
-        @AuraEnabled public Decimal totalAmountGoalMTD;
+        @AuraEnabled public Decimal totalAmountGoalQTD;
         @AuraEnabled public Decimal amountAttainmentPct;
     }
 
@@ -392,11 +392,11 @@ public with sharing class PGInsightsController {
         S1Status s = new S1Status();
         s.nbCount = 0;
         s.expCount = 0;
-        s.goalMTD = 0;
+        s.goalQTD = 0;
         s.attainmentPct = 0;
         s.nbAmount = 0;
         s.expAmount = 0;
-        s.amountGoalMTD = 0;
+        s.amountGoalQTD = 0;
         s.amountAttainmentPct = 0;
 
         Date qStart = startOfCurrentFiscalQuarter();
@@ -420,11 +420,11 @@ public with sharing class PGInsightsController {
             totalCountGoal += g[0] + g[1];
             totalAmtGoal   += g[2] + g[3];
         }
-        Decimal proration = mtdProration();
-        s.goalMTD             = totalCountGoal * proration;
-        s.amountGoalMTD       = totalAmtGoal   * proration;
-        s.attainmentPct       = s.goalMTD       == 0 ? 0 : ((s.nbCount  + s.expCount)  / s.goalMTD)       * 100;
-        s.amountAttainmentPct = s.amountGoalMTD == 0 ? 0 : ((s.nbAmount + s.expAmount) / s.amountGoalMTD) * 100;
+        Decimal proration = qtdProration();
+        s.goalQTD             = totalCountGoal * proration;
+        s.amountGoalQTD       = totalAmtGoal   * proration;
+        s.attainmentPct       = s.goalQTD       == 0 ? 0 : ((s.nbCount  + s.expCount)  / s.goalQTD)       * 100;
+        s.amountAttainmentPct = s.amountGoalQTD == 0 ? 0 : ((s.nbAmount + s.expAmount) / s.amountGoalQTD) * 100;
         return s;
     }
 
@@ -442,7 +442,7 @@ public with sharing class PGInsightsController {
         }
         Map<Id, Opportunity> opps = getOppDetails(qIds);
         Map<Id, Decimal[]> quotas = getQuotasForCurrentQuarter();
-        Decimal proration = mtdProration();
+        Decimal proration = qtdProration();
 
         Map<String, Set<Id>> aesByPod = getAeUserIdsByPod();
         Map<Id, String> podByAe = new Map<Id, String>();
@@ -514,8 +514,8 @@ public with sharing class PGInsightsController {
             pp.totalExp             = totalExp;
             pp.totalNbAmount        = totalNbAmt;
             pp.totalExpAmount       = totalExpAmt;
-            pp.totalGoalMTD         = totalCountGoal;
-            pp.totalAmountGoalMTD   = totalAmtGoal;
+            pp.totalGoalQTD         = totalCountGoal;
+            pp.totalAmountGoalQTD   = totalAmtGoal;
             pp.attainmentPct        = totalCountGoal == 0 ? 0
                 : ((totalNb + totalExp) / totalCountGoal) * 100;
             pp.amountAttainmentPct  = totalAmtGoal == 0 ? 0
@@ -1206,7 +1206,7 @@ public with sharing class PGInsightsController {
         return out;
     }
 
-    private static Decimal mtdProration() {
+    private static Decimal qtdProration() {
         Date qStart = startOfCurrentFiscalQuarter();
         Date qEnd = qStart.addMonths(3).addDays(-1);
         Date today = Date.today();
