@@ -35,11 +35,33 @@ The previous `User.Pod__c` field is no longer used for dashboard scoping.
 
 ### What counts as a New Business or Expansion opportunity
 
-- **New Business**: `Opportunity.Type = 'New Business'`
+- **New Business**: `Opportunity.Type IN ('New Business', 'Pilot')` —
+  Pilots are pre-NB pipeline and roll up under New Business in every
+  count / $ widget.
 - **Expansion**: `Opportunity.Type = 'Upsell'`
 
-`Renewal`, `Pilot`, `Downsell`, `Contract Restructure`, `Debooking` are
-explicitly excluded. The dashboard never references them.
+`Renewal`, `Downsell`, `Contract Restructure`, `Debooking` are explicitly
+excluded. The dashboard never references them.
+
+### `#` vs `$` (count vs amount)
+
+Quarter Recap has a global toggle at the top — `# of opps` (default) and
+`$ pipeline`. Every widget on that tab honors the toggle:
+
+- KPI panels (when enabled): NB / Expansion totals + deltas in count or
+  formatted currency (`$120K`, `$1.2M`).
+- Stage 2+ Progress chart: bar heights and goal line both swap. Y-axis
+  ticks reformat to `$` shorthand.
+- Stage 2+ Status panel and Top Performers cards: counts and prorated
+  goals + attainment swap to amount-based equivalents.
+
+The Apex always returns both shapes in the same payload; the LWC picks
+which to render. Switching the toggle is instant — no Apex re-call.
+
+Goals come from two parallel pairs of fields on `PG_Quota__c`:
+`NB_Goal__c` / `Exp_Goal__c` for counts, `NB_Amount_Goal__c` /
+`Exp_Amount_Goal__c` for $. AEs can have either or both; missing values
+display as `0` for that mode without affecting the other.
 
 ### What counts as "AE-sourced"
 
@@ -153,25 +175,37 @@ elapsed-time grounds. Read MoM with that caveat.
 
 ### AE Qualified Stage 2+ Progress chart
 
-**Question answered:** is the team's Stage 2+ pipeline creation accelerating
-or decelerating across the last 6 fiscal quarters?
+**Question answered:** how is the team pacing on Stage 2+ pipeline
+creation? Two views available via an in-card toggle:
 
-**Visualization:** stacked bar chart, one bar per fiscal quarter. Each bar
-has a New Business stack (cyan-to-navy gradient) and an Expansion stack
-(rose-to-burgundy gradient). A dashed dark goal line overlays.
+- **Per Week (this Q)** — default. One bar per ISO week starting at the
+  current fiscal quarter start through today. No goal line (per-week
+  targets aren't stored).
+- **By Quarter (last 6)** — last 6 fiscal quarters. Goal line overlays
+  the bars when at least one quarter in the window has quotas configured.
 
-**X axis:** the 6 most recent fiscal quarters that have any data, labeled
-`FYxxxx-Qx`.
+**Visualization:** stacked bar chart, one bar per bucket. NB stack on
+bottom (cyan-to-navy gradient), Expansion stack on top (rose-to-burgundy).
+Dashed dark goal line in quarter view; tooltip shows total and breakdown.
 
-**Y values:** count of opps owned by an AE, AE-sourced, NB or Upsell type,
-where the **first** OpportunityHistory entry to a stage 2+ value falls in
-that fiscal quarter (using `Organization.FiscalYearStartMonth` to compute
-the quarter). NB stacks on bottom, Expansion on top.
+**Bucket value (count mode):** count of opps owned by an AE, AE-sourced
+(`Booked_By_Role__c LIKE 'AE%'`), Type IN (`'New Business'`, `'Pilot'`,
+`'Upsell'`), where the **first** OpportunityHistory entry to a Stage 2+
+value falls in that bucket.
 
-**Goal line:** sum of `PG_Quota__c.NB_Goal__c + Exp_Goal__c` across every
-AE for that fiscal year + fiscal quarter. Quarters with no quota rows show
-no goal line for that quarter (the line is omitted entirely if no quarter
-in the window has goals set).
+**Bucket value (amount mode):** same universe, summed `Opportunity.Amount`
+instead of count.
+
+**Quarter labels:** `FYxxxx-Qx` derived from
+`Organization.FiscalYearStartMonth`.
+
+**Week labels:** compact `M/d` (e.g. `5/4`).
+
+**Goal line (quarter view only):** sum of `PG_Quota__c.NB_Goal__c +
+Exp_Goal__c` across every AE for the matching fiscal year + quarter
+(count mode), or `NB_Amount_Goal__c + Exp_Amount_Goal__c` (amount mode).
+Quarters with no quota rows have a `0` goal point and the line dips —
+acceptable since the quarter genuinely has no goal set.
 
 ### Stage 2+ Status panel (above the pod cards)
 
@@ -230,6 +264,20 @@ had goals set and others didn't.
 
 Two side-by-side cards: **Current Week (CW)** and **Quarter to Date (QTD)**.
 Identical structure, different time windows.
+
+### Group rows by manager
+
+A checkbox at the top of the tab (`Group rows by manager`, default off)
+toggles between two layouts:
+
+- **Off (default):** flat per-AE rows sorted by Total OB descending.
+- **On:** AEs grouped under their `User.Manager.Name`. Each group has
+  a dark banner row with summed Email / Call / LinkedIn / Meeting / Total
+  counts for that manager's team. AEs with no manager fall under a
+  "No Manager" group. Groups are ordered by total team OB descending.
+
+Useful for VP-level review where the team-level numbers matter more than
+individual leaderboards.
 
 ### Outreach table (CW and QTD)
 
@@ -295,20 +343,32 @@ Zero values render no bar. The leader in each column has a full-width bar.
 
 ## Conversion tab
 
-### Conversion Rates by AE heatmap
+### Conversion Rates heatmap
 
-**Question answered:** for each AE, what fraction of their pipeline
-converts at each stage transition?
+**Question answered:** at each stage transition, what fraction of *settled*
+deals converted? Two view modes via an in-card toggle:
 
-**Math:** for each AE and each transition X→Y, conversion =
+- **By AE** (default) — one row per AE. Manager column shown.
+- **By Pod** — rows aggregated to pod level. Optional **Combine IB1 + IB2**
+  checkbox collapses both IB pods into a single `IB` row.
+
+**Math:** for each group and each transition X→Y:
 
 ```
-count(opps that ever reached Y or higher) / count(opps that ever reached X or higher)
+conversion = reached[Y] / eligible[X]
 ```
 
-This is a cumulative-funnel ratio. An opp is counted toward "reached stage
-N" if `OpportunityHistory` has any row for that opp with a `StageName` of
-rank ≥ N.
+Where `reached[N]` = count of opps where any `OpportunityHistory` row's
+`StageName` rank is ≥ N (cumulative).
+
+Where `eligible[X]` = count of opps that have *settled* the X→Y decision:
+either advanced past X (max rank > X) or closed at exactly X without
+advancing (max rank == X AND `Opportunity.IsClosed = TRUE`).
+
+**This excludes still-open deals at exactly X.** A rep with deals
+currently in Contracting and no Closed Won deals shows `N/A` for
+Contracting → Closed Won, not 0% — the deals are still in flight, they
+haven't decided yet.
 
 **Stage rank map:**
 
@@ -366,11 +426,20 @@ by manager name (alphabetical), then by AE name (alphabetical).
 | 50-74% | lime |
 | 30-49% | yellow |
 | < 30% | red |
-| Denominator = 0 | faded gray |
+| `N/A` (no settled denominator) | faded gray |
 
-The faded-gray "no denominator" treatment is important — it lets you
-distinguish "0% real conversion" from "no opps in this stage to convert
-from" at a glance.
+The faded-gray `N/A` treatment is important — it lets you distinguish
+"0% real conversion" from "no settled deals at that stage yet to convert"
+at a glance.
+
+**Drill-down popup:** click any cell to open a modal showing the
+underlying deals that contributed to that cell's denominator. Each row
+shows opportunity name, current stage, amount, close date, and a status
+label — `Advanced` (green-tinted, in numerator), `Closed without
+advancing` (in denominator but not numerator), or `Open at stage` (won't
+appear unless backend filter logic is changed). Backed by a separate
+`getHeatmapCellOpps` Apex method that takes the same `groupBy` and
+`combineIB` settings the heatmap uses.
 
 ---
 
@@ -378,22 +447,26 @@ from" at a glance.
 
 ### `PG_Quota__c` (custom object)
 
-One row per AE per fiscal quarter, holding their goal:
+One row per AE per fiscal quarter, holding their goals (count, $, or both):
 
 | Field | Type | Notes |
 |---|---|---|
 | `User__c` | Lookup → User | The AE this quota applies to |
 | `Fiscal_Year__c` | Number(4,0) | e.g. `2026` |
 | `Fiscal_Quarter__c` | Number(1,0) | `1`–`4` |
-| `NB_Goal__c` | Number(18,2) | New Business Stage 2+ count target for the quarter |
-| `Exp_Goal__c` | Number(18,2) | Upsell Stage 2+ count target for the quarter |
+| `NB_Goal__c` | Number(18,2) | New Business Stage 2+ **count** target for the quarter |
+| `Exp_Goal__c` | Number(18,2) | Upsell Stage 2+ **count** target for the quarter |
+| `NB_Amount_Goal__c` | Number(18,2) | New Business Stage 2+ **$ amount** target for the quarter |
+| `Exp_Amount_Goal__c` | Number(18,2) | Upsell Stage 2+ **$ amount** target for the quarter |
 | (Name) | AutoNumber | `PGQ-{0000}` |
 
-Goal MTD = `(NB_Goal + Exp_Goal) × proration` where proration is days into
-quarter / total days in quarter.
+Goal MTD = `(<count goals or amount goals>) × proration` where proration
+is days into quarter / total days in quarter. The toggle on Quarter Recap
+picks which pair of fields to read.
 
-If a row is missing, the AE shows `0` for goal and `—` (or 0%) for
-attainment. The dashboard does not invent fallback values.
+If a goal field is missing, the AE shows `0` for that goal and `—` (or
+0%) for the matching attainment. The dashboard does not invent fallback
+values.
 
 ---
 
