@@ -69,3 +69,151 @@
     color: #64748b;
     font-style: italic;
 }
+
+/* Cell hover affordance — they're clickable for drilldown. */
+.pg-heatmap td.pg-cell {
+    cursor: pointer;
+    transition: filter 0.1s ease;
+}
+
+.pg-heatmap td.pg-cell:hover {
+    filter: brightness(0.95);
+}
+
+/* Card title bar with controls. */
+.pg-heatmap__title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.pg-heatmap__controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 400;
+    font-size: 0.8rem;
+}
+
+.pg-mini-toggle {
+    display: inline-flex;
+    background: #e2e8f0;
+    border-radius: 9999px;
+    padding: 0.15rem;
+    border: 1px solid #cbd5e1;
+}
+
+.pg-mini-toggle__btn {
+    border: 0;
+    background: transparent;
+    color: #475569;
+    padding: 0.25rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 9999px;
+    cursor: pointer;
+}
+
+.pg-mini-toggle__btn:hover { color: #0f172a; }
+
+.pg-mini-toggle__btn--active {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #f8fafc;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+}
+
+.pg-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: #1e293b;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.pg-checkbox input { cursor: pointer; }
+
+/* Drilldown modal. */
+.pg-drill__backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.pg-drill {
+    background: #fff;
+    border-radius: 0.5rem;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.4);
+    max-width: 64rem;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.pg-drill__header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    color: #f8fafc;
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.pg-drill__title {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.pg-drill__close {
+    background: transparent;
+    border: 0;
+    color: #f8fafc;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.4rem;
+}
+
+.pg-drill__close:hover { color: #fbbf24; }
+
+.pg-drill__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    overflow-y: auto;
+}
+
+.pg-drill__table th {
+    text-align: left;
+    padding: 0.5rem 0.85rem;
+    background: #f1f5f9;
+    border-bottom: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+    position: sticky;
+    top: 0;
+}
+
+.pg-drill__table td {
+    padding: 0.5rem 0.85rem;
+    border-bottom: 1px solid #f1f5f9;
+    color: #1e293b;
+}
+
+.pg-drill__row--reached td {
+    background: #f0fdf4;
+}

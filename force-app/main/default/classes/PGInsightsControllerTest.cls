@@ -237,7 +237,7 @@ private class PGInsightsControllerTest {
 
         Test.startTest();
         List<PGInsightsController.HeatmapRow> rows =
-            PGInsightsController.getConversionHeatmap();
+            PGInsightsController.getConversionHeatmap('AE', false);
         Test.stopTest();
 
         System.assertEquals(3, rows.size(), 'One row per AE that has at least one opp at Stage 1+');

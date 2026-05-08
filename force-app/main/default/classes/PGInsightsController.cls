@@ -150,6 +150,16 @@ public with sharing class PGInsightsController {
         @AuraEnabled public Integer total;
     }
 
+    public class HeatmapCellOpp {
+        @AuraEnabled public Id oppId;
+        @AuraEnabled public String name;
+        @AuraEnabled public String stageName;
+        @AuraEnabled public Decimal amount;
+        @AuraEnabled public Date closeDate;
+        @AuraEnabled public Boolean isClosed;
+        @AuraEnabled public Boolean reachedTarget;
+    }
+
     public class HeatmapRow {
         @AuraEnabled public Id ownerId;
         @AuraEnabled public String ownerName;
@@ -554,7 +564,85 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<HeatmapRow> getConversionHeatmap() {
+    public static List<HeatmapCellOpp> getHeatmapCellOpps(String groupKey, Integer fromRank, String groupBy, Boolean combineIB) {
+        // Returns the underlying opps that contributed to the denominator of
+        // a conversion cell (fromRank -> fromRank+1) for the given group.
+        // groupBy mirrors getConversionHeatmap; groupKey is either an AE
+        // OwnerId (in AE mode) or a pod label (in Pod mode).
+        List<HeatmapCellOpp> out = new List<HeatmapCellOpp>();
+        if (String.isBlank(groupKey) || fromRank == null || fromRank < 1) return out;
+        String mode = String.isBlank(groupBy) ? 'AE' : groupBy;
+        Boolean ibCombined = combineIB == true;
+
+        Set<Id> aes = getAeUserIds();
+        if (aes.isEmpty()) return out;
+
+        // Resolve which AE owner ids belong to the requested group.
+        Set<Id> ownerScope = new Set<Id>();
+        if (mode == 'Pod') {
+            Map<String, Set<Id>> aesByPod = getAeUserIdsByPod();
+            for (String pod : aesByPod.keySet()) {
+                String displayPod = (ibCombined && (pod == 'IB1' || pod == 'IB2'))
+                    ? 'IB' : pod;
+                if (displayPod == groupKey) ownerScope.addAll(aesByPod.get(pod));
+            }
+        } else {
+            ownerScope.add((Id) groupKey);
+        }
+        if (ownerScope.isEmpty()) return out;
+
+        List<Opportunity> opps = [
+            SELECT Id, Name, OwnerId, Type, StageName, Amount, CloseDate, IsClosed
+            FROM Opportunity
+            WHERE OwnerId IN :ownerScope
+              AND Type IN :ALL_DASHBOARD_TYPES
+        ];
+        if (opps.isEmpty()) return out;
+
+        Set<Id> oppIds = new Set<Id>();
+        for (Opportunity o : opps) oppIds.add(o.Id);
+        Map<Id, Set<String>> stagesByOpp = getStagesByOpp(oppIds);
+
+        for (Opportunity o : opps) {
+            Set<String> stages = stagesByOpp.get(o.Id);
+            Integer maxRank = 0;
+            if (stages != null) {
+                for (String s : stages) {
+                    Integer r = STAGE_RANK.get(s);
+                    if (r != null && r > maxRank) maxRank = r;
+                }
+            }
+            if (maxRank == 0) continue;
+
+            // Eligible for fromRank denominator?
+            Boolean eligible = (maxRank > fromRank) || (maxRank == fromRank && o.IsClosed);
+            if (!eligible) continue;
+
+            HeatmapCellOpp row = new HeatmapCellOpp();
+            row.oppId = o.Id;
+            row.name = o.Name;
+            row.stageName = o.StageName;
+            row.amount = o.Amount;
+            row.closeDate = o.CloseDate;
+            row.isClosed = o.IsClosed;
+            row.reachedTarget = (maxRank >= fromRank + 1);
+            out.add(row);
+        }
+
+        // Sort: reached-target first (descending stage), then non-reached.
+        out.sort(new HeatmapCellComparator());
+        return out;
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static List<HeatmapRow> getConversionHeatmap(String groupBy, Boolean combineIB) {
+        // groupBy: 'AE' (default) returns one row per AE owner.
+        //         'Pod' returns one row per pod, aggregating across all AEs
+        //         in that pod. When combineIB is true, IB1 + IB2 collapse to
+        //         a single 'IB' row.
+        String mode = String.isBlank(groupBy) ? 'AE' : groupBy;
+        Boolean ibCombined = combineIB == true;
+
         Set<Id> aes = getAeUserIds();
         List<HeatmapRow> result = new List<HeatmapRow>();
         if (aes.isEmpty()) return result;
@@ -574,19 +662,22 @@ public with sharing class PGInsightsController {
 
         Map<Id, Set<String>> stagesByOpp = getStagesByOpp(opps.keySet());
 
-        // For each owner, build two parallel arrays indexed by stage rank:
-        //   reached[N]  = count of opps that ever reached rank N (numerator)
-        //   eligible[N] = count of opps that "settled" the N -> N+1 decision,
-        //                 i.e. either advanced past N, or closed at exactly N
-        //                 without advancing. Open deals currently sitting at
-        //                 exactly rank N are excluded from eligible[N] so we
-        //                 don't penalize a rep with N/A vs 0% when their
-        //                 deals are still in flight at that stage.
-        // Conversion N -> N+1 = pct(reached[N+1], eligible[N]). When
-        // eligible[N] is 0, pct() returns null and the LWC renders "N/A".
-        Map<Id, Integer[]> reachedByOwner  = new Map<Id, Integer[]>();
-        Map<Id, Integer[]> eligibleByOwner = new Map<Id, Integer[]>();
-        Map<Id, Opportunity> sampleByOwner = new Map<Id, Opportunity>();
+        // Group key per opp: AE mode uses OwnerId; Pod mode uses the pod
+        // label (with IB1/IB2 optionally collapsed to 'IB').
+        Map<Id, String> podByAe = new Map<Id, String>();
+        if (mode == 'Pod') {
+            Map<String, Set<Id>> aesByPod = getAeUserIdsByPod();
+            for (String pod : aesByPod.keySet()) {
+                String displayPod = (ibCombined && (pod == 'IB1' || pod == 'IB2'))
+                    ? 'IB' : pod;
+                for (Id aeId : aesByPod.get(pod)) podByAe.put(aeId, displayPod);
+            }
+        }
+
+        // Per-group: reached[N] / eligible[N] arrays indexed by stage rank.
+        Map<String, Integer[]>      reachedByGroup  = new Map<String, Integer[]>();
+        Map<String, Integer[]>      eligibleByGroup = new Map<String, Integer[]>();
+        Map<String, Opportunity>    sampleByGroup   = new Map<String, Opportunity>();
 
         for (Opportunity o : opps.values()) {
             Set<String> stages = stagesByOpp.get(o.Id);
@@ -599,14 +690,22 @@ public with sharing class PGInsightsController {
             }
             if (maxRank == 0) continue;
 
-            Integer[] reached  = reachedByOwner.get(o.OwnerId);
-            Integer[] eligible = eligibleByOwner.get(o.OwnerId);
+            String groupKey;
+            if (mode == 'Pod') {
+                groupKey = podByAe.get(o.OwnerId);
+                if (groupKey == null) continue;
+            } else {
+                groupKey = String.valueOf(o.OwnerId);
+            }
+
+            Integer[] reached  = reachedByGroup.get(groupKey);
+            Integer[] eligible = eligibleByGroup.get(groupKey);
             if (reached == null) {
                 reached  = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
                 eligible = new Integer[]{ 0, 0, 0, 0, 0, 0, 0 };
-                reachedByOwner.put(o.OwnerId, reached);
-                eligibleByOwner.put(o.OwnerId, eligible);
-                sampleByOwner.put(o.OwnerId, o);
+                reachedByGroup.put(groupKey, reached);
+                eligibleByGroup.put(groupKey, eligible);
+                sampleByGroup.put(groupKey, o);
             }
             for (Integer N = 1; N <= 6; N++) {
                 if (maxRank >= N) reached[N]++;
@@ -614,16 +713,22 @@ public with sharing class PGInsightsController {
             }
         }
 
-        for (Id ownerId : reachedByOwner.keySet()) {
-            Integer[] reached  = reachedByOwner.get(ownerId);
-            Integer[] eligible = eligibleByOwner.get(ownerId);
-            Opportunity sample = sampleByOwner.get(ownerId);
+        for (String groupKey : reachedByGroup.keySet()) {
+            Integer[] reached  = reachedByGroup.get(groupKey);
+            Integer[] eligible = eligibleByGroup.get(groupKey);
+            Opportunity sample = sampleByGroup.get(groupKey);
 
             HeatmapRow row = new HeatmapRow();
-            row.ownerId     = ownerId;
-            row.ownerName   = sample.Owner != null ? sample.Owner.Name : null;
-            row.managerName = (sample.Owner != null && sample.Owner.Manager != null)
-                ? sample.Owner.Manager.Name : null;
+            if (mode == 'Pod') {
+                row.ownerId     = null;
+                row.ownerName   = groupKey;          // pod label as the row name
+                row.managerName = null;
+            } else {
+                row.ownerId     = sample.OwnerId;
+                row.ownerName   = sample.Owner != null ? sample.Owner.Name : null;
+                row.managerName = (sample.Owner != null && sample.Owner.Manager != null)
+                    ? sample.Owner.Manager.Name : null;
+            }
 
             row.demoCount        = reached[1];
             row.discoveryCount   = reached[2];
@@ -1019,6 +1124,22 @@ public with sharing class PGInsightsController {
         // shows "N/A". A literal 0% means "had a chance and didn't convert".
         if (denominator == null || denominator == 0) return null;
         return (Decimal.valueOf(numerator) / Decimal.valueOf(denominator)) * 100;
+    }
+
+    private class HeatmapCellComparator implements Comparator<HeatmapCellOpp> {
+        public Integer compare(HeatmapCellOpp a, HeatmapCellOpp b) {
+            // Reached-target first, then by stage descending, then by amount desc.
+            if (a.reachedTarget != b.reachedTarget) return a.reachedTarget ? -1 : 1;
+            String aStage = a.stageName == null ? '' : a.stageName;
+            String bStage = b.stageName == null ? '' : b.stageName;
+            Integer cmp = bStage.compareTo(aStage);
+            if (cmp != 0) return cmp;
+            Decimal aAmt = a.amount == null ? 0 : a.amount;
+            Decimal bAmt = b.amount == null ? 0 : b.amount;
+            if (bAmt > aAmt) return 1;
+            if (bAmt < aAmt) return -1;
+            return 0;
+        }
     }
 
     private class HeatmapComparator implements Comparator<HeatmapRow> {

@@ -1,13 +1,32 @@
 <template>
     <article class="pg-card">
-        <header class="pg-card__title">Conversion Rates by AE | All Time</header>
+        <header class="pg-card__title pg-heatmap__title-bar">
+            <span>Conversion Rates | All Time</span>
+            <div class="pg-heatmap__controls">
+                <div class="pg-mini-toggle">
+                    <button type="button" class={aeToggleClass}  onclick={handleSelectAE}>By AE</button>
+                    <button type="button" class={podToggleClass} onclick={handleSelectPod}>By Pod</button>
+                </div>
+                <template lwc:if={isPodMode}>
+                    <label class="pg-checkbox">
+                        <input type="checkbox" checked={combineIB} onchange={handleToggleCombineIB} />
+                        <span>Combine IB1 + IB2</span>
+                    </label>
+                </template>
+            </div>
+        </header>
         <template lwc:if={hasRows}>
             <div class="pg-heatmap__wrap">
                 <table class="pg-heatmap">
                     <thead>
                         <tr>
-                            <th class="pg-heatmap__th-name">Manager</th>
-                            <th class="pg-heatmap__th-name">AE</th>
+                            <template lwc:if={isPodMode}>
+                                <th class="pg-heatmap__th-name">Pod</th>
+                            </template>
+                            <template lwc:else>
+                                <th class="pg-heatmap__th-name">Manager</th>
+                                <th class="pg-heatmap__th-name">AE</th>
+                            </template>
                             <th>Demo → Discovery</th>
                             <th>Discovery → POV</th>
                             <th>POV → Proposal</th>
@@ -17,14 +36,19 @@
                     </thead>
                     <tbody>
                         <template for:each={rows} for:item="row">
-                            <tr key={row.ownerId}>
-                                <td class="pg-heatmap__td-name">{row.managerName}</td>
-                                <td class="pg-heatmap__td-name">{row.ownerName}</td>
-                                <td class={row.demoToDiscoClass} title="Reached Discovery">{row.demoToDiscoFmt}</td>
-                                <td class={row.discoToPovClass} title="Reached POV">{row.discoToPovFmt}</td>
-                                <td class={row.povToProposalClass} title="Reached Proposal">{row.povToProposalFmt}</td>
-                                <td class={row.proposalToContractingClass} title="Reached Contracting">{row.proposalToContractingFmt}</td>
-                                <td class={row.contractingToWonClass} title="Reached Closed Won">{row.contractingToWonFmt}</td>
+                            <tr key={row.groupKey}>
+                                <template lwc:if={isPodMode}>
+                                    <td class="pg-heatmap__td-name">{row.ownerName}</td>
+                                </template>
+                                <template lwc:else>
+                                    <td class="pg-heatmap__td-name">{row.managerName}</td>
+                                    <td class="pg-heatmap__td-name">{row.ownerName}</td>
+                                </template>
+                                <td class={row.demoToDiscoClass}           data-from-rank="1" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.demoToDiscoFmt}</td>
+                                <td class={row.discoToPovClass}            data-from-rank="2" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.discoToPovFmt}</td>
+                                <td class={row.povToProposalClass}         data-from-rank="3" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.povToProposalFmt}</td>
+                                <td class={row.proposalToContractingClass} data-from-rank="4" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.proposalToContractingFmt}</td>
+                                <td class={row.contractingToWonClass}      data-from-rank="5" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.contractingToWonFmt}</td>
                             </tr>
                         </template>
                     </tbody>
@@ -35,4 +59,44 @@
             <div class="pg-empty">No conversion data available yet.</div>
         </template>
     </article>
+
+    <template lwc:if={drillOpen}>
+        <section class="pg-drill__backdrop" onclick={closeDrill}>
+            <div class="pg-drill" onclick={preventBackdropClose}>
+                <header class="pg-drill__header">
+                    <span class="pg-drill__title">{drillTitle}</span>
+                    <button type="button" class="pg-drill__close" onclick={closeDrill}>×</button>
+                </header>
+                <template lwc:if={drillLoading}>
+                    <div class="slds-p-around_large slds-text-align_center">
+                        <lightning-spinner alternative-text="Loading"></lightning-spinner>
+                    </div>
+                </template>
+                <template lwc:else>
+                    <table class="pg-drill__table">
+                        <thead>
+                            <tr>
+                                <th>Opportunity</th>
+                                <th>Stage</th>
+                                <th>Amount</th>
+                                <th>Close Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template for:each={drillRows} for:item="r">
+                                <tr key={r.oppId} class={r.rowClass}>
+                                    <td>{r.name}</td>
+                                    <td>{r.stageName}</td>
+                                    <td>{r.amountFmt}</td>
+                                    <td>{r.closeDateFmt}</td>
+                                    <td>{r.statusLabel}</td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </template>
+            </div>
+        </section>
+    </template>
 </template>
