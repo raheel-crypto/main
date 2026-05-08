@@ -249,7 +249,257 @@ private class PGInsightsControllerTest {
         System.assert(foundFullFunnel, 'At least one AE has an opp that reached Closed Won');
     }
 
+    // ---- Phase B: $ amount tracking ------------------------------------------------
+
+    @IsTest
+    static void getPacingKpis_includesAmountFields() {
+        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        Test.startTest();
+        PGInsightsController.PacingKpis wow = PGInsightsController.getPacingKpis('WoW');
+        Test.stopTest();
+
+        // 8 NB opps × 50K + 2 Upsell × 50K = 400K NB / 100K Exp.
+        System.assertEquals(400000, wow.newBusinessAmount, 'NB amount sums Opportunity.Amount');
+        System.assertEquals(100000, wow.expansionAmount,   'Expansion amount sums Opportunity.Amount');
+        System.assertEquals(80,     wow.nbAmtPctOfTotal,   'NB % of total in $ matches count split');
+    }
+
+    @IsTest
+    static void getS1StatusQTD_includesAmountAndAttainment() {
+        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        Test.startTest();
+        PGInsightsController.S1Status s = PGInsightsController.getS1StatusQTD();
+        Test.stopTest();
+
+        System.assertEquals(400000, s.nbAmount,  'QTD NB amount');
+        System.assertEquals(100000, s.expAmount, 'QTD Exp amount');
+        // ae1 has NB $200K + Exp $80K quarterly amount goal; prorated.
+        System.assert(s.amountGoalMTD > 0,
+            'Amount goal MTD prorated from PG_Quota__c amount fields');
+        System.assert(s.amountAttainmentPct > 0,
+            'Amount attainment % computed from goal + actuals');
+    }
+
+    @IsTest
+    static void getTopPerformersByPod_includesAmountFields() {
+        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        Test.startTest();
+        List<PGInsightsController.PodPerformers> pods =
+            PGInsightsController.getTopPerformersByPod(5);
+        Test.stopTest();
+
+        Map<String, PGInsightsController.PodPerformers> byPod =
+            new Map<String, PGInsightsController.PodPerformers>();
+        for (PGInsightsController.PodPerformers p : pods) byPod.put(p.pod, p);
+
+        // ae1 in IB1: 4 NB + 2 Upsell @ 50K each.
+        PGInsightsController.PodPerformers ib1 = byPod.get('IB1');
+        System.assertEquals(200000, ib1.totalNbAmount,  'IB1 NB amount');
+        System.assertEquals(100000, ib1.totalExpAmount, 'IB1 Exp amount');
+        System.assert(ib1.totalAmountGoalMTD > 0, 'IB1 inherits amount quota');
+
+        PGInsightsController.PerformerRow leader = ib1.rows[0];
+        System.assertEquals(200000, leader.nbAmount,  'Leader NB amount');
+        System.assertEquals(100000, leader.expAmount, 'Leader Exp amount');
+        System.assert(leader.amountGoal > 0, 'Leader has amount goal');
+    }
+
+    // ---- Phase C: weekly chart ----------------------------------------------------
+
+    @IsTest
+    static void getStageProgressByWeek_returnsCurrentQuarterBuckets() {
+        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        Test.startTest();
+        List<PGInsightsController.QuarterRow> rows =
+            PGInsightsController.getStageProgressByWeek();
+        Test.stopTest();
+
+        System.assert(rows.size() >= 1, 'At least one weekly bucket present');
+        Integer totalNb = 0, totalExp = 0;
+        Decimal totalNbAmt = 0, totalExpAmt = 0;
+        for (PGInsightsController.QuarterRow r : rows) {
+            totalNb     += r.nbCount;
+            totalExp    += r.expCount;
+            totalNbAmt  += (r.nbAmount  == null ? 0 : r.nbAmount);
+            totalExpAmt += (r.expAmount == null ? 0 : r.expAmount);
+        }
+        System.assertEquals(8, totalNb,  'Sum of NB across weeks (only this quarter)');
+        System.assertEquals(2, totalExp, 'Sum of Expansion across weeks');
+        System.assertEquals(400000, totalNbAmt,  'Sum of NB amount');
+        System.assertEquals(100000, totalExpAmt, 'Sum of Expansion amount');
+    }
+
+    // ---- Phase D: heatmap groupings + drill-down ----------------------------------
+
+    @IsTest
+    static void getConversionHeatmap_byPodGroupsAEs() {
+        PGInsightsController.mockStagesByOpp = buildSimpleStagesMock();
+        Test.startTest();
+        List<PGInsightsController.HeatmapRow> rows =
+            PGInsightsController.getConversionHeatmap('Pod', false);
+        Test.stopTest();
+
+        Set<String> seen = new Set<String>();
+        for (PGInsightsController.HeatmapRow r : rows) seen.add(r.ownerName);
+        // 3 pods have opps (IB1 via ae1, IB2 via ae2, MM via ae3). ae4 is in
+        // Buyside but has no opps so its pod row is absent.
+        System.assert(seen.contains('IB1'), 'IB1 row present');
+        System.assert(seen.contains('IB2'), 'IB2 row present');
+        System.assert(seen.contains('MM'),  'MM row present');
+        System.assert(!seen.contains('IB'), 'IB combined row should NOT be present without combineIB');
+    }
+
+    @IsTest
+    static void getConversionHeatmap_byPodCombinesIB() {
+        PGInsightsController.mockStagesByOpp = buildSimpleStagesMock();
+        Test.startTest();
+        List<PGInsightsController.HeatmapRow> rows =
+            PGInsightsController.getConversionHeatmap('Pod', true);
+        Test.stopTest();
+
+        Map<String, PGInsightsController.HeatmapRow> byName =
+            new Map<String, PGInsightsController.HeatmapRow>();
+        for (PGInsightsController.HeatmapRow r : rows) byName.put(r.ownerName, r);
+
+        System.assert(byName.containsKey('IB'), 'IB combined row present');
+        System.assert(!byName.containsKey('IB1'), 'IB1 collapsed under IB');
+        System.assert(!byName.containsKey('IB2'), 'IB2 collapsed under IB');
+        // ae1's 6 opps + ae2's 3 opps = 9 opps under combined IB.
+        System.assertEquals(9, byName.get('IB').demoCount,
+            'IB combined demo count is sum of IB1 + IB2 AEs');
+    }
+
+    @IsTest
+    static void getConversionHeatmap_returnsNAForOpenAtSourceStage() {
+        // Mock a single open-at-Contracting opp for ae1; all other opps
+        // are excluded by leaving them out of mockStagesByOpp.
+        Set<Id> aeIds = computeTestAeIds();
+        Id ae1Id = null;
+        for (User u : [SELECT Id, Alias FROM User WHERE Id IN :aeIds]) {
+            if (u.Alias == 'ae1') { ae1Id = u.Id; break; }
+        }
+        System.assertNotEquals(null, ae1Id, 'ae1 in test set');
+
+        // Find ae1's first stage 2+ opp (still has StageName = '2 - Discovery'
+        // from setup, so IsClosed = false).
+        Opportunity targetOpp = [
+            SELECT Id, IsClosed FROM Opportunity
+            WHERE OwnerId = :ae1Id AND StageName = '2 - Discovery'
+            LIMIT 1
+        ];
+        // Verify it's open — controller relies on this for the eligible[] math.
+        System.assertEquals(false, targetOpp.IsClosed, 'Test fixture is open');
+
+        // Mock its stage history as having reached up through Contracting.
+        Map<Id, Set<String>> mock = new Map<Id, Set<String>>();
+        mock.put(targetOpp.Id, new Set<String>{
+            '1 - Demo','2 - Discovery','3 - POV','4 - Proposal','5 - Contracting'
+        });
+        PGInsightsController.mockStagesByOpp = mock;
+
+        Test.startTest();
+        List<PGInsightsController.HeatmapRow> rows =
+            PGInsightsController.getConversionHeatmap('AE', false);
+        Test.stopTest();
+
+        // ae1 is the only AE with a non-skipped opp in this test.
+        System.assertEquals(1, rows.size(), 'One row for ae1');
+        PGInsightsController.HeatmapRow r = rows[0];
+        // Reached Contracting: yes. Reached Won: no. Open at Contracting:
+        // eligible[5] = 0 → contractingToWon = null (N/A).
+        System.assertEquals(null, r.contractingToWon,
+            'Contracting -> Won is N/A when only deal is open at Contracting');
+        // Earlier transitions: deal advanced past stages 1-4, so they all
+        // have an eligible denominator and a 100% conversion.
+        System.assertEquals(100, r.demoToDisco,           'Demo -> Discovery converted');
+        System.assertEquals(100, r.discoToPov,            'Discovery -> POV converted');
+        System.assertEquals(100, r.povToProposal,         'POV -> Proposal converted');
+        System.assertEquals(100, r.proposalToContracting, 'Proposal -> Contracting converted');
+    }
+
+    @IsTest
+    static void getHeatmapCellOpps_returnsDenominatorOpps() {
+        PGInsightsController.mockStagesByOpp = buildSimpleStagesMock();
+
+        // Pick ae1 — they have stage 2+ history per the simple mock.
+        Set<Id> aeIds = computeTestAeIds();
+        Id ae1Id = null;
+        for (User u : [SELECT Id, Alias FROM User WHERE Id IN :aeIds]) {
+            if (u.Alias == 'ae1') { ae1Id = u.Id; break; }
+        }
+
+        Test.startTest();
+        // Demo -> Discovery transition (fromRank = 1).
+        List<PGInsightsController.HeatmapCellOpp> aeRows =
+            PGInsightsController.getHeatmapCellOpps(String.valueOf(ae1Id), 1, 'AE', false);
+        Test.stopTest();
+
+        System.assert(aeRows.size() > 0, 'Drill-down returns at least one opp');
+        Boolean foundReached = false;
+        for (PGInsightsController.HeatmapCellOpp o : aeRows) {
+            if (o.reachedTarget) foundReached = true;
+            System.assertNotEquals(null, o.name,      'opp name populated');
+            System.assertNotEquals(null, o.stageName, 'opp stage populated');
+        }
+        System.assert(foundReached, 'At least one drilldown row reached Discovery');
+    }
+
+    @IsTest
+    static void getHeatmapCellOpps_byPodReturnsAllPodAEs() {
+        PGInsightsController.mockStagesByOpp = buildSimpleStagesMock();
+        Test.startTest();
+        // Pod 'IB' should aggregate across IB1 + IB2 AEs (ae1 + ae2).
+        List<PGInsightsController.HeatmapCellOpp> rows =
+            PGInsightsController.getHeatmapCellOpps('IB', 1, 'Pod', true);
+        Test.stopTest();
+
+        // 6 ae1 opps + 3 ae2 opps in stage 2+; all eligible for fromRank=1 since
+        // the simple mock has them all reaching at least Discovery (rank 2).
+        System.assertEquals(9, rows.size(), 'IB combined drilldown returns ae1 + ae2 opps');
+    }
+
+    // ---- Phase E: outreach manager grouping ---------------------------------------
+
+    @IsTest
+    static void getIndividualOutreach_includesManagerInfo() {
+        Test.startTest();
+        List<PGInsightsController.OutreachRow> rows =
+            PGInsightsController.getIndividualOutreach('CW');
+        Test.stopTest();
+
+        // Test users have no manager assigned, so managerName should be null
+        // for every row. The query path runs regardless and the field is set.
+        System.assert(rows.size() > 0, 'outreach rows returned');
+        for (PGInsightsController.OutreachRow r : rows) {
+            // managerId/managerName fields exist on every row (both null is
+            // acceptable — proves the enrichment loop ran without error).
+            System.assertEquals(null, r.managerName,
+                'Test users have no manager — managerName should be null');
+        }
+    }
+
     // ---- helpers --------------------------------------------------------------------
+
+    /**
+     * Simple stages mock for heatmap tests. Maps every Stage 2+ test opp to a
+     * stage set that reaches at least Discovery so the heatmap produces a row
+     * for each AE.
+     */
+    private static Map<Id, Set<String>> buildSimpleStagesMock() {
+        Set<Id> aeIds = computeTestAeIds();
+        Map<Id, Set<String>> mock = new Map<Id, Set<String>>();
+        Set<String> stages = new Set<String>{
+            '1 - Demo', '2 - Discovery', '3 - POV', 'Closed Won'
+        };
+        for (Opportunity o : [
+            SELECT Id, StageName FROM Opportunity
+            WHERE OwnerId IN :aeIds AND StageName != '1 - Demo'
+        ]) {
+            mock.put(o.Id, stages);
+        }
+        return mock;
+    }
+
 
     private static Map<Id, DateTime> buildStage2PlusMock() {
         Set<Id> aeIds = computeTestAeIds();
@@ -327,6 +577,7 @@ private class PGInsightsControllerTest {
             StageName = stageName,
             CloseDate = Date.today().addDays(60),
             Type = oppType,
+            Amount = 50000,
             Booked_By_Role__c = 'AE - ENT'
         );
     }
