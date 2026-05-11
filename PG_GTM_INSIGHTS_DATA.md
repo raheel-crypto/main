@@ -44,7 +44,7 @@ it where `StageName IN ('2 - Discovery', '3 - POV', '4 - Proposal',
 '5 - Contracting', 'Closed Won')`. This is the same Stage 2+ definition
 the AE dashboard uses.
 
-Pass-through % = `Qualified / Booked × 100` over the chosen window.
+`% Qualified` = `Qualified / Booked × 100` over the chosen window.
 
 ### Goals: re-use `PG_Quota__c`
 
@@ -62,7 +62,7 @@ don't split NB vs Upsell.
 Identical pattern to the AE dashboard's `# of opps` / `$ pipeline` toggle.
 Every wrapper carries both shapes; the LWC picks which to render.
 
-### Pass-through window toggle
+### % Qualified window toggle
 
 The status panel and ranking table support two windows:
 
@@ -98,7 +98,7 @@ on the headline metric?
 - **Qualified (Stage 2+)** — subset of booked opps that have ever reached
   Stage 2+ in `OpportunityHistory`. Not time-scoped on the qualification
   date; just "of those we booked in the window, how many have advanced."
-- **Pass-through** — `Qualified / Booked × 100`. Displays `0%` (not N/A)
+- **% Qualified** — `Qualified / Booked × 100`. Displays `0%` (not N/A)
   when Booked is 0, since the metric is well-defined.
 - **Goal (window)** — sum of `NB_Goal__c` (or `NB_Amount_Goal__c`) across
   all GTMs for current fiscal year + quarter, prorated by window.
@@ -135,9 +135,9 @@ their pass-through rate say about lead quality?
 
 - Rank — by booked count desc (ties broken by booked amount).
 - GTM — User name.
-- Booked.
-- Qualified — Stage 2+ subset of Booked.
-- Pass-through — `Qualified / Booked × 100`, or `N/A` if Booked is 0.
+- Meeting Booked — count or $ of booked opps in the window.
+- Qualified — Stage 2+ subset of the meetings booked.
+- % Qualified — `Qualified / Booked × 100`, or `N/A` if Booked is 0.
 - Goal — that GTM's `NB_Goal__c` or `NB_Amount_Goal__c`, prorated by
   the window selection.
 - Attainment — `Booked / Goal × 100`, or `—` if no goal set.
@@ -150,10 +150,21 @@ the period (or new and ramping).
 
 ## Individual Outreach tab
 
-Identical structure and filters to the AE dashboard's outreach view —
-two side-by-side cards (CW and QTD) with colored bars per column. The
-only difference is the user set: `getGtmUserIds()` instead of the AE
-filter.
+Two side-by-side cards with colored bars per column. The right card is
+**always Quarter to Date** so it's a stable reference. The left card has
+a window dropdown in its header — pick one of:
+
+- Current Week
+- Prior Week
+- Current Month
+- Prior Month
+
+(Full names rather than `CW` / `PW` so the labels don't get confused with
+`Closed Won`.)
+
+Apex `getIndividualOutreach(windowLabel)` accepts the short codes `CW`,
+`PW`, `CM`, `PM`, and `QTD`; the LWC sends those internally based on the
+dropdown selection. The right (QTD) card is hard-wired to `QTD`.
 
 | Column | Source | Filters |
 |---|---|---|

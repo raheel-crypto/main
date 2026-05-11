@@ -3,20 +3,30 @@ import getIndividualOutreach from "@salesforce/apex/PGGtmInsightsController.getI
 
 const SORTABLE = ['emails', 'calls', 'linkedin', 'meetings', 'total', 'ownerName'];
 
+const LEFT_WINDOW_OPTIONS = [
+    { label: 'Current Week',  value: 'CW' },
+    { label: 'Prior Week',    value: 'PW' },
+    { label: 'Current Month', value: 'CM' },
+    { label: 'Prior Month',   value: 'PM' }
+];
+
 export default class PgGtmIndividualOutreach extends LightningElement {
-    cwRowsRaw;
+    leftWindow = 'CW';
+    leftRowsRaw;
     qtdRowsRaw;
 
-    cwSortBy = 'total';
-    cwSortDir = 'desc';
+    leftSortBy = 'total';
+    leftSortDir = 'desc';
     qtdSortBy = 'total';
     qtdSortDir = 'desc';
 
     groupByManager = false;
 
-    @wire(getIndividualOutreach, { windowLabel: 'CW' })
-    wiredCw({ data }) {
-        if (data) this.cwRowsRaw = data;
+    leftWindowOptions = LEFT_WINDOW_OPTIONS;
+
+    @wire(getIndividualOutreach, { windowLabel: '$leftWindow' })
+    wiredLeft({ data }) {
+        if (data) this.leftRowsRaw = data;
     }
 
     @wire(getIndividualOutreach, { windowLabel: 'QTD' })
@@ -24,57 +34,29 @@ export default class PgGtmIndividualOutreach extends LightningElement {
         if (data) this.qtdRowsRaw = data;
     }
 
-    handleToggleGroup(event) { this.groupByManager = event.target.checked; }
+    handleToggleGroup(event)       { this.groupByManager = event.target.checked; }
+    handleLeftWindowChange(event)  { this.leftWindow = event.detail.value; }
 
-    get cwRows() {
-        return this.decorateRows(this.cwRowsRaw, this.cwSortBy, this.cwSortDir);
+    get leftWindowLabel() {
+        const opt = this.leftWindowOptions.find(o => o.value === this.leftWindow);
+        return opt ? opt.label : 'Current Week';
     }
 
-    get qtdRows() {
-        return this.decorateRows(this.qtdRowsRaw, this.qtdSortBy, this.qtdSortDir);
+    get leftCardTitle() {
+        return `Individual Outreach · ${this.leftWindowLabel}`;
     }
 
-    get cwGroups() {
-        return this.groupByManager ? this.buildGroups(this.cwRows) : null;
-    }
+    get leftRows()  { return this.decorateRows(this.leftRowsRaw, this.leftSortBy, this.leftSortDir); }
+    get qtdRows()   { return this.decorateRows(this.qtdRowsRaw,  this.qtdSortBy,  this.qtdSortDir); }
 
-    get qtdGroups() {
-        return this.groupByManager ? this.buildGroups(this.qtdRows) : null;
-    }
+    get leftGroups() { return this.groupByManager ? this.buildGroups(this.leftRows) : null; }
+    get qtdGroups()  { return this.groupByManager ? this.buildGroups(this.qtdRows)  : null; }
 
-    get hasCwRows()  { return this.cwRows.length > 0; }
-    get hasQtdRows() { return this.qtdRows.length > 0; }
+    get hasLeftRows() { return this.leftRows.length > 0; }
+    get hasQtdRows()  { return this.qtdRows.length > 0; }
 
-    get cwTotals() { return this.computeTotals(this.cwRowsRaw); }
-    get qtdTotals() { return this.computeTotals(this.qtdRowsRaw); }
-
-    buildGroups(rows) {
-        if (!rows || !rows.length) return [];
-        const buckets = new Map();
-        for (const r of rows) {
-            const key = r.managerId || '__unmanaged__';
-            const display = r.managerName || 'No Manager';
-            let b = buckets.get(key);
-            if (!b) {
-                b = {
-                    key,
-                    managerName: display,
-                    rows: [],
-                    emailsSum: 0, callsSum: 0, linkedinSum: 0, meetingsSum: 0, totalSum: 0
-                };
-                buckets.set(key, b);
-            }
-            b.rows.push(r);
-            b.emailsSum   += r.emails || 0;
-            b.callsSum    += r.calls || 0;
-            b.linkedinSum += r.linkedin || 0;
-            b.meetingsSum += r.meetings || 0;
-            b.totalSum    += r.total || 0;
-        }
-        const groups = Array.from(buckets.values());
-        groups.sort((a, b) => b.totalSum - a.totalSum);
-        return groups;
-    }
+    get leftTotals() { return this.computeTotals(this.leftRowsRaw); }
+    get qtdTotals()  { return this.computeTotals(this.qtdRowsRaw); }
 
     decorateRows(rows, sortBy, sortDir) {
         if (!rows || !rows.length) return [];
@@ -107,6 +89,30 @@ export default class PgGtmIndividualOutreach extends LightningElement {
         }));
     }
 
+    buildGroups(rows) {
+        if (!rows || !rows.length) return [];
+        const buckets = new Map();
+        for (const r of rows) {
+            const key = r.managerId || '__unmanaged__';
+            const display = r.managerName || 'No Manager';
+            let b = buckets.get(key);
+            if (!b) {
+                b = {
+                    key, managerName: display, rows: [],
+                    emailsSum: 0, callsSum: 0, linkedinSum: 0, meetingsSum: 0, totalSum: 0
+                };
+                buckets.set(key, b);
+            }
+            b.rows.push(r);
+            b.emailsSum   += r.emails || 0;
+            b.callsSum    += r.calls || 0;
+            b.linkedinSum += r.linkedin || 0;
+            b.meetingsSum += r.meetings || 0;
+            b.totalSum    += r.total || 0;
+        }
+        return Array.from(buckets.values()).sort((a, b) => b.totalSum - a.totalSum);
+    }
+
     computeTotals(rows) {
         if (!rows || !rows.length) return null;
         const sum = (key) => rows.reduce((a, r) => a + (r[key] || 0), 0);
@@ -119,14 +125,14 @@ export default class PgGtmIndividualOutreach extends LightningElement {
         };
     }
 
-    handleCwSort(event) {
+    handleLeftSort(event) {
         const field = event.currentTarget.dataset.field;
         if (!SORTABLE.includes(field)) return;
-        if (this.cwSortBy === field) {
-            this.cwSortDir = this.cwSortDir === 'asc' ? 'desc' : 'asc';
+        if (this.leftSortBy === field) {
+            this.leftSortDir = this.leftSortDir === 'asc' ? 'desc' : 'asc';
         } else {
-            this.cwSortBy = field;
-            this.cwSortDir = field === 'ownerName' ? 'asc' : 'desc';
+            this.leftSortBy = field;
+            this.leftSortDir = field === 'ownerName' ? 'asc' : 'desc';
         }
     }
 

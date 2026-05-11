@@ -159,6 +159,20 @@ private class PGGtmInsightsControllerTest {
     }
 
     @IsTest
+    static void getIndividualOutreach_supportsAllWindowLabels() {
+        // Verify each window label parses cleanly and doesn't error. The
+        // test fixture inserts today's activity, so CW / CM / QTD should
+        // all return rows; PW / PM are valid syntax but may return empty.
+        Test.startTest();
+        for (String win : new List<String>{ 'CW', 'PW', 'CM', 'PM', 'QTD' }) {
+            List<PGGtmInsightsController.OutreachRow> rows =
+                PGGtmInsightsController.getIndividualOutreach(win);
+            System.assertNotEquals(null, rows, 'window ' + win + ' returns a list');
+        }
+        Test.stopTest();
+    }
+
+    @IsTest
     static void getIndividualOutreach_excludesNonGtmUsers() {
         Test.startTest();
         List<PGGtmInsightsController.OutreachRow> rows =

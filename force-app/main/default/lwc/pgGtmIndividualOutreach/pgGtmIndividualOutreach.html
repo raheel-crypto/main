@@ -10,22 +10,32 @@
 
         <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-2 slds-p-around_x-small">
             <article class="pg-card">
-                <header class="pg-card__title">Individual Outreach (CW)</header>
-                <template lwc:if={hasCwRows}>
+                <header class="pg-card__title pg-card__title--with-control">
+                    <span>{leftCardTitle}</span>
+                    <lightning-combobox
+                        class="pg-window-select"
+                        label="Window"
+                        variant="label-hidden"
+                        value={leftWindow}
+                        options={leftWindowOptions}
+                        onchange={handleLeftWindowChange}>
+                    </lightning-combobox>
+                </header>
+                <template lwc:if={hasLeftRows}>
                     <table class="pg-table">
                         <thead>
                             <tr>
-                                <th class="pg-th pg-th--sortable" data-field="ownerName" onclick={handleCwSort}>Name</th>
-                                <th class="pg-th pg-th--sortable" data-field="emails"   onclick={handleCwSort}>OB Emails</th>
-                                <th class="pg-th pg-th--sortable" data-field="calls"    onclick={handleCwSort}>OB Calls</th>
-                                <th class="pg-th pg-th--sortable" data-field="linkedin" onclick={handleCwSort}>OB LinkedIn</th>
-                                <th class="pg-th pg-th--sortable" data-field="meetings" onclick={handleCwSort}>Meetings</th>
-                                <th class="pg-th pg-th--sortable" data-field="total"    onclick={handleCwSort}>Total OB</th>
+                                <th class="pg-th pg-th--sortable" data-field="ownerName" onclick={handleLeftSort}>Name</th>
+                                <th class="pg-th pg-th--sortable" data-field="emails"   onclick={handleLeftSort}>OB Emails</th>
+                                <th class="pg-th pg-th--sortable" data-field="calls"    onclick={handleLeftSort}>OB Calls</th>
+                                <th class="pg-th pg-th--sortable" data-field="linkedin" onclick={handleLeftSort}>OB LinkedIn</th>
+                                <th class="pg-th pg-th--sortable" data-field="meetings" onclick={handleLeftSort}>Meetings</th>
+                                <th class="pg-th pg-th--sortable" data-field="total"    onclick={handleLeftSort}>Total OB</th>
                             </tr>
                         </thead>
                         <tbody>
                             <template lwc:if={groupByManager}>
-                                <template for:each={cwGroups} for:item="g">
+                                <template for:each={leftGroups} for:item="g">
                                     <tr key={g.key} class="pg-tr--group">
                                         <td class="pg-td pg-td--name pg-td--group">{g.managerName}</td>
                                         <td class="pg-td pg-td--group">{g.emailsSum}</td>
@@ -47,7 +57,7 @@
                                 </template>
                             </template>
                             <template lwc:else>
-                                <template for:each={cwRows} for:item="row">
+                                <template for:each={leftRows} for:item="row">
                                     <tr key={row.ownerId}>
                                         <td class="pg-td pg-td--name">{row.ownerName}</td>
                                         <td class="pg-td"><div class="pg-bar-cell"><span class="pg-bar-num">{row.emails}</span><span class="pg-bar-track"><span class="pg-bar pg-bar--emails" style={row.emailsBar}></span></span></div></td>
@@ -59,29 +69,29 @@
                                 </template>
                             </template>
                         </tbody>
-                        <template lwc:if={cwTotals}>
+                        <template lwc:if={leftTotals}>
                             <tfoot>
                                 <tr class="pg-tr--totals">
                                     <td class="pg-td pg-td--name">Grand total</td>
-                                    <td class="pg-td">{cwTotals.emails}</td>
-                                    <td class="pg-td">{cwTotals.calls}</td>
-                                    <td class="pg-td">{cwTotals.linkedin}</td>
-                                    <td class="pg-td">{cwTotals.meetings}</td>
-                                    <td class="pg-td">{cwTotals.total}</td>
+                                    <td class="pg-td">{leftTotals.emails}</td>
+                                    <td class="pg-td">{leftTotals.calls}</td>
+                                    <td class="pg-td">{leftTotals.linkedin}</td>
+                                    <td class="pg-td">{leftTotals.meetings}</td>
+                                    <td class="pg-td">{leftTotals.total}</td>
                                 </tr>
                             </tfoot>
                         </template>
                     </table>
                 </template>
                 <template lwc:else>
-                    <div class="pg-empty">No outreach yet this week.</div>
+                    <div class="pg-empty">No outreach in this window.</div>
                 </template>
             </article>
         </div>
 
         <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-2 slds-p-around_x-small">
             <article class="pg-card">
-                <header class="pg-card__title">Individual Outreach (QTD)</header>
+                <header class="pg-card__title">Individual Outreach · Quarter to Date</header>
                 <template lwc:if={hasQtdRows}>
                     <table class="pg-table">
                         <thead>

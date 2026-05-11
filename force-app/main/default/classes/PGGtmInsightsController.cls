@@ -450,30 +450,48 @@ public with sharing class PGGtmInsightsController {
     // ---- Outreach query helpers (mirror PGInsightsController) ------------------------
 
     private static List<AggregateResult> queryEmailCallAggregates(Set<Id> gtms, String windowLabel) {
+        // windowLabel: 'CW' | 'PW' | 'CM' | 'PM' | 'QTD' (default).
         if (windowLabel == 'CW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
                 FROM Task
-                WHERE OwnerId IN :gtms
-                  AND Status = 'Completed'
-                  AND ActivityDate = THIS_WEEK
-                  AND (
-                      (TaskSubtype = 'Email' AND NektarSender__c = 'Us')
-                      OR TaskSubtype = 'Call'
-                  )
+                WHERE OwnerId IN :gtms AND Status = 'Completed' AND ActivityDate = THIS_WEEK
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
+                GROUP BY OwnerId, Owner.Name, TaskSubtype
+            ];
+        }
+        if (windowLabel == 'PW') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
+                FROM Task
+                WHERE OwnerId IN :gtms AND Status = 'Completed' AND ActivityDate = LAST_WEEK
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
+                GROUP BY OwnerId, Owner.Name, TaskSubtype
+            ];
+        }
+        if (windowLabel == 'CM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
+                FROM Task
+                WHERE OwnerId IN :gtms AND Status = 'Completed' AND ActivityDate = THIS_MONTH
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
+                GROUP BY OwnerId, Owner.Name, TaskSubtype
+            ];
+        }
+        if (windowLabel == 'PM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
+                FROM Task
+                WHERE OwnerId IN :gtms AND Status = 'Completed' AND ActivityDate = LAST_MONTH
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
                 GROUP BY OwnerId, Owner.Name, TaskSubtype
             ];
         }
         return [
             SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
             FROM Task
-            WHERE OwnerId IN :gtms
-              AND Status = 'Completed'
-              AND ActivityDate = THIS_FISCAL_QUARTER
-              AND (
-                  (TaskSubtype = 'Email' AND NektarSender__c = 'Us')
-                  OR TaskSubtype = 'Call'
-              )
+            WHERE OwnerId IN :gtms AND Status = 'Completed' AND ActivityDate = THIS_FISCAL_QUARTER
+              AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
             GROUP BY OwnerId, Owner.Name, TaskSubtype
         ];
     }
@@ -481,23 +499,44 @@ public with sharing class PGGtmInsightsController {
     private static List<AggregateResult> queryLinkedInAggregates(Set<Id> gtms, String windowLabel) {
         if (windowLabel == 'CW') {
             return [
-                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-                FROM Task
-                WHERE OwnerId IN :gtms
-                  AND TaskSubtype = 'Task'
-                  AND Subject LIKE '%Sales Navigator%'
-                  AND Subject LIKE '%Sent%'
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :gtms AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
                   AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
         }
+        if (windowLabel == 'PW') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :gtms AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
+                  AND ActivityDate = LAST_WEEK
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'CM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :gtms AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
+                  AND ActivityDate = THIS_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'PM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :gtms AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
+                  AND ActivityDate = LAST_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
         return [
-            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-            FROM Task
-            WHERE OwnerId IN :gtms
-              AND TaskSubtype = 'Task'
-              AND Subject LIKE '%Sales Navigator%'
-              AND Subject LIKE '%Sent%'
+            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+            WHERE OwnerId IN :gtms AND TaskSubtype = 'Task'
+              AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
               AND ActivityDate = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name
         ];
@@ -506,21 +545,47 @@ public with sharing class PGGtmInsightsController {
     private static List<AggregateResult> queryEventMeetings(Set<Id> gtms, String windowLabel) {
         if (windowLabel == 'CW') {
             return [
-                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-                FROM Event
-                WHERE OwnerId IN :gtms
-                  AND NektarSender__c = 'Us'
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
                   AND NektarStatus__c = 'completed'
                   AND Meeting_Type__c IN ('Discovery', 'First Meeting')
                   AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
         }
+        if (windowLabel == 'PW') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
+                  AND NektarStatus__c = 'completed'
+                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
+                  AND ActivityDate = LAST_WEEK
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'CM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
+                  AND NektarStatus__c = 'completed'
+                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
+                  AND ActivityDate = THIS_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'PM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
+                  AND NektarStatus__c = 'completed'
+                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
+                  AND ActivityDate = LAST_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
         return [
-            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-            FROM Event
-            WHERE OwnerId IN :gtms
-              AND NektarSender__c = 'Us'
+            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+            WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
               AND NektarStatus__c = 'completed'
               AND Meeting_Type__c IN ('Discovery', 'First Meeting')
               AND ActivityDate = THIS_FISCAL_QUARTER
