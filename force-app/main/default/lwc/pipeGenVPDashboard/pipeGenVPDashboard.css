@@ -84,10 +84,6 @@
     border-left: 3px solid rgba(245, 158, 11, 0.7);
 }
 
-.mgr-card--expanded {
-    border-color: rgba(99, 128, 200, 0.5);
-    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4);
-}
 
 /* ── Rep Card (manager mode + nested in VP mode) ─────────────────────────── */
 
@@ -107,18 +103,6 @@
     border-left: 3px solid rgba(245, 158, 11, 0.7);
 }
 
-.rep-card--expanded {
-    border-color: rgba(99, 128, 200, 0.4);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-}
-
-/* ── Team detail panel (expanded manager card) ───────────────────────────── */
-
-.team-detail {
-    border-top: 1px solid rgba(99, 128, 200, 0.15);
-    background: rgba(0, 0, 0, 0.18);
-    padding: 0.75rem;
-}
 
 /* ── Card Top ────────────────────────────────────────────────────────────── */
 
@@ -444,3 +428,100 @@ lightning-button {
 .mgr-dot--complete { background: #10b981; }
 .mgr-dot--partial  { background: #f59e0b; }
 .mgr-dot--pending  { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.35); }
+
+/* ── Modal backdrop ──────────────────────────────────────────────────────── */
+
+.vp-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+/* ── Modal container ─────────────────────────────────────────────────────── */
+
+.vp-modal {
+    background: linear-gradient(160deg, #080d1a 0%, #0c1426 55%, #0f1a36 100%);
+    border: 1px solid rgba(99, 128, 200, 0.28);
+    border-radius: 0.75rem;
+    width: 100%;
+    max-width: 960px;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+}
+
+/* ── Modal header ────────────────────────────────────────────────────────── */
+
+.vp-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid rgba(99, 128, 200, 0.18);
+    flex-shrink: 0;
+    gap: 0.75rem;
+}
+
+.vp-modal-title {
+    color: #e0e7ff;
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vp-back-btn {
+    background: rgba(99, 128, 200, 0.12);
+    border: 1px solid rgba(99, 128, 200, 0.3);
+    border-radius: 999px;
+    color: rgba(160, 185, 255, 0.8);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+}
+
+.vp-back-btn:hover {
+    background: rgba(99, 128, 200, 0.22);
+    color: #e0e7ff;
+}
+
+.vp-close-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.85rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+}
+
+.vp-close-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* ── Modal body ──────────────────────────────────────────────────────────── */
+
+.vp-modal-body {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+}

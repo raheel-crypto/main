@@ -9,21 +9,22 @@ const CURR       = new Intl.NumberFormat('en-US', { style: 'currency', currency:
 
 export default class PipeGenVPDashboard extends LightningElement {
 
-    @track managers      = [];
-    @track reps          = [];
-    @track summary       = {};
-    @track isVP          = false;
-    @track isLoading     = true;
-    @track errorMessage  = null;
+    @track managers     = [];
+    @track reps         = [];
+    @track summary      = {};
+    @track isVP         = false;
+    @track isLoading    = true;
+    @track errorMessage = null;
+    @track modal        = { isOpen: false, type: null, managerId: null, repId: null };
 
     connectedCallback() { this.loadData(); }
 
     async loadData() {
         this.isLoading = true; this.errorMessage = null;
         try {
-            const raw     = await getVPDashboardData();
-            this.isVP     = raw.isVP;
-            this.summary  = this.buildSummary(raw.teamSummary || {});
+            const raw    = await getVPDashboardData();
+            this.isVP    = raw.isVP;
+            this.summary = this.buildSummary(raw.teamSummary || {});
             if (raw.isVP) {
                 this.managers = (raw.managers || []).map(m => this.enrichManager(m));
                 this.reps     = [];
@@ -48,13 +49,9 @@ export default class PipeGenVPDashboard extends LightningElement {
                        : attPct >=  60 ? 'att-bar-fill att-bar--good'
                        : attPct >=  30 ? 'att-bar-fill att-bar--warn'
                        :                  'att-bar-fill att-bar--low';
-        const isExpanded = false;
         return {
             ...mgr,
-            isExpanded,
-            chevronIcon:        'utility:chevronright',
-            expandLabel:        'View Team',
-            mgrCardClass:       this.mgrCardClass(mgr, isExpanded),
+            mgrCardClass:       this.mgrCardClass(mgr),
             attainmentPct:      attPct,
             attainmentBarStyle: `width: ${attPct}%`,
             attainmentBarClass: barClass,
@@ -70,7 +67,6 @@ export default class PipeGenVPDashboard extends LightningElement {
         const target = rep.pipelineTarget || 0;
         const actual = rep.pipelineActual || 0;
         const attPct = target > 0 ? Math.min(100, Math.round((actual / target) * 100)) : 0;
-        const isExpanded = false;
         const barClass = attPct >= 100 ? 'att-bar-fill att-bar--won'
                        : attPct >=  60 ? 'att-bar-fill att-bar--good'
                        : attPct >=  30 ? 'att-bar-fill att-bar--warn'
@@ -80,34 +76,31 @@ export default class PipeGenVPDashboard extends LightningElement {
         const lwCompleted = lwCommits.filter(c => c.Completion_Status__c === 'Completed').length;
         return {
             ...rep,
-            isExpanded,
-            chevronIcon:         'utility:chevronright',
-            expandLabel:         'View Commits',
-            repCardClass:        this.repCardClass(rep, isExpanded),
-            twCompletionClass:   this.completionClass(rep.thisWeekCompleted, rep.thisWeekTotal),
-            lwCompletionClass:   this.completionClass(lwCompleted, lwTotal),
+            repCardClass:       this.repCardClass(rep),
+            twCompletionClass:  this.completionClass(rep.thisWeekCompleted, rep.thisWeekTotal),
+            lwCompletionClass:  this.completionClass(lwCompleted, lwTotal),
             lwCompleted, lwTotal,
-            hasCommits:          (rep.thisWeekCommits || []).length > 0,
-            hasLastWeekCommits:  lwCommits.length > 0,
-            thisWeekCommits:     (rep.thisWeekCommits || []).map(c => this.enrichCommit(c)),
-            lastWeekCommits:     lwCommits,
-            attainmentPct:       attPct,
-            attainmentBarStyle:  `width: ${attPct}%`,
-            attainmentBarClass:  barClass,
-            pipelineActualFmt:   CURR.format(actual),
-            pipelineTargetFmt:   CURR.format(target),
-            weeksRemaining:      rep.weeksRemaining || 0,
-            lwOppsCreated:       rep.lwOppsCreated      || 0,
-            qtdOppsCreated:      rep.qtdOppsCreated     || 0,
-            lwOppsToDiscovery:   rep.lwOppsToDiscovery  || 0,
-            qtdOppsToDiscovery:  rep.qtdOppsToDiscovery || 0
+            hasCommits:         (rep.thisWeekCommits || []).length > 0,
+            hasLastWeekCommits: lwCommits.length > 0,
+            thisWeekCommits:    (rep.thisWeekCommits || []).map(c => this.enrichCommit(c)),
+            lastWeekCommits:    lwCommits,
+            attainmentPct:      attPct,
+            attainmentBarStyle: `width: ${attPct}%`,
+            attainmentBarClass: barClass,
+            pipelineActualFmt:  CURR.format(actual),
+            pipelineTargetFmt:  CURR.format(target),
+            weeksRemaining:     rep.weeksRemaining      || 0,
+            lwOppsCreated:      rep.lwOppsCreated       || 0,
+            qtdOppsCreated:     rep.qtdOppsCreated      || 0,
+            lwOppsToDiscovery:  rep.lwOppsToDiscovery   || 0,
+            qtdOppsToDiscovery: rep.qtdOppsToDiscovery  || 0
         };
     }
 
     enrichCommit(c) {
-        const status  = c.Completion_Status__c || 'Not Started';
-        const actual  = c.Actual_Count__c    || 0;
-        const committed = c.Committed_Count__c || 1;
+        const status    = c.Completion_Status__c || 'Not Started';
+        const actual    = c.Actual_Count__c      || 0;
+        const committed = c.Committed_Count__c   || 1;
         return {
             ...c,
             progressLabel:      `${actual} / ${committed}`,
@@ -132,18 +125,12 @@ export default class PipeGenVPDashboard extends LightningElement {
         return { ...ts, completionRateLabel: `${done}/${total} (${rate}%)`, completionRateValue: rate };
     }
 
-    mgrCardClass(mgr, isExpanded) {
-        let cls = 'mgr-card';
-        if (mgr.hasRisk)  cls += ' mgr-card--risk';
-        if (isExpanded)   cls += ' mgr-card--expanded';
-        return cls;
+    mgrCardClass(mgr) {
+        return 'mgr-card' + (mgr.hasRisk ? ' mgr-card--risk' : '');
     }
 
-    repCardClass(rep, isExpanded) {
-        let cls = 'rep-card';
-        if (rep.hasRisk)  cls += ' rep-card--risk';
-        if (isExpanded)   cls += ' rep-card--expanded';
-        return cls;
+    repCardClass(rep) {
+        return 'rep-card' + (rep.hasRisk ? ' rep-card--risk' : '');
     }
 
     completionClass(completed, total) {
@@ -153,10 +140,10 @@ export default class PipeGenVPDashboard extends LightningElement {
 
     // ── Computed ───────────────────────────────────────────────────────────────
 
-    get isReady()      { return !this.isLoading && !this.errorMessage; }
-    get hasError()     { return !!this.errorMessage; }
-    get hasManagers()  { return this.managers.length > 0; }
-    get hasReps()      { return this.reps.length > 0; }
+    get isReady()     { return !this.isLoading && !this.errorMessage; }
+    get hasError()    { return !!this.errorMessage; }
+    get hasManagers() { return this.managers.length > 0; }
+    get hasReps()     { return this.reps.length > 0; }
 
     get weekLabel() {
         const today = new Date();
@@ -178,54 +165,60 @@ export default class PipeGenVPDashboard extends LightningElement {
             : 'summary-value summary-value--good';
     }
 
-    // ── Handlers ───────────────────────────────────────────────────────────────
+    // ── Modal computed ─────────────────────────────────────────────────────────
 
-    handleManagerExpand(e) {
-        const id = e.currentTarget.dataset.id;
-        this.managers = this.managers.map(m => {
-            if (m.managerId !== id) return m;
-            const expanded = !m.isExpanded;
-            return {
-                ...m,
-                isExpanded:   expanded,
-                chevronIcon:  expanded ? 'utility:chevrondown' : 'utility:chevronright',
-                expandLabel:  expanded ? 'Hide Team' : 'View Team',
-                mgrCardClass: this.mgrCardClass(m, expanded)
-            };
-        });
+    get isModalTeam()    { return this.modal.type === 'team'; }
+    get isModalCommits() { return this.modal.type === 'commits'; }
+
+    get canGoBack() {
+        return this.modal.type === 'commits' && !!this.modal.managerId && this.isVP;
     }
 
-    handleRepExpand(e) {
-        const repId = e.currentTarget.dataset.repid;
-        const mgrId = e.currentTarget.dataset.mgrid;
-        if (mgrId) {
-            // VP mode: rep is nested inside a manager
-            this.managers = this.managers.map(m => {
-                if (m.managerId !== mgrId) return m;
-                return {
-                    ...m,
-                    reps: m.reps.map(r => {
-                        if (r.repId !== repId) return r;
-                        const expanded = !r.isExpanded;
-                        return { ...r, isExpanded: expanded,
-                            chevronIcon: expanded ? 'utility:chevrondown' : 'utility:chevronright',
-                            expandLabel: expanded ? 'Hide Commits' : 'View Commits',
-                            repCardClass: this.repCardClass(r, expanded) };
-                    })
-                };
-            });
-        } else {
-            // Manager mode: flat rep list
-            this.reps = this.reps.map(r => {
-                if (r.repId !== repId) return r;
-                const expanded = !r.isExpanded;
-                return { ...r, isExpanded: expanded,
-                    chevronIcon: expanded ? 'utility:chevrondown' : 'utility:chevronright',
-                    expandLabel: expanded ? 'Hide Commits' : 'View Commits',
-                    repCardClass: this.repCardClass(r, expanded) };
-            });
+    get modalManager() {
+        return this.managers.find(m => m.managerId === this.modal.managerId);
+    }
+
+    get modalRep() {
+        const { repId, managerId } = this.modal;
+        if (managerId) {
+            const mgr = this.managers.find(m => m.managerId === managerId);
+            return mgr?.reps.find(r => r.repId === repId);
         }
+        return this.reps.find(r => r.repId === repId);
     }
+
+    get modalTitle() {
+        if (this.isModalTeam)    return `${this.modalManager?.managerName || ‘’}’s Team`;
+        if (this.isModalCommits) return `${this.modalRep?.repName || ‘’} — Commits`;
+        return ‘’;
+    }
+
+    // ── Modal handlers ─────────────────────────────────────────────────────────
+
+    handleViewTeam(e) {
+        const id = e.currentTarget.dataset.id;
+        this.modal = { isOpen: true, type: 'team', managerId: id, repId: null };
+    }
+
+    handleViewCommits(e) {
+        const repId = e.currentTarget.dataset.repid;
+        const mgrId = e.currentTarget.dataset.mgrid || null;
+        this.modal  = { isOpen: true, type: 'commits', managerId: mgrId, repId };
+    }
+
+    handleModalBack() {
+        this.modal = { ...this.modal, type: 'team', repId: null };
+    }
+
+    closeModal() {
+        this.modal = { isOpen: false, type: null, managerId: null, repId: null };
+    }
+
+    handleBackdropClick(e) {
+        if (e.target === e.currentTarget) this.closeModal();
+    }
+
+    // ── Commit handlers ────────────────────────────────────────────────────────
 
     handleNoteChange(e) {
         const commitId = e.target.dataset.id;
