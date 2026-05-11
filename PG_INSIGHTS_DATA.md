@@ -74,31 +74,41 @@ Goals come from two parallel pairs of fields on `PG_Quota__c`:
 `Exp_Amount_Goal__c` for $. AEs can have either or both; missing values
 display as `0` for that mode without affecting the other.
 
-### What counts as "AE-sourced"
+### Source-scope toggle (`All opps` / `AE-sourced only`)
 
-**No longer applied.** Previously the Quarter Recap widgets filtered by
-`Opportunity.Booked_By_Role__c LIKE 'AE%'` to scope to deals an AE
-booked. That filter has been removed across pacing / chart / status /
-top performers: once an AE owns an opp it counts toward their pipeline
-regardless of who originally booked it (GTM Associate, Integration
-partner, etc.). The change brings the dashboard in line with the
-team's existing reports.
+Quarter Recap has a third toggle (next to `# / $`) that controls whether
+the dashboard counts every opp the AE owns or only opps an AE booked:
 
-The conversion heatmap is also unfiltered for the same reason.
+- **`All opps`** (default) — no `Booked_By_Role__c` filter. Matches the
+  team's existing reports, which include opps booked by GTM Associates,
+  Integration partners, etc., as long as an AE owns them now.
+- **`AE-sourced only`** — applies `Opportunity.Booked_By_Role__c LIKE 'AE%'`
+  so only deals an AE personally booked count. Useful for measuring
+  self-sourcing performance.
+
+The conversion heatmap is always `All opps` since it measures execution
+on whatever opps the AE has in queue, not who originally sourced them.
 
 ### "Reached Stage 2+"
 
-An opportunity counts for Stage 2+ metrics if its **current** `StageName`
-is one of `2 - Discovery`, `3 - POV`, `4 - Proposal`, `5 - Contracting`,
-or `Closed Won`. `Closed Lost` and `1 - Demo` are excluded.
+An opportunity has "reached Stage 2+" if any `OpportunityHistory` row
+exists where `StageName IN ('2 - Discovery', '3 - POV', '4 - Proposal',
+'5 - Contracting', 'Closed Won')`.
 
-Pacing dates flow from `Opportunity.CreatedDate`. An opp counts in the
-quarter / week / month it was *created*, not when it crossed Stage 2+.
-An opp created last quarter that pushes into Stage 2+ this quarter is
-intentionally NOT in this quarter's pacing — it's last quarter's
-pipeline finally maturing. For historical stage progression (when did
-each stage happen?) see the **Conversion heatmap**, which uses
-`OpportunityHistory`.
+The **first** such history row's `CreatedDate` is the date the opp
+"entered Stage 2+". Pacing widgets bucket by that date, so a deal that
+jumps Stage 1 → Stage 4 directly counts on the day it made the leap
+(prior-quarter opps that push into Stage 2+ this quarter DO show up in
+this quarter — pipeline maturing into Stage 2+ now is this-quarter
+activity, not last quarter's).
+
+`Closed Lost` is intentionally not in the Stage 2+ set — losing a deal
+isn't progression.
+
+`OpportunityHistory` is the source of truth for this metric, not the
+custom `Stage_N_Start_Date__c` fields (those are unreliable in this
+org — only ~33% populated on `Stage_1_Start_Date__c`, 0% on
+`Stage_2_Start_Date__c`).
 
 ### Fiscal year and quarter
 
@@ -163,8 +173,9 @@ Each tile shows a delta vs the prior week. Green if direction is favorable
 
 - AE owns the opp (`OwnerId IN :aeIds`)
 - Type IN (`'New Business'`, `'Pilot'`, `'Upsell'`)
-- Currently at Stage 2+ (`StageName IN ('2 - Discovery', '3 - POV', '4 - Proposal', '5 - Contracting', 'Closed Won')`)
-- `Opportunity.CreatedDate` falls in the window
+- First Stage 2+ entry's `CreatedDate` falls in the window (via
+  `OpportunityHistory`)
+- If `AE-sourced only` toggle is active: also `Booked_By_Role__c LIKE 'AE%'`
 
 **Window definition (rolling, not calendar-week-bounded):**
 
@@ -204,8 +215,10 @@ metric — so totals are visible without hovering. Hover tooltip still
 shows the per-stack breakdown.
 
 **Bucket value (count mode):** count of opps owned by an AE, Type IN
-(`'New Business'`, `'Pilot'`, `'Upsell'`), currently at Stage 2+, whose
-`Opportunity.CreatedDate` falls in that bucket.
+(`'New Business'`, `'Pilot'`, `'Upsell'`), where the **first**
+`OpportunityHistory` entry to a Stage 2+ value falls in that bucket.
+The source-scope toggle on Quarter Recap optionally adds
+`Booked_By_Role__c LIKE 'AE%'`.
 
 **Bucket value (amount mode):** same universe, summed `Opportunity.Amount`
 instead of count.
@@ -524,12 +537,13 @@ that simply hadn't been logged as an Open NB Opportunity yet. This is its
 own metric worth surfacing eventually.
 
 **OpportunityHistory in test context.** This org's Apex test context does
-not auto-create `OpportunityHistory` rows on opp insert. Only the
-conversion heatmap reads history (via `mockStagesByOpp`); the Quarter
-Recap widgets switched to `Opportunity.CreatedDate` + current StageName
-and no longer depend on it. The `mockStage2PlusByOpp` test seam is
-retained for tests that need deterministic dates that don't equal
-`CreatedDate` (e.g. backdating).
+not auto-create `OpportunityHistory` rows on opp insert (verified
+empirically; production has 800+ rows for the current quarter as
+expected). The controller has two `@TestVisible` mock seams —
+`mockStage2PlusByOpp` for the Quarter Recap pacing/chart/status/top-
+performers path and `mockStagesByOpp` for the conversion heatmap — so
+tests inject hand-crafted history maps without depending on
+auto-creation. Production code paths are untouched.
 
 **Pod definition is role-name-based, not Pod__c.** AEs are grouped by
 substring match on `User.UserRole.Name`. Users in the relevant role

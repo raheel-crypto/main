@@ -6,6 +6,7 @@ import getStageProgressByWeek    from '@salesforce/apex/PGInsightsController.get
 
 export default class PgStageProgressChart extends LightningElement {
     @api metric = 'count'; // 'count' | 'amount'
+    @api sourceMode = 'ALL';
 
     grouping = 'week'; // 'week' | 'quarter'
 
@@ -37,7 +38,7 @@ export default class PgStageProgressChart extends LightningElement {
     rowsByWeek = [];
     error;
 
-    @wire(getStageProgressByQuarter, { numQuarters: 6 })
+    @wire(getStageProgressByQuarter, { numQuarters: 6, sourceMode: '$sourceMode' })
     wiredQuarter({ data, error }) {
         if (data) {
             this.rowsByQuarter = data;
@@ -46,7 +47,7 @@ export default class PgStageProgressChart extends LightningElement {
         if (error) this.error = error;
     }
 
-    @wire(getStageProgressByWeek)
+    @wire(getStageProgressByWeek, { sourceMode: '$sourceMode' })
     wiredWeek({ data, error }) {
         if (data) {
             this.rowsByWeek = data;

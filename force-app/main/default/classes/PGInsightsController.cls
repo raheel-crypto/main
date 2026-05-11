@@ -3,19 +3,18 @@
  *
  * Backs the pgInsightsApp LWC with aggregated Pipeline Generation metrics.
  *
- * Pipeline = opportunities (NB, Pilot, or Upsell) owned by an AE that are
- * currently at Stage 2 or beyond. Dates flow from Opportunity.CreatedDate
- * — an opp counts in the quarter / week / month it was *created*, not
- * when it crossed Stage 2+. An opp created last quarter that pushes into
- * Stage 2+ this quarter is intentionally NOT in this quarter's pacing
- * (it's last quarter's pipeline finally maturing). For historical
- * progression / conversion rates, see the heatmap which uses
- * OpportunityHistory.
+ * Pipeline = opportunities owned by an AE whose FIRST OpportunityHistory
+ * entry to a Stage 2+ value falls in the window. A deal that jumped
+ * Stage 1 → Stage 4 directly still counts on the date of that jump.
+ * Deals that never reached Stage 2+ do not count.
  *
- * No Booked_By_Role__c filter on pacing/status/top-performers — once the
- * AE owns the opp it's their pipeline to work, regardless of who
- * originally booked it. The conversion heatmap is also unfiltered for
- * the same reason.
+ * The dashboard supports a source-scope toggle:
+ *   - 'AE_SOURCED' applies Opportunity.Booked_By_Role__c LIKE 'AE%' so
+ *     only deals an AE personally booked count.
+ *   - 'ALL' (default) drops the Booked_By filter — the AE team's total
+ *     pipeline responsibility, regardless of who originally booked it.
+ * The conversion heatmap is always 'ALL' since it's about per-AE
+ * execution on whatever opps land in their queue.
  *
  * Outbound activity sources:
  *   - Emails / Calls / LinkedIn = Task records
@@ -68,14 +67,18 @@ public with sharing class PGInsightsController {
 
     // ---- Per-transaction caches ------------------------------------------------------
 
+    public static final String SOURCE_AE   = 'AE_SOURCED';
+    public static final String SOURCE_ALL  = 'ALL';
+
     private static Set<Id>            aeUserIdsCache;
     private static Map<String, Set<Id>> aeUserIdsByPodCache;
-    private static Map<Id, DateTime>  stage2PlusCache;
+    private static Map<String, Map<Id, DateTime>> stage2PlusCacheByMode = new Map<String, Map<Id, DateTime>>();
     private static Map<Id, Opportunity> oppDetailsCache;
     private static Integer            fiscalStartMonthCache;
 
-    // Test seam: lets tests inject a hand-crafted map of OppId -> date so
-    // the production query (Opportunity SOQL) doesn't have to run.
+    // Test seam: lets tests inject a hand-crafted map of OppId -> first
+    // Stage 2+ DateTime so the OpportunityHistory query doesn't have to
+    // run (rows don't auto-create in this org's test context).
     @TestVisible
     private static Map<Id, DateTime>  mockStage2PlusByOpp;
 
@@ -221,7 +224,7 @@ public with sharing class PGInsightsController {
     // ---- @AuraEnabled API ------------------------------------------------------------
 
     @AuraEnabled(cacheable=true)
-    public static PacingKpis getPacingKpis(String windowLabel) {
+    public static PacingKpis getPacingKpis(String windowLabel, String sourceMode) {
         Date today = Date.today();
         Date currStart, currEnd, priorStart, priorEnd;
         if (windowLabel == 'WoW') {
@@ -236,7 +239,7 @@ public with sharing class PGInsightsController {
             priorStart = priorEnd.toStartOfMonth();
         }
 
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
         Set<Id> currIds  = new Set<Id>();
         Set<Id> priorIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
@@ -276,14 +279,14 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<QuarterRow> getStageProgressByWeek() {
+    public static List<QuarterRow> getStageProgressByWeek(String sourceMode) {
         // Weekly buckets for the current fiscal quarter only. Used by the
         // chart's "Per Week (this Q)" view. Goals aren't applied per week —
         // the chart skips the goal line in this view.
         Date qStart = startOfCurrentFiscalQuarter();
         Date today = Date.today();
 
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
         Map<Id, Opportunity> opps = getOppDetails(firstDates.keySet());
 
         // Build week buckets up to today, aligned to qStart.
@@ -336,9 +339,9 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<QuarterRow> getStageProgressByQuarter(Integer numQuarters) {
+    public static List<QuarterRow> getStageProgressByQuarter(Integer numQuarters, String sourceMode) {
         Integer n = (numQuarters == null || numQuarters <= 0) ? 8 : numQuarters;
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
         Map<Id, Opportunity> opps = getOppDetails(firstDates.keySet());
 
         Map<Integer, QuarterRow> byKey = new Map<Integer, QuarterRow>();
@@ -394,7 +397,7 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static S1Status getS1StatusQTD() {
+    public static S1Status getS1StatusQTD(String sourceMode) {
         S1Status s = new S1Status();
         s.nbCount = 0;
         s.expCount = 0;
@@ -406,7 +409,7 @@ public with sharing class PGInsightsController {
         s.amountAttainmentPct = 0;
 
         Date qStart = startOfCurrentFiscalQuarter();
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
         Set<Id> qIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
             if (firstDates.get(oid).date() >= qStart) qIds.add(oid);
@@ -435,12 +438,12 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<PodPerformers> getTopPerformersByPod(Integer topN) {
+    public static List<PodPerformers> getTopPerformersByPod(Integer topN, String sourceMode) {
         // topN is honored only as a soft cap (default no trim) so the LWC can
         // re-sort by # or $ client-side and still show the right top-N.
         Integer cap = (topN == null || topN <= 0) ? 50 : topN;
         Date qStart = startOfCurrentFiscalQuarter();
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
 
         Set<Id> qIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
@@ -928,37 +931,65 @@ public with sharing class PGInsightsController {
     }
 
     /**
-     * Returns AE-owned NB/Upsell/Pilot opps currently at Stage 2+, keyed by
-     * Opportunity.Id, valued by Opportunity.CreatedDate.
+     * Returns AE-owned NB/Upsell/Pilot opps that have reached Stage 2+,
+     * keyed by Opportunity.Id, valued by the FIRST OpportunityHistory
+     * CreatedDate for a Stage 2+ entry. Pacing widgets bucket by that
+     * date so a deal that jumps Stage 1 → Stage 4 still counts on the
+     * day it made the leap.
      *
-     * Semantic match with the team's reporting view: pipeline is counted in
-     * the quarter / week / month an opp was *created*, not when it crossed
-     * Stage 2+. An opp created last quarter that pushes into Stage 2+ this
-     * quarter is intentionally NOT in this quarter's pacing — it's last
-     * quarter's pipeline finally maturing. Use the conversion heatmap to
-     * see historical progression.
-     *
-     * No Booked_By_Role__c filter — the dashboard reflects the AE team's
-     * full pipeline responsibility, not just what they originally sourced.
+     * sourceMode controls whether to scope to AE-booked opps only:
+     *   'AE_SOURCED'  applies Booked_By_Role__c LIKE 'AE%'
+     *   'ALL' (or any other value) drops that filter
      */
-    private static Map<Id, DateTime> getStage2PlusByOpp() {
+    private static Map<Id, DateTime> getStage2PlusByOpp(String sourceMode) {
         if (mockStage2PlusByOpp != null) return mockStage2PlusByOpp;
-        if (stage2PlusCache != null) return stage2PlusCache;
+        String mode = (sourceMode == SOURCE_AE) ? SOURCE_AE : SOURCE_ALL;
+        Map<Id, DateTime> cached = stage2PlusCacheByMode.get(mode);
+        if (cached != null) return cached;
+
         Set<Id> aes = getAeUserIds();
         Map<Id, DateTime> out = new Map<Id, DateTime>();
         if (aes.isEmpty()) {
-            stage2PlusCache = out;
+            stage2PlusCacheByMode.put(mode, out);
             return out;
         }
-        for (Opportunity o : [
-            SELECT Id, CreatedDate FROM Opportunity
-            WHERE OwnerId IN :aes
-              AND Type IN :ALL_DASHBOARD_TYPES
-              AND StageName IN :STAGE_2_PLUS
-        ]) {
-            out.put(o.Id, o.CreatedDate);
+
+        // Two-step: get AE-owned opp ids (with or without Booked_By filter),
+        // then aggregate first-Stage-2+ history for those IDs.
+        Set<Id> aeOppIds = new Set<Id>();
+        if (mode == SOURCE_AE) {
+            for (Opportunity o : [
+                SELECT Id FROM Opportunity
+                WHERE OwnerId IN :aes
+                  AND Type IN :ALL_DASHBOARD_TYPES
+                  AND Booked_By_Role__c LIKE 'AE%'
+            ]) {
+                aeOppIds.add(o.Id);
+            }
+        } else {
+            for (Opportunity o : [
+                SELECT Id FROM Opportunity
+                WHERE OwnerId IN :aes
+                  AND Type IN :ALL_DASHBOARD_TYPES
+            ]) {
+                aeOppIds.add(o.Id);
+            }
         }
-        stage2PlusCache = out;
+        if (aeOppIds.isEmpty()) {
+            stage2PlusCacheByMode.put(mode, out);
+            return out;
+        }
+
+        for (AggregateResult ar : [
+            SELECT OpportunityId oid, MIN(CreatedDate) firstDt
+            FROM OpportunityHistory
+            WHERE StageName IN :STAGE_2_PLUS
+              AND OpportunityId IN :aeOppIds
+            GROUP BY OpportunityId
+        ]) {
+            out.put((Id) ar.get('oid'), (DateTime) ar.get('firstDt'));
+        }
+        stage2PlusCacheByMode.put(mode, out);
         return out;
     }
 

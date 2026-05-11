@@ -3,14 +3,15 @@ import getPacingKpis from '@salesforce/apex/PGInsightsController.getPacingKpis';
 
 export default class PgPacingKpis extends LightningElement {
     @api metric = 'count'; // 'count' | 'amount'
+    @api sourceMode = 'ALL';
 
     rawWow;
     rawMom;
 
-    @wire(getPacingKpis, { windowLabel: 'WoW' })
+    @wire(getPacingKpis, { windowLabel: 'WoW', sourceMode: '$sourceMode' })
     wiredWow({ data }) { if (data) this.rawWow = data; }
 
-    @wire(getPacingKpis, { windowLabel: 'MoM' })
+    @wire(getPacingKpis, { windowLabel: 'MoM', sourceMode: '$sourceMode' })
     wiredMom({ data }) { if (data) this.rawMom = data; }
 
     get isAmount()    { return this.metric === 'amount'; }
