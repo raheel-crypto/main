@@ -1,0 +1,40 @@
+<template>
+    <div class="pg-app">
+        <div class="pg-app__header slds-p-around_small">
+            <h1 class="pg-app__title">GTM Insights</h1>
+            <p class="pg-app__subtitle">Pipeline Generation pacing &amp; outreach for GTM Associates</p>
+        </div>
+
+        <lightning-tabset variant="scoped" active-tab-value={activeTab}>
+            <lightning-tab label="Quarter Recap" value="recap">
+                <div class="pg-toggle-row slds-p-horizontal_small slds-p-top_small">
+                    <span class="pg-toggle__label">Show as:</span>
+                    <div class="pg-toggle">
+                        <button type="button" class={countToggleClass}  onclick={handleSelectCount}># of opps</button>
+                        <button type="button" class={amountToggleClass} onclick={handleSelectAmount}>$ pipeline</button>
+                    </div>
+                    <span class="pg-toggle__label pg-toggle__label--right">Window:</span>
+                    <div class="pg-toggle">
+                        <button type="button" class={qtdToggleClass} onclick={handleSelectQtd}>QTD</button>
+                        <button type="button" class={cmToggleClass}  onclick={handleSelectCm}>Current Month</button>
+                    </div>
+                </div>
+                <div class="slds-p-around_small">
+                    <c-pg-gtm-status-panel metric={metric} window-label={windowSelection}></c-pg-gtm-status-panel>
+                </div>
+                <div class="slds-p-horizontal_small">
+                    <c-pg-gtm-trend-chart metric={metric}></c-pg-gtm-trend-chart>
+                </div>
+                <div class="slds-p-around_small">
+                    <c-pg-gtm-ranking metric={metric} window-label={windowSelection}></c-pg-gtm-ranking>
+                </div>
+            </lightning-tab>
+
+            <lightning-tab label="Individual Outreach" value="outreach">
+                <div class="slds-p-around_small">
+                    <c-pg-gtm-individual-outreach></c-pg-gtm-individual-outreach>
+                </div>
+            </lightning-tab>
+        </lightning-tabset>
+    </div>
+</template>

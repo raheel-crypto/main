@@ -1,0 +1,36 @@
+<template>
+    <article class="pg-card">
+        <header class="pg-card__title">GTM Ranking | {windowDisplay}</header>
+        <template lwc:if={hasRows}>
+            <table class="pg-table">
+                <thead>
+                    <tr>
+                        <th class="pg-th pg-th--rank">#</th>
+                        <th class="pg-th">GTM</th>
+                        <th class="pg-th">Booked</th>
+                        <th class="pg-th">Qualified</th>
+                        <th class="pg-th">Pass-through</th>
+                        <th class="pg-th">Goal</th>
+                        <th class="pg-th">Attainment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template for:each={rows} for:item="r">
+                        <tr key={r.ownerId} class={r.rowClass}>
+                            <td class="pg-td pg-td--rank">{r.rank}</td>
+                            <td class="pg-td pg-td--name">{r.ownerName}</td>
+                            <td class="pg-td">{r.bookedDisplay}</td>
+                            <td class="pg-td">{r.qualifiedDisplay}</td>
+                            <td class="pg-td">{r.passDisplay}</td>
+                            <td class="pg-td">{r.goalDisplay}</td>
+                            <td class="pg-td">{r.attainmentDisplay}</td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </template>
+        <template lwc:else>
+            <div class="pg-empty">No GTM data yet.</div>
+        </template>
+    </article>
+</template>

@@ -1,0 +1,17 @@
+<template>
+    <lightning-card>
+        <span slot="title" class="pg-chart__title">{title}</span>
+        <div slot="actions" class="pg-mini-toggle">
+            <button type="button" class={weekToggleClass}    onclick={handleSelectWeek}>Per Week</button>
+            <button type="button" class={quarterToggleClass} onclick={handleSelectQuarter}>By Quarter</button>
+        </div>
+        <div class="pg-chart__wrap">
+            <canvas class="pg-chart" lwc:dom="manual"></canvas>
+            <template lwc:if={error}>
+                <div class="slds-text-color_error slds-p-around_small">
+                    Could not load chart data.
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

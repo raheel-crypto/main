@@ -1,7 +1,8 @@
 # PG Insights — GTM Associate Dashboard Plan
 
-Status: **planning only — not yet built**. Capture questions, revisit when GTM
-team is ready to define their metrics.
+Status: **built**. Implementation reference now lives in
+`PG_GTM_INSIGHTS_DATA.md`. The original planning doc below is preserved
+for context on how the design was reached.
 
 ## Why a separate dashboard
 

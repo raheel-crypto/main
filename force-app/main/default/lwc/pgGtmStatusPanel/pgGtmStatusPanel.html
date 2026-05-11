@@ -1,0 +1,29 @@
+<template>
+    <template lwc:if={hasStatus}>
+        <article class="pg-status-card">
+            <header class="pg-status-card__title">GTM Pipeline Generation | {windowDisplay}</header>
+            <div class="slds-grid slds-gutters slds-p-around_small pg-status-card__body">
+                <div class="slds-col">
+                    <div class="pg-status__label">Opps Booked</div>
+                    <div class="pg-status__value">{status.bookedDisplay}</div>
+                </div>
+                <div class="slds-col">
+                    <div class="pg-status__label">Qualified (Stage 2+)</div>
+                    <div class="pg-status__value">{status.qualifiedDisplay}</div>
+                </div>
+                <div class="slds-col">
+                    <div class="pg-status__label">Pass-through</div>
+                    <div class="pg-status__value">{status.passDisplay}</div>
+                </div>
+                <div class="slds-col">
+                    <div class="pg-status__label">Goal ({windowDisplay})</div>
+                    <div class="pg-status__value">{status.goalDisplay}</div>
+                </div>
+                <div class="slds-col">
+                    <div class="pg-status__label">Attainment</div>
+                    <div class="pg-status__value">{status.attainmentDisplay}</div>
+                </div>
+            </div>
+        </article>
+    </template>
+</template>
