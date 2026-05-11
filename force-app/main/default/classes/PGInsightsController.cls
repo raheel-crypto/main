@@ -3,14 +3,23 @@
  *
  * Backs the pgInsightsApp LWC with aggregated Pipeline Generation metrics.
  *
- * Pipeline = opportunities (NB or Upsell) that FIRST entered Stage 2 or beyond
- * during the window. Source of truth is OpportunityHistory: a deal that
- * jumped from Stage 1 directly to Stage 4 still counts on the date of that
- * jump. Deals still in Stage 1 do not count.
+ * Pipeline = opportunities (NB, Pilot, or Upsell) owned by an AE that are
+ * currently at Stage 2 or beyond. Dates flow from Opportunity.CreatedDate
+ * — an opp counts in the quarter / week / month it was *created*, not
+ * when it crossed Stage 2+. An opp created last quarter that pushes into
+ * Stage 2+ this quarter is intentionally NOT in this quarter's pacing
+ * (it's last quarter's pipeline finally maturing). For historical
+ * progression / conversion rates, see the heatmap which uses
+ * OpportunityHistory.
+ *
+ * No Booked_By_Role__c filter on pacing/status/top-performers — once the
+ * AE owns the opp it's their pipeline to work, regardless of who
+ * originally booked it. The conversion heatmap is also unfiltered for
+ * the same reason.
  *
  * Outbound activity sources:
- *   - Emails / Calls / LinkedIn = Task.TaskSubtype with Status='Completed'
- *   - Meetings                  = Event records (OwnerId is the AE)
+ *   - Emails / Calls / LinkedIn = Task records
+ *   - Meetings                  = Event records
  */
 public with sharing class PGInsightsController {
 
@@ -61,17 +70,14 @@ public with sharing class PGInsightsController {
 
     private static Set<Id>            aeUserIdsCache;
     private static Map<String, Set<Id>> aeUserIdsByPodCache;
-    private static Map<Id, DateTime>  firstStage2PlusCache;
+    private static Map<Id, DateTime>  stage2PlusCache;
     private static Map<Id, Opportunity> oppDetailsCache;
     private static Integer            fiscalStartMonthCache;
 
-    // Test seam: this org's test context does not auto-create OpportunityHistory
-    // on opp insert (verified via diagnostic test — Hist=0 even after a clean
-    // insert of stage-2 opps), and OpportunityHistory is a read-only object
-    // so direct DML isn't allowed. Tests assign this map to bypass the
-    // history query while leaving the production code path untouched.
+    // Test seam: lets tests inject a hand-crafted map of OppId -> date so
+    // the production query (Opportunity SOQL) doesn't have to run.
     @TestVisible
-    private static Map<Id, DateTime>  mockFirstStage2PlusByOpp;
+    private static Map<Id, DateTime>  mockStage2PlusByOpp;
 
     // ---- Result wrappers -------------------------------------------------------------
 
@@ -230,7 +236,7 @@ public with sharing class PGInsightsController {
             priorStart = priorEnd.toStartOfMonth();
         }
 
-        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
         Set<Id> currIds  = new Set<Id>();
         Set<Id> priorIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
@@ -277,7 +283,7 @@ public with sharing class PGInsightsController {
         Date qStart = startOfCurrentFiscalQuarter();
         Date today = Date.today();
 
-        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
         Map<Id, Opportunity> opps = getOppDetails(firstDates.keySet());
 
         // Build week buckets up to today, aligned to qStart.
@@ -332,7 +338,7 @@ public with sharing class PGInsightsController {
     @AuraEnabled(cacheable=true)
     public static List<QuarterRow> getStageProgressByQuarter(Integer numQuarters) {
         Integer n = (numQuarters == null || numQuarters <= 0) ? 8 : numQuarters;
-        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
         Map<Id, Opportunity> opps = getOppDetails(firstDates.keySet());
 
         Map<Integer, QuarterRow> byKey = new Map<Integer, QuarterRow>();
@@ -400,7 +406,7 @@ public with sharing class PGInsightsController {
         s.amountAttainmentPct = 0;
 
         Date qStart = startOfCurrentFiscalQuarter();
-        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
         Set<Id> qIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
             if (firstDates.get(oid).date() >= qStart) qIds.add(oid);
@@ -434,7 +440,7 @@ public with sharing class PGInsightsController {
         // re-sort by # or $ client-side and still show the right top-N.
         Integer cap = (topN == null || topN <= 0) ? 50 : topN;
         Date qStart = startOfCurrentFiscalQuarter();
-        Map<Id, DateTime> firstDates = getFirstStage2PlusByOpp();
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp();
 
         Set<Id> qIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
@@ -921,45 +927,38 @@ public with sharing class PGInsightsController {
         return ids;
     }
 
-    private static Map<Id, DateTime> getFirstStage2PlusByOpp() {
-        if (mockFirstStage2PlusByOpp != null) return mockFirstStage2PlusByOpp;
-        if (firstStage2PlusCache != null) return firstStage2PlusCache;
+    /**
+     * Returns AE-owned NB/Upsell/Pilot opps currently at Stage 2+, keyed by
+     * Opportunity.Id, valued by Opportunity.CreatedDate.
+     *
+     * Semantic match with the team's reporting view: pipeline is counted in
+     * the quarter / week / month an opp was *created*, not when it crossed
+     * Stage 2+. An opp created last quarter that pushes into Stage 2+ this
+     * quarter is intentionally NOT in this quarter's pacing — it's last
+     * quarter's pipeline finally maturing. Use the conversion heatmap to
+     * see historical progression.
+     *
+     * No Booked_By_Role__c filter — the dashboard reflects the AE team's
+     * full pipeline responsibility, not just what they originally sourced.
+     */
+    private static Map<Id, DateTime> getStage2PlusByOpp() {
+        if (mockStage2PlusByOpp != null) return mockStage2PlusByOpp;
+        if (stage2PlusCache != null) return stage2PlusCache;
         Set<Id> aes = getAeUserIds();
         Map<Id, DateTime> out = new Map<Id, DateTime>();
         if (aes.isEmpty()) {
-            firstStage2PlusCache = out;
+            stage2PlusCache = out;
             return out;
         }
-
-        // Two-step query: relationship filters on OpportunityHistory
-        // (Opportunity.OwnerId / Opportunity.Type) behave inconsistently in
-        // some test contexts and in orgs with packaged trigger interference.
-        // Pull the AE-owned NB/Upsell opp IDs first, then aggregate history
-        // by direct OpportunityId IN clause.
-        Set<Id> aeOppIds = new Set<Id>();
         for (Opportunity o : [
-            SELECT Id FROM Opportunity
+            SELECT Id, CreatedDate FROM Opportunity
             WHERE OwnerId IN :aes
               AND Type IN :ALL_DASHBOARD_TYPES
-              AND Booked_By_Role__c LIKE 'AE%'
+              AND StageName IN :STAGE_2_PLUS
         ]) {
-            aeOppIds.add(o.Id);
+            out.put(o.Id, o.CreatedDate);
         }
-        if (aeOppIds.isEmpty()) {
-            firstStage2PlusCache = out;
-            return out;
-        }
-
-        for (AggregateResult ar : [
-            SELECT OpportunityId oid, MIN(CreatedDate) firstDt
-            FROM OpportunityHistory
-            WHERE StageName IN :STAGE_2_PLUS
-              AND OpportunityId IN :aeOppIds
-            GROUP BY OpportunityId
-        ]) {
-            out.put((Id) ar.get('oid'), (DateTime) ar.get('firstDt'));
-        }
-        firstStage2PlusCache = out;
+        stage2PlusCache = out;
         return out;
     }
 

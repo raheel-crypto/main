@@ -124,7 +124,7 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void getStageProgressByQuarter_bucketsByCurrentQuarter() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.QuarterRow> rows =
             PGInsightsController.getStageProgressByQuarter(8);
@@ -141,7 +141,7 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void getS1StatusQTD_aggregatesAcrossAEs() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         PGInsightsController.S1Status s = PGInsightsController.getS1StatusQTD();
         Test.stopTest();
@@ -152,7 +152,7 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void getTopPerformersByPod_groupsAEsByRole() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.PodPerformers> pods =
             PGInsightsController.getTopPerformersByPod(5);
@@ -253,7 +253,7 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void getPacingKpis_includesAmountFields() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         PGInsightsController.PacingKpis wow = PGInsightsController.getPacingKpis('WoW');
         Test.stopTest();
@@ -266,7 +266,7 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void getS1StatusQTD_includesAmountAndAttainment() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         PGInsightsController.S1Status s = PGInsightsController.getS1StatusQTD();
         Test.stopTest();
@@ -282,7 +282,7 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void getTopPerformersByPod_includesAmountFields() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.PodPerformers> pods =
             PGInsightsController.getTopPerformersByPod(5);
@@ -308,7 +308,7 @@ private class PGInsightsControllerTest {
 
     @IsTest
     static void getStageProgressByWeek_returnsCurrentQuarterBuckets() {
-        PGInsightsController.mockFirstStage2PlusByOpp = buildStage2PlusMock();
+        PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.QuarterRow> rows =
             PGInsightsController.getStageProgressByWeek();
