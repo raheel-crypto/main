@@ -1,12 +1,12 @@
 <template>
     <article class="pg-card">
-        <header class="pg-card__title">GTM Ranking | {windowDisplay}</header>
+        <header class="pg-card__title">GTMA Ranking | {windowDisplay}</header>
         <template lwc:if={hasRows}>
             <table class="pg-table">
                 <thead>
                     <tr>
                         <th class="pg-th pg-th--rank">#</th>
-                        <th class="pg-th">GTM</th>
+                        <th class="pg-th">GTMA</th>
                         <th class="pg-th">Meeting Booked</th>
                         <th class="pg-th">Qualified</th>
                         <th class="pg-th">% Qualified</th>
@@ -30,7 +30,7 @@
             </table>
         </template>
         <template lwc:else>
-            <div class="pg-empty">No GTM data yet.</div>
+            <div class="pg-empty">No GTMA data yet.</div>
         </template>
     </article>
 </template>
