@@ -185,6 +185,11 @@
                                                                 {opp.contactRoleCount}
                                                             </span>
                                                         </div>
+                                                        <div class="opp-score-btn" role="button" tabindex="0"
+                                                             data-id={opp.id} data-name={opp.name}
+                                                             onclick={handleViewScoreCard}>
+                                                            &#x2728; Deal Intelligence
+                                                        </div>
                                                     </div>
                                                 </template>
                                             </div>
@@ -535,6 +540,21 @@
             </lightning-tab>
 
         </lightning-tabset>
+
+        <!-- ── Deal Intelligence Modal ── -->
+        <template lwc:if={showScoreCardModal}>
+            <div class="sc-modal-backdrop" onclick={handleScoreCardBackdrop}>
+                <div class="sc-modal">
+                    <div class="sc-modal-header">
+                        <span class="sc-modal-title">&#x2728; {selectedOppName}</span>
+                        <button class="sc-modal-close" onclick={closeScoreCard}>&#x2715;</button>
+                    </div>
+                    <div class="sc-modal-body">
+                        <c-deal-score-card record-id={selectedOppId}></c-deal-score-card>
+                    </div>
+                </div>
+            </div>
+        </template>
 
     </template>
 </template>

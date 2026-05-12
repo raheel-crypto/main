@@ -37,6 +37,27 @@ export default class PipeGenRepDashboard extends LightningElement {
     @track accountSearchResults = [];
     @track newCommit            = EMPTY_COMMIT();
 
+    // ─── Deal Intelligence modal ──────────────────────────────────────────────
+    @track selectedOppId   = null;
+    @track selectedOppName = '';
+
+    get showScoreCardModal() { return !!this.selectedOppId; }
+
+    handleViewScoreCard(e) {
+        e.stopPropagation();
+        this.selectedOppId   = e.currentTarget.dataset.id;
+        this.selectedOppName = e.currentTarget.dataset.name;
+    }
+
+    closeScoreCard() {
+        this.selectedOppId   = null;
+        this.selectedOppName = '';
+    }
+
+    handleScoreCardBackdrop(e) {
+        if (e.target === e.currentTarget) this.closeScoreCard();
+    }
+
     // ─── Account card tab state ───────────────────────────────────────────────
     @track accountCards         = [];
     @track accountCardsLoaded   = false;
