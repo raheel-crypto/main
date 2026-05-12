@@ -10,15 +10,16 @@ the AE dashboard).
 
 ### Who counts as a GTM Associate
 
-An active Salesforce User is a "GTM" for dashboard purposes if all of:
+An active Salesforce User is a "GTM" for dashboard purposes if both of:
 
 - `User.IsActive = TRUE`
 - `User.UserRole.Name = 'GTM Associate'`
-- `User.Title = 'GTM Associate'`
 
-Both the role and title checks are applied so a user has to be explicitly
-labeled. There's no role-prefix exclusion needed (unlike AEs) because the
-role name is exact.
+Role-only; Title is not checked. Titles drift (`Sr. GTM Associate`,
+`GTM Associate II`, etc.) but the role stays stable until a promotion
+moves the user out of the `GTM Associate` role into an AE role
+entirely. No role-prefix exclusion needed (unlike AEs) because the
+role name is an exact match.
 
 ### Attribution: booked, not owned
 

@@ -209,7 +209,6 @@ private class PGGtmInsightsControllerTest {
             SELECT Id FROM User
             WHERE IsActive = TRUE
               AND UserRole.Name = 'GTM Associate'
-              AND Title = 'GTM Associate'
         ]) {
             gtms.add(u.Id);
         }

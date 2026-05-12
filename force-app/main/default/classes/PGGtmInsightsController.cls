@@ -16,7 +16,6 @@ public with sharing class PGGtmInsightsController {
     // ---- Org-specific configuration ------------------------------------------------
 
     private static final String GTM_ROLE_NAME = 'GTM Associate';
-    private static final String GTM_TITLE     = 'GTM Associate';
 
     private static final Set<String> ALL_DASHBOARD_TYPES = new Set<String>{
         'New Business', 'Upsell', 'Pilot'
@@ -358,6 +357,9 @@ public with sharing class PGGtmInsightsController {
 
     // ---- Private helpers -----------------------------------------------------------
 
+    // Identify GTMs by UserRole only. Title can drift (e.g. "Sr. GTM
+    // Associate", "GTM Associate II") whereas the role is stable until a
+    // promotion to AE moves them out of the GTM Associate role entirely.
     private static Set<Id> getGtmUserIds() {
         if (gtmUserIdsCache != null) return gtmUserIdsCache;
         Set<Id> ids = new Set<Id>();
@@ -365,7 +367,6 @@ public with sharing class PGGtmInsightsController {
             SELECT Id FROM User
             WHERE IsActive = TRUE
               AND UserRole.Name = :GTM_ROLE_NAME
-              AND Title = :GTM_TITLE
         ]) {
             ids.add(u.Id);
         }
