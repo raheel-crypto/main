@@ -108,9 +108,9 @@ public with sharing class RogoUsageInsightsController {
         Integer start = answer.indexOf('{');
         Integer fin = answer.lastIndexOf('}');
         if (start < 0 || fin <= start) return null;
-        String blob = answer.substring(start, fin + 1);
+        String jsonText = answer.substring(start, fin + 1);
         try {
-            Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(blob);
+            Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(jsonText);
             Metrics m = new Metrics();
             m.accountName  = (String) parsed.get('account');
             m.dau          = toInteger(parsed.get('dau'));
