@@ -1,0 +1,7 @@
+**/.DS_Store
+**/jsconfig.json
+**/.eslintrc.json
+node_modules/
+client/
+server/
+mcp-server/

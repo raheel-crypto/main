@@ -1,0 +1,68 @@
+<template>
+    <lightning-card title="Usage Insights" icon-name="standard:metrics">
+        <div slot="actions">
+            <lightning-button
+                label="Generate Usage Insights"
+                variant="brand"
+                onclick={handleGenerate}
+                disabled={loading}>
+            </lightning-button>
+        </div>
+
+        <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+
+            <template lwc:if={loading}>
+                <div class="slds-is-relative slds-p-vertical_medium">
+                    <lightning-spinner alternative-text="Generating insights" size="small"></lightning-spinner>
+                    <p class="slds-text-body_small slds-align_absolute-center slds-m-top_large">
+                        {statusLabel}
+                    </p>
+                </div>
+            </template>
+
+            <template lwc:if={error}>
+                <div class="slds-text-color_error slds-m-vertical_small">{error}</div>
+            </template>
+
+            <template lwc:if={metrics}>
+                <template lwc:if={metrics.accountName}>
+                    <p class="slds-text-title_caps slds-m-bottom_x-small">
+                        {metrics.accountName} &middot; last 28 days
+                    </p>
+                </template>
+
+                <div class="slds-grid slds-gutters slds-wrap">
+                    <div class="slds-col slds-size_1-of-3 metric-tile">
+                        <p class="metric-label">DAU / WAU (stickiness)</p>
+                        <p class="metric-value">{dauWauDisplay}</p>
+                        <p class="metric-sub">{dauWauSub}</p>
+                    </div>
+                    <div class="slds-col slds-size_1-of-3 metric-tile">
+                        <p class="metric-label">WAU / Enrolled</p>
+                        <p class="metric-value">{wauEnrolledDisplay}</p>
+                        <p class="metric-sub">{wauEnrolledSub}</p>
+                    </div>
+                    <div class="slds-col slds-size_1-of-3 metric-tile">
+                        <p class="metric-label">Queries per User</p>
+                        <p class="metric-value">{qpuDisplay}</p>
+                        <p class="metric-sub">{qpuSub}</p>
+                    </div>
+                </div>
+
+                <template lwc:if={rawAnswer}>
+                    <lightning-accordion class="slds-m-top_medium" allow-multiple-sections-open>
+                        <lightning-accordion-section name="raw" label="Raw bot response">
+                            <pre class="raw-answer">{rawAnswer}</pre>
+                        </lightning-accordion-section>
+                    </lightning-accordion>
+                </template>
+            </template>
+
+            <template lwc:if={empty}>
+                <p class="slds-text-body_small slds-text-color_weak slds-m-vertical_small">
+                    Click <strong>Generate Usage Insights</strong> to fetch DAU/WAU, WAU/Enrolled, and QPU from the Rogo Analytics Bot for this account.
+                </p>
+            </template>
+        </div>
+    </lightning-card>
+</template>
