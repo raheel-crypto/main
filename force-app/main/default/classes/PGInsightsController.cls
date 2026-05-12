@@ -70,9 +70,22 @@ public with sharing class PGInsightsController {
     public static final String SOURCE_AE   = 'AE_SOURCED';
     public static final String SOURCE_ALL  = 'ALL';
 
+    // Two ways to date a Stage 2+ opp for pacing/bucketing:
+    //   OPP_HISTORY (default) — first OpportunityHistory entry to Stage 2+.
+    //     A deal created last quarter that pushes into Stage 2+ THIS quarter
+    //     shows up in THIS quarter. A Stage 1 → Stage 4 jump counts on the
+    //     day of the jump.
+    //   CREATED_DATE — Opportunity.CreatedDate, filtered to opps currently
+    //     at Stage 2+. A deal created last quarter that pushes into Stage 2+
+    //     this quarter shows up in LAST quarter (it's last quarter's pipeline
+    //     finally maturing). Matches team reports that pull from raw opp
+    //     records without joining history.
+    public static final String DATE_OH       = 'OPP_HISTORY';
+    public static final String DATE_CREATED  = 'CREATED_DATE';
+
     private static Set<Id>            aeUserIdsCache;
     private static Map<String, Set<Id>> aeUserIdsByPodCache;
-    private static Map<String, Map<Id, DateTime>> stage2PlusCacheByMode = new Map<String, Map<Id, DateTime>>();
+    private static Map<String, Map<Id, DateTime>> stage2PlusCacheByKey = new Map<String, Map<Id, DateTime>>();
     private static Map<Id, Opportunity> oppDetailsCache;
     private static Integer            fiscalStartMonthCache;
 
@@ -224,7 +237,7 @@ public with sharing class PGInsightsController {
     // ---- @AuraEnabled API ------------------------------------------------------------
 
     @AuraEnabled(cacheable=true)
-    public static PacingKpis getPacingKpis(String windowLabel, String sourceMode) {
+    public static PacingKpis getPacingKpis(String windowLabel, String sourceMode, String dateMode) {
         Date today = Date.today();
         Date currStart, currEnd, priorStart, priorEnd;
         if (windowLabel == 'WoW') {
@@ -239,7 +252,7 @@ public with sharing class PGInsightsController {
             priorStart = priorEnd.toStartOfMonth();
         }
 
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode, dateMode);
         Set<Id> currIds  = new Set<Id>();
         Set<Id> priorIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
@@ -279,14 +292,14 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<QuarterRow> getStageProgressByWeek(String sourceMode) {
+    public static List<QuarterRow> getStageProgressByWeek(String sourceMode, String dateMode) {
         // Weekly buckets for the current fiscal quarter only. Used by the
         // chart's "Per Week (this Q)" view. Goals aren't applied per week —
         // the chart skips the goal line in this view.
         Date qStart = startOfCurrentFiscalQuarter();
         Date today = Date.today();
 
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode, dateMode);
         Map<Id, Opportunity> opps = getOppDetails(firstDates.keySet());
 
         // Build week buckets up to today, aligned to qStart.
@@ -339,9 +352,9 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<QuarterRow> getStageProgressByQuarter(Integer numQuarters, String sourceMode) {
+    public static List<QuarterRow> getStageProgressByQuarter(Integer numQuarters, String sourceMode, String dateMode) {
         Integer n = (numQuarters == null || numQuarters <= 0) ? 8 : numQuarters;
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode, dateMode);
         Map<Id, Opportunity> opps = getOppDetails(firstDates.keySet());
 
         Map<Integer, QuarterRow> byKey = new Map<Integer, QuarterRow>();
@@ -397,7 +410,7 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static S1Status getS1StatusQTD(String sourceMode) {
+    public static S1Status getS1StatusQTD(String sourceMode, String dateMode) {
         S1Status s = new S1Status();
         s.nbCount = 0;
         s.expCount = 0;
@@ -409,7 +422,7 @@ public with sharing class PGInsightsController {
         s.amountAttainmentPct = 0;
 
         Date qStart = startOfCurrentFiscalQuarter();
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode, dateMode);
         Set<Id> qIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
             if (firstDates.get(oid).date() >= qStart) qIds.add(oid);
@@ -438,12 +451,12 @@ public with sharing class PGInsightsController {
     }
 
     @AuraEnabled(cacheable=true)
-    public static List<PodPerformers> getTopPerformersByPod(Integer topN, String sourceMode) {
+    public static List<PodPerformers> getTopPerformersByPod(Integer topN, String sourceMode, String dateMode) {
         // topN is honored only as a soft cap (default no trim) so the LWC can
         // re-sort by # or $ client-side and still show the right top-N.
         Integer cap = (topN == null || topN <= 0) ? 50 : topN;
         Date qStart = startOfCurrentFiscalQuarter();
-        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode);
+        Map<Id, DateTime> firstDates = getStage2PlusByOpp(sourceMode, dateMode);
 
         Set<Id> qIds = new Set<Id>();
         for (Id oid : firstDates.keySet()) {
@@ -932,64 +945,87 @@ public with sharing class PGInsightsController {
 
     /**
      * Returns AE-owned NB/Upsell/Pilot opps that have reached Stage 2+,
-     * keyed by Opportunity.Id, valued by the FIRST OpportunityHistory
-     * CreatedDate for a Stage 2+ entry. Pacing widgets bucket by that
-     * date so a deal that jumps Stage 1 → Stage 4 still counts on the
-     * day it made the leap.
+     * keyed by Opportunity.Id, valued by a date that depends on dateMode:
+     *
+     *   DATE_OH      — first OpportunityHistory entry to a Stage 2+ value.
+     *                  Default. Pacing widgets bucket by that date.
+     *   DATE_CREATED — Opportunity.CreatedDate, filtered to opps that are
+     *                  currently at a Stage 2+ value.
      *
      * sourceMode controls whether to scope to AE-booked opps only:
-     *   'AE_SOURCED'  applies Booked_By_Role__c LIKE 'AE%'
-     *   'ALL' (or any other value) drops that filter
+     *   SOURCE_AE  applies Booked_By_Role__c LIKE 'AE%'
+     *   SOURCE_ALL (default) drops that filter.
+     *
+     * Cached per (sourceMode, dateMode) within a transaction.
      */
-    private static Map<Id, DateTime> getStage2PlusByOpp(String sourceMode) {
+    private static Map<Id, DateTime> getStage2PlusByOpp(String sourceMode, String dateMode) {
         if (mockStage2PlusByOpp != null) return mockStage2PlusByOpp;
-        String mode = (sourceMode == SOURCE_AE) ? SOURCE_AE : SOURCE_ALL;
-        Map<Id, DateTime> cached = stage2PlusCacheByMode.get(mode);
+        String s = (sourceMode == SOURCE_AE) ? SOURCE_AE : SOURCE_ALL;
+        String d = (dateMode == DATE_CREATED) ? DATE_CREATED : DATE_OH;
+        String key = s + '|' + d;
+        Map<Id, DateTime> cached = stage2PlusCacheByKey.get(key);
         if (cached != null) return cached;
 
         Set<Id> aes = getAeUserIds();
         Map<Id, DateTime> out = new Map<Id, DateTime>();
         if (aes.isEmpty()) {
-            stage2PlusCacheByMode.put(mode, out);
+            stage2PlusCacheByKey.put(key, out);
             return out;
         }
 
-        // Two-step: get AE-owned opp ids (with or without Booked_By filter),
-        // then aggregate first-Stage-2+ history for those IDs.
-        Set<Id> aeOppIds = new Set<Id>();
-        if (mode == SOURCE_AE) {
-            for (Opportunity o : [
-                SELECT Id FROM Opportunity
-                WHERE OwnerId IN :aes
-                  AND Type IN :ALL_DASHBOARD_TYPES
-                  AND Booked_By_Role__c LIKE 'AE%'
-            ]) {
-                aeOppIds.add(o.Id);
+        if (d == DATE_CREATED) {
+            // Direct Opportunity query — no history dependency. Currently
+            // at Stage 2+ AND created in the window's universe.
+            if (s == SOURCE_AE) {
+                for (Opportunity o : [
+                    SELECT Id, CreatedDate FROM Opportunity
+                    WHERE OwnerId IN :aes
+                      AND Type IN :ALL_DASHBOARD_TYPES
+                      AND StageName IN :STAGE_2_PLUS
+                      AND Booked_By_Role__c LIKE 'AE%'
+                ]) {
+                    out.put(o.Id, o.CreatedDate);
+                }
+            } else {
+                for (Opportunity o : [
+                    SELECT Id, CreatedDate FROM Opportunity
+                    WHERE OwnerId IN :aes
+                      AND Type IN :ALL_DASHBOARD_TYPES
+                      AND StageName IN :STAGE_2_PLUS
+                ]) {
+                    out.put(o.Id, o.CreatedDate);
+                }
             }
         } else {
-            for (Opportunity o : [
-                SELECT Id FROM Opportunity
-                WHERE OwnerId IN :aes
-                  AND Type IN :ALL_DASHBOARD_TYPES
-            ]) {
-                aeOppIds.add(o.Id);
+            // DATE_OH: two-step query, get opp IDs then aggregate history.
+            Set<Id> aeOppIds = new Set<Id>();
+            if (s == SOURCE_AE) {
+                for (Opportunity o : [
+                    SELECT Id FROM Opportunity
+                    WHERE OwnerId IN :aes
+                      AND Type IN :ALL_DASHBOARD_TYPES
+                      AND Booked_By_Role__c LIKE 'AE%'
+                ]) aeOppIds.add(o.Id);
+            } else {
+                for (Opportunity o : [
+                    SELECT Id FROM Opportunity
+                    WHERE OwnerId IN :aes
+                      AND Type IN :ALL_DASHBOARD_TYPES
+                ]) aeOppIds.add(o.Id);
+            }
+            if (!aeOppIds.isEmpty()) {
+                for (AggregateResult ar : [
+                    SELECT OpportunityId oid, MIN(CreatedDate) firstDt
+                    FROM OpportunityHistory
+                    WHERE StageName IN :STAGE_2_PLUS
+                      AND OpportunityId IN :aeOppIds
+                    GROUP BY OpportunityId
+                ]) {
+                    out.put((Id) ar.get('oid'), (DateTime) ar.get('firstDt'));
+                }
             }
         }
-        if (aeOppIds.isEmpty()) {
-            stage2PlusCacheByMode.put(mode, out);
-            return out;
-        }
-
-        for (AggregateResult ar : [
-            SELECT OpportunityId oid, MIN(CreatedDate) firstDt
-            FROM OpportunityHistory
-            WHERE StageName IN :STAGE_2_PLUS
-              AND OpportunityId IN :aeOppIds
-            GROUP BY OpportunityId
-        ]) {
-            out.put((Id) ar.get('oid'), (DateTime) ar.get('firstDt'));
-        }
-        stage2PlusCacheByMode.put(mode, out);
+        stage2PlusCacheByKey.put(key, out);
         return out;
     }
 
@@ -1094,87 +1130,143 @@ public with sharing class PGInsightsController {
         return 'FY' + fy + '-Q' + fq;
     }
 
+    // windowLabel: 'CW' | 'PW' | 'CM' | 'PM' | 'QTD'.
     private static List<AggregateResult> queryEmailCallAggregates(Set<Id> aes, String windowLabel) {
-        // Emails are Nektar-tagged ('NektarSender__c = Us' = outbound); Call
-        // records in this org have all Nektar fields null, so calls are
-        // identified by TaskSubtype alone.
         if (windowLabel == 'CW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
                 FROM Task
-                WHERE OwnerId IN :aes
-                  AND Status = 'Completed'
-                  AND ActivityDate = THIS_WEEK
-                  AND (
-                      (TaskSubtype = 'Email' AND NektarSender__c = 'Us')
-                      OR TaskSubtype = 'Call'
-                  )
+                WHERE OwnerId IN :aes AND Status = 'Completed' AND ActivityDate = THIS_WEEK
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
+                GROUP BY OwnerId, Owner.Name, TaskSubtype
+            ];
+        }
+        if (windowLabel == 'PW') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
+                FROM Task
+                WHERE OwnerId IN :aes AND Status = 'Completed' AND ActivityDate = LAST_WEEK
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
+                GROUP BY OwnerId, Owner.Name, TaskSubtype
+            ];
+        }
+        if (windowLabel == 'CM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
+                FROM Task
+                WHERE OwnerId IN :aes AND Status = 'Completed' AND ActivityDate = THIS_MONTH
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
+                GROUP BY OwnerId, Owner.Name, TaskSubtype
+            ];
+        }
+        if (windowLabel == 'PM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
+                FROM Task
+                WHERE OwnerId IN :aes AND Status = 'Completed' AND ActivityDate = LAST_MONTH
+                  AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
                 GROUP BY OwnerId, Owner.Name, TaskSubtype
             ];
         }
         return [
             SELECT OwnerId oid, Owner.Name oname, TaskSubtype st, COUNT(Id) cnt
             FROM Task
-            WHERE OwnerId IN :aes
-              AND Status = 'Completed'
-              AND ActivityDate = THIS_FISCAL_QUARTER
-              AND (
-                  (TaskSubtype = 'Email' AND NektarSender__c = 'Us')
-                  OR TaskSubtype = 'Call'
-              )
+            WHERE OwnerId IN :aes AND Status = 'Completed' AND ActivityDate = THIS_FISCAL_QUARTER
+              AND ((TaskSubtype = 'Email' AND NektarSender__c = 'Us') OR TaskSubtype = 'Call')
             GROUP BY OwnerId, Owner.Name, TaskSubtype
         ];
     }
 
     private static List<AggregateResult> queryLinkedInAggregates(Set<Id> aes, String windowLabel) {
-        // LinkedIn touches via Sales Navigator integration: TaskSubtype is the
-        // generic 'Task' (not 'LinkedIn'), Subject contains 'Sales Navigator'
-        // and 'Sent' for outbound. Nektar does not tag these.
         if (windowLabel == 'CW') {
             return [
-                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-                FROM Task
-                WHERE OwnerId IN :aes
-                  AND TaskSubtype = 'Task'
-                  AND Subject LIKE '%Sales Navigator%'
-                  AND Subject LIKE '%Sent%'
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :aes AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
                   AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
         }
+        if (windowLabel == 'PW') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :aes AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
+                  AND ActivityDate = LAST_WEEK
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'CM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :aes AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
+                  AND ActivityDate = THIS_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'PM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+                WHERE OwnerId IN :aes AND TaskSubtype = 'Task'
+                  AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
+                  AND ActivityDate = LAST_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
         return [
-            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-            FROM Task
-            WHERE OwnerId IN :aes
-              AND TaskSubtype = 'Task'
-              AND Subject LIKE '%Sales Navigator%'
-              AND Subject LIKE '%Sent%'
+            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Task
+            WHERE OwnerId IN :aes AND TaskSubtype = 'Task'
+              AND Subject LIKE '%Sales Navigator%' AND Subject LIKE '%Sent%'
               AND ActivityDate = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name
         ];
     }
 
     private static List<AggregateResult> queryEventMeetings(Set<Id> aes, String windowLabel) {
-        // Pipe-gen specific: only Discovery / First Meeting that actually
-        // happened (NektarStatus = completed). Excludes internal calendar
-        // items, deal-progression check-ins, and canceled/missed meetings.
         if (windowLabel == 'CW') {
             return [
-                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-                FROM Event
-                WHERE OwnerId IN :aes
-                  AND NektarSender__c = 'Us'
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :aes AND NektarSender__c = 'Us'
                   AND NektarStatus__c = 'completed'
                   AND Meeting_Type__c IN ('Discovery', 'First Meeting')
                   AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
         }
+        if (windowLabel == 'PW') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :aes AND NektarSender__c = 'Us'
+                  AND NektarStatus__c = 'completed'
+                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
+                  AND ActivityDate = LAST_WEEK
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'CM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :aes AND NektarSender__c = 'Us'
+                  AND NektarStatus__c = 'completed'
+                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
+                  AND ActivityDate = THIS_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
+        if (windowLabel == 'PM') {
+            return [
+                SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+                WHERE OwnerId IN :aes AND NektarSender__c = 'Us'
+                  AND NektarStatus__c = 'completed'
+                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
+                  AND ActivityDate = LAST_MONTH
+                GROUP BY OwnerId, Owner.Name
+            ];
+        }
         return [
-            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt
-            FROM Event
-            WHERE OwnerId IN :aes
-              AND NektarSender__c = 'Us'
+            SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
+            WHERE OwnerId IN :aes AND NektarSender__c = 'Us'
               AND NektarStatus__c = 'completed'
               AND Meeting_Type__c IN ('Discovery', 'First Meeting')
               AND ActivityDate = THIS_FISCAL_QUARTER

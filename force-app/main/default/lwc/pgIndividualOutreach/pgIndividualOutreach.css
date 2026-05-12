@@ -136,3 +136,17 @@
 .pg-td--indent {
     padding-left: 1.75rem;
 }
+
+.pg-card__title--with-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.pg-window-select {
+    font-weight: 400;
+    font-size: 0.8125rem;
+    min-width: 9rem;
+}

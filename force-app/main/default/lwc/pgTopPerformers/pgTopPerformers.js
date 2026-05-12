@@ -14,18 +14,19 @@ const TOP_N = 5;
 export default class PgTopPerformers extends LightningElement {
     @api metric = 'count'; // 'count' | 'amount'
     @api sourceMode = 'ALL';
+    @api dateMode = 'OPP_HISTORY';
 
     rawPods;
     rawStatus;
 
     // Pull the full pod rosters (Apex caps at 50) so the LWC can re-sort
     // by # or $ without dropping candidates on the metric flip.
-    @wire(getTopPerformersByPod, { topN: 50, sourceMode: '$sourceMode' })
+    @wire(getTopPerformersByPod, { topN: 50, sourceMode: '$sourceMode', dateMode: '$dateMode' })
     wiredPods({ data }) {
         if (data) this.rawPods = data;
     }
 
-    @wire(getS1StatusQTD, { sourceMode: '$sourceMode' })
+    @wire(getS1StatusQTD, { sourceMode: '$sourceMode', dateMode: '$dateMode' })
     wiredStatus({ data }) {
         if (data) this.rawStatus = data;
     }

@@ -127,7 +127,7 @@ private class PGInsightsControllerTest {
         PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.QuarterRow> rows =
-            PGInsightsController.getStageProgressByQuarter(8, 'ALL');
+            PGInsightsController.getStageProgressByQuarter(8, 'ALL', 'OPP_HISTORY');
         Test.stopTest();
         System.assert(rows.size() >= 1, 'At least one quarter present');
         Integer totalNB = 0, totalExp = 0;
@@ -143,7 +143,7 @@ private class PGInsightsControllerTest {
     static void getS1StatusQTD_aggregatesAcrossAEs() {
         PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
-        PGInsightsController.S1Status s = PGInsightsController.getS1StatusQTD('ALL');
+        PGInsightsController.S1Status s = PGInsightsController.getS1StatusQTD('ALL', 'OPP_HISTORY');
         Test.stopTest();
         System.assertEquals(8, s.nbCount,  'QTD NB count');
         System.assertEquals(2, s.expCount, 'QTD Exp count');
@@ -155,7 +155,7 @@ private class PGInsightsControllerTest {
         PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.PodPerformers> pods =
-            PGInsightsController.getTopPerformersByPod(5, 'ALL');
+            PGInsightsController.getTopPerformersByPod(5, 'ALL', 'OPP_HISTORY');
         Test.stopTest();
 
         Map<String, PGInsightsController.PodPerformers> byPod =
@@ -255,7 +255,7 @@ private class PGInsightsControllerTest {
     static void getPacingKpis_includesAmountFields() {
         PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
-        PGInsightsController.PacingKpis wow = PGInsightsController.getPacingKpis('WoW', 'ALL');
+        PGInsightsController.PacingKpis wow = PGInsightsController.getPacingKpis('WoW', 'ALL', 'OPP_HISTORY');
         Test.stopTest();
 
         // 8 NB opps × 50K + 2 Upsell × 50K = 400K NB / 100K Exp.
@@ -268,7 +268,7 @@ private class PGInsightsControllerTest {
     static void getS1StatusQTD_includesAmountAndAttainment() {
         PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
-        PGInsightsController.S1Status s = PGInsightsController.getS1StatusQTD('ALL');
+        PGInsightsController.S1Status s = PGInsightsController.getS1StatusQTD('ALL', 'OPP_HISTORY');
         Test.stopTest();
 
         System.assertEquals(400000, s.nbAmount,  'QTD NB amount');
@@ -285,7 +285,7 @@ private class PGInsightsControllerTest {
         PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.PodPerformers> pods =
-            PGInsightsController.getTopPerformersByPod(5, 'ALL');
+            PGInsightsController.getTopPerformersByPod(5, 'ALL', 'OPP_HISTORY');
         Test.stopTest();
 
         Map<String, PGInsightsController.PodPerformers> byPod =
@@ -311,7 +311,7 @@ private class PGInsightsControllerTest {
         PGInsightsController.mockStage2PlusByOpp = buildStage2PlusMock();
         Test.startTest();
         List<PGInsightsController.QuarterRow> rows =
-            PGInsightsController.getStageProgressByWeek('ALL');
+            PGInsightsController.getStageProgressByWeek('ALL', 'OPP_HISTORY');
         Test.stopTest();
 
         System.assert(rows.size() >= 1, 'At least one weekly bucket present');

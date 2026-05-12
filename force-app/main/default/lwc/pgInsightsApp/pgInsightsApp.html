@@ -18,17 +18,22 @@
                         <button type="button" class={allSourceToggleClass}  onclick={handleSelectAllSource}>All opps</button>
                         <button type="button" class={aeSourcedToggleClass}  onclick={handleSelectAeSourced}>AE-sourced only</button>
                     </div>
+                    <span class="pg-toggle__label pg-toggle__label--right">Date logic:</span>
+                    <div class="pg-toggle">
+                        <button type="button" class={oppHistoryToggleClass}  onclick={handleSelectOppHistory}>Stage 2+ entry</button>
+                        <button type="button" class={createdDateToggleClass} onclick={handleSelectCreatedDate}>Opp created</button>
+                    </div>
                 </div>
                 <template lwc:if={showPacingKpis}>
                     <div class="slds-p-around_small">
-                        <c-pg-pacing-kpis metric={metric} source-mode={sourceMode}></c-pg-pacing-kpis>
+                        <c-pg-pacing-kpis metric={metric} source-mode={sourceMode} date-mode={dateMode}></c-pg-pacing-kpis>
                     </div>
                 </template>
                 <div class="slds-p-horizontal_small">
-                    <c-pg-stage-progress-chart metric={metric} source-mode={sourceMode}></c-pg-stage-progress-chart>
+                    <c-pg-stage-progress-chart metric={metric} source-mode={sourceMode} date-mode={dateMode}></c-pg-stage-progress-chart>
                 </div>
                 <div class="slds-p-around_small">
-                    <c-pg-top-performers metric={metric} source-mode={sourceMode}></c-pg-top-performers>
+                    <c-pg-top-performers metric={metric} source-mode={sourceMode} date-mode={dateMode}></c-pg-top-performers>
                 </div>
             </lightning-tab>
 

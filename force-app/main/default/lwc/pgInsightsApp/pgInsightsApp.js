@@ -16,10 +16,17 @@ export default class PgInsightsApp extends LightningElement {
     // Booked_By_Role__c LIKE 'AE%' so only AE-booked opps count.
     sourceMode = 'ALL';
 
+    // Date-logic toggle:
+    //   'OPP_HISTORY'  — bucket by first OpportunityHistory Stage 2+ entry
+    //   'CREATED_DATE' — bucket by Opportunity.CreatedDate (currently @ Stage 2+)
+    dateMode = 'OPP_HISTORY';
+
     get isCount()  { return this.metric === 'count'; }
     get isAmount() { return this.metric === 'amount'; }
     get isAllSource()      { return this.sourceMode === 'ALL'; }
     get isAeSourcedOnly()  { return this.sourceMode === 'AE_SOURCED'; }
+    get isOppHistory()     { return this.dateMode === 'OPP_HISTORY'; }
+    get isCreatedDate()    { return this.dateMode === 'CREATED_DATE'; }
 
     get countToggleClass() {
         return 'pg-toggle__btn' + (this.isCount  ? ' pg-toggle__btn--active' : '');
@@ -33,9 +40,17 @@ export default class PgInsightsApp extends LightningElement {
     get aeSourcedToggleClass() {
         return 'pg-toggle__btn' + (this.isAeSourcedOnly ? ' pg-toggle__btn--active' : '');
     }
+    get oppHistoryToggleClass() {
+        return 'pg-toggle__btn' + (this.isOppHistory ? ' pg-toggle__btn--active' : '');
+    }
+    get createdDateToggleClass() {
+        return 'pg-toggle__btn' + (this.isCreatedDate ? ' pg-toggle__btn--active' : '');
+    }
 
-    handleSelectCount()       { this.metric = 'count';  }
-    handleSelectAmount()      { this.metric = 'amount'; }
-    handleSelectAllSource()   { this.sourceMode = 'ALL'; }
-    handleSelectAeSourced()   { this.sourceMode = 'AE_SOURCED'; }
+    handleSelectCount()        { this.metric = 'count';  }
+    handleSelectAmount()       { this.metric = 'amount'; }
+    handleSelectAllSource()    { this.sourceMode = 'ALL'; }
+    handleSelectAeSourced()    { this.sourceMode = 'AE_SOURCED'; }
+    handleSelectOppHistory()   { this.dateMode = 'OPP_HISTORY'; }
+    handleSelectCreatedDate()  { this.dateMode = 'CREATED_DATE'; }
 }

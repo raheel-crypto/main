@@ -76,8 +76,8 @@ display as `0` for that mode without affecting the other.
 
 ### Source-scope toggle (`All opps` / `AE-sourced only`)
 
-Quarter Recap has a third toggle (next to `# / $`) that controls whether
-the dashboard counts every opp the AE owns or only opps an AE booked:
+Quarter Recap has a Source toggle that controls whether the dashboard
+counts every opp the AE owns or only opps an AE booked:
 
 - **`All opps`** (default) — no `Booked_By_Role__c` filter. Matches the
   team's existing reports, which include opps booked by GTM Associates,
@@ -89,26 +89,39 @@ the dashboard counts every opp the AE owns or only opps an AE booked:
 The conversion heatmap is always `All opps` since it measures execution
 on whatever opps the AE has in queue, not who originally sourced them.
 
+### Date-logic toggle (`Stage 2+ entry` / `Opp created`)
+
+Quarter Recap has a Date-logic toggle that controls *which date* drives
+the pacing buckets:
+
+- **`Stage 2+ entry`** (default) — first `OpportunityHistory` entry to
+  a Stage 2+ value. A deal created last quarter that pushes into
+  Stage 2+ this quarter shows up THIS quarter (the leap happened now).
+  A Stage 1 → Stage 4 jump counts on the day of the jump.
+- **`Opp created`** — `Opportunity.CreatedDate`, filtered to opps that
+  are currently at Stage 2+. A deal created last quarter that pushes
+  into Stage 2+ this quarter shows up LAST quarter (it's last quarter's
+  pipeline maturing). Matches reports that pull raw opp records without
+  joining history.
+
+The conversion heatmap is always `Stage 2+ entry`-equivalent (it's
+explicitly a historical-progression view).
+
 ### "Reached Stage 2+"
 
 An opportunity has "reached Stage 2+" if any `OpportunityHistory` row
 exists where `StageName IN ('2 - Discovery', '3 - POV', '4 - Proposal',
-'5 - Contracting', 'Closed Won')`.
-
-The **first** such history row's `CreatedDate` is the date the opp
-"entered Stage 2+". Pacing widgets bucket by that date, so a deal that
-jumps Stage 1 → Stage 4 directly counts on the day it made the leap
-(prior-quarter opps that push into Stage 2+ this quarter DO show up in
-this quarter — pipeline maturing into Stage 2+ now is this-quarter
-activity, not last quarter's).
+'5 - Contracting', 'Closed Won')` — used by the `Stage 2+ entry` date
+mode. The `Opp created` date mode instead checks the current `StageName`
+(must be one of the above) and dates from `Opportunity.CreatedDate`.
 
 `Closed Lost` is intentionally not in the Stage 2+ set — losing a deal
 isn't progression.
 
-`OpportunityHistory` is the source of truth for this metric, not the
-custom `Stage_N_Start_Date__c` fields (those are unreliable in this
-org — only ~33% populated on `Stage_1_Start_Date__c`, 0% on
-`Stage_2_Start_Date__c`).
+`OpportunityHistory` is the source of truth for the `Stage 2+ entry`
+mode, not the custom `Stage_N_Start_Date__c` fields (those are
+unreliable in this org — only ~33% populated on `Stage_1_Start_Date__c`,
+0% on `Stage_2_Start_Date__c`).
 
 ### Fiscal year and quarter
 
@@ -173,8 +186,9 @@ Each tile shows a delta vs the prior week. Green if direction is favorable
 
 - AE owns the opp (`OwnerId IN :aeIds`)
 - Type IN (`'New Business'`, `'Pilot'`, `'Upsell'`)
-- First Stage 2+ entry's `CreatedDate` falls in the window (via
-  `OpportunityHistory`)
+- Date in the window: depends on the Date-logic toggle
+  (`Stage 2+ entry` uses `OpportunityHistory`; `Opp created` uses
+  `Opportunity.CreatedDate`)
 - If `AE-sourced only` toggle is active: also `Booked_By_Role__c LIKE 'AE%'`
 
 **Window definition (rolling, not calendar-week-bounded):**
@@ -306,7 +320,16 @@ toggles between two layouts:
 Useful for VP-level review where the team-level numbers matter more than
 individual leaderboards.
 
-### Outreach table (CW and QTD)
+### Outreach tables (configurable left + Quarter to Date right)
+
+Two side-by-side cards with colored bars per column. The right card is
+**always Quarter to Date** for a stable reference. The left card has a
+window dropdown in its header — pick one of `Current Week`, `Prior Week`,
+`Current Month`, `Prior Month`. Full names rather than abbreviations
+(`CW` could otherwise be confused with `Closed Won`).
+
+Apex `getIndividualOutreach(windowLabel)` accepts `CW`, `PW`, `CM`, `PM`,
+or `QTD`.
 
 **Question answered:** which reps are doing the most outbound activity?
 
