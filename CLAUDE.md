@@ -7,11 +7,12 @@ The developer is new to terminal/CLI workflows. Always provide full copy-paste c
 
 ## Repo Layout
 
-npm workspaces monorepo (root `package.json` declares the three workspaces). All three are TypeScript, ESM (`"type": "module"`), and share the root `tsconfig.json`.
+npm workspaces monorepo (root `package.json` declares the four workspaces). All are TypeScript, ESM (`"type": "module"`), and share the root `tsconfig.json`.
 
 - `server/` — Express API on port 3001. Handles Salesforce OAuth, proxies SOQL/Tooling/Metadata calls via `jsforce`, calls Anthropic for AI explanations, and acts as a client to Salesforce's Hosted MCP server.
 - `client/` — Vite + React 18 + Tailwind v4 frontend on port 5173. Dev server proxies `/auth` and `/api` to `http://localhost:3001` (see `client/vite.config.ts`). Path alias `@/*` → `client/src/*`.
 - `mcp-server/` — Standalone stdio MCP server intended to be wired into Claude Desktop. Same `jsforce` tools as the web server, but exposed via the MCP protocol. Independent auth (token file).
+- `slack-bot/` — Agentic Slack standup bot deployed to Vercel (separate deploy from the local SF Visualizer). HTTP-mode Bolt receiver, Vercel Cron, Vercel Postgres. See "Slack standup bot" section below.
 
 ## Common Commands
 
@@ -76,7 +77,7 @@ Both flows are env-aware (production vs sandbox) and pick credentials from `conf
 `server/src/services/salesforce.ts` exposes `getConnection(session.sf)` which returns a `jsforce.Connection` configured with the user's tokens — every route service grabs a connection this way. The MCP-hosted variant is in `server/src/services/sfMcpClient.ts`, which opens a `StreamableHTTPClientTransport` to `https://api.salesforce.com/platform/mcp/v1/...` per call.
 
 ### AI features (Anthropic SDK)
-`server/src/services/ai.ts` runs flow/Apex explanations and Well-Architected assessments. `server/src/services/architect.ts` is the agentic loop — it defines a tool schema that maps Anthropic tool calls to jsforce operations (`sf_query`, `sf_tooling_query`, `sf_create_field`, `sf_create_validation_rule`, etc.) and is invoked from the cleanup/architect route. The current model ID hardcoded in these files is `claude-sonnet-4-20250514`; bump it together when upgrading.
+`server/src/services/ai.ts` runs flow/Apex explanations and Well-Architected assessments. `server/src/services/architect.ts` is the agentic loop — it defines a tool schema that maps Anthropic tool calls to jsforce operations (`sf_query`, `sf_tooling_query`, `sf_create_field`, `sf_create_validation_rule`, etc.) and is invoked from the cleanup/architect route. The current model ID hardcoded in these files is `claude-sonnet-4-20250514`; it lives in **three places** now — `server/src/services/ai.ts`, `server/src/services/architect.ts`, and `slack-bot/src/constants.ts`. Bump all three together when upgrading.
 
 ### Bulk match (`server/src/services/bulkMatcher.ts`)
 CSV upload → in-memory job store keyed by `jobId` → background match/update jobs → client polls `/api/bulk/jobs/:id/status`. State is lost on server restart. Multer writes uploads to `os.tmpdir()`.
@@ -98,8 +99,44 @@ cd mcp-server && SF_CLIENT_ID=... SF_CLIENT_SECRET=... SF_LOGIN_URL=... npx tsx 
 ```
 Tools defined: SOQL/Tooling queries, describe, list objects, CRUD on custom fields/objects, validation rules, flow activate/deactivate, permission set assign/remove, generic record CRUD, and a raw `sf_deploy_metadata` escape hatch.
 
+### Slack standup bot (`slack-bot/`)
+
+Proactive agent that, at each rep's preferred local time, pulls today's Gong calls + their open Salesforce Opportunities + per-account usage and DMs a thread of recommendation cards. Buttons apply field updates back to Salesforce. Runs on Vercel (separate deploy from the local SF Visualizer).
+
+Entrypoints under `slack-bot/api/`:
+- `POST /api/slack/events` — Bolt receiver (slash commands, button actions, modal submissions).
+- `GET /api/oauth/sf/start?slack_user_id=…` + `GET /api/oauth/sf/callback` — per-rep PKCE flow against the existing Salesforce Connected App. Add the Vercel `/api/oauth/sf/callback` URL to the Connected App's allowed callbacks.
+- `POST /api/cron/tick` — fires every 5 minutes via Vercel Cron; matches reps whose preferred local time is in the last 5 minutes and triggers `/api/standup/run` per rep.
+- `POST /api/standup/run` — runs the standup pipeline for one rep (gated by `STANDUP_INTERNAL_SECRET`). `maxDuration: 300`.
+
+Persistent state lives in **Vercel Postgres** (or any `POSTGRES_URL`-compatible DB). Tables: `users`, `sf_tokens`, `sf_oauth_state`, `pending_cards`, `audit_log`. Apply with `npm run migrate -w slack-bot` against `POSTGRES_URL`.
+
+Local dev: `npm run dev -w slack-bot` runs `scripts/devServer.ts` on port 3002, dispatching to the same handlers Vercel uses. Use ngrok to expose for Slack webhooks.
+
+Key services:
+- `src/services/runner.ts` — the standup pipeline. Pulls context, fans out per-opp recommendation calls (concurrency 3), posts thread parent + per-opp cards, records audit rows.
+- `src/services/opportunityContext.ts` — single-query bulk fetch of opps + `OpportunityHistory` + Tasks/Events; joins with usage rows from `usageDb`.
+- `src/services/recommender.ts` — one Claude call per opp, Zod-validated JSON (`RecommendationSchema` in `src/types.ts`). Strips out null / no-change fields.
+- `src/services/salesforceClient.ts` — same shape as `server/src/services/salesforce.ts:getConnection`, but reads tokens from Postgres and persists rotated tokens via `conn.on('refresh', …)`.
+- `src/services/usageDb.ts` — `UsageProvider` interface; ships `HttpUsageProvider` (POST `{accountIds, asOf}`) and `NoopUsageProvider`. The internal HTTP API spec is pending — bot ships with Noop if `USAGE_API_URL` is empty.
+
+Conventions specific to the bot:
+- Per-rep Salesforce auth (no service account). Each rep runs `/standup connect` once.
+- `STANDUP_DRY_RUN=true` makes `sfWriter` log audit rows but skip the SF update — use it on Vercel preview deployments.
+- Action IDs encode card + field: `<verb>:<cardId>:<field>` (`accept`, `edit`, `skip`, `apply_all`). Don't change this shape without updating `slack/blocks.ts:parseActionId` and `slack/interactivity.ts`.
+
+After pushing slack-bot changes:
+```
+cd ~/sf-visualizer
+git pull
+cd slack-bot
+npm install            # only if package.json changed
+vercel deploy --prod   # if linked to Vercel
+```
+For local dev: `npm run dev -w slack-bot` (port 3002). Migration: `POSTGRES_URL=… npm run migrate -w slack-bot`.
+
 ## Conventions
 
 - Server imports use explicit `.js` extensions on relative paths (required by ESM resolution even though source is `.ts`).
 - Route errors are caught and surfaced as `res.status(500).json({ message: err.message })`; the client `request()` helper reads `message` to throw.
-- All credentials flow through `server/src/config.ts` from the root `.env` — don't inline secrets.
+- All credentials flow through `server/src/config.ts` (web app) or `slack-bot/src/config.ts` (bot) from the root `.env` — don't inline secrets.
