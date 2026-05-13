@@ -5,7 +5,7 @@ import { startAuthorization } from "../services/salesforceAuth.js";
 import { configModal, connectPrompt } from "./blocks.js";
 
 export function registerCommands(app: App): void {
-  app.command(/\/standup(?:_dev)?/, async ({ command, ack, respond, client }) => {
+  app.command(/\/(standup|merlin)(?:_dev)?/, async ({ command, ack, respond, client }) => {
     await ack();
     const sub = (command.text || "").trim().split(/\s+/)[0];
 
