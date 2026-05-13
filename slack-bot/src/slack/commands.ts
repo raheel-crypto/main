@@ -1,31 +1,10 @@
 import type { App } from "@slack/bolt";
 import { waitUntil } from "@vercel/functions";
 import { config } from "../config.js";
-import { getUser, upsertUser } from "../db/queries.js";
+import { getUser } from "../db/queries.js";
 import { startAuthorization } from "../services/salesforceAuth.js";
 import { configModal, connectPrompt } from "./blocks.js";
-
-async function ensureUserRow(
-  slackUserId: string,
-  slackTeamId: string,
-  app: App
-): Promise<void> {
-  const existing = await getUser(slackUserId);
-  if (existing) return;
-  let email = "";
-  try {
-    const info = await app.client.users.info({ user: slackUserId });
-    email = (info.user?.profile as any)?.email ?? "";
-  } catch {}
-  await upsertUser({
-    slackUserId,
-    slackTeamId,
-    email,
-    timezone: config.defaultTimezone,
-    preferredHour: config.defaultHour,
-    preferredMinute: 0,
-  });
-}
+import { ensureUserRow } from "./ensureUser.js";
 
 async function openConfigModal(app: App, command: { user_id: string; team_id: string; trigger_id: string }) {
   await ensureUserRow(command.user_id, command.team_id, app);
