@@ -1,4 +1,5 @@
 import type { App } from "@slack/bolt";
+import { waitUntil } from "@vercel/functions";
 import { config } from "../config.js";
 import { getUser, upsertUser } from "../db/queries.js";
 import { startAuthorization } from "../services/salesforceAuth.js";
@@ -29,26 +30,30 @@ export function registerCommands(app: App): void {
 
     await ensureUserRow(command.user_id, command.team_id, app);
 
-    await respond({
-      response_type: "ephemeral",
-      text: "Running your standup now…",
-    });
-
-    const res = await fetch(`${config.publicUrl}/api/standup/run`, {
+    const runPromise = fetch(`${config.publicUrl}/api/standup/run`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-internal-secret": config.internalSecret,
       },
       body: JSON.stringify({ slackUserId: command.user_id }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      await respond({
-        response_type: "ephemeral",
-        text: `Standup failed: ${text.slice(0, 200)}`,
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const text = await res.text();
+          console.error(`[slash] standup/run failed: ${res.status} ${text}`);
+        }
+      })
+      .catch((err) => {
+        console.error("[slash] standup/run fetch error:", err);
       });
-    }
+
+    waitUntil(runPromise);
+
+    await respond({
+      response_type: "ephemeral",
+      text: "Running your standup. You'll get a DM in 30-60 seconds.",
+    });
   });
 }
 

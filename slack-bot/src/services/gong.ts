@@ -46,14 +46,12 @@ export async function getCallsForUserToday(
     filter: {
       fromDateTime: fromIso,
       toDateTime: toIso,
-      primaryUserIds: [],
     },
     contentSelector: {
       context: "Extended",
       exposedFields: {
         parties: true,
         content: { brief: true },
-        interaction: true,
       },
     },
   };
