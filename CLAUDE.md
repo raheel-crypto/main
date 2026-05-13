@@ -1,36 +1,105 @@
-# SF Visualizer — Development Notes
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## User Context
-The developer is new to terminal/CLI workflows. Always provide full copy-paste commands when pushing updates.
+The developer is new to terminal/CLI workflows. Always provide full copy-paste commands when pushing updates, and assume the repo lives at `~/sf-visualizer` on the user's machine.
 
-## After Pushing Changes
-When changes are pushed, ALWAYS provide the full command sequence to pull and restart:
+## Repo Layout
 
+npm workspaces monorepo (root `package.json` declares the three workspaces). All three are TypeScript, ESM (`"type": "module"`), and share the root `tsconfig.json`.
+
+- `server/` — Express API on port 3001. Handles Salesforce OAuth, proxies SOQL/Tooling/Metadata calls via `jsforce`, calls Anthropic for AI explanations, and acts as a client to Salesforce's Hosted MCP server.
+- `client/` — Vite + React 18 + Tailwind v4 frontend on port 5173. Dev server proxies `/auth` and `/api` to `http://localhost:3001` (see `client/vite.config.ts`). Path alias `@/*` → `client/src/*`.
+- `mcp-server/` — Standalone stdio MCP server intended to be wired into Claude Desktop. Same `jsforce` tools as the web server, but exposed via the MCP protocol. Independent auth (token file).
+
+## Common Commands
+
+Run both servers from repo root:
+```
+npm run dev          # concurrently runs server + client
+npm run build        # builds client then server
+```
+
+Per workspace:
+```
+npm run dev -w server          # tsx watch src/index.ts (port 3001)
+npm run dev -w client          # vite (port 5173)
+npm run dev -w mcp-server      # one-shot tsx (stdio)
+npm run build -w server        # tsc → server/dist
+npm run build -w client        # tsc -b && vite build
+npm run start -w server        # node dist/index.js
+```
+
+No test or lint scripts are configured anywhere in this repo — don't fabricate them.
+
+### After Pushing Changes
+Tell the user to run, in order:
 ```
 cd ~/sf-visualizer
 git pull
 ```
-
 Terminal 1 (backend):
 ```
 cd ~/sf-visualizer/server
 npx tsx watch src/index.ts
 ```
-
 Terminal 2 (frontend):
 ```
 cd ~/sf-visualizer/client
 npx vite
 ```
+Then refresh `http://localhost:5173`. Remind them to `Ctrl+C` each terminal before restarting.
 
-Then refresh the browser at http://localhost:5173
-
-## Environment Variables
-When the user needs to edit `.env`, tell them to run:
+### Editing `.env`
+The server reads `.env` from the **repo root** (not `server/`), via `path.resolve(__dirname, "../../.env")` in `server/src/config.ts`. Tell the user:
 ```
 open -a TextEdit ~/sf-visualizer/.env
 ```
-Then save with Cmd+S.
+Save with Cmd+S. See `.env.example` for the full set of keys (three OAuth credential pairs: the main Salesforce Connected App, an optional sandbox app, and a separate External Client App for the `mcp_api` scope used by Salesforce's Hosted MCP).
 
-## Stopping Servers
-Remind the user to press `Ctrl+C` in each terminal window before restarting.
+## Architecture
+
+### Two parallel OAuth flows on the server
+1. **Main Salesforce login** (`/auth/login`, `/auth/callback`) — PKCE flow against `login.salesforce.com` or `test.salesforce.com`. Scope: `api refresh_token`. Stores `req.session.sf` with `accessToken`, `refreshToken`, `instanceUrl`, identity info, and `environment`.
+2. **Hosted MCP login** (`/auth/mcp-login`, `/auth/mcp-callback`) — second PKCE flow against the user's own org (`<instanceUrl>/services/oauth2/authorize`) using **External Client App** credentials with scope `mcp_api`. Stores only `req.session.mcpToken`. Required because Salesforce's Hosted MCP endpoint won't accept a regular API token.
+
+Both flows are env-aware (production vs sandbox) and pick credentials from `config.salesforce` / `config.sandbox` / `config.mcpApp` / `config.mcpSandbox` accordingly.
+
+### Auth gating
+`server/src/middleware/auth.ts` exports `requireAuth`, which 401s if `req.session.sf?.accessToken` is missing. `server/src/index.ts` mounts every `/api/*` router behind it; only `/auth/*` and `/api/health` are public.
+
+### Session typing
+`server/src/types/index.ts` augments `express-session`'s `SessionData` with `sf` and `mcpToken`. All shared response types (FlowDetail, ApexDetail, FieldUsageTree, AIExplanation) also live there and are duplicated in `client/src/lib/api.ts`.
+
+### Salesforce calls
+`server/src/services/salesforce.ts` exposes `getConnection(session.sf)` which returns a `jsforce.Connection` configured with the user's tokens — every route service grabs a connection this way. The MCP-hosted variant is in `server/src/services/sfMcpClient.ts`, which opens a `StreamableHTTPClientTransport` to `https://api.salesforce.com/platform/mcp/v1/...` per call.
+
+### AI features (Anthropic SDK)
+`server/src/services/ai.ts` runs flow/Apex explanations and Well-Architected assessments. `server/src/services/architect.ts` is the agentic loop — it defines a tool schema that maps Anthropic tool calls to jsforce operations (`sf_query`, `sf_tooling_query`, `sf_create_field`, `sf_create_validation_rule`, etc.) and is invoked from the cleanup/architect route. The current model ID hardcoded in these files is `claude-sonnet-4-20250514`; bump it together when upgrading.
+
+### Bulk match (`server/src/services/bulkMatcher.ts`)
+CSV upload → in-memory job store keyed by `jobId` → background match/update jobs → client polls `/api/bulk/jobs/:id/status`. State is lost on server restart. Multer writes uploads to `os.tmpdir()`.
+
+### Frontend conventions
+- React Router routes are flat in `client/src/App.tsx`.
+- All data fetching goes through the single `api` object in `client/src/lib/api.ts` (uses `fetch` with `credentials: "include"` to send the session cookie). Custom hooks in `client/src/hooks/` wrap individual endpoints.
+- If `useSalesforceAuth` reports unauthenticated, `App.tsx` short-circuits to `<LoginButton/>` instead of rendering the layout.
+
+### Standalone MCP server (`mcp-server/`)
+Three auth strategies, tried in order, inside `getConnection()`:
+1. `SF_ACCESS_TOKEN` + `SF_INSTANCE_URL` env vars (direct token).
+2. `~/.sf_mcp_tokens.json` written by `mcp-server/src/auth.ts` (one-time browser OAuth on `localhost:9876`, supports MFA, auto-refreshes).
+3. Username + password (+ optional security token) env vars (no MFA).
+
+Run the one-time auth helper with:
+```
+cd mcp-server && SF_CLIENT_ID=... SF_CLIENT_SECRET=... SF_LOGIN_URL=... npx tsx src/auth.ts
+```
+Tools defined: SOQL/Tooling queries, describe, list objects, CRUD on custom fields/objects, validation rules, flow activate/deactivate, permission set assign/remove, generic record CRUD, and a raw `sf_deploy_metadata` escape hatch.
+
+## Conventions
+
+- Server imports use explicit `.js` extensions on relative paths (required by ESM resolution even though source is `.ts`).
+- Route errors are caught and surfaced as `res.status(500).json({ message: err.message })`; the client `request()` helper reads `message` to throw.
+- All credentials flow through `server/src/config.ts` from the root `.env` — don't inline secrets.
