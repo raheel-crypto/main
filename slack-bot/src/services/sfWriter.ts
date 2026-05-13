@@ -53,7 +53,7 @@ export async function applyFields(args: {
   }
 
   try {
-    await conn.sobject("Opportunity").update(payload);
+    await conn.sobject("Opportunity").update(payload as any);
     for (const f of fields) {
       await appendAudit({
         slackUserId,
