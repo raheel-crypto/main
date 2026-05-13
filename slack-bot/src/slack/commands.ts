@@ -33,6 +33,8 @@ export function registerCommands(app: App): void {
       const url = await startAuthorization(command.user_id);
       await client.chat.postMessage({
         channel: command.user_id,
+        unfurl_links: false,
+        unfurl_media: false,
         ...connectPrompt(url),
       });
       await respond({

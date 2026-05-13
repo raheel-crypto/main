@@ -41,6 +41,8 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
       const url = await startAuthorization(slackUserId);
       await slack.chat.postMessage({
         channel: slackUserId,
+        unfurl_links: false,
+        unfurl_media: false,
         ...connectPrompt(url),
       });
       return { ran: false, reason: "sf_not_connected" };
@@ -57,6 +59,8 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
       const url = await startAuthorization(slackUserId);
       await slack.chat.postMessage({
         channel: slackUserId,
+        unfurl_links: false,
+        unfurl_media: false,
         ...connectPrompt(url),
       });
       return { ran: false, reason: "sf_invalid_grant" };
@@ -75,6 +79,8 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
   if (opps.length === 0) {
     await slack.chat.postMessage({
       channel: slackUserId,
+      unfurl_links: false,
+      unfurl_media: false,
       text: "No open opportunities found today. Nothing to review.",
     });
     await markToday(user.slackUserId, user.timezone);
@@ -98,6 +104,8 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
 
   const parentRes = await slack.chat.postMessage({
     channel: slackUserId,
+    unfurl_links: false,
+    unfurl_media: false,
     ...parent,
   });
   const threadTs = parentRes.ts!;
@@ -119,6 +127,8 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
     const cardRes = await slack.chat.postMessage({
       channel,
       thread_ts: threadTs,
+      unfurl_links: false,
+      unfurl_media: false,
       ...cardBlocks,
     });
     if (cardRes.ts) await setCardMessageTs(cardId, cardRes.ts);
