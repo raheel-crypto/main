@@ -5,6 +5,41 @@ import { getUser, upsertUser } from "../db/queries.js";
 import { startAuthorization } from "../services/salesforceAuth.js";
 import { configModal, connectPrompt } from "./blocks.js";
 
+async function ensureUserRow(
+  slackUserId: string,
+  slackTeamId: string,
+  app: App
+): Promise<void> {
+  const existing = await getUser(slackUserId);
+  if (existing) return;
+  let email = "";
+  try {
+    const info = await app.client.users.info({ user: slackUserId });
+    email = (info.user?.profile as any)?.email ?? "";
+  } catch {}
+  await upsertUser({
+    slackUserId,
+    slackTeamId,
+    email,
+    timezone: config.defaultTimezone,
+    preferredHour: config.defaultHour,
+    preferredMinute: 0,
+  });
+}
+
+async function openConfigModal(app: App, command: { user_id: string; team_id: string; trigger_id: string }) {
+  await ensureUserRow(command.user_id, command.team_id, app);
+  const user = await getUser(command.user_id);
+  await app.client.views.open({
+    trigger_id: command.trigger_id,
+    view: configModal({
+      timezone: user?.timezone ?? config.defaultTimezone,
+      hour: user?.preferredHour ?? config.defaultHour,
+      minute: user?.preferredMinute ?? 0,
+    }),
+  });
+}
+
 export function registerCommands(app: App): void {
   app.command(/\/(standup|merlin)(?:_dev)?/, async ({ command, ack, respond, client }) => {
     await ack();
@@ -54,40 +89,5 @@ export function registerCommands(app: App): void {
       response_type: "ephemeral",
       text: "Running your standup. You'll get a DM in 30-60 seconds.",
     });
-  });
-}
-
-async function openConfigModal(app: App, command: { user_id: string; team_id: string; trigger_id: string }) {
-  await ensureUserRow(command.user_id, command.team_id, app);
-  const user = await getUser(command.user_id);
-  await app.client.views.open({
-    trigger_id: command.trigger_id,
-    view: configModal({
-      timezone: user?.timezone ?? config.defaultTimezone,
-      hour: user?.preferredHour ?? config.defaultHour,
-      minute: user?.preferredMinute ?? 0,
-    }),
-  });
-}
-
-async function ensureUserRow(
-  slackUserId: string,
-  slackTeamId: string,
-  app: App
-): Promise<void> {
-  const existing = await getUser(slackUserId);
-  if (existing) return;
-  let email = "";
-  try {
-    const info = await app.client.users.info({ user: slackUserId });
-    email = (info.user?.profile as any)?.email ?? "";
-  } catch {}
-  await upsertUser({
-    slackUserId,
-    slackTeamId,
-    email,
-    timezone: config.defaultTimezone,
-    preferredHour: config.defaultHour,
-    preferredMinute: 0,
   });
 }
