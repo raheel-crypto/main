@@ -16,8 +16,11 @@ Rules:
 - Recommended values must use the exact picklist option strings when provided.
 - NextStep is a single sentence (<=120 chars) starting with a verb.
 - Amount is a number (no currency symbol). CloseDate is YYYY-MM-DD.
-- Description is appended notes, not a replacement; keep <=400 chars.
 - Recap is 2-3 sentences. Lead with what happened, then what to do.
+
+Stalled-opp rule (important):
+- If the opp has been in its current stage for >=90 days AND there are no Gong calls today and no Activities since the last stage change, recommend moving StageName to the Closed Lost (or equivalent closed-lost) option from the allowed picklist. Do NOT just push CloseDate out.
+- Never recommend a CloseDate in the past unless you are also moving StageName to a Closed stage in the same recommendation. If the deal is still open and the existing CloseDate is in the past, the right move is either a forward-looking CloseDate (with clear evidence of momentum) or Closed Lost.
 
 Output strict JSON ONLY in this shape (no prose, no markdown):
 {
@@ -25,7 +28,7 @@ Output strict JSON ONLY in this shape (no prose, no markdown):
   "recap": "string",
   "fields": [
     {
-      "field": "StageName" | "NextStep" | "Amount" | "CloseDate" | "Description",
+      "field": "StageName" | "NextStep" | "Amount" | "CloseDate",
       "currentValue": <string|number|null>,
       "recommendedValue": <string|number|null>,
       "rationale": "string"

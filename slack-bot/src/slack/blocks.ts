@@ -193,13 +193,6 @@ export function editFieldModal(args: {
       is_decimal_allowed: true,
       initial_value: initial,
     };
-  } else if (field === "Description") {
-    input = {
-      type: "plain_text_input",
-      action_id: "value",
-      multiline: true,
-      initial_value: initial,
-    };
   } else {
     input = {
       type: "plain_text_input",

@@ -72,7 +72,6 @@ const SF_WRITABLE_FIELDS = [
   "NextStep",
   "Amount",
   "CloseDate",
-  "Description",
 ] as const;
 
 export const RecommendedFieldSchema = z.object({
