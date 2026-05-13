@@ -35,9 +35,22 @@ export const config = {
     accessKeySecret: optional("GONG_ACCESS_KEY_SECRET"),
     baseUrl: optional("GONG_BASE_URL", "https://api.gong.io"),
   },
-  usage: {
-    url: optional("USAGE_API_URL"),
-    token: optional("USAGE_API_TOKEN"),
+  rogo: {
+    baseUrl: optional(
+      "ROGO_API_BASE_URL",
+      "https://rogo-analytics-bot-461481229379.us-central1.run.app"
+    ),
+    apiKey: optional("ROGO_API_KEY"),
+    directorySfKey: optional("ROGO_DIRECTORY_SF_KEY", "salesforce_account_id"),
+    directoryCustomerKey: optional(
+      "ROGO_DIRECTORY_CUSTOMER_KEY",
+      "customer_id"
+    ),
+    customerJoinColumn: optional("ROGO_CUSTOMER_JOIN_COLUMN", "customer_id"),
+    customerTable: optional(
+      "ROGO_CUSTOMER_TABLE",
+      "REPORT_ENTITIES.CUSTOMER"
+    ),
   },
   anthropic: {
     apiKey: optional("ANTHROPIC_API_KEY"),

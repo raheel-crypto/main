@@ -110,3 +110,73 @@ export type AuditAction =
   | "applied"
   | "apply_failed"
   | "recommend_failed";
+
+export type RogoCustomer = Record<string, unknown>;
+
+export interface RogoBootstrap {
+  contract_version?: string;
+  generated_at?: string;
+  database?: string;
+  available_schemas?: string[];
+  data_model_doc?: {
+    content_md?: string;
+    content_sha256?: string;
+    bytes?: number;
+  };
+  customer_directory?: {
+    rows: RogoCustomer[];
+    row_count?: number;
+    refreshed_at?: string;
+    content_sha256?: string;
+  };
+  guardrails?: {
+    max_result_rows?: number;
+    query_timeout_seconds?: number;
+  };
+  endpoints?: Record<string, unknown>;
+}
+
+export interface RogoQueryResult {
+  status?: string;
+  columns: string[];
+  column_types?: string[];
+  rows: unknown[][];
+  row_count: number;
+  truncated?: boolean;
+  echo?: { sql: string; sha256?: string };
+  warnings?: string[];
+}
+
+export interface RogoBatchDataset {
+  id: string;
+  sql: string;
+  expected_columns?: string[];
+  label?: string;
+  max_rows?: number;
+}
+
+export interface RogoBatchResultDataset {
+  id: string;
+  status: "ok" | "error";
+  columns?: string[];
+  column_types?: string[];
+  rows?: unknown[][];
+  row_count?: number;
+  truncated?: boolean;
+  echo?: { sql: string; sha256?: string };
+  error?: {
+    status: string;
+    code: string;
+    message: string;
+    retryable: boolean;
+    details?: Record<string, unknown>;
+  };
+}
+
+export interface RogoBatchResult {
+  batch_id?: string;
+  generated_at?: string;
+  status: "ok" | "partial_success" | "failed";
+  datasets: RogoBatchResultDataset[];
+  warnings?: string[];
+}
