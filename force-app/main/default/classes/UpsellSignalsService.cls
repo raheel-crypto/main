@@ -3,6 +3,7 @@ public with sharing class UpsellSignalsService {
     @TestVisible private static String benchmarkCsvOverride;
     @TestVisible private static String bearerTokenOverride;
     @TestVisible private static Boolean skipNarrativeCall = false;
+    @TestVisible private static List<Map<String, Object>> gongCallsOverride;
 
     public class Signal {
         @AuraEnabled public String key;
@@ -57,12 +58,13 @@ public with sharing class UpsellSignalsService {
 
         Map<String, Decimal> benchmark = loadBenchmark(a, out.warnings);
 
+        List<Map<String, Object>> gongCallSummaries = new List<Map<String, Object>>();
         out.signals.add(scoreUsageVsBenchmark(dauWauObserved, wauEnrolledObserved, qpuObserved, benchmark));
         out.signals.add(scoreWhitespace(a));
         out.signals.add(scoreArrTamGap(a));
         out.signals.add(scoreOpportunityCadence(opps));
         out.signals.add(scoreHealth(a));
-        out.signals.add(stubGong());
+        out.signals.add(scoreGong(accountId, gongCallSummaries));
 
         Decimal total = 0;
         for (Signal s : out.signals) {
@@ -75,7 +77,8 @@ public with sharing class UpsellSignalsService {
         if (!skipNarrativeCall) {
             try {
                 out.narrativeJobId = submitNarrativeJob(a, out,
-                    dauWauObserved, wauEnrolledObserved, qpuObserved);
+                    dauWauObserved, wauEnrolledObserved, qpuObserved,
+                    gongCallSummaries);
             } catch (Exception e) {
                 out.warnings.add('Narrative generation skipped: ' + e.getMessage());
             }
@@ -269,14 +272,62 @@ public with sharing class UpsellSignalsService {
         return s;
     }
 
-    private static Signal stubGong() {
+    private static Signal scoreGong(Id accountId, List<Map<String, Object>> outCalls) {
         Signal s = new Signal();
         s.key = 'gong_signals';
         s.label = 'Gong Call Signals (last 7 days)';
-        s.weight = 0;
-        s.contributionPoints = 0;
-        s.status = 'pending';
-        s.detail = 'Pending — awaiting Gong API setup';
+        s.weight = 0; // additive modifier on top of the 100
+
+        List<Map<String, Object>> calls;
+        if (gongCallsOverride != null) {
+            calls = gongCallsOverride;
+        } else {
+            Schema.SObjectType gongType = Schema.getGlobalDescribe().get('Gong__Gong_Call__c');
+            if (gongType == null) {
+                s.contributionPoints = 0;
+                s.status = 'missing';
+                s.detail = 'Gong managed package not installed in this org';
+                return s;
+            }
+            try {
+                DateTime since = DateTime.now().addDays(-7);
+                List<SObject> rows = Database.query(
+                    'SELECT Id, Name, Gong__Call_ID__c, CreatedDate ' +
+                    'FROM Gong__Gong_Call__c ' +
+                    'WHERE Gong__Primary_Account__c = :accountId ' +
+                    'AND CreatedDate >= :since ' +
+                    'ORDER BY CreatedDate DESC ' +
+                    'LIMIT 25'
+                );
+                calls = new List<Map<String, Object>>();
+                for (SObject r : rows) {
+                    calls.add(new Map<String, Object>{
+                        'title'       => r.get('Name'),
+                        'gongCallId'  => r.get('Gong__Call_ID__c'),
+                        'createdDate' => r.get('CreatedDate')
+                    });
+                }
+            } catch (Exception e) {
+                s.contributionPoints = 0;
+                s.status = 'missing';
+                s.detail = 'Gong query failed: ' + e.getMessage();
+                return s;
+            }
+        }
+
+        for (Map<String, Object> c : calls) outCalls.add(c);
+
+        Integer count = calls.size();
+        Decimal pts;
+        if (count >= 3)      pts = 5;
+        else if (count >= 1) pts = 3;
+        else                 pts = 0;
+
+        s.contributionPoints = pts;
+        s.status = 'present';
+        s.detail = count == 0
+            ? 'No Gong calls in last 7 days'
+            : count + ' call' + (count == 1 ? '' : 's') + ' in last 7 days';
         return s;
     }
 
@@ -338,7 +389,8 @@ public with sharing class UpsellSignalsService {
 
     private static String submitNarrativeJob(
         Account a, UpsellOutput out,
-        Decimal dauWau, Decimal wauEnr, Decimal qpu
+        Decimal dauWau, Decimal wauEnr, Decimal qpu,
+        List<Map<String, Object>> gongCallSummaries
     ) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint('callout:Rogo_Analytics/api/ask');
@@ -346,7 +398,7 @@ public with sharing class UpsellSignalsService {
         req.setHeader('Authorization', 'Bearer ' + getBearerToken());
         req.setHeader('Content-Type', 'application/json');
         req.setBody(JSON.serialize(new Map<String, Object>{
-            'question' => buildNarrativePrompt(a, out, dauWau, wauEnr, qpu),
+            'question' => buildNarrativePrompt(a, out, dauWau, wauEnr, qpu, gongCallSummaries),
             'user_name' => UserInfo.getUserName()
         }));
         req.setTimeout(60000);
@@ -361,8 +413,22 @@ public with sharing class UpsellSignalsService {
 
     private static String buildNarrativePrompt(
         Account a, UpsellOutput out,
-        Decimal dauWau, Decimal wauEnr, Decimal qpu
+        Decimal dauWau, Decimal wauEnr, Decimal qpu,
+        List<Map<String, Object>> gongCallSummaries
     ) {
+        String gongContext = '';
+        if (gongCallSummaries != null && !gongCallSummaries.isEmpty()) {
+            gongContext = ' Recent Gong calls (last 7 days): ';
+            Integer i = 0;
+            for (Map<String, Object> c : gongCallSummaries) {
+                i++;
+                if (i > 5) break;
+                String title = (String) c.get('title');
+                Datetime cd = (Datetime) c.get('createdDate');
+                gongContext += i + ') "' + title + '" on ' + cd.format('yyyy-MM-dd') + '; ';
+            }
+        }
+
         return 'You are advising a Customer Success Manager on an upsell opportunity at a customer account. '
             + 'Account: "' + a.Name + '" (Salesforce id ' + a.Id + '). '
             + 'Business Type: ' + nz(a.Business_Type__c) + ', '
@@ -372,10 +438,12 @@ public with sharing class UpsellSignalsService {
             + 'Computed upsell score: ' + out.score + '/100. '
             + 'Signals (JSON): ' + JSON.serialize(out.signals) + '. '
             + 'Observed last-28-day usage: DAU/WAU=' + pct(dauWau) + ', '
-            + 'WAU/Enrolled=' + pct(wauEnr) + ', QPU=' + num(qpu) + '. '
+            + 'WAU/Enrolled=' + pct(wauEnr) + ', QPU=' + num(qpu) + '.'
+            + gongContext + ' '
             + 'Respond in markdown with EXACTLY two sections. '
             + 'First section header: "## Upsell Opportunity" — 2 to 3 sentences identifying the most likely upsell '
             + '(seat expansion, product line, tier upgrade, or geo expansion) and which signals support it. '
+            + 'Reference recent Gong calls by title where they reinforce the recommendation. '
             + 'Second section header: "## Recommended Actions" — a numbered list of 3 specific actions the CSM should take in the next 7 days. '
             + 'Do NOT invent metrics. Reference only the signals above. '
             + 'Do NOT include SQL or data queries — this is synthesis, not a data lookup.';

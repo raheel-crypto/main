@@ -35,9 +35,10 @@ private class UpsellSignalsServiceTest {
     }
 
     @IsTest
-    static void compute_producesFiveScoredSignalsAndStubbedGong() {
+    static void compute_producesAllSixSignalsWhenDataPresent() {
         UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
         UpsellSignalsService.bearerTokenOverride = 'test-token';
+        UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>();
         Test.setMock(HttpCalloutMock.class, new AskMock());
 
         Account a = buildAccount(true);
@@ -58,7 +59,7 @@ private class UpsellSignalsServiceTest {
 
         System.assertEquals('Acme Capital', out.accountName);
         System.assertEquals('Tier I', out.accountTier);
-        System.assertEquals(6, out.signals.size(), '5 scored + 1 stub gong');
+        System.assertEquals(6, out.signals.size());
         System.assert(out.score > 0, 'score should be > 0 with mostly green signals');
         System.assert(out.score <= 100);
         System.assertEquals('narr_xyz', out.narrativeJobId);
@@ -71,7 +72,48 @@ private class UpsellSignalsServiceTest {
         System.assertEquals('present', byKey.get('arr_tam_gap').status);
         System.assertEquals('present', byKey.get('opp_cadence').status);
         System.assertEquals('present', byKey.get('health').status);
-        System.assertEquals('pending', byKey.get('gong_signals').status);
+        System.assertEquals('present', byKey.get('gong_signals').status);
+        System.assertEquals(0, byKey.get('gong_signals').contributionPoints,
+            'no override calls -> 0 bonus');
+    }
+
+    @IsTest
+    static void compute_gongBonusGrowsWithCallVolume() {
+        UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
+        UpsellSignalsService.bearerTokenOverride = 'test-token';
+        UpsellSignalsService.skipNarrativeCall = true;
+        UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>{
+            new Map<String, Object>{
+                'title' => 'Discovery: expansion seats',
+                'gongCallId' => '111',
+                'createdDate' => Datetime.now().addDays(-1)
+            },
+            new Map<String, Object>{
+                'title' => 'QBR',
+                'gongCallId' => '222',
+                'createdDate' => Datetime.now().addDays(-3)
+            },
+            new Map<String, Object>{
+                'title' => 'Executive sync',
+                'gongCallId' => '333',
+                'createdDate' => Datetime.now().addDays(-5)
+            }
+        };
+
+        Account a = buildAccount(true);
+        insert a;
+
+        Test.startTest();
+        UpsellSignalsService.UpsellOutput out =
+            UpsellSignalsService.compute(a.Id, 0.50, 0.62, 22.0);
+        Test.stopTest();
+
+        for (UpsellSignalsService.Signal s : out.signals) {
+            if (s.key == 'gong_signals') {
+                System.assertEquals(5, s.contributionPoints, '3 calls -> +5 bonus');
+                System.assert(s.detail.contains('3 calls'), 'detail mentions count: ' + s.detail);
+            }
+        }
     }
 
     @IsTest
