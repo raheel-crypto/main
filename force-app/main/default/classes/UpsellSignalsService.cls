@@ -97,7 +97,7 @@ public with sharing class UpsellSignalsService {
         Signal s = new Signal();
         s.key = 'usage_vs_benchmark';
         s.label = 'Usage vs Peer Benchmark';
-        s.weight = 25;
+        s.weight = 30;
 
         if (dauWauObs == null && wauEnrObs == null && qpuObs == null) {
             s.contributionPoints = 0;
@@ -167,7 +167,7 @@ public with sharing class UpsellSignalsService {
         Signal s = new Signal();
         s.key = 'arr_tam_gap';
         s.label = 'ARR vs Estimated TAM';
-        s.weight = 20;
+        s.weight = 10;
         if (a.ARR__c == null || a.Estimated_TAM__c == null || a.Estimated_TAM__c == 0) {
             s.contributionPoints = 0;
             s.status = 'missing';
@@ -296,7 +296,7 @@ public with sharing class UpsellSignalsService {
         Signal s = new Signal();
         s.key = 'health';
         s.label = 'Account Health Score';
-        s.weight = 10;
+        s.weight = 15;
         if (a.Account_Health_Score__c == null) {
             s.contributionPoints = 0;
             s.status = 'missing';
