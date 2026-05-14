@@ -255,7 +255,7 @@ private class UpsellSignalsServiceTest {
     }
 
     @IsTest
-    static void compute_opportunityCadenceRewardsExpansionPattern() {
+    static void compute_oppHistoryRewardsRenewalsPlusUpsells() {
         UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
         UpsellSignalsService.bearerTokenOverride = 'test-token';
         UpsellSignalsService.skipNarrativeCall = true;
@@ -264,14 +264,20 @@ private class UpsellSignalsServiceTest {
         insert a;
         insert new List<Opportunity>{
             new Opportunity(AccountId = a.Id, Name = 'NB',
-                StageName = 'Closed Won', CloseDate = Date.today().addDays(-300),
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-800),
                 Type = 'New Business', Amount = 100000),
+            new Opportunity(AccountId = a.Id, Name = 'R1',
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-400),
+                Type = 'Renewal', Amount = 110000),
             new Opportunity(AccountId = a.Id, Name = 'U1',
-                StageName = 'Closed Won', CloseDate = Date.today().addDays(-200),
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-300),
                 Type = 'Upsell', Amount = 30000),
             new Opportunity(AccountId = a.Id, Name = 'U2',
                 StageName = 'Closed Won', CloseDate = Date.today().addDays(-60),
-                Type = 'Upsell', Amount = 45000)
+                Type = 'Upsell', Amount = 45000),
+            new Opportunity(AccountId = a.Id, Name = 'R2',
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-35),
+                Type = 'Renewal', Amount = 130000)
         };
 
         Test.startTest();
@@ -281,15 +287,63 @@ private class UpsellSignalsServiceTest {
 
         for (UpsellSignalsService.Signal s : out.signals) {
             if (s.key == 'opp_cadence') {
-                System.assert(s.contributionPoints > 10,
-                    'multi-upsell + sweet-spot tenure should score high, got ' + s.contributionPoints);
-                System.assert(s.detail.contains('2 upsells'), 'detail should reflect 2 upsells: ' + s.detail);
+                System.assertEquals('Opportunity History', s.label);
+                System.assert(s.contributionPoints >= 12,
+                    'sticky customer with active upsell pattern should score high, got ' + s.contributionPoints);
+                System.assert(s.detail.contains('2 renewals'), 'detail mentions 2 renewals: ' + s.detail);
+                System.assert(s.detail.contains('2 upsells'), 'detail mentions 2 upsells: ' + s.detail);
+                System.assert(s.detail.contains('NB $100,000'), 'detail shows NB amount: ' + s.detail);
             }
         }
     }
 
     @IsTest
-    static void compute_opportunityCadencePenalizesDownsell() {
+    static void compute_oppHistoryFlagsUnderMonetizationAndAmountDecline() {
+        // Mirrors the real customer the user pushed back on:
+        // 2-year customer, 2 renewals, 1 upsell, last renewal amount declined ($48K -> $42K)
+        UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
+        UpsellSignalsService.bearerTokenOverride = 'test-token';
+        UpsellSignalsService.skipNarrativeCall = true;
+
+        Account a = buildAccount(true);
+        insert a;
+        insert new List<Opportunity>{
+            new Opportunity(AccountId = a.Id, Name = 'NB',
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-751),
+                Type = 'New Business', Amount = 30000),
+            new Opportunity(AccountId = a.Id, Name = 'U1',
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-650),
+                Type = 'Upsell', Amount = 6000),
+            new Opportunity(AccountId = a.Id, Name = 'R1',
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-400),
+                Type = 'Renewal', Amount = 48000),
+            new Opportunity(AccountId = a.Id, Name = 'R2',
+                StageName = 'Closed Won', CloseDate = Date.today().addDays(-35),
+                Type = 'Renewal', Amount = 42000)
+        };
+
+        Test.startTest();
+        UpsellSignalsService.UpsellOutput out =
+            UpsellSignalsService.compute(a.Id, 0.50, 0.85, 243.0);
+        Test.stopTest();
+
+        for (UpsellSignalsService.Signal s : out.signals) {
+            if (s.key == 'opp_cadence') {
+                System.assert(s.detail.contains('renewal amount declined'),
+                    'should flag amount decline: ' + s.detail);
+                System.assert(s.detail.contains('Renewal $48,000'),
+                    'should show first renewal amount: ' + s.detail);
+                System.assert(s.detail.contains('Renewal $42,000'),
+                    'should show declining renewal amount: ' + s.detail);
+                // 2 renewals(+6) + 1 upsell(+3) + 0 recency(>365d ago) + under-monetized(+4) - decline(-3) = 10
+                System.assert(s.contributionPoints >= 8 && s.contributionPoints <= 12,
+                    'under-monetized with amount decline should net mid-range, got ' + s.contributionPoints);
+            }
+        }
+    }
+
+    @IsTest
+    static void compute_oppHistoryPenalizesDownsellType() {
         UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
         UpsellSignalsService.bearerTokenOverride = 'test-token';
         UpsellSignalsService.skipNarrativeCall = true;
@@ -312,7 +366,8 @@ private class UpsellSignalsServiceTest {
 
         for (UpsellSignalsService.Signal s : out.signals) {
             if (s.key == 'opp_cadence') {
-                System.assert(s.detail.contains('1 downsell'), 'detail should call out the downsell: ' + s.detail);
+                System.assert(s.detail.contains('1 downsell'),
+                    'detail should call out the downsell: ' + s.detail);
             }
         }
     }

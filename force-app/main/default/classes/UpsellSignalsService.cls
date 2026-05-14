@@ -188,7 +188,7 @@ public with sharing class UpsellSignalsService {
     private static Signal scoreOpportunityCadence(List<Opportunity> opps) {
         Signal s = new Signal();
         s.key = 'opp_cadence';
-        s.label = 'Opportunity Cadence';
+        s.label = 'Opportunity History';
         s.weight = 20;
 
         if (opps == null || opps.isEmpty()) {
@@ -199,7 +199,8 @@ public with sharing class UpsellSignalsService {
         }
 
         Date firstNewBiz;
-        Integer upsells = 0, renewals = 0, downsells = 0, pilots = 0;
+        List<Opportunity> renewalsList = new List<Opportunity>();
+        Integer upsells = 0, renewals = 0, typeDownsells = 0, pilots = 0;
         Date lastUpsell;
 
         for (Opportunity o : opps) {
@@ -210,46 +211,85 @@ public with sharing class UpsellSignalsService {
                 if (lastUpsell == null || o.CloseDate > lastUpsell) lastUpsell = o.CloseDate;
             } else if (o.Type == 'Renewal') {
                 renewals++;
+                renewalsList.add(o);
             } else if (o.Type == 'Downsell') {
-                downsells++;
+                typeDownsells++;
             } else if (o.Type == 'Pilot') {
                 pilots++;
             }
         }
 
-        Decimal pts = 0;
-        Integer daysSinceNewBiz;
-        if (firstNewBiz != null) {
-            daysSinceNewBiz = firstNewBiz.daysBetween(Date.today());
-            if (daysSinceNewBiz >= 180 && daysSinceNewBiz <= 540)      pts += 8;
-            else if (daysSinceNewBiz > 540)                            pts += 4;
-            else                                                       pts += 2;
+        Integer amountDeclines = 0;
+        Decimal priorRenewalAmount;
+        for (Opportunity r : renewalsList) {
+            if (priorRenewalAmount != null && r.Amount != null && r.Amount < priorRenewalAmount) {
+                amountDeclines++;
+            }
+            if (r.Amount != null) priorRenewalAmount = r.Amount;
         }
 
-        if (upsells >= 2) pts += 6;
-        else if (upsells == 1) pts += 4;
+        Integer tenureDays;
+        if (firstNewBiz != null) tenureDays = firstNewBiz.daysBetween(Date.today());
+
+        Decimal pts = 0;
+        if (renewals >= 2) pts += 6;
+        else if (renewals == 1) pts += 4;
+        else if (tenureDays != null && tenureDays < 365) pts += 2;
+
+        if (upsells >= 2)      pts += 5;
+        else if (upsells == 1) pts += 3;
 
         if (lastUpsell != null) {
             Integer dsl = lastUpsell.daysBetween(Date.today());
-            if (dsl <= 180) pts += 3;
+            if (dsl <= 180) pts += 2;
             else if (dsl <= 365) pts += 1;
         }
 
-        if (downsells > 0) pts -= 3;
+        if (renewals >= 2 && upsells <= 1) pts += 4;
         if (pilots > 0 && upsells == 0) pts += 2;
+        if (typeDownsells > 0) pts -= 3;
+        if (amountDeclines > 0) pts -= 3;
 
         if (pts < 0) pts = 0;
         if (pts > s.weight) pts = s.weight;
 
         s.contributionPoints = pts.setScale(1);
-        s.detail = (daysSinceNewBiz == null ? 'No New Business on file'
-                     : 'New Business ' + daysSinceNewBiz + ' days ago')
-            + '; ' + upsells + ' upsell' + (upsells == 1 ? '' : 's')
-            + ', ' + renewals + ' renewal' + (renewals == 1 ? '' : 's')
-            + (downsells > 0 ? ', ' + downsells + ' downsell' + (downsells == 1 ? '' : 's') : '')
-            + (pilots > 0 ? ', ' + pilots + ' pilot' + (pilots == 1 ? '' : 's') : '');
+        s.detail = buildOppHistoryDetail(opps, tenureDays, renewals, upsells, typeDownsells, amountDeclines);
         s.status = 'present';
         return s;
+    }
+
+    private static String buildOppHistoryDetail(
+        List<Opportunity> opps,
+        Integer tenureDays,
+        Integer renewals,
+        Integer upsells,
+        Integer typeDownsells,
+        Integer amountDeclines
+    ) {
+        List<String> headerParts = new List<String>();
+        if (tenureDays != null) headerParts.add('Customer ' + tenureDays + 'd');
+        if (renewals > 0) headerParts.add(renewals + ' renewal' + (renewals == 1 ? '' : 's'));
+        if (upsells > 0) headerParts.add(upsells + ' upsell' + (upsells == 1 ? '' : 's'));
+        if (typeDownsells > 0) headerParts.add(typeDownsells + ' downsell' + (typeDownsells == 1 ? '' : 's'));
+        if (amountDeclines > 0) headerParts.add('renewal amount declined');
+
+        List<String> sequence = new List<String>();
+        for (Opportunity o : opps) {
+            String label;
+            if      (o.Type == 'New Business') label = 'NB';
+            else if (o.Type == 'Upsell')       label = 'Upsell';
+            else if (o.Type == 'Renewal')      label = 'Renewal';
+            else if (o.Type == 'Downsell')     label = 'Downsell';
+            else if (o.Type == 'Pilot')        label = 'Pilot';
+            else                                label = (o.Type == null ? '?' : o.Type);
+            String amt = o.Amount == null ? '?' : '$' + formatThousands(o.Amount);
+            sequence.add(label + ' ' + amt);
+        }
+
+        String headline = headerParts.isEmpty() ? 'No history' : String.join(headerParts, ' · ');
+        String history = sequence.isEmpty() ? '' : ' — ' + String.join(sequence, ' → ');
+        return headline + history;
     }
 
     private static Signal scoreHealth(Account a) {
@@ -524,13 +564,20 @@ public with sharing class UpsellSignalsService {
             + 'Observed last-28-day usage: DAU/WAU=' + pct(dauWau) + ', '
             + 'WAU/Enrolled=' + pct(wauEnr) + ', QPU=' + num(qpu) + '.'
             + gongContext + '\n\n'
+            + 'Important framing rules: '
+            + '(1) Tenure (e.g. "Customer 751d") is stickiness, NOT a sales gap — do not describe long tenure as "time since New Business" or "751-day gap". '
+            + '(2) Renewals are annual; "2 renewals" means a 2-year+ customer who has stayed twice. '
+            + '(3) If the opportunity-history detail says "renewal amount declined", treat that as a recoverable downsell already in the data — call it out as a specific risk to recover via expansion, not as churn alarm. '
+            + '(4) An account with several renewals but few upsells is UNDER-MONETIZED — that is the clearest expansion signal, even when ARR/TAM headroom is moderate. '
+            + '(5) Read the score in context: scores in the 45-65 range with strong usage and health are still high-priority pursuits, not "lukewarm". '
+            + '\n\n'
             + 'Respond in markdown with EXACTLY two sections. '
             + 'First section header: "## Upsell Opportunity" — 2 to 3 sentences identifying the most likely upsell '
             + '(seat expansion, product line, tier upgrade, or geo expansion) and which signals support it. '
             + 'Quote specific phrases or trackers from the Gong calls where they reinforce the recommendation, '
-            + 'or surface contrary signals (concerns, churn risk) if present. '
+            + 'or surface contrary signals (concerns, churn risk, renewal amount declines) if present. '
             + 'Second section header: "## Recommended Actions" — a numbered list of 3 specific actions the CSM should take in the next 7 days. '
-            + 'Tie each action to either a Gong call (reference by title), a usage gap, or a whitespace number. '
+            + 'Tie each action to either a Gong call (reference by title), a usage gap, a specific whitespace number, or the opportunity history. '
             + 'Do NOT invent metrics. Reference only the signals above. '
             + 'Do NOT include SQL or data queries — this is synthesis, not a data lookup.';
     }

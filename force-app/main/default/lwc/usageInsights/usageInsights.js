@@ -55,9 +55,9 @@ export default class UsageInsights extends LightningElement {
     get scoreBand() {
         if (!this.upsell) return '';
         const s = this.upsell.score;
-        if (s >= 75) return 'Strong upsell candidate';
-        if (s >= 50) return 'Worth pursuing';
-        if (s >= 25) return 'Watch';
+        if (s >= 70) return 'Top expansion candidate';
+        if (s >= 45) return 'Strong candidate — pursue actively';
+        if (s >= 25) return 'Watch — re-evaluate next quarter';
         return 'Low signal';
     }
 
