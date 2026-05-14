@@ -115,6 +115,22 @@ function selectOpportunityFields(): string {
   );
 }
 
+/**
+ * Post a Chatter feed item to a record (e.g. Opportunity). Used as the
+ * audit-log channel for approval decisions — best-effort, failures here
+ * shouldn't block the approval flow.
+ */
+export async function postChatterFeed(recordId: string, text: string): Promise<void> {
+  await sfdcFetch(`/chatter/feeds/record/${recordId}/feed-elements`, {
+    method: "POST",
+    body: JSON.stringify({
+      body: { messageSegments: [{ type: "Text", text }] },
+      feedElementType: "FeedItem",
+      subjectId: recordId,
+    }),
+  });
+}
+
 function escapeSoql(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }

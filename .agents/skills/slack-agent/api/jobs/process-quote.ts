@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { runQuoteAgent } from "../../lib/agent.js";
 import { routeApproval } from "../../lib/approval.js";
 import { calculatePricing } from "../../lib/pricing.js";
-import { postApprovalRequest } from "../../lib/revops.js";
+import { postApprovalRequest, postAuditLog } from "../../lib/revops.js";
 import { dmUser } from "../../lib/slack.js";
 import { stashAt } from "../../lib/state.js";
 import type { AgentOutput, ApprovalRequest, ProcessQuoteJob } from "../../lib/types.js";
@@ -94,6 +94,12 @@ async function processJob(job: ProcessQuoteJob): Promise<void> {
   request.slack_message = posted.ts ? { channel: posted.channel, ts: posted.ts } : null;
 
   await stashAt(`approval:${request_id}`, request, 60 * 60 * 24 * 30);
+
+  // Auto-approved quotes don't go through the button flow, so we audit-log
+  // them here. Manually decided ones get audited inside postDecisionUpdate.
+  if (isAuto) {
+    await postAuditLog(request);
+  }
 
   if (requester.slack_user_id) {
     const verb = isAuto ? "auto-approved and posted" : "posted for approval";

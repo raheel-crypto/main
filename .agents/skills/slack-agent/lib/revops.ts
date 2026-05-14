@@ -1,6 +1,41 @@
 import { buildApprovalBlocks, buildStatusInThreadText, buildTopLineText } from "./blocks.js";
+import { postChatterFeed } from "./sfdc-client.js";
 import { postMessage, updateMessage } from "./slack.js";
 import type { ApprovalRequest } from "./types.js";
+
+/**
+ * Audit-log a decision to the related Opportunity's Chatter feed.
+ * Best-effort — Chatter failures are logged but never thrown.
+ */
+export async function postAuditLog(request: ApprovalRequest): Promise<void> {
+  const fmtMoney = (n: number | null) => (n == null ? "—" : `$${n.toLocaleString()}`);
+  const fmtPct = (n: number | null) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
+  const verb =
+    request.state === "approved"
+      ? "APPROVED"
+      : request.state === "rejected"
+        ? "REJECTED"
+        : "PENDING";
+  const by =
+    request.state === "approved" && request.decided_by_slack_user_id === "auto"
+      ? "auto (no approval required)"
+      : request.decided_by_name ?? "—";
+  const lines = [
+    `Quote Bot — Quote \`${request.request_id}\` ${verb}`,
+    `Decided by: ${by}`,
+    `Package: ${request.form.package} · Users: ${request.form.users.toLocaleString()}`,
+    `Price/user: ${fmtMoney(request.form.price_per_user)} · Discount: ${fmtPct(request.pricing.discount_pct)}`,
+    `Total: ${fmtMoney(request.pricing.total_amount)}`,
+  ];
+  if (request.routing.tier !== "auto") {
+    lines.push(`Tier: ${request.routing.tier_label}`);
+  }
+  try {
+    await postChatterFeed(request.context.opportunity.id, lines.join("\n"));
+  } catch (e) {
+    console.error("Chatter audit log failed:", e);
+  }
+}
 
 /**
  * Post a fresh approval request to the deal-desk channel. Returns the message
@@ -72,6 +107,8 @@ export async function postDecisionUpdate(request: ApprovalRequest): Promise<void
       at_iso: request.decided_at,
     }),
   });
+
+  await postAuditLog(request);
 }
 
 function required(name: string): string {

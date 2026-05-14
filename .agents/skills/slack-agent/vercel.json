@@ -3,6 +3,8 @@
     "api/jobs/process-quote.ts": { "maxDuration": 300 },
     "api/slack/quote.ts": { "maxDuration": 10 },
     "api/slack/interactivity.ts": { "maxDuration": 10 },
+    "api/slack/quote-status.ts": { "maxDuration": 10 },
+    "api/slack/quote-override.ts": { "maxDuration": 10 },
     "api/sfdc/intake.ts": { "maxDuration": 30 }
   }
 }
