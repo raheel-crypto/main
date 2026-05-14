@@ -1,4 +1,6 @@
 import type { App } from "@slack/bolt";
+import { WebClient } from "@slack/web-api";
+import { config } from "../config.js";
 import {
   appendAudit,
   getPendingCard,
@@ -10,12 +12,20 @@ import {
   SfNotConnectedError,
 } from "../services/salesforceClient.js";
 import { applyFields } from "../services/sfWriter.js";
+import { runBriefForUser } from "../services/brief.js";
 import {
+  briefSuggestionField,
+  briefSuggestionResolved,
   cardWithFieldResolved,
   editFieldModal,
   parseActionId,
 } from "./blocks.js";
-import type { RecommendedField } from "../types.js";
+import type {
+  BriefPendingCard,
+  BriefSuggestion,
+  PendingCard,
+  RecommendedField,
+} from "../types.js";
 
 export function registerInteractivity(app: App): void {
   app.action(/^accept:.+/, async ({ ack, body, action, client }) => {
@@ -37,7 +47,7 @@ export function registerInteractivity(app: App): void {
     const parsed = parseActionId((action as any).action_id);
     if (!parsed || !parsed.field) return;
     const card = await getPendingCard(parsed.cardId);
-    if (!card) return;
+    if (!card || card.kind !== "standup") return;
     const fieldRec = card.recommendation.fields.find(
       (f) => f.field === parsed.field
     );
@@ -58,6 +68,40 @@ export function registerInteractivity(app: App): void {
     const parsed = parseActionId((action as any).action_id);
     if (!parsed) return;
     await handleApplyAll(app, body, parsed.cardId);
+  });
+
+  app.action(/^brief_apply:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed || !parsed.field) return;
+    const idx = parseInt(parsed.field, 10);
+    if (!Number.isFinite(idx)) return;
+    await handleBriefApply(app, body, parsed.cardId, idx);
+  });
+
+  app.action(/^brief_skip:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed || !parsed.field) return;
+    const idx = parseInt(parsed.field, 10);
+    if (!Number.isFinite(idx)) return;
+    await handleBriefSkip(app, body, parsed.cardId, idx);
+  });
+
+  app.action(/^brief_apply_all:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed) return;
+    await handleBriefApplyAll(app, body, parsed.cardId);
+  });
+
+  app.action(/^brief_pick_account:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed) return;
+    const accountName = ((action as any).value as string | undefined) ?? "";
+    if (!accountName) return;
+    await handleBriefPickAccount(body, accountName);
   });
 
   app.view(/^edit_field:.+/, async ({ ack, body, view, client }) => {
@@ -85,7 +129,7 @@ async function handleAccept(
   field: string
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card) return;
+  if (!card || card.kind !== "standup") return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   if (!fieldRec) return;
@@ -109,7 +153,7 @@ async function handleSkip(
   field: string
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card) return;
+  if (!card || card.kind !== "standup") return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   await appendAudit({
@@ -132,7 +176,7 @@ async function handleSkip(
 
 async function handleApplyAll(app: App, body: any, cardId: string): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card) return;
+  if (!card || card.kind !== "standup") return;
   const slackUserId = body.user.id as string;
   const fields = card.recommendation.fields;
   if (fields.length === 0) return;
@@ -157,7 +201,7 @@ async function handleEditSubmit(
   newValue: unknown
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card) return;
+  if (!card || card.kind !== "standup") return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   if (!fieldRec) return;
@@ -247,6 +291,161 @@ async function writeAndReply(
     text: "Updated",
   });
 
+}
+
+async function handleBriefApply(
+  app: App,
+  body: any,
+  cardId: string,
+  index: number
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "brief") return;
+  const suggestion = card.recommendation.suggestedActions[index];
+  if (!suggestion) return;
+  await applyBriefSuggestion(app, body, card, [index], [suggestion]);
+}
+
+async function handleBriefSkip(
+  app: App,
+  body: any,
+  cardId: string,
+  index: number
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "brief") return;
+  const suggestion = card.recommendation.suggestedActions[index];
+  const slackUserId = body.user.id as string;
+  await appendAudit({
+    slackUserId,
+    opportunityId: suggestion?.opportunityId,
+    fieldName: suggestion ? briefSuggestionField(suggestion.kind) : undefined,
+    action: "skipped",
+    newValue: suggestion ? String(suggestion.value ?? "") : null,
+    metadata: { briefCardId: cardId, suggestionIndex: index },
+  });
+  const blocks = briefSuggestionResolved(body.message?.blocks, index, "skipped");
+  await app.client.chat.update({
+    channel: body.channel.id,
+    ts: body.message.ts,
+    blocks,
+    text: body.message.text || "Updated",
+  });
+}
+
+async function handleBriefApplyAll(
+  app: App,
+  body: any,
+  cardId: string
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "brief") return;
+  const suggestions = card.recommendation.suggestedActions;
+  if (suggestions.length === 0) return;
+  const indexes = suggestions.map((_, i) => i);
+  await applyBriefSuggestion(app, body, card, indexes, suggestions);
+}
+
+async function applyBriefSuggestion(
+  app: App,
+  body: any,
+  card: BriefPendingCard,
+  indexes: number[],
+  suggestions: BriefSuggestion[]
+): Promise<void> {
+  const slackUserId = body.user.id as string;
+  let conn;
+  try {
+    conn = await getConnectionForUser(slackUserId);
+  } catch (err) {
+    if (err instanceof SfNotConnectedError) {
+      await app.client.chat.postEphemeral({
+        channel: body.channel.id,
+        user: slackUserId,
+        text: "Salesforce isn't connected. Run `/merlin connect`.",
+      });
+    }
+    return;
+  }
+
+  const byOpp = new Map<
+    string,
+    { field: string; newValue: unknown; oldValue: unknown }[]
+  >();
+  const indexByField = new Map<string, number>();
+  for (let i = 0; i < indexes.length; i++) {
+    const idx = indexes[i];
+    const s = suggestions[i];
+    const field = briefSuggestionField(s.kind);
+    const opp = card.recommendation.openOpportunities.find(
+      (o) => o.id === s.opportunityId
+    );
+    const oldValue =
+      field === "StageName"
+        ? opp?.stage
+        : field === "CloseDate"
+          ? opp?.closeDate
+          : field === "Amount"
+            ? opp?.amount
+            : null;
+    const arr = byOpp.get(s.opportunityId) ?? [];
+    arr.push({ field, newValue: s.value, oldValue: oldValue ?? null });
+    byOpp.set(s.opportunityId, arr);
+    indexByField.set(`${s.opportunityId}:${field}`, idx);
+  }
+
+  let blocks = body.message?.blocks;
+  if (!blocks) {
+    const fresh = await app.client.conversations.history({
+      channel: card.slackChannel,
+      latest: card.slackMessageTs,
+      inclusive: true,
+      limit: 1,
+    });
+    blocks = (fresh.messages as any[])?.[0]?.blocks ?? [];
+  }
+
+  for (const [oppId, fields] of byOpp) {
+    const results = await applyFields({
+      conn,
+      slackUserId,
+      opportunityId: oppId,
+      fields,
+    });
+    for (const r of results) {
+      const idx = indexByField.get(`${oppId}:${r.field}`);
+      if (idx === undefined) continue;
+      blocks = briefSuggestionResolved(
+        blocks,
+        idx,
+        r.ok ? "applied" : "skipped",
+        r.ok ? undefined : r.error
+      );
+    }
+  }
+
+  await app.client.chat.update({
+    channel: card.slackChannel,
+    ts: card.slackMessageTs,
+    blocks,
+    text: "Brief updated",
+  });
+}
+
+async function handleBriefPickAccount(
+  body: any,
+  accountName: string
+): Promise<void> {
+  const slackUserId = body.user.id as string;
+  const channelId = body.channel?.id as string;
+  if (!channelId) return;
+  const slack = new WebClient(config.slack.botToken);
+  await runBriefForUser({
+    slackUserId,
+    channelId,
+    accountQuery: accountName,
+    slack,
+  });
 }
 
 export async function saveUserPrefs(args: {

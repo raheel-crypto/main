@@ -1,0 +1,297 @@
+import type Anthropic from "@anthropic-ai/sdk";
+import { Connection } from "jsforce";
+import { DateTime } from "luxon";
+import { getCallsForUserToday } from "../services/gong.js";
+import {
+  AccountSearchResult,
+  escapeSoql,
+  fetchActivities,
+  fetchLastStageChangesForOpps,
+  fetchOpportunitiesForAccount,
+  findAccountsByName,
+} from "../services/sfReads.js";
+import { getUsageProvider } from "../services/usageDb.js";
+
+export interface AgentToolCtx {
+  conn: Connection;
+  slackUserId: string;
+  userEmail: string;
+  userTimezone: string;
+  instanceUrl: string;
+}
+
+export interface AgentTool {
+  name: string;
+  definition: Anthropic.Tool;
+  execute(input: any, ctx: AgentToolCtx): Promise<unknown>;
+}
+
+const REJECT_DML = /\b(INSERT|UPDATE|DELETE|UPSERT|MERGE)\b/i;
+
+function safeStringifyTruncated(value: unknown, max = 30_000): string {
+  const s = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  if (s.length <= max) return s;
+  return s.slice(0, max) + `\n...[truncated ${s.length - max} chars]`;
+}
+
+const now: AgentTool = {
+  name: "now",
+  definition: {
+    name: "now",
+    description:
+      "Return the current date/time, both UTC and in the rep's local timezone. Always call this when you need 'today' or to reason about relative dates.",
+    input_schema: { type: "object", properties: {} },
+  },
+  async execute(_input, ctx) {
+    const utc = DateTime.utc();
+    const local = utc.setZone(ctx.userTimezone);
+    return {
+      utc_iso: utc.toISO(),
+      local_iso: local.toISO(),
+      local_date: local.toISODate(),
+      timezone: ctx.userTimezone,
+    };
+  },
+};
+
+const sfFindAccount: AgentTool = {
+  name: "sf_find_account",
+  definition: {
+    name: "sf_find_account",
+    description:
+      "Fuzzy search Salesforce Accounts by name (LIKE %name%). Returns up to 10 matches with id, name, industry, ownerName.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Account name fragment" },
+      },
+      required: ["name"],
+    },
+  },
+  async execute(input, ctx) {
+    const name = String((input as any).name ?? "").trim();
+    if (!name) return { matches: [] };
+    const matches = await findAccountsByName(ctx.conn, name);
+    return { matches } satisfies { matches: AccountSearchResult[] };
+  },
+};
+
+const sfGetAccountSummary: AgentTool = {
+  name: "sf_get_account_summary",
+  definition: {
+    name: "sf_get_account_summary",
+    description:
+      "For one Account, return the account record, allowed Opportunity stage picklist values, open opportunities (with last-stage-change dates), and the 5 most-recently closed opportunities.",
+    input_schema: {
+      type: "object",
+      properties: {
+        accountId: { type: "string" },
+      },
+      required: ["accountId"],
+    },
+  },
+  async execute(input, ctx) {
+    const accountId = String((input as any).accountId ?? "");
+    if (!accountId) throw new Error("accountId required");
+
+    const [accountRes, openOpps, closedOpps] = await Promise.all([
+      ctx.conn.query(
+        `SELECT Id, Name, Industry, OwnerId, Owner.Name, Website
+           FROM Account WHERE Id = '${escapeSoql(accountId)}' LIMIT 1`
+      ),
+      fetchOpportunitiesForAccount(ctx.conn, accountId, true, 50),
+      fetchOpportunitiesForAccount(ctx.conn, accountId, false, 5),
+    ]);
+
+    const stagePicklist: string[] = await (async () => {
+      try {
+        const desc = await ctx.conn.describe("Opportunity");
+        const f = desc.fields.find((x) => x.name === "StageName");
+        return (f?.picklistValues ?? [])
+          .filter((p) => p.active)
+          .map((p) => p.value);
+      } catch {
+        return [];
+      }
+    })();
+
+    const stageChanges = await fetchLastStageChangesForOpps(
+      ctx.conn,
+      openOpps.map((o) => o.id)
+    );
+
+    const account =
+      (accountRes.records[0] as any) ?? { Id: accountId, Name: "(unknown)" };
+
+    return {
+      account: {
+        id: account.Id,
+        name: account.Name,
+        industry: account.Industry ?? null,
+        website: account.Website ?? null,
+        ownerName: account.Owner?.Name ?? null,
+      },
+      stagePicklist,
+      openOpportunities: openOpps.map((o) => ({
+        ...o,
+        lastStageChangeDate: stageChanges.get(o.id) ?? null,
+      })),
+      recentClosedOpportunities: closedOpps.filter((o) => o.isClosed),
+    };
+  },
+};
+
+const sfGetActivities: AgentTool = {
+  name: "sf_get_activities",
+  definition: {
+    name: "sf_get_activities",
+    description:
+      "Fetch Tasks and Events related to the given Salesforce record IDs (typically Opportunity IDs or Account IDs) since the given ISO date.",
+    input_schema: {
+      type: "object",
+      properties: {
+        whatIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Opportunity or Account IDs",
+        },
+        sinceIso: {
+          type: "string",
+          description: "Start date in YYYY-MM-DD or full ISO format",
+        },
+      },
+      required: ["whatIds", "sinceIso"],
+    },
+  },
+  async execute(input, ctx) {
+    const whatIds = ((input as any).whatIds ?? []) as string[];
+    const sinceIso = String((input as any).sinceIso ?? "");
+    if (!sinceIso) throw new Error("sinceIso required");
+    const map = await fetchActivities(ctx.conn, whatIds, sinceIso);
+    const out: Record<string, unknown[]> = {};
+    for (const [k, v] of map) out[k] = v;
+    return out;
+  },
+};
+
+const sfQuery: AgentTool = {
+  name: "sf_query",
+  definition: {
+    name: "sf_query",
+    description:
+      "Run an arbitrary read-only SOQL SELECT against Salesforce. Rejects any DML. Use sparingly — prefer the targeted tools.",
+    input_schema: {
+      type: "object",
+      properties: {
+        soql: { type: "string" },
+      },
+      required: ["soql"],
+    },
+  },
+  async execute(input, ctx) {
+    const soql = String((input as any).soql ?? "").trim();
+    if (!/^\s*SELECT\b/i.test(soql)) {
+      throw new Error("Only SELECT queries are allowed");
+    }
+    if (REJECT_DML.test(soql)) {
+      throw new Error("DML keywords are not allowed");
+    }
+    const result = await ctx.conn.query(soql);
+    return {
+      totalSize: result.totalSize,
+      done: result.done,
+      records: result.records,
+    };
+  },
+};
+
+const gongGetCalls: AgentTool = {
+  name: "gong_get_calls",
+  definition: {
+    name: "gong_get_calls",
+    description:
+      "Fetch Gong call summaries for the rep within a date range, optionally filtered by accountName substring match against the call title.",
+    input_schema: {
+      type: "object",
+      properties: {
+        fromIso: { type: "string", description: "Start datetime ISO" },
+        toIso: { type: "string", description: "End datetime ISO" },
+        accountName: {
+          type: "string",
+          description:
+            "Optional account name substring to filter call titles (case-insensitive).",
+        },
+      },
+      required: ["fromIso", "toIso"],
+    },
+  },
+  async execute(input, ctx) {
+    const fromIso = String((input as any).fromIso ?? "");
+    const toIso = String((input as any).toIso ?? "");
+    const accountName = (input as any).accountName as string | undefined;
+    if (!fromIso || !toIso) throw new Error("fromIso and toIso required");
+    if (!ctx.userEmail) return { calls: [] };
+    const calls = await getCallsForUserToday(ctx.userEmail, fromIso, toIso);
+    const filtered = accountName
+      ? calls.filter((c) =>
+          c.title.toLowerCase().includes(accountName.toLowerCase())
+        )
+      : calls;
+    return { calls: filtered.slice(0, 20) };
+  },
+};
+
+const rogoGetUsage: AgentTool = {
+  name: "rogo_get_usage",
+  definition: {
+    name: "rogo_get_usage",
+    description:
+      "Fetch product usage metrics for one or more Salesforce Account IDs. Returns an array of {accountId, metric, value, asOf} rows.",
+    input_schema: {
+      type: "object",
+      properties: {
+        accountIds: {
+          type: "array",
+          items: { type: "string" },
+        },
+      },
+      required: ["accountIds"],
+    },
+  },
+  async execute(input, _ctx) {
+    const ids = ((input as any).accountIds ?? []) as string[];
+    if (ids.length === 0) return { usage: [] };
+    const rows = await getUsageProvider().getUsageForAccounts(
+      ids,
+      DateTime.now().toISODate()!
+    );
+    return { usage: rows };
+  },
+};
+
+export const ALL_TOOLS: AgentTool[] = [
+  now,
+  sfFindAccount,
+  sfGetAccountSummary,
+  sfGetActivities,
+  sfQuery,
+  gongGetCalls,
+  rogoGetUsage,
+];
+
+export const TOOL_DEFINITIONS = ALL_TOOLS.map((t) => t.definition);
+
+export async function dispatchToolCall(
+  name: string,
+  input: unknown,
+  ctx: AgentToolCtx
+): Promise<string> {
+  const tool = ALL_TOOLS.find((t) => t.name === name);
+  if (!tool) return JSON.stringify({ error: `Unknown tool: ${name}` });
+  try {
+    const result = await tool.execute(input, ctx);
+    return safeStringifyTruncated(result);
+  } catch (err: any) {
+    return JSON.stringify({ error: err?.message ?? String(err) });
+  }
+}

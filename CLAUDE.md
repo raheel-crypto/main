@@ -126,6 +126,14 @@ Conventions specific to the bot:
 - `STANDUP_DRY_RUN=true` makes `sfWriter` log audit rows but skip the SF update — use it on Vercel preview deployments.
 - Action IDs encode card + field: `<verb>:<cardId>:<field>` (`accept`, `edit`, `skip`, `apply_all`). Don't change this shape without updating `slack/blocks.ts:parseActionId` and `slack/interactivity.ts`.
 
+**Post-Sales agent (`@merlin` Q&A + Brief)** — shared Anthropic tool-use loop in `slack-bot/src/agent/` (`runner.ts`, `tools.ts`, `prompts.ts`). Exposed to reps via DM only:
+- `app.message` handler in `slack/mentions.ts` routes DM text. Prefix `brief <account>` → `services/brief.ts` (Block Kit `briefCard` with action buttons; disambiguates on multiple Account matches). Anything else → `services/qa.ts` (placeholder "Thinking…" + `chat.update` with the agent's final text).
+- `app_mention` in channels gets a polite "DM me" ephemeral. No channel Q&A in v1.
+- Read-only tools: `sf_find_account`, `sf_get_account_summary`, `sf_get_activities`, `sf_query` (SELECT only — DML rejected), `gong_get_calls`, `rogo_get_usage`, `now`. Writes still flow through button → `sfWriter` so audit semantics match the standup.
+- `pending_cards.kind` discriminates `'standup'` vs `'brief'`; `opportunity_id` is nullable so brief cards can attach to an account. Existing handlers narrow on `card.kind === 'standup'`.
+- Slack manifest needs `app_mentions:read`, `im:history`, `im:read` scopes plus event subscriptions `app_mention` + `message.im`. Reinstall the app after changing these.
+- Probe the agent offline: `npm run probe -w slack-bot agent brief <slack_user_id> "Acme Corp"` or `agent qa <slack_user_id> "<question>"`.
+
 After pushing slack-bot changes:
 ```
 cd ~/sf-visualizer

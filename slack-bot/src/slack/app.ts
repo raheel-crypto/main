@@ -5,6 +5,7 @@ import {
   registerConfigSubmit,
   registerInteractivity,
 } from "./interactivity.js";
+import { registerMentions } from "./mentions.js";
 
 let cached: { app: App; receiver: ExpressReceiver } | null = null;
 
@@ -23,6 +24,7 @@ export function getApp(): { app: App; receiver: ExpressReceiver } {
   registerCommands(app);
   registerInteractivity(app);
   registerConfigSubmit(app);
+  registerMentions(app);
   cached = { app, receiver };
   return cached;
 }

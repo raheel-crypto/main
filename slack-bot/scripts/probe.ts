@@ -8,6 +8,8 @@ import {
   lookupRogoCustomer,
 } from "../src/services/rogoClient.js";
 import { getUser } from "../src/db/queries.js";
+import { runAgent } from "../src/agent/runner.js";
+import { BRIEF_SYSTEM, QA_SYSTEM } from "../src/agent/prompts.js";
 
 async function main() {
   const [_, __, kind, ...rest] = process.argv;
@@ -86,8 +88,53 @@ async function main() {
     console.log(JSON.stringify(row, null, 2));
     return;
   }
+  if (kind === "agent") {
+    const mode = rest[0];
+    const slackUserId = rest[1];
+    const message = rest.slice(2).join(" ");
+    if (!mode || !slackUserId || !message) {
+      console.error(
+        "usage: probe agent <brief|qa> <slack_user_id> <message...>"
+      );
+      process.exit(1);
+    }
+    const user = await getUser(slackUserId);
+    if (!user) throw new Error(`No user row for ${slackUserId}`);
+    const conn = await getConnectionForUser(slackUserId);
+    const today = DateTime.now().setZone(user.timezone).toISODate();
+    const result = await runAgent({
+      system: mode === "brief" ? BRIEF_SYSTEM : QA_SYSTEM,
+      userMessage:
+        mode === "brief"
+          ? `Generate a pre-meeting brief for the Salesforce account whose name matches: "${message}". Today is ${today} (${user.timezone}).`
+          : `Today is ${today} (${user.timezone}).\n\n${message}`,
+      ctx: {
+        conn,
+        slackUserId,
+        userEmail: user.email,
+        userTimezone: user.timezone,
+        instanceUrl: conn.instanceUrl!,
+      },
+    });
+    console.log(
+      JSON.stringify(
+        {
+          stopReason: result.stopReason,
+          toolCalls: result.toolCalls.map((c) => ({
+            name: c.name,
+            input: c.input,
+            result: c.result.slice(0, 500),
+          })),
+          finalText: result.finalText,
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent> <args...>"
   );
   process.exit(1);
 }

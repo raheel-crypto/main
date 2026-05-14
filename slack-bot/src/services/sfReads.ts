@@ -1,0 +1,150 @@
+import { Connection } from "jsforce";
+import type { SfActivity } from "../types.js";
+
+export function escapeSoql(value: string): string {
+  return value.replace(/'/g, "\\'");
+}
+
+export interface ActivityWithWhat extends SfActivity {
+  whatId: string;
+}
+
+export async function fetchActivities(
+  conn: Connection,
+  whatIds: string[],
+  sinceIso: string
+): Promise<Map<string, SfActivity[]>> {
+  const out = new Map<string, SfActivity[]>();
+  if (whatIds.length === 0) return out;
+  const ids = whatIds.map((id) => `'${escapeSoql(id)}'`).join(",");
+  const sinceDate = sinceIso.slice(0, 10);
+
+  const taskSoql = `
+    SELECT Id, WhatId, Subject, ActivityDate, Description
+      FROM Task
+     WHERE WhatId IN (${ids}) AND ActivityDate >= ${sinceDate}
+     ORDER BY ActivityDate DESC
+     LIMIT 200`;
+  const eventSoql = `
+    SELECT Id, WhatId, Subject, ActivityDate, Description
+      FROM Event
+     WHERE WhatId IN (${ids}) AND ActivityDate >= ${sinceDate}
+     ORDER BY ActivityDate DESC
+     LIMIT 200`;
+
+  const [tasks, events] = await Promise.all([
+    conn.query(taskSoql),
+    conn.query(eventSoql),
+  ]);
+
+  const push = (whatId: string, a: SfActivity) => {
+    const arr = out.get(whatId) ?? [];
+    arr.push(a);
+    out.set(whatId, arr);
+  };
+
+  for (const r of tasks.records as any[]) {
+    push(r.WhatId, {
+      id: r.Id,
+      type: "Task",
+      subject: r.Subject ?? "",
+      activityDate: r.ActivityDate ?? null,
+      description: r.Description ?? null,
+    });
+  }
+  for (const r of events.records as any[]) {
+    push(r.WhatId, {
+      id: r.Id,
+      type: "Event",
+      subject: r.Subject ?? "",
+      activityDate: r.ActivityDate ?? null,
+      description: r.Description ?? null,
+    });
+  }
+  return out;
+}
+
+export interface AccountSearchResult {
+  id: string;
+  name: string;
+  industry: string | null;
+  ownerName: string | null;
+}
+
+export async function findAccountsByName(
+  conn: Connection,
+  name: string,
+  limit = 10
+): Promise<AccountSearchResult[]> {
+  const q = `
+    SELECT Id, Name, Industry, Owner.Name
+      FROM Account
+     WHERE Name LIKE '%${escapeSoql(name)}%'
+     ORDER BY Name
+     LIMIT ${limit}`;
+  const result = await conn.query(q);
+  return (result.records as any[]).map((r) => ({
+    id: r.Id,
+    name: r.Name,
+    industry: r.Industry ?? null,
+    ownerName: r.Owner?.Name ?? null,
+  }));
+}
+
+export interface AccountOpportunity {
+  id: string;
+  name: string;
+  stage: string;
+  amount: number | null;
+  closeDate: string | null;
+  isClosed: boolean;
+  isWon: boolean;
+  nextStep: string | null;
+  ownerId: string;
+}
+
+export async function fetchOpportunitiesForAccount(
+  conn: Connection,
+  accountId: string,
+  openOnly = true,
+  limit = 50
+): Promise<AccountOpportunity[]> {
+  const closedFilter = openOnly ? "AND IsClosed = false" : "";
+  const q = `
+    SELECT Id, Name, StageName, Amount, CloseDate, IsClosed, IsWon, NextStep, OwnerId
+      FROM Opportunity
+     WHERE AccountId = '${escapeSoql(accountId)}' ${closedFilter}
+     ORDER BY CloseDate ASC NULLS LAST
+     LIMIT ${limit}`;
+  const result = await conn.query(q);
+  return (result.records as any[]).map((r) => ({
+    id: r.Id,
+    name: r.Name,
+    stage: r.StageName,
+    amount: r.Amount ?? null,
+    closeDate: r.CloseDate ?? null,
+    isClosed: !!r.IsClosed,
+    isWon: !!r.IsWon,
+    nextStep: r.NextStep ?? null,
+    ownerId: r.OwnerId,
+  }));
+}
+
+export async function fetchLastStageChangesForOpps(
+  conn: Connection,
+  oppIds: string[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (oppIds.length === 0) return out;
+  const ids = oppIds.map((id) => `'${escapeSoql(id)}'`).join(",");
+  const soql = `
+    SELECT OpportunityId, CreatedDate
+      FROM OpportunityHistory
+     WHERE OpportunityId IN (${ids})
+     ORDER BY CreatedDate DESC`;
+  const result = await conn.query(soql);
+  for (const r of result.records as any[]) {
+    if (!out.has(r.OpportunityId)) out.set(r.OpportunityId, r.CreatedDate);
+  }
+  return out;
+}

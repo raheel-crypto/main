@@ -34,12 +34,16 @@ CREATE TABLE IF NOT EXISTS pending_cards (
   slack_channel TEXT NOT NULL,
   slack_thread_ts TEXT NOT NULL,
   slack_message_ts TEXT NOT NULL DEFAULT '',
-  opportunity_id TEXT NOT NULL,
+  opportunity_id TEXT,
   recommendation JSONB NOT NULL,
   status TEXT NOT NULL DEFAULT 'open',
+  kind TEXT NOT NULL DEFAULT 'standup',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE pending_cards ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'standup';
+ALTER TABLE pending_cards ALTER COLUMN opportunity_id DROP NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_pending_user ON pending_cards(slack_user_id, status);
+CREATE INDEX IF NOT EXISTS idx_pending_kind ON pending_cards(slack_user_id, kind, status);
 
 CREATE TABLE IF NOT EXISTS audit_log (
   id BIGSERIAL PRIMARY KEY,

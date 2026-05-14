@@ -90,16 +90,30 @@ export const RecommendationSchema = z.object({
 export type RecommendedField = z.infer<typeof RecommendedFieldSchema>;
 export type Recommendation = z.infer<typeof RecommendationSchema>;
 
-export interface PendingCard {
+export type PendingCardKind = "standup" | "brief";
+
+export interface PendingCardBase {
   id: string;
   slackUserId: string;
   slackChannel: string;
   slackThreadTs: string;
   slackMessageTs: string;
-  opportunityId: string;
-  recommendation: Recommendation;
   status: "open" | "applied" | "partial" | "skipped" | "expired";
 }
+
+export interface StandupPendingCard extends PendingCardBase {
+  kind: "standup";
+  opportunityId: string;
+  recommendation: Recommendation;
+}
+
+export interface BriefPendingCard extends PendingCardBase {
+  kind: "brief";
+  opportunityId: string | null;
+  recommendation: BriefPayload;
+}
+
+export type PendingCard = StandupPendingCard | BriefPendingCard;
 
 export type AuditAction =
   | "recommended"
@@ -108,7 +122,78 @@ export type AuditAction =
   | "skipped"
   | "applied"
   | "apply_failed"
-  | "recommend_failed";
+  | "recommend_failed"
+  | "briefed"
+  | "brief_failed"
+  | "qa_answered"
+  | "qa_failed";
+
+const BRIEF_SUGGESTION_KINDS = [
+  "update_next_step",
+  "update_close_date",
+  "update_stage",
+  "update_amount",
+] as const;
+
+export const BriefSuggestionSchema = z.object({
+  kind: z.enum(BRIEF_SUGGESTION_KINDS),
+  opportunityId: z.string(),
+  value: z.union([z.string(), z.number()]),
+  reasoning: z.string().min(1),
+});
+
+export const BriefCallSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  startedAt: z.string(),
+  brief: z.string().nullable().optional(),
+  callUrl: z.string().nullable().optional(),
+});
+
+export const BriefActivitySchema = z.object({
+  type: z.string(),
+  subject: z.string(),
+  when: z.string().nullable().optional(),
+  who: z.string().nullable().optional(),
+});
+
+export const BriefOpportunitySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  stage: z.string(),
+  amount: z.number().nullable().optional(),
+  closeDate: z.string().nullable().optional(),
+  lastStageChangeDate: z.string().nullable().optional(),
+});
+
+export const BriefPayloadSchema = z.object({
+  accountId: z.string(),
+  accountName: z.string(),
+  snapshot: z.string(),
+  recentCalls: z.array(BriefCallSchema).default([]),
+  recentActivities: z.array(BriefActivitySchema).default([]),
+  openOpportunities: z.array(BriefOpportunitySchema).default([]),
+  usageTrend: z.string().nullable().optional(),
+  talkingPoints: z.array(z.string()).default([]),
+  suggestedActions: z.array(BriefSuggestionSchema).default([]),
+});
+
+export const BriefDisambiguateSchema = z.object({
+  kind: z.literal("disambiguate"),
+  candidates: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      industry: z.string().nullable().optional(),
+      ownerName: z.string().nullable().optional(),
+    })
+  ),
+});
+
+export type BriefPayload = z.infer<typeof BriefPayloadSchema>;
+export type BriefSuggestion = z.infer<typeof BriefSuggestionSchema>;
+export type BriefSuggestionKind = (typeof BRIEF_SUGGESTION_KINDS)[number];
+export type BriefDisambiguate = z.infer<typeof BriefDisambiguateSchema>;
 
 export type RogoCustomer = Record<string, unknown>;
 

@@ -1,7 +1,9 @@
 import { getPool } from "./client.js";
 import type {
   AuditAction,
+  BriefPayload,
   PendingCard,
+  PendingCardKind,
   Recommendation,
   SfTokens,
   UserPrefs,
@@ -168,15 +170,19 @@ export async function consumeOauthState(
   return { slackUserId: r.slack_user_id, codeVerifier: r.code_verifier };
 }
 
-export async function insertPendingCard(
-  c: Omit<PendingCard, "id" | "slackMessageTs" | "status"> & {
-    slackMessageTs?: string;
-  }
-): Promise<string> {
+export async function insertPendingCard(c: {
+  slackUserId: string;
+  slackChannel: string;
+  slackThreadTs: string;
+  slackMessageTs?: string;
+  opportunityId: string | null;
+  recommendation: Recommendation | BriefPayload;
+  kind?: PendingCardKind;
+}): Promise<string> {
   const pool = getPool();
   const { rows } = await pool.query(
-    `INSERT INTO pending_cards (slack_user_id, slack_channel, slack_thread_ts, slack_message_ts, opportunity_id, recommendation)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    `INSERT INTO pending_cards (slack_user_id, slack_channel, slack_thread_ts, slack_message_ts, opportunity_id, recommendation, kind)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
     [
       c.slackUserId,
       c.slackChannel,
@@ -184,6 +190,7 @@ export async function insertPendingCard(
       c.slackMessageTs ?? "",
       c.opportunityId,
       JSON.stringify(c.recommendation),
+      c.kind ?? "standup",
     ]
   );
   return rows[0].id;
@@ -204,24 +211,38 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
   const pool = getPool();
   const { rows } = await pool.query(
     `SELECT id, slack_user_id, slack_channel, slack_thread_ts, slack_message_ts,
-            opportunity_id, recommendation, status
+            opportunity_id, recommendation, status, kind
        FROM pending_cards WHERE id = $1`,
     [id]
   );
   const r = rows[0];
   if (!r) return null;
-  return {
+  const recommendation =
+    typeof r.recommendation === "string"
+      ? JSON.parse(r.recommendation)
+      : r.recommendation;
+  const base = {
     id: r.id,
     slackUserId: r.slack_user_id,
     slackChannel: r.slack_channel,
     slackThreadTs: r.slack_thread_ts,
     slackMessageTs: r.slack_message_ts,
-    opportunityId: r.opportunity_id,
-    recommendation:
-      typeof r.recommendation === "string"
-        ? (JSON.parse(r.recommendation) as Recommendation)
-        : (r.recommendation as Recommendation),
     status: r.status,
+  };
+  const kind: PendingCardKind = r.kind === "brief" ? "brief" : "standup";
+  if (kind === "brief") {
+    return {
+      ...base,
+      kind: "brief",
+      opportunityId: r.opportunity_id ?? null,
+      recommendation: recommendation as BriefPayload,
+    };
+  }
+  return {
+    ...base,
+    kind: "standup",
+    opportunityId: r.opportunity_id,
+    recommendation: recommendation as Recommendation,
   };
 }
 

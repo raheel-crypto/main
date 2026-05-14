@@ -3,16 +3,16 @@ import { DateTime } from "luxon";
 import type {
   GongCall,
   OppContext,
-  SfActivity,
   SfOpportunity,
   UsageRow,
 } from "../types.js";
 import { getUsageProvider } from "./usageDb.js";
 import { getCallsForUserToday } from "./gong.js";
-
-function escape(value: string): string {
-  return value.replace(/'/g, "\\'");
-}
+import {
+  escapeSoql as escape,
+  fetchActivities,
+  fetchLastStageChangesForOpps,
+} from "./sfReads.js";
 
 async function getStagePicklist(conn: Connection): Promise<string[]> {
   try {
@@ -53,78 +53,6 @@ async function fetchOpenOpps(
   }));
 }
 
-async function fetchLastStageChanges(
-  conn: Connection,
-  oppIds: string[]
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (oppIds.length === 0) return out;
-  const ids = oppIds.map((id) => `'${escape(id)}'`).join(",");
-  const soql = `
-    SELECT OpportunityId, CreatedDate, StageName
-      FROM OpportunityHistory
-     WHERE OpportunityId IN (${ids})
-     ORDER BY CreatedDate DESC`;
-  const result = await conn.query(soql);
-  for (const r of result.records as any[]) {
-    if (!out.has(r.OpportunityId)) out.set(r.OpportunityId, r.CreatedDate);
-  }
-  return out;
-}
-
-async function fetchActivities(
-  conn: Connection,
-  oppIds: string[],
-  sinceIso: string
-): Promise<Map<string, SfActivity[]>> {
-  const out = new Map<string, SfActivity[]>();
-  if (oppIds.length === 0) return out;
-  const ids = oppIds.map((id) => `'${escape(id)}'`).join(",");
-  const sinceDate = sinceIso.slice(0, 10);
-
-  const taskSoql = `
-    SELECT Id, WhatId, Subject, ActivityDate, Description
-      FROM Task
-     WHERE WhatId IN (${ids}) AND ActivityDate >= ${sinceDate}
-     ORDER BY ActivityDate DESC
-     LIMIT 200`;
-  const eventSoql = `
-    SELECT Id, WhatId, Subject, ActivityDate, Description
-      FROM Event
-     WHERE WhatId IN (${ids}) AND ActivityDate >= ${sinceDate}
-     ORDER BY ActivityDate DESC
-     LIMIT 200`;
-
-  const [tasks, events] = await Promise.all([
-    conn.query(taskSoql),
-    conn.query(eventSoql),
-  ]);
-
-  for (const r of tasks.records as any[]) {
-    const arr = out.get(r.WhatId) ?? [];
-    arr.push({
-      id: r.Id,
-      type: "Task",
-      subject: r.Subject ?? "",
-      activityDate: r.ActivityDate ?? null,
-      description: r.Description ?? null,
-    });
-    out.set(r.WhatId, arr);
-  }
-  for (const r of events.records as any[]) {
-    const arr = out.get(r.WhatId) ?? [];
-    arr.push({
-      id: r.Id,
-      type: "Event",
-      subject: r.Subject ?? "",
-      activityDate: r.ActivityDate ?? null,
-      description: r.Description ?? null,
-    });
-    out.set(r.WhatId, arr);
-  }
-  return out;
-}
-
 export interface BuildContextInput {
   conn: Connection;
   sfUserId: string;
@@ -158,7 +86,7 @@ export async function buildContext(
   ]);
 
   const oppIds = opps.map((o) => o.id);
-  const stageChanges = await fetchLastStageChanges(input.conn, oppIds);
+  const stageChanges = await fetchLastStageChangesForOpps(input.conn, oppIds);
 
   let earliestSince = todayStart;
   for (const dt of stageChanges.values()) {
