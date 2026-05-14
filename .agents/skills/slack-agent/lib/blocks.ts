@@ -105,12 +105,12 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
         },
         {
           type: "mrkdwn",
-          text: `*ARR* _(placeholder)_\n${pricing.arr != null ? fmtMoney(pricing.arr) : "—"}`,
+          text: `*ARR*\n${pricing.arr != null ? fmtMoney(pricing.arr) : "—"}`,
         },
         {
           type: "mrkdwn",
-          text: `*TCV* _(placeholder)_\n${pricing.tcv != null ? fmtMoney(pricing.tcv) : "—"}${
-            pricing.contract_years != null ? ` _(${pricing.contract_years} yrs)_` : ""
+          text: `*TCV*\n${pricing.tcv != null ? fmtMoney(pricing.tcv) : "—"}${
+            pricing.contract_months != null ? ` _(${pricing.contract_months} mo)_` : ""
           }`,
         },
       ],

@@ -50,6 +50,7 @@ function toQuoteApprovalFields(r: ApprovalRequest): Record<string, unknown> {
     Discount_Pct__c: r.pricing.discount_pct,
     ARR__c: r.pricing.arr,
     TCV__c: r.pricing.tcv,
+    Contract_Term_Months__c: r.pricing.contract_months,
     Contract_Start_Date__c: r.form.contract_start_date || null,
     Contract_End_Date__c: r.form.contract_end_date || null,
     Pricing_Discussed__c: r.form.pricing_discussed,

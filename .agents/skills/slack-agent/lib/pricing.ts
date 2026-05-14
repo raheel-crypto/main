@@ -23,12 +23,14 @@ export function calculatePricing(form: QuoteForm): PricingBreakdown {
       ? discountPerUser / listPrice
       : null;
 
-  // Placeholder math — swap when the team finalizes the real formula.
-  // ARR  = annual sum of recurring fees (what's currently labeled Total Amount).
-  // TCV  = ARR × contract years if both dates supplied; null otherwise.
+  // ARR = annual sum of recurring fees (same value as total_amount; surfaced
+  // separately so reports / blocks can pivot on it).
+  // TCV = ARR × contract_months / 12. Sales contracts run in whole months,
+  // so we snap day deltas to the nearest month for consistent math
+  // (e.g. an 18-month deal = 1.5 × ARR exactly, not 1.49).
   const arr = round2(total);
-  const years = computeContractYears(form.contract_start_date, form.contract_end_date);
-  const tcv = years != null ? round2(arr * years) : null;
+  const months = computeContractMonths(form.contract_start_date, form.contract_end_date);
+  const tcv = months != null ? round2(arr * (months / 12)) : null;
 
   return {
     platform_fee_total: round2(platformFee),
@@ -40,17 +42,20 @@ export function calculatePricing(form: QuoteForm): PricingBreakdown {
     discount_pct: discountPct,
     arr,
     tcv,
-    contract_years: years,
+    contract_months: months,
   };
 }
 
-function computeContractYears(start: string | null | undefined, end: string | null | undefined): number | null {
+function computeContractMonths(
+  start: string | null | undefined,
+  end: string | null | undefined,
+): number | null {
   if (!start || !end) return null;
   const s = Date.parse(start);
   const e = Date.parse(end);
   if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return null;
-  const yearMs = 365.25 * 24 * 60 * 60 * 1000;
-  return Math.round(((e - s) / yearMs) * 100) / 100;
+  const days = (e - s) / (24 * 60 * 60 * 1000);
+  return Math.round(days / 30.4375); // avg days/month
 }
 
 function round2(n: number): number {

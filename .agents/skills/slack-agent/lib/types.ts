@@ -33,17 +33,17 @@ export interface PricingBreakdown {
   /** 0–1. Null for Enterprise. */
   discount_pct: number | null;
   /**
-   * Annual Recurring Revenue — placeholder. Currently set to total_amount
-   * (annual sum). Replace with the team's real formula when finalized.
+   * Annual Recurring Revenue. Same value as total_amount; surfaced as a
+   * named field so reports can pivot on it.
    */
   arr: number | null;
   /**
-   * Total Contract Value — placeholder. Currently arr × contract years.
-   * Replace with the team's real formula when finalized.
+   * Total Contract Value = ARR × (contract months / 12).
+   * Null if contract dates aren't supplied or are invalid.
    */
   tcv: number | null;
-  /** Years between start/end date (rounded to 0.01). Null if dates invalid. */
-  contract_years: number | null;
+  /** Whole-month contract term derived from start/end dates. Null if invalid. */
+  contract_months: number | null;
 }
 
 /** Resolved opportunity context from SFDC. */
