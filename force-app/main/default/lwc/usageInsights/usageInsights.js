@@ -1,6 +1,7 @@
 import { LightningElement, api } from 'lwc';
 import submitJob from '@salesforce/apex/RogoUsageInsightsController.submitJob';
 import fetchJob from '@salesforce/apex/RogoUsageInsightsController.fetchJob';
+import computeUpsell from '@salesforce/apex/UpsellSignalsService.compute';
 
 const DEFAULT_POLL_MS = 2000;
 const MAX_POLLS = 90;
@@ -15,30 +16,76 @@ export default class UsageInsights extends LightningElement {
     rawAnswer;
     jobId;
 
+    upsell;
+    upsellWarningRows;
+    narrativeLoading = false;
+    narrativeSections;
+    rawNarrative;
+
     get empty() {
         return !this.loading && !this.metrics && !this.error;
     }
+    get accountHeader() {
+        if (this.upsell && this.upsell.accountName) {
+            const tierBit = this.upsell.accountTier ? ` · ${this.upsell.accountTier}` : '';
+            return `${this.upsell.accountName}${tierBit}`;
+        }
+        if (this.metrics && this.metrics.accountName) {
+            return `${this.metrics.accountName}`;
+        }
+        return null;
+    }
 
-    get dauWauDisplay() {
-        return formatRatio(this.metrics && this.metrics.dauWau);
-    }
-    get wauEnrolledDisplay() {
-        return formatRatio(this.metrics && this.metrics.wauEnrolled);
-    }
-    get qpuDisplay() {
-        return formatNumber(this.metrics && this.metrics.qpu);
-    }
-    get dauWauSub() {
+    get dauWauDisplay()    { return fmtRatio(this.metrics && this.metrics.dauWau); }
+    get wauEnrolledDisplay() { return fmtRatio(this.metrics && this.metrics.wauEnrolled); }
+    get qpuDisplay()       { return fmtNumber(this.metrics && this.metrics.qpu); }
+    get dauWauSub()        {
         if (!this.metrics) return '';
-        return `DAU ${formatInt(this.metrics.dau)} / WAU ${formatInt(this.metrics.wau)}`;
+        return `DAU ${fmtInt(this.metrics.dau)} / WAU ${fmtInt(this.metrics.wau)}`;
     }
-    get wauEnrolledSub() {
+    get wauEnrolledSub()   {
         if (!this.metrics) return '';
-        return `WAU ${formatInt(this.metrics.wau)} / Enrolled ${formatInt(this.metrics.enrolled)}`;
+        return `WAU ${fmtInt(this.metrics.wau)} / Enrolled ${fmtInt(this.metrics.enrolled)}`;
     }
-    get qpuSub() {
+    get qpuSub()           {
         if (!this.metrics) return '';
-        return `${formatInt(this.metrics.queries)} queries`;
+        return `${fmtInt(this.metrics.queries)} queries`;
+    }
+
+    get scoreBand() {
+        if (!this.upsell) return '';
+        const s = this.upsell.score;
+        if (s >= 75) return 'Strong upsell candidate';
+        if (s >= 50) return 'Worth pursuing';
+        if (s >= 25) return 'Watch';
+        return 'Low signal';
+    }
+
+    get signalRows() {
+        if (!this.upsell || !this.upsell.signals) return [];
+        return this.upsell.signals.map((s) => {
+            const weight = s.weight || 0;
+            const pts = s.contributionPoints == null ? 0 : Number(s.contributionPoints);
+            const hasBar = weight > 0 && s.status !== 'missing' && s.status !== 'pending';
+            const fillPercent = weight > 0 ? Math.round((pts / weight) * 100) : 0;
+            const pointsDisplay = s.status === 'pending'
+                ? 'pending'
+                : s.status === 'missing'
+                    ? 'no data'
+                    : `${pts.toFixed(1)} / ${weight}`;
+            const pointsClass = s.status === 'pending' || s.status === 'missing'
+                ? 'signal-points signal-points-muted'
+                : 'signal-points';
+            return {
+                key: s.key,
+                label: s.label,
+                detail: s.detail,
+                hasBar,
+                fillPercent,
+                pointsDisplay,
+                pointsClass
+            };
+        });
     }
 
     async handleGenerate() {
@@ -49,47 +96,80 @@ export default class UsageInsights extends LightningElement {
             const job = await submitJob({ accountId: this.recordId });
             this.jobId = job.jobId;
             this.statusLabel = 'Job accepted, waiting for analysis...';
-            await this.pollUntilTerminal(job.nextPollAfterMs || DEFAULT_POLL_MS);
+            const usageResult = await this.pollUntilTerminal(this.jobId, DEFAULT_POLL_MS, (r) => {
+                if (typeof r.progress === 'number') {
+                    this.statusLabel = `Analyzing usage... ${Math.round(r.progress * 100)}%`;
+                }
+            });
+            if (!usageResult) return;
+
+            this.rawAnswer = usageResult.rawAnswer;
+            if (usageResult.metrics) {
+                this.metrics = usageResult.metrics;
+            } else {
+                this.error = 'Usage job completed but no metrics could be parsed.';
+                this.loading = false;
+                return;
+            }
+            this.loading = false;
+
+            await this.runUpsellFlow();
         } catch (e) {
             this.handleError(e);
         }
     }
 
-    async pollUntilTerminal(initialDelay) {
+    async runUpsellFlow() {
+        try {
+            const out = await computeUpsell({
+                accountId: this.recordId,
+                dauWauObserved: this.metrics.dauWau,
+                wauEnrolledObserved: this.metrics.wauEnrolled,
+                qpuObserved: this.metrics.qpu
+            });
+            this.upsell = out;
+            this.upsellWarningRows = (out.warnings && out.warnings.length)
+                ? out.warnings.map((w, i) => ({ id: `w${i}`, text: w }))
+                : null;
+
+            if (out.narrativeJobId) {
+                this.narrativeLoading = true;
+                const narrResult = await this.pollUntilTerminal(out.narrativeJobId, DEFAULT_POLL_MS, () => {});
+                this.narrativeLoading = false;
+                if (narrResult && narrResult.status === 'completed') {
+                    this.rawNarrative = narrResult.rawAnswer;
+                    this.narrativeSections = parseNarrative(narrResult.rawAnswer);
+                }
+            }
+        } catch (e) {
+            const msg = (e && e.body && e.body.message) || (e && e.message) || 'Upsell forecast failed';
+            this.upsellWarningRows = [{ id: 'w0', text: msg }];
+        }
+    }
+
+    async pollUntilTerminal(jobId, initialDelay, onProgress) {
         let delay = initialDelay;
         for (let i = 0; i < MAX_POLLS; i++) {
             await wait(delay);
             let result;
             try {
-                result = await fetchJob({ jobId: this.jobId });
+                result = await fetchJob({ jobId });
             } catch (e) {
                 this.handleError(e);
-                return;
+                return null;
             }
-            if (typeof result.progress === 'number') {
-                this.statusLabel = `Analyzing... ${Math.round(result.progress * 100)}%`;
-            }
-            if (result.status === 'completed') {
-                this.rawAnswer = result.rawAnswer;
-                if (result.metrics) {
-                    this.metrics = result.metrics;
-                } else {
-                    this.error = 'Job completed but no metrics could be parsed from the answer. See raw response.';
-                }
-                this.loading = false;
-                return;
-            }
+            if (onProgress) onProgress(result);
+            if (result.status === 'completed') return result;
             if (result.status === 'failed') {
-                this.error = result.errorMessage
-                    ? `Job failed: ${result.errorMessage}`
-                    : 'Job failed';
+                this.error = result.errorMessage ? `Job failed: ${result.errorMessage}` : 'Job failed';
                 this.loading = false;
-                return;
+                return null;
             }
             delay = result.nextPollAfterMs || DEFAULT_POLL_MS;
         }
         this.error = 'Timed out waiting for Rogo analysis.';
         this.loading = false;
+        return null;
     }
 
     reset() {
@@ -98,10 +178,16 @@ export default class UsageInsights extends LightningElement {
         this.rawAnswer = undefined;
         this.jobId = undefined;
         this.statusLabel = '';
+        this.upsell = undefined;
+        this.upsellWarningRows = undefined;
+        this.narrativeLoading = false;
+        this.narrativeSections = undefined;
+        this.rawNarrative = undefined;
     }
 
     handleError(e) {
         this.loading = false;
+        this.narrativeLoading = false;
         this.error =
             (e && e.body && e.body.message) ||
             (e && e.message) ||
@@ -113,17 +199,41 @@ function wait(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function formatRatio(v) {
+function fmtRatio(v) {
     if (v == null) return '—';
     return `${(Number(v) * 100).toFixed(1)}%`;
 }
 
-function formatNumber(v) {
+function fmtNumber(v) {
     if (v == null) return '—';
     return Number(v).toFixed(1);
 }
 
-function formatInt(v) {
+function fmtInt(v) {
     if (v == null) return '—';
     return String(v);
+}
+
+function parseNarrative(md) {
+    if (!md) return null;
+    const sections = [];
+    let current = null;
+    for (const rawLine of md.split('\n')) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        if (line.startsWith('## ')) {
+            current = { id: `s${sections.length}`, title: line.slice(3).trim(), items: [] };
+            sections.push(current);
+        } else if (current) {
+            const cleaned = line
+                .replace(/^\d+\.\s+/, '')
+                .replace(/^[-*]\s+/, '')
+                .replace(/\*\*(.+?)\*\*/g, '$1');
+            current.items.push({
+                id: `${current.id}i${current.items.length}`,
+                text: cleaned
+            });
+        }
+    }
+    return sections.length ? sections : null;
 }

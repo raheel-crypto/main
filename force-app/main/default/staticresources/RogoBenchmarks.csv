@@ -1,0 +1,18 @@
+DIMENSION,GROUP_VALUE,CUSTOMER_COUNT,DAU_WAU_PCT,WAU_ENROLLED_PCT,QPU
+Business Type,Asset Manager,12,47.0,65.8,20.0
+Business Type,Hedge Fund,25,40.7,39.1,9.4
+Business Type,Investment Bank,108,46.0,59.1,19.4
+Business Type,NULL / MISSING,13,33.3,25.8,9.8
+Business Type,Other,65,47.1,57.5,18.4
+Business Type,Private Credit,1,55.6,96.4,47.9
+Business Type,Private Equity,52,43.1,38.9,17.8
+Business Type,Venture Capital,9,63.8,68.2,33.1
+Overall,All Customers,285,45.8,57.9,19.2
+Region,AMERICAS,189,46.1,57.4,19.0
+Region,APAC,24,47.1,69.1,22.0
+Region,EMEA,60,43.6,59.2,18.9
+Region,Unknown,12,31.5,25.0,7.8
+Segment,Enterprise,51,45.8,59.0,19.0
+Segment,Mid-Market,119,50.2,54.6,25.3
+Segment,SMB,114,52.0,65.0,25.5
+Segment,Unknown,1,29.7,23.4,6.8

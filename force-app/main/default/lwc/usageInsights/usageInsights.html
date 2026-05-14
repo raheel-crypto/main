@@ -1,8 +1,8 @@
 <template>
-    <lightning-card title="Usage Insights" icon-name="standard:metrics">
+    <lightning-card title="Account Insights" icon-name="standard:metrics">
         <div slot="actions">
             <lightning-button
-                label="Generate Usage Insights"
+                label="Generate Insights"
                 variant="brand"
                 onclick={handleGenerate}
                 disabled={loading}>
@@ -25,12 +25,11 @@
             </template>
 
             <template lwc:if={metrics}>
-                <template lwc:if={metrics.accountName}>
-                    <p class="slds-text-title_caps slds-m-bottom_x-small">
-                        {metrics.accountName} &middot; last 28 days
-                    </p>
+                <template lwc:if={accountHeader}>
+                    <p class="slds-text-title_caps slds-m-bottom_x-small">{accountHeader}</p>
                 </template>
 
+                <p class="section-heading">Usage &middot; last 28 days</p>
                 <div class="slds-grid slds-gutters slds-wrap">
                     <div class="slds-col slds-size_1-of-3 metric-tile">
                         <p class="metric-label">DAU / WAU (stickiness)</p>
@@ -48,19 +47,82 @@
                         <p class="metric-sub">{qpuSub}</p>
                     </div>
                 </div>
+            </template>
 
-                <template lwc:if={rawAnswer}>
-                    <lightning-accordion class="slds-m-top_medium" allow-multiple-sections-open>
-                        <lightning-accordion-section name="raw" label="Raw bot response">
-                            <pre class="raw-answer">{rawAnswer}</pre>
-                        </lightning-accordion-section>
-                    </lightning-accordion>
+            <template lwc:if={upsell}>
+                <p class="section-heading slds-m-top_medium">Upsell Forecast</p>
+                <div class="slds-grid slds-gutters slds-wrap">
+                    <div class="slds-col slds-size_1-of-3">
+                        <div class="score-card">
+                            <p class="metric-label">Upsell Score</p>
+                            <p class="score-value">{upsell.score}<span class="score-out-of">/100</span></p>
+                            <p class="metric-sub">{scoreBand}</p>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_2-of-3">
+                        <template for:each={signalRows} for:item="sig">
+                            <div key={sig.key} class="signal-row">
+                                <div class="signal-header">
+                                    <span class="signal-label">{sig.label}</span>
+                                    <span class={sig.pointsClass}>{sig.pointsDisplay}</span>
+                                </div>
+                                <template lwc:if={sig.hasBar}>
+                                    <lightning-progress-bar value={sig.fillPercent} size="small"></lightning-progress-bar>
+                                </template>
+                                <p class="signal-detail">{sig.detail}</p>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <template lwc:if={upsellWarningRows}>
+                    <div class="slds-m-top_small slds-text-color_weak slds-text-body_small">
+                        <template for:each={upsellWarningRows} for:item="w">
+                            <p key={w.id}>&middot; {w.text}</p>
+                        </template>
+                    </div>
                 </template>
+            </template>
+
+            <template lwc:if={narrativeLoading}>
+                <div class="slds-m-top_medium slds-is-relative slds-p-vertical_medium">
+                    <lightning-spinner alternative-text="Generating recommendation" size="x-small"></lightning-spinner>
+                    <p class="slds-text-body_small slds-align_absolute-center slds-m-top_large">
+                        Generating CSM recommendations...
+                    </p>
+                </div>
+            </template>
+
+            <template lwc:if={narrativeSections}>
+                <div class="narrative slds-m-top_medium">
+                    <template for:each={narrativeSections} for:item="section">
+                        <div key={section.id} class="narrative-section">
+                            <p class="narrative-title">{section.title}</p>
+                            <template for:each={section.items} for:item="item">
+                                <p key={item.id} class="narrative-item">{item.text}</p>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <template lwc:if={rawAnswer}>
+                <lightning-accordion class="slds-m-top_medium" allow-multiple-sections-open>
+                    <lightning-accordion-section name="raw-usage" label="Raw usage response">
+                        <pre class="raw-answer">{rawAnswer}</pre>
+                    </lightning-accordion-section>
+                    <template lwc:if={rawNarrative}>
+                        <lightning-accordion-section name="raw-narrative" label="Raw narrative response">
+                            <pre class="raw-answer">{rawNarrative}</pre>
+                        </lightning-accordion-section>
+                    </template>
+                </lightning-accordion>
             </template>
 
             <template lwc:if={empty}>
                 <p class="slds-text-body_small slds-text-color_weak slds-m-vertical_small">
-                    Click <strong>Generate Usage Insights</strong> to fetch DAU/WAU, WAU/Enrolled, and QPU from the Rogo Analytics Bot for this account.
+                    Click <strong>Generate Insights</strong> to fetch DAU/WAU, WAU/Enrolled, and QPU plus an
+                    upsell forecast and CSM recommendations for this account.
                 </p>
             </template>
         </div>
