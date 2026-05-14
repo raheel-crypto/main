@@ -400,4 +400,65 @@ private class UpsellSignalsServiceTest {
         System.assert(!out.warnings.isEmpty(), 'a warning should be recorded');
         System.assert(out.score > 0, 'score still computed');
     }
+
+    @IsTest
+    static void getLastInsight_returnsNullWhenNothingSaved() {
+        Account a = buildAccount(true);
+        insert a;
+        UpsellSignalsService.SavedInsight got =
+            UpsellSignalsService.getLastInsight(a.Id);
+        System.assertEquals(null, got);
+    }
+
+    @IsTest
+    static void saveInsight_thenGetLast_roundTripsPayload() {
+        Account a = buildAccount(true);
+        insert a;
+        String payload = '{"score":61,"metrics":{"dauWau":0.50}}';
+
+        Test.startTest();
+        UpsellSignalsService.SavedInsight savedReturn =
+            UpsellSignalsService.saveInsight(a.Id, payload, 61);
+        UpsellSignalsService.SavedInsight got =
+            UpsellSignalsService.getLastInsight(a.Id);
+        Test.stopTest();
+
+        System.assertEquals(61, savedReturn.score);
+        System.assertEquals(payload, savedReturn.payloadJson);
+        System.assertNotEquals(null, savedReturn.lastRunAt);
+        System.assertNotEquals(null, savedReturn.lastRunByName);
+
+        System.assertEquals(61, got.score);
+        System.assertEquals(payload, got.payloadJson);
+    }
+
+    @IsTest
+    static void saveInsight_updatesExistingRecordInPlace() {
+        Account a = buildAccount(true);
+        insert a;
+
+        UpsellSignalsService.saveInsight(a.Id, '{"score":40}', 40);
+        UpsellSignalsService.saveInsight(a.Id, '{"score":61}', 61);
+
+        UpsellSignalsService.SavedInsight got =
+            UpsellSignalsService.getLastInsight(a.Id);
+        System.assertEquals(61, got.score, 'should reflect second save');
+
+        Integer count = [SELECT count() FROM Upsell_Insight__c WHERE Account__c = :a.Id];
+        System.assertEquals(1, count, 'should only ever keep one row per account');
+    }
+
+    @IsTest
+    static void saveInsight_requiresAccountIdAndPayload() {
+        Account a = buildAccount(true);
+        insert a;
+        try {
+            UpsellSignalsService.saveInsight(null, '{}', 50);
+            System.assert(false, 'expected exception');
+        } catch (AuraHandledException e) { /* expected */ }
+        try {
+            UpsellSignalsService.saveInsight(a.Id, null, 50);
+            System.assert(false, 'expected exception');
+        } catch (AuraHandledException e) { /* expected */ }
+    }
 }

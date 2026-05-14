@@ -23,6 +23,61 @@ public with sharing class UpsellSignalsService {
         @AuraEnabled public String narrativeJobId;
     }
 
+    public class SavedInsight {
+        @AuraEnabled public String payloadJson;
+        @AuraEnabled public Decimal score;
+        @AuraEnabled public DateTime lastRunAt;
+        @AuraEnabled public String lastRunByName;
+    }
+
+    @AuraEnabled(cacheable=true)
+    public static SavedInsight getLastInsight(Id accountId) {
+        if (accountId == null) return null;
+        List<Upsell_Insight__c> rows = [
+            SELECT Score__c, Payload_Json__c, LastModifiedDate, LastModifiedBy.Name
+            FROM Upsell_Insight__c
+            WHERE Account__c = :accountId
+            ORDER BY LastModifiedDate DESC
+            LIMIT 1
+        ];
+        if (rows.isEmpty()) return null;
+        return toSavedInsight(rows[0]);
+    }
+
+    @AuraEnabled
+    public static SavedInsight saveInsight(Id accountId, String payloadJson, Decimal score) {
+        if (accountId == null) {
+            throw new AuraHandledException('accountId is required');
+        }
+        if (String.isBlank(payloadJson)) {
+            throw new AuraHandledException('payloadJson is required');
+        }
+        List<Upsell_Insight__c> existing = [
+            SELECT Id FROM Upsell_Insight__c WHERE Account__c = :accountId LIMIT 1
+        ];
+        Upsell_Insight__c rec = existing.isEmpty()
+            ? new Upsell_Insight__c(Account__c = accountId)
+            : existing[0];
+        rec.Score__c = score;
+        rec.Payload_Json__c = payloadJson;
+        upsert rec;
+
+        Upsell_Insight__c saved = [
+            SELECT Score__c, Payload_Json__c, LastModifiedDate, LastModifiedBy.Name
+            FROM Upsell_Insight__c WHERE Id = :rec.Id LIMIT 1
+        ];
+        return toSavedInsight(saved);
+    }
+
+    private static SavedInsight toSavedInsight(Upsell_Insight__c r) {
+        SavedInsight si = new SavedInsight();
+        si.payloadJson = r.Payload_Json__c;
+        si.score = r.Score__c;
+        si.lastRunAt = r.LastModifiedDate;
+        si.lastRunByName = r.LastModifiedBy != null ? r.LastModifiedBy.Name : null;
+        return si;
+    }
+
     @AuraEnabled
     public static UpsellOutput compute(
         Id accountId,

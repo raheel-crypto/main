@@ -2,6 +2,8 @@ import { LightningElement, api } from 'lwc';
 import submitJob from '@salesforce/apex/RogoUsageInsightsController.submitJob';
 import fetchJob from '@salesforce/apex/RogoUsageInsightsController.fetchJob';
 import computeUpsell from '@salesforce/apex/UpsellSignalsService.compute';
+import getLastInsight from '@salesforce/apex/UpsellSignalsService.getLastInsight';
+import saveInsight from '@salesforce/apex/UpsellSignalsService.saveInsight';
 
 const DEFAULT_POLL_MS = 2000;
 const MAX_POLLS = 90;
@@ -22,8 +24,51 @@ export default class UsageInsights extends LightningElement {
     narrativeSections;
     rawNarrative;
 
+    hydrating = true;
+    lastRunAt;
+    lastRunByName;
+
+    connectedCallback() {
+        this.hydrateFromCache();
+    }
+
+    async hydrateFromCache() {
+        if (!this.recordId) {
+            this.hydrating = false;
+            return;
+        }
+        try {
+            const saved = await getLastInsight({ accountId: this.recordId });
+            if (saved && saved.payloadJson) {
+                const payload = JSON.parse(saved.payloadJson);
+                this.metrics = payload.metrics;
+                this.upsell = payload.upsell;
+                this.rawAnswer = payload.rawAnswer;
+                this.rawNarrative = payload.rawNarrative;
+                this.narrativeSections = parseNarrative(payload.rawNarrative);
+                this.lastRunAt = saved.lastRunAt;
+                this.lastRunByName = saved.lastRunByName;
+                this.upsellWarningRows = (this.upsell && this.upsell.warnings && this.upsell.warnings.length)
+                    ? this.upsell.warnings.map((w, i) => ({ id: `w${i}`, text: w }))
+                    : null;
+            }
+        } catch (e) {
+            // Object/permissions may not be available yet — silently skip
+        } finally {
+            this.hydrating = false;
+        }
+    }
+
+    get buttonLabel() {
+        return this.lastRunAt ? 'Refresh' : 'Generate Insights';
+    }
+
+    get hasLastRun() {
+        return !this.loading && !!this.lastRunAt;
+    }
+
     get empty() {
-        return !this.loading && !this.metrics && !this.error;
+        return !this.loading && !this.hydrating && !this.metrics && !this.error;
     }
     get accountHeader() {
         if (this.upsell && this.upsell.accountName) {
@@ -141,9 +186,36 @@ export default class UsageInsights extends LightningElement {
                     this.narrativeSections = parseNarrative(narrResult.rawAnswer);
                 }
             }
+            await this.persist();
         } catch (e) {
             const msg = (e && e.body && e.body.message) || (e && e.message) || 'Upsell forecast failed';
             this.upsellWarningRows = [{ id: 'w0', text: msg }];
+        }
+    }
+
+    async persist() {
+        if (!this.upsell) return;
+        try {
+            const payload = JSON.stringify({
+                metrics: this.metrics,
+                upsell: this.upsell,
+                rawAnswer: this.rawAnswer,
+                rawNarrative: this.rawNarrative
+            });
+            const saved = await saveInsight({
+                accountId: this.recordId,
+                payloadJson: payload,
+                score: this.upsell.score
+            });
+            if (saved) {
+                this.lastRunAt = saved.lastRunAt;
+                this.lastRunByName = saved.lastRunByName;
+            }
+        } catch (e) {
+            // Don't fail the UI on save errors
+            const msg = (e && e.body && e.body.message) || (e && e.message) || 'Save failed';
+            const existing = this.upsellWarningRows || [];
+            this.upsellWarningRows = existing.concat({ id: `wSave`, text: 'Could not cache result: ' + msg });
         }
     }
 
@@ -183,6 +255,8 @@ export default class UsageInsights extends LightningElement {
         this.narrativeLoading = false;
         this.narrativeSections = undefined;
         this.rawNarrative = undefined;
+        // intentionally NOT clearing lastRunAt / lastRunByName — we want the
+        // previous timestamp visible until the new run completes and overwrites it
     }
 
     handleError(e) {

@@ -2,7 +2,7 @@
     <lightning-card title="Account Insights" icon-name="standard:metrics">
         <div slot="actions">
             <lightning-button
-                label="Generate Insights"
+                label={buttonLabel}
                 variant="brand"
                 onclick={handleGenerate}
                 disabled={loading}>
@@ -10,6 +10,16 @@
         </div>
 
         <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+
+            <template lwc:if={hasLastRun}>
+                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                    Last refreshed
+                    <lightning-relative-date-time value={lastRunAt}></lightning-relative-date-time>
+                    <template lwc:if={lastRunByName}>
+                        &middot; by {lastRunByName}
+                    </template>
+                </p>
+            </template>
 
             <template lwc:if={loading}>
                 <div class="slds-is-relative slds-p-vertical_medium">
