@@ -123,6 +123,18 @@ function buildQuoteModalView(intakeId: string, prefill: string) {
       },
       {
         type: "input",
+        block_id: "contract_start_date",
+        label: { type: "plain_text", text: "Contract start date" },
+        element: { type: "datepicker", action_id: "value" },
+      },
+      {
+        type: "input",
+        block_id: "contract_end_date",
+        label: { type: "plain_text", text: "Contract end date" },
+        element: { type: "datepicker", action_id: "value" },
+      },
+      {
+        type: "input",
         block_id: "pricing_discussed",
         label: { type: "plain_text", text: "Pricing already discussed with customer?" },
         element: {

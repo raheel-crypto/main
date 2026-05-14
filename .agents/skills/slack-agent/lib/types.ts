@@ -13,6 +13,10 @@ export interface QuoteForm {
   free_credits: number;
   hosting_fee: number;
   pricing_discussed: boolean;
+  /** ISO date string YYYY-MM-DD. */
+  contract_start_date: string;
+  /** ISO date string YYYY-MM-DD. */
+  contract_end_date: string;
   notes: string;
 }
 
@@ -28,6 +32,18 @@ export interface PricingBreakdown {
   discount_per_user: number | null;
   /** 0–1. Null for Enterprise. */
   discount_pct: number | null;
+  /**
+   * Annual Recurring Revenue — placeholder. Currently set to total_amount
+   * (annual sum). Replace with the team's real formula when finalized.
+   */
+  arr: number | null;
+  /**
+   * Total Contract Value — placeholder. Currently arr × contract years.
+   * Replace with the team's real formula when finalized.
+   */
+  tcv: number | null;
+  /** Years between start/end date (rounded to 0.01). Null if dates invalid. */
+  contract_years: number | null;
 }
 
 /** Resolved opportunity context from SFDC. */

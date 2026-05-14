@@ -12,6 +12,8 @@ interface IntakePayload {
     free_credits?: number;
     hosting_fee: number;
     pricing_discussed: boolean;
+    contract_start_date?: string;
+    contract_end_date?: string;
     notes?: string;
   };
   requester: {
@@ -53,6 +55,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     free_credits: Number(payload.form.free_credits ?? 0),
     hosting_fee: Number(payload.form.hosting_fee),
     pricing_discussed: !!payload.form.pricing_discussed,
+    contract_start_date: String(payload.form.contract_start_date ?? ""),
+    contract_end_date: String(payload.form.contract_end_date ?? ""),
     notes: String(payload.form.notes ?? ""),
   };
   const requester: Requester = {

@@ -23,6 +23,13 @@ export function calculatePricing(form: QuoteForm): PricingBreakdown {
       ? discountPerUser / listPrice
       : null;
 
+  // Placeholder math — swap when the team finalizes the real formula.
+  // ARR  = annual sum of recurring fees (what's currently labeled Total Amount).
+  // TCV  = ARR × contract years if both dates supplied; null otherwise.
+  const arr = round2(total);
+  const years = computeContractYears(form.contract_start_date, form.contract_end_date);
+  const tcv = years != null ? round2(arr * years) : null;
+
   return {
     platform_fee_total: round2(platformFee),
     credits_commit_total: round2(creditsCommit),
@@ -31,7 +38,19 @@ export function calculatePricing(form: QuoteForm): PricingBreakdown {
     list_price_per_user: listPrice,
     discount_per_user: discountPerUser != null ? round2(discountPerUser) : null,
     discount_pct: discountPct,
+    arr,
+    tcv,
+    contract_years: years,
   };
+}
+
+function computeContractYears(start: string | null | undefined, end: string | null | undefined): number | null {
+  if (!start || !end) return null;
+  const s = Date.parse(start);
+  const e = Date.parse(end);
+  if (Number.isNaN(s) || Number.isNaN(e) || e <= s) return null;
+  const yearMs = 365.25 * 24 * 60 * 60 * 1000;
+  return Math.round(((e - s) / yearMs) * 100) / 100;
 }
 
 function round2(n: number): number {

@@ -87,6 +87,8 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
         { type: "mrkdwn", text: `*Free credits given*\n${fmtNum(form.free_credits)}` },
         { type: "mrkdwn", text: `*Hosting fee*\n${fmtMoney(form.hosting_fee)} / yr` },
         { type: "mrkdwn", text: `*Pricing discussed?*\n${form.pricing_discussed ? "Yes" : "No"}` },
+        { type: "mrkdwn", text: `*Contract start*\n${form.contract_start_date || "—"}` },
+        { type: "mrkdwn", text: `*Contract end*\n${form.contract_end_date || "—"}` },
       ],
     },
     { type: "divider" },
@@ -99,7 +101,17 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
         { type: "mrkdwn", text: `*Hosting*\n${fmtMoney(pricing.hosting_fee_total)}` },
         {
           type: "mrkdwn",
-          text: `*Total contract value*\n*${fmtMoney(pricing.total_amount)}*`,
+          text: `*Total amount*\n*${fmtMoney(pricing.total_amount)}*`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*ARR* _(placeholder)_\n${pricing.arr != null ? fmtMoney(pricing.arr) : "—"}`,
+        },
+        {
+          type: "mrkdwn",
+          text: `*TCV* _(placeholder)_\n${pricing.tcv != null ? fmtMoney(pricing.tcv) : "—"}${
+            pricing.contract_years != null ? ` _(${pricing.contract_years} yrs)_` : ""
+          }`,
         },
       ],
     },

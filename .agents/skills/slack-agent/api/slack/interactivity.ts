@@ -62,6 +62,8 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
   const creditsRaw = values.total_credits?.value?.value ?? "";
   const freeCreditsRaw = values.free_credits?.value?.value ?? "0";
   const hostingRaw = values.hosting_fee?.value?.value ?? "";
+  const startDate = values.contract_start_date?.value?.selected_date ?? "";
+  const endDate = values.contract_end_date?.value?.selected_date ?? "";
   const discussedRaw = values.pricing_discussed?.value?.selected_option?.value ?? "";
   const notes = values.notes?.value?.value ?? "";
 
@@ -78,6 +80,10 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
   if (!Number.isFinite(free_credits) || free_credits < 0) errors.free_credits = "Must be ≥ 0";
   const hosting_fee = Number(hostingRaw);
   if (!Number.isFinite(hosting_fee) || hosting_fee < 0) errors.hosting_fee = "Must be ≥ 0";
+  if (!startDate) errors.contract_start_date = "Required";
+  if (!endDate) errors.contract_end_date = "Required";
+  if (startDate && endDate && endDate <= startDate)
+    errors.contract_end_date = "Must be after start date";
   if (!discussedRaw) errors.pricing_discussed = "Required";
 
   if (Object.keys(errors).length > 0) {
@@ -110,6 +116,8 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
     free_credits,
     hosting_fee,
     pricing_discussed: discussedRaw === "yes",
+    contract_start_date: startDate,
+    contract_end_date: endDate,
     notes,
   };
 
@@ -242,4 +250,5 @@ interface ViewStateValue {
   type?: string;
   value?: string;
   selected_option?: { value: string };
+  selected_date?: string;
 }
