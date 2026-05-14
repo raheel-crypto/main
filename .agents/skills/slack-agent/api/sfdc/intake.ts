@@ -23,10 +23,11 @@ interface IntakePayload {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).send("Method not allowed");
 
-  // Accept the secret either as X-Intake-Secret or Authorization header.
-  // Named Credentials send it as a Custom Header (configurable name).
+  // Accept the secret in any of the headers v1 setups have used in the
+  // wild. Node lowercases incoming header names.
   const provided =
     headerString(req.headers["x-intake-secret"]) ??
+    headerString(req.headers["x-sfdc-secret"]) ??
     stripBearer(headerString(req.headers["authorization"]));
   const expected = process.env.SFDC_INTAKE_SECRET;
   if (!expected || !provided || provided !== expected) {
