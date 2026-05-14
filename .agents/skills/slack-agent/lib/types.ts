@@ -9,6 +9,8 @@ export interface QuoteForm {
   users: number;
   price_per_user: number;
   total_credits: number;
+  /** Display-only — rep-entered. Subset of total_credits given for free. */
+  free_credits: number;
   hosting_fee: number;
   pricing_discussed: boolean;
   notes: string;

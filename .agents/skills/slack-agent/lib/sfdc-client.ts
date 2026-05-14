@@ -33,6 +33,7 @@ export interface SFDCOpportunity {
   Account?: {
     Id: string;
     Name: string;
+    Segment__c?: string;
     Type?: string;
     Industry?: string;
   };
@@ -88,9 +89,7 @@ export function toDealContext(opp: SFDCOpportunity): DealContext {
     account: {
       id: opp.Account?.Id ?? opp.AccountId,
       name: opp.Account?.Name ?? "(unknown)",
-      // Using Account.Type as Segment. Swap to a custom field (e.g. Segment__c)
-      // if the org has one and update selectOpportunityFields() accordingly.
-      segment: opp.Account?.Type ?? null,
+      segment: opp.Account?.Segment__c ?? null,
     },
     opportunity: {
       id: opp.Id,
@@ -110,7 +109,7 @@ export function toDealContext(opp: SFDCOpportunity): DealContext {
 function selectOpportunityFields(): string {
   return (
     `SELECT Id, Name, StageName, Amount, CloseDate, AccountId, ` +
-    `Account.Id, Account.Name, Account.Type, Account.Industry, ` +
+    `Account.Id, Account.Name, Account.Segment__c, Account.Type, Account.Industry, ` +
     `Owner.Id, Owner.Name, Owner.Email, Owner.Slack_User_Id__c, ` +
     `Owner.Manager.Id, Owner.Manager.Name, Owner.Manager.Slack_User_Id__c`
   );

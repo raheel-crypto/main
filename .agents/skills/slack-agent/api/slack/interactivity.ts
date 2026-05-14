@@ -60,6 +60,7 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
   const usersRaw = values.users?.value?.value ?? "";
   const ppuRaw = values.price_per_user?.value?.value ?? "";
   const creditsRaw = values.total_credits?.value?.value ?? "";
+  const freeCreditsRaw = values.free_credits?.value?.value ?? "0";
   const hostingRaw = values.hosting_fee?.value?.value ?? "";
   const discussedRaw = values.pricing_discussed?.value?.selected_option?.value ?? "";
   const notes = values.notes?.value?.value ?? "";
@@ -73,6 +74,8 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
   if (!Number.isFinite(price_per_user) || price_per_user < 0) errors.price_per_user = "Must be ≥ 0";
   const total_credits = Number(creditsRaw);
   if (!Number.isFinite(total_credits) || total_credits < 0) errors.total_credits = "Must be ≥ 0";
+  const free_credits = Number(freeCreditsRaw);
+  if (!Number.isFinite(free_credits) || free_credits < 0) errors.free_credits = "Must be ≥ 0";
   const hosting_fee = Number(hostingRaw);
   if (!Number.isFinite(hosting_fee) || hosting_fee < 0) errors.hosting_fee = "Must be ≥ 0";
   if (!discussedRaw) errors.pricing_discussed = "Required";
@@ -104,6 +107,7 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
     users,
     price_per_user,
     total_credits,
+    free_credits,
     hosting_fee,
     pricing_discussed: discussedRaw === "yes",
     notes,

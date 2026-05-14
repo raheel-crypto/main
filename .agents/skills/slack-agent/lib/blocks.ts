@@ -28,6 +28,7 @@ interface BuildArgs {
 export function buildApprovalBlocks(args: BuildArgs): unknown[] {
   const { context, form, pricing, routing, agent, state } = args;
   const isEnterprise = form.package === "Enterprise";
+
   const headerStatus =
     state === "approved"
       ? "Approved"
@@ -36,6 +37,20 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
         : routing.tier === "auto"
           ? "Auto-approved"
           : "Approval Required";
+
+  const priceCell = isEnterprise
+    ? `*Price per user*\n${fmtMoney(form.price_per_user)} (custom)`
+    : `*Price per user*\n${fmtMoney(form.price_per_user)}${
+        pricing.list_price_per_user != null
+          ? ` _(list ${fmtMoney(pricing.list_price_per_user)})_`
+          : ""
+      }`;
+
+  const discountCell = isEnterprise
+    ? `*Discount*\n—`
+    : `*Discount*\n${
+        pricing.discount_per_user != null ? fmtMoney(pricing.discount_per_user) : "—"
+      } · ${pricing.discount_pct != null ? fmtPct(pricing.discount_pct) : "—"}`;
 
   const blocks: unknown[] = [
     {
@@ -47,52 +62,51 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
       elements: [{ type: "mrkdwn", text: statusIcon(state, routing) + " " + routing.tier_label }],
     },
     { type: "divider" },
+    // Opportunity context block
     {
       type: "section",
       fields: [
-        { type: "mrkdwn", text: `*Opportunity*\n${context.opportunity.name}` },
-        { type: "mrkdwn", text: `*Account*\n${context.account.name}` },
+        { type: "mrkdwn", text: `*Opportunity name*\n${context.opportunity.name}` },
+        { type: "mrkdwn", text: `*Account name*\n${context.account.name}` },
         { type: "mrkdwn", text: `*Segment*\n${context.account.segment ?? "—"}` },
         { type: "mrkdwn", text: `*Owner*\n${context.opportunity.owner_name}` },
         { type: "mrkdwn", text: `*Close date*\n${context.opportunity.close_date}` },
-        { type: "mrkdwn", text: `*Package*\n${form.package}` },
-      ],
-    },
-    {
-      type: "section",
-      fields: [
-        { type: "mrkdwn", text: `*Users*\n${fmtNum(form.users)}` },
-        { type: "mrkdwn", text: `*Price per user*\n${fmtMoney(form.price_per_user)}` },
-        ...(isEnterprise
-          ? []
-          : [
-              {
-                type: "mrkdwn",
-                text: `*Discount*\n${pricing.discount_pct != null ? fmtPct(pricing.discount_pct) : "—"} (${pricing.discount_per_user != null ? fmtMoney(pricing.discount_per_user) : "—"}/user)`,
-              },
-            ]),
-        { type: "mrkdwn", text: `*Total credits*\n${fmtNum(form.total_credits)}` },
-        { type: "mrkdwn", text: `*Hosting fee*\n${fmtMoney(form.hosting_fee)}/yr` },
-        { type: "mrkdwn", text: `*Pricing discussed*\n${form.pricing_discussed ? "Yes" : "No"}` },
+        { type: "mrkdwn", text: " " },
       ],
     },
     { type: "divider" },
+    // Quote inputs block
     {
       type: "section",
-      text: { type: "mrkdwn", text: "*Calculated totals*" },
+      fields: [
+        { type: "mrkdwn", text: `*Package*\n${form.package}` },
+        { type: "mrkdwn", text: `*Users*\n${fmtNum(form.users)}` },
+        { type: "mrkdwn", text: priceCell },
+        { type: "mrkdwn", text: discountCell },
+        { type: "mrkdwn", text: `*Total credits*\n${fmtNum(form.total_credits)}` },
+        { type: "mrkdwn", text: `*Free credits given*\n${fmtNum(form.free_credits)}` },
+        { type: "mrkdwn", text: `*Hosting fee*\n${fmtMoney(form.hosting_fee)} / yr` },
+        { type: "mrkdwn", text: `*Pricing discussed?*\n${form.pricing_discussed ? "Yes" : "No"}` },
+      ],
     },
+    { type: "divider" },
+    // Calculated totals
     {
       type: "section",
       fields: [
         { type: "mrkdwn", text: `*Platform fee*\n${fmtMoney(pricing.platform_fee_total)}` },
         { type: "mrkdwn", text: `*Credits commit*\n${fmtMoney(pricing.credits_commit_total)}` },
         { type: "mrkdwn", text: `*Hosting*\n${fmtMoney(pricing.hosting_fee_total)}` },
-        { type: "mrkdwn", text: `*Total contract value*\n*${fmtMoney(pricing.total_amount)}*` },
+        {
+          type: "mrkdwn",
+          text: `*Total contract value*\n*${fmtMoney(pricing.total_amount)}*`,
+        },
       ],
     },
   ];
 
   if (form.notes.trim()) {
+    blocks.push({ type: "divider" });
     blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: `*Notes for Deal Desk*\n${form.notes}` },
@@ -119,7 +133,7 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
     elements: [
       {
         type: "mrkdwn",
-        text: `Requested by <@${args.requester_slack_user_id}> · Request ID \`${args.request_id}\``,
+        text: `Request ID \`${args.request_id}\``,
       },
     ],
   });
@@ -148,7 +162,7 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
               {
                 type: "button",
                 action_id: "quote_view_sfdc",
-                text: { type: "plain_text", text: "View in Salesforce" },
+                text: { type: "plain_text", text: "View in Salesforce ↗" },
                 url: `${args.sfdc_instance_url}/${context.opportunity.id}`,
               },
             ]
@@ -170,15 +184,18 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
   return blocks;
 }
 
-/** Top-line text for the channel post (includes approver @-mentions). */
-export function buildTopLineText(request: Pick<ApprovalRequest, "routing" | "context" | "pricing" | "form">): string {
-  const { routing, context, form, pricing } = request;
-  const mentions = routing.allowed_approver_ids.map((id) => `<@${id}>`).join(" ");
-  const discountFragment =
-    pricing.discount_pct != null ? ` · ${fmtPct(pricing.discount_pct)} discount` : "";
-  const head = `*Quote: ${context.account.name}* · ${form.package} · ${fmtNum(form.users)} users${discountFragment}`;
-  if (routing.tier === "auto") return `${head} — auto-approved`;
-  return `${head}\n${mentions} — ${routing.tier_label}`;
+/** Top-line message text (above the card). Includes @-mentions for notifications. */
+export function buildTopLineText(
+  request: Pick<ApprovalRequest, "routing" | "requester">,
+): string {
+  const submittedBy = `<@${request.requester.slack_user_id}>`;
+  const mentions = request.routing.allowed_approver_ids.map((id) => `<@${id}>`).join(" ");
+  if (request.routing.tier === "auto") {
+    return `New deal request submitted by ${submittedBy} — auto-approved`;
+  }
+  return `New deal approval request submitted by ${submittedBy}${
+    mentions ? ` — approval needed: ${mentions}` : ""
+  }`;
 }
 
 export function buildStatusInThreadText(args: {
@@ -209,5 +226,5 @@ function fmtNum(n: number | null | undefined): string {
 }
 
 function fmtPct(n: number): string {
-  return `${(n * 100).toFixed(1)}%`;
+  return `${(n * 100).toFixed(0)}%`;
 }

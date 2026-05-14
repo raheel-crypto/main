@@ -110,6 +110,13 @@ function buildQuoteModalView(intakeId: string, prefill: string) {
       },
       {
         type: "input",
+        block_id: "free_credits",
+        optional: true,
+        label: { type: "plain_text", text: "Free credits given (#, subset of total)" },
+        element: { type: "number_input", action_id: "value", is_decimal_allowed: false },
+      },
+      {
+        type: "input",
         block_id: "hosting_fee",
         label: { type: "plain_text", text: "Hosting fee ($USD/year)" },
         element: { type: "number_input", action_id: "value", is_decimal_allowed: true },
