@@ -146,16 +146,19 @@ export default class UsageInsights extends LightningElement {
                     this.statusLabel = `Analyzing usage... ${Math.round(r.progress * 100)}%`;
                 }
             });
-            if (!usageResult) return;
+            if (usageResult.status !== 'completed') {
+                this.error = usageResult.errorMessage || 'Usage job did not complete';
+                this.loading = false;
+                return;
+            }
 
             this.rawAnswer = usageResult.rawAnswer;
-            if (usageResult.metrics) {
-                this.metrics = usageResult.metrics;
-            } else {
+            if (!usageResult.metrics) {
                 this.error = 'Usage job completed but no metrics could be parsed.';
                 this.loading = false;
                 return;
             }
+            this.metrics = usageResult.metrics;
             this.loading = false;
 
             await this.runUpsellFlow();
@@ -173,19 +176,26 @@ export default class UsageInsights extends LightningElement {
                 qpuObserved: this.metrics.qpu
             });
             this.upsell = out;
-            this.upsellWarningRows = (out.warnings && out.warnings.length)
+            const warnings = (out.warnings && out.warnings.length)
                 ? out.warnings.map((w, i) => ({ id: `w${i}`, text: w }))
-                : null;
+                : [];
 
             if (out.narrativeJobId) {
                 this.narrativeLoading = true;
                 const narrResult = await this.pollUntilTerminal(out.narrativeJobId, DEFAULT_POLL_MS, () => {});
                 this.narrativeLoading = false;
-                if (narrResult && narrResult.status === 'completed') {
+                if (narrResult.status === 'completed' && narrResult.rawAnswer) {
                     this.rawNarrative = narrResult.rawAnswer;
                     this.narrativeSections = parseNarrative(narrResult.rawAnswer);
+                } else {
+                    warnings.push({
+                        id: 'narrativeFail',
+                        text: 'CSM recommendation unavailable — ' + (narrResult.errorMessage || 'narrative job did not complete') +
+                              '. The score and signals above are still valid.'
+                    });
                 }
             }
+            this.upsellWarningRows = warnings.length ? warnings : null;
             await this.persist();
         } catch (e) {
             const msg = (e && e.body && e.body.message) || (e && e.message) || 'Upsell forecast failed';
@@ -219,29 +229,49 @@ export default class UsageInsights extends LightningElement {
         }
     }
 
+    // Returns a plain result object; does NOT mutate state. Callers decide how
+    // to react. Possible terminal statuses: completed, failed, not_found,
+    // timeout, callout_error.
     async pollUntilTerminal(jobId, initialDelay, onProgress) {
+        const MAX_NOT_FOUND_RETRIES = 5;
         let delay = initialDelay;
+        let notFoundRetries = 0;
         for (let i = 0; i < MAX_POLLS; i++) {
             await wait(delay);
             let result;
             try {
                 result = await fetchJob({ jobId });
             } catch (e) {
-                this.handleError(e);
-                return null;
+                return {
+                    status: 'callout_error',
+                    errorMessage: (e && e.body && e.body.message) || (e && e.message) || 'Callout error'
+                };
+            }
+            if (result.status === 'not_found') {
+                notFoundRetries++;
+                if (notFoundRetries >= MAX_NOT_FOUND_RETRIES) {
+                    return {
+                        status: 'not_found',
+                        errorMessage: 'Rogo could not find this job after ' + MAX_NOT_FOUND_RETRIES +
+                            ' retries (likely a Cloud Run instance routing issue, or the job expired).'
+                    };
+                }
+                // 404 on first polls is usually instance-routing on Cloud Run;
+                // back off and try again.
+                delay = Math.min(delay * 2, 8000);
+                continue;
             }
             if (onProgress) onProgress(result);
             if (result.status === 'completed') return result;
             if (result.status === 'failed') {
-                this.error = result.errorMessage ? `Job failed: ${result.errorMessage}` : 'Job failed';
-                this.loading = false;
-                return null;
+                return {
+                    status: 'failed',
+                    errorMessage: result.errorMessage || 'Job failed'
+                };
             }
             delay = result.nextPollAfterMs || DEFAULT_POLL_MS;
         }
-        this.error = 'Timed out waiting for Rogo analysis.';
-        this.loading = false;
-        return null;
+        return { status: 'timeout', errorMessage: 'Timed out waiting for Rogo analysis.' };
     }
 
     reset() {

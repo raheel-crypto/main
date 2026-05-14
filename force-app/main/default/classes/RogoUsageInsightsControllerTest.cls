@@ -128,4 +128,29 @@ private class RogoUsageInsightsControllerTest {
             // expected
         }
     }
+
+    private class NotFoundMock implements HttpCalloutMock {
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse res = new HttpResponse();
+            res.setHeader('Content-Type', 'application/json');
+            res.setStatusCode(404);
+            res.setBody('{"error":{"status":"error","code":"job_not_found","message":"Job not found (may have expired)","retryable":false}}');
+            return res;
+        }
+    }
+
+    @IsTest
+    static void fetchJob_returnsNotFoundStatusOn404InsteadOfThrowing() {
+        RogoUsageInsightsController.bearerTokenOverride = 'test-token';
+        Test.setMock(HttpCalloutMock.class, new NotFoundMock());
+
+        Test.startTest();
+        RogoUsageInsightsController.InsightsResult r =
+            RogoUsageInsightsController.fetchJob('expired-or-misrouted-id');
+        Test.stopTest();
+
+        System.assertEquals('not_found', r.status);
+        System.assertEquals('job_not_found', r.errorCode);
+        System.assertNotEquals(null, r.errorMessage);
+    }
 }

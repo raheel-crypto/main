@@ -73,8 +73,21 @@ public with sharing class RogoUsageInsightsController {
         req.setTimeout(120000);
 
         HttpResponse res = new Http().send(req);
-        if (res.getStatusCode() != 200) {
-            throw new AuraHandledException('Rogo /api/jobs failed: ' + res.getStatusCode() + ' ' + res.getBody());
+        Integer code = res.getStatusCode();
+        if (code == 404) {
+            // Rogo runs on Cloud Run with per-instance in-memory job storage. A
+            // 404 here often means the poll landed on a different instance than
+            // the one that accepted the job, rather than the job actually being
+            // gone. Return a structured 'not_found' so the LWC can retry with
+            // backoff before giving up.
+            InsightsResult out = new InsightsResult();
+            out.status = 'not_found';
+            out.errorCode = 'job_not_found';
+            out.errorMessage = 'Job not found on this Rogo instance';
+            return out;
+        }
+        if (code != 200) {
+            throw new AuraHandledException('Rogo /api/jobs failed: ' + code + ' ' + res.getBody());
         }
         return parseJobResponse(res.getBody());
     }
