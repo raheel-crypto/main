@@ -56,14 +56,19 @@ export function oppCard(
     },
     {
       type: "context",
+      elements: [{ type: "mrkdwn", text: opp.accountName }],
+    },
+    { type: "section", text: { type: "mrkdwn", text: rec.recap } },
+    {
+      type: "actions",
       elements: [
         {
-          type: "mrkdwn",
-          text: `${opp.accountName} • <${oppUrl}|Open in Salesforce>`,
+          type: "button",
+          text: { type: "plain_text", text: "Open in Salesforce" },
+          url: oppUrl,
         },
       ],
     },
-    { type: "section", text: { type: "mrkdwn", text: rec.recap } },
   ];
 
   if (rec.fields.length === 0) {
