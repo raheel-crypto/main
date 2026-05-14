@@ -1,40 +1,63 @@
 import { buildApprovalBlocks, buildStatusInThreadText, buildTopLineText } from "./blocks.js";
-import { postChatterFeed } from "./sfdc-client.js";
+import { upsertByExternalId } from "./sfdc-client.js";
 import { postMessage, updateMessage } from "./slack.js";
 import type { ApprovalRequest } from "./types.js";
 
 /**
- * Audit-log a decision to the related Opportunity's Chatter feed.
- * Best-effort — Chatter failures are logged but never thrown.
+ * Upsert a Quote_Approval__c record matching this request. Called twice in
+ * the lifecycle:
+ *   1) From process-quote.ts right after the channel post — creates the
+ *      record with state = Pending (or Approved for auto-approved).
+ *   2) From postDecisionUpdate below when a button click flips state, OR
+ *      from /quote-override when an admin force-decides.
+ *
+ * Best-effort — SFDC failures are logged but never thrown, so a bad SFDC
+ * write can't break the Slack approval flow.
  */
 export async function postAuditLog(request: ApprovalRequest): Promise<void> {
-  const fmtMoney = (n: number | null) => (n == null ? "—" : `$${n.toLocaleString()}`);
-  const fmtPct = (n: number | null) => (n == null ? "—" : `${(n * 100).toFixed(1)}%`);
-  const verb =
-    request.state === "approved"
-      ? "APPROVED"
-      : request.state === "rejected"
-        ? "REJECTED"
-        : "PENDING";
-  const by =
-    request.state === "approved" && request.decided_by_slack_user_id === "auto"
-      ? "auto (no approval required)"
-      : request.decided_by_name ?? "—";
-  const lines = [
-    `Quote Bot — Quote \`${request.request_id}\` ${verb}`,
-    `Decided by: ${by}`,
-    `Package: ${request.form.package} · Users: ${request.form.users.toLocaleString()}`,
-    `Price/user: ${fmtMoney(request.form.price_per_user)} · Discount: ${fmtPct(request.pricing.discount_pct)}`,
-    `Total: ${fmtMoney(request.pricing.total_amount)}`,
-  ];
-  if (request.routing.tier !== "auto") {
-    lines.push(`Tier: ${request.routing.tier_label}`);
-  }
   try {
-    await postChatterFeed(request.context.opportunity.id, lines.join("\n"));
+    await upsertByExternalId(
+      "Quote_Approval__c",
+      "Request_Id__c",
+      request.request_id,
+      toQuoteApprovalFields(request),
+    );
   } catch (e) {
-    console.error("Chatter audit log failed:", e);
+    console.error("Quote_Approval__c upsert failed:", e);
   }
+}
+
+function toQuoteApprovalFields(r: ApprovalRequest): Record<string, unknown> {
+  const state =
+    r.state === "approved" ? "Approved" : r.state === "rejected" ? "Rejected" : "Pending";
+  const wasOverride =
+    typeof r.decided_by_name === "string" && r.decided_by_name.includes("(override)");
+  const slackUrl = r.slack_message
+    ? `https://slack.com/archives/${r.slack_message.channel}/p${r.slack_message.ts.replace(".", "")}`
+    : null;
+
+  return {
+    Opportunity__c: r.context.opportunity.id,
+    State__c: state,
+    Approval_Tier__c: r.routing.tier_label,
+    Decided_By_Name__c: r.decided_by_name,
+    Decision_Made_At__c: r.decided_at,
+    Was_Override__c: wasOverride,
+    Package__c: r.form.package,
+    Users__c: r.form.users,
+    Price_Per_User__c: r.form.price_per_user,
+    Total_Amount__c: r.pricing.total_amount,
+    Discount_Pct__c: r.pricing.discount_pct,
+    ARR__c: r.pricing.arr,
+    TCV__c: r.pricing.tcv,
+    Contract_Start_Date__c: r.form.contract_start_date || null,
+    Contract_End_Date__c: r.form.contract_end_date || null,
+    Pricing_Discussed__c: r.form.pricing_discussed,
+    Notes__c: r.form.notes,
+    Submitted_By_Name__c: r.requester.slack_user_name,
+    Source__c: r.requester.source === "salesforce" ? "Salesforce" : "Slack",
+    Slack_Message_Url__c: slackUrl,
+  };
 }
 
 /**

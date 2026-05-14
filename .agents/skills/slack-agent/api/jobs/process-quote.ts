@@ -95,11 +95,11 @@ async function processJob(job: ProcessQuoteJob): Promise<void> {
 
   await stashAt(`approval:${request_id}`, request, 60 * 60 * 24 * 30);
 
-  // Auto-approved quotes don't go through the button flow, so we audit-log
-  // them here. Manually decided ones get audited inside postDecisionUpdate.
-  if (isAuto) {
-    await postAuditLog(request);
-  }
+  // Write the Quote_Approval__c record for every submission — pending ones
+  // get state=Pending, auto-approved get state=Approved. Manual decisions
+  // upsert this same record (matched by Request_Id__c) when the buttons
+  // are clicked, so we always have one row per quote.
+  await postAuditLog(request);
 
   if (requester.slack_user_id) {
     const verb = isAuto ? "auto-approved and posted" : "posted for approval";

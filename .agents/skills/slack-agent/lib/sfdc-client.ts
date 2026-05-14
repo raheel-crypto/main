@@ -116,19 +116,26 @@ function selectOpportunityFields(): string {
 }
 
 /**
- * Post a Chatter feed item to a record (e.g. Opportunity). Used as the
- * audit-log channel for approval decisions — best-effort, failures here
- * shouldn't block the approval flow.
+ * Upsert any sobject by an External ID field. If a record with that External
+ * ID exists, it's patched with the supplied fields; otherwise a new record
+ * is created. Used by the audit-log path so submission and decision-update
+ * writes converge on the same row.
+ *
+ * https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/dome_upsert.htm
  */
-export async function postChatterFeed(recordId: string, text: string): Promise<void> {
-  await sfdcFetch(`/chatter/feeds/record/${recordId}/feed-elements`, {
-    method: "POST",
-    body: JSON.stringify({
-      body: { messageSegments: [{ type: "Text", text }] },
-      feedElementType: "FeedItem",
-      subjectId: recordId,
-    }),
-  });
+export async function upsertByExternalId(
+  sobjectName: string,
+  externalIdField: string,
+  externalIdValue: string,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  await sfdcFetch(
+    `/sobjects/${encodeURIComponent(sobjectName)}/${encodeURIComponent(externalIdField)}/${encodeURIComponent(externalIdValue)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(fields),
+    },
+  );
 }
 
 function escapeSoql(s: string): string {
