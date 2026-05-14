@@ -272,6 +272,20 @@ public with sharing class UpsellSignalsService {
         return s;
     }
 
+    private static final Set<String> UPSELL_TERMS = new Set<String>{
+        'expansion', 'expand', 'upsell', 'upgrade', 'more seats',
+        'additional users', 'additional licenses', 'additional license',
+        'new product', 'add-on', 'addon', 'tier ii', 'tier iii',
+        'enterprise', 'growth', 'scale up', 'scaling', 'roll out',
+        'rollout', 'pilot to', 'expand to', 'team expansion'
+    };
+    private static final Set<String> CONCERN_TERMS = new Set<String>{
+        'cancel', 'cancellation', 'churn', 'frustrated', 'unhappy',
+        'pricing pushback', 'pricing concern', 'price concern',
+        'budget cut', 'budget freeze', 'reduce seats', 'downsize',
+        'competitor', 'switching', 'leaving', 'evaluating alternatives'
+    };
+
     private static Signal scoreGong(Id accountId, List<Map<String, Object>> outCalls) {
         Signal s = new Signal();
         s.key = 'gong_signals';
@@ -292,19 +306,40 @@ public with sharing class UpsellSignalsService {
             try {
                 DateTime since = DateTime.now().addDays(-7);
                 List<SObject> rows = Database.query(
-                    'SELECT Id, Name, Gong__Call_ID__c, CreatedDate ' +
+                    'SELECT Id, Name, Gong__Title__c, Gong__Call_ID__c, ' +
+                    'Gong__Call_Start__c, Gong__Call_Duration_sec__c, ' +
+                    'Gong__Direction__c, Gong__Talk_Time_Us__c, Gong__Talk_Time_Them__c, ' +
+                    'Gong__Call_Score__c, Gong__Call_Outcome__c, Gong__Call_Result__c, ' +
+                    'Gong__Call_Brief__c, Gong__Call_Key_Points__c, ' +
+                    'Gong__Call_Highlights_Next_Steps__c, ' +
+                    'Gong__Related_Topics_json__c, Gong__Related_Trackers_json__c, ' +
+                    'Gong__Primary_User__c, CreatedDate ' +
                     'FROM Gong__Gong_Call__c ' +
                     'WHERE Gong__Primary_Account__c = :accountId ' +
-                    'AND CreatedDate >= :since ' +
-                    'ORDER BY CreatedDate DESC ' +
+                    'AND Gong__Call_Start__c >= :since ' +
+                    'ORDER BY Gong__Call_Start__c DESC ' +
                     'LIMIT 25'
                 );
                 calls = new List<Map<String, Object>>();
                 for (SObject r : rows) {
                     calls.add(new Map<String, Object>{
-                        'title'       => r.get('Name'),
+                        'title'       => firstNonBlank((String) r.get('Gong__Title__c'), (String) r.get('Name')),
                         'gongCallId'  => r.get('Gong__Call_ID__c'),
-                        'createdDate' => r.get('CreatedDate')
+                        'callStart'   => r.get('Gong__Call_Start__c'),
+                        'createdDate' => r.get('CreatedDate'),
+                        'durationSec' => r.get('Gong__Call_Duration_sec__c'),
+                        'direction'   => r.get('Gong__Direction__c'),
+                        'talkUs'      => r.get('Gong__Talk_Time_Us__c'),
+                        'talkThem'    => r.get('Gong__Talk_Time_Them__c'),
+                        'callScore'   => r.get('Gong__Call_Score__c'),
+                        'outcome'     => r.get('Gong__Call_Outcome__c'),
+                        'result'      => r.get('Gong__Call_Result__c'),
+                        'brief'       => r.get('Gong__Call_Brief__c'),
+                        'keyPoints'   => r.get('Gong__Call_Key_Points__c'),
+                        'nextSteps'   => r.get('Gong__Call_Highlights_Next_Steps__c'),
+                        'topicsJson'  => r.get('Gong__Related_Topics_json__c'),
+                        'trackersJson'=> r.get('Gong__Related_Trackers_json__c'),
+                        'primaryUser' => r.get('Gong__Primary_User__c')
                     });
                 }
             } catch (Exception e) {
@@ -323,13 +358,42 @@ public with sharing class UpsellSignalsService {
         else if (count >= 1) pts = 3;
         else                 pts = 0;
 
+        Integer upsellHits = 0;
+        Integer concernHits = 0;
+        for (Map<String, Object> c : calls) {
+            String haystack = (
+                nullToBlank((String) c.get('brief')) + ' ' +
+                nullToBlank((String) c.get('keyPoints')) + ' ' +
+                nullToBlank((String) c.get('nextSteps')) + ' ' +
+                nullToBlank((String) c.get('outcome')) + ' ' +
+                nullToBlank((String) c.get('result')) + ' ' +
+                nullToBlank((String) c.get('trackersJson')) + ' ' +
+                nullToBlank((String) c.get('topicsJson'))
+            ).toLowerCase();
+            for (String t : UPSELL_TERMS)  if (haystack.contains(t)) { upsellHits++; break; }
+            for (String t : CONCERN_TERMS) if (haystack.contains(t)) { concernHits++; break; }
+        }
+        pts += upsellHits;
+        pts -= concernHits;
+        if (pts > 5) pts = 5;
+        if (pts < -5) pts = -5;
+
+        List<String> detailParts = new List<String>();
+        if (count > 0) detailParts.add(count + ' call' + (count == 1 ? '' : 's'));
+        else           detailParts.add('No calls in last 7 days');
+        if (upsellHits > 0)  detailParts.add(upsellHits + ' with upsell talk');
+        if (concernHits > 0) detailParts.add(concernHits + ' with concern talk');
+
         s.contributionPoints = pts;
         s.status = 'present';
-        s.detail = count == 0
-            ? 'No Gong calls in last 7 days'
-            : count + ' call' + (count == 1 ? '' : 's') + ' in last 7 days';
+        s.detail = String.join(detailParts, ' · ');
         return s;
     }
+
+    private static String firstNonBlank(String a, String b) {
+        return String.isNotBlank(a) ? a : (String.isNotBlank(b) ? b : null);
+    }
+    private static String nullToBlank(String s) { return s == null ? '' : s; }
 
     // ------------------------------------------------------------
     // Benchmark lookup
@@ -418,14 +482,34 @@ public with sharing class UpsellSignalsService {
     ) {
         String gongContext = '';
         if (gongCallSummaries != null && !gongCallSummaries.isEmpty()) {
-            gongContext = ' Recent Gong calls (last 7 days): ';
+            gongContext = '\n\nRecent Gong calls (last 7 days, most recent first):\n';
             Integer i = 0;
             for (Map<String, Object> c : gongCallSummaries) {
                 i++;
                 if (i > 5) break;
                 String title = (String) c.get('title');
-                Datetime cd = (Datetime) c.get('createdDate');
-                gongContext += i + ') "' + title + '" on ' + cd.format('yyyy-MM-dd') + '; ';
+                Datetime when = (Datetime) c.get('callStart');
+                if (when == null) when = (Datetime) c.get('createdDate');
+                String dateStr = when != null ? when.format('yyyy-MM-dd') : 'unknown date';
+
+                gongContext += i + ') "' + title + '" (' + dateStr + ')';
+                Decimal durSec = (Decimal) c.get('durationSec');
+                if (durSec != null) gongContext += ', ' + (durSec / 60).setScale(0) + ' min';
+                gongContext += '.';
+
+                String brief = truncate((String) c.get('brief'), 400);
+                if (String.isNotBlank(brief)) gongContext += ' BRIEF: ' + brief;
+
+                String kp = truncate((String) c.get('keyPoints'), 400);
+                if (String.isNotBlank(kp)) gongContext += ' KEY POINTS: ' + kp;
+
+                String ns = truncate((String) c.get('nextSteps'), 300);
+                if (String.isNotBlank(ns)) gongContext += ' NEXT STEPS: ' + ns;
+
+                String trackers = extractTrackerNames((String) c.get('trackersJson'));
+                if (String.isNotBlank(trackers)) gongContext += ' TRACKERS: ' + trackers + '.';
+
+                gongContext += '\n';
             }
         }
 
@@ -439,14 +523,46 @@ public with sharing class UpsellSignalsService {
             + 'Signals (JSON): ' + JSON.serialize(out.signals) + '. '
             + 'Observed last-28-day usage: DAU/WAU=' + pct(dauWau) + ', '
             + 'WAU/Enrolled=' + pct(wauEnr) + ', QPU=' + num(qpu) + '.'
-            + gongContext + ' '
+            + gongContext + '\n\n'
             + 'Respond in markdown with EXACTLY two sections. '
             + 'First section header: "## Upsell Opportunity" — 2 to 3 sentences identifying the most likely upsell '
             + '(seat expansion, product line, tier upgrade, or geo expansion) and which signals support it. '
-            + 'Reference recent Gong calls by title where they reinforce the recommendation. '
+            + 'Quote specific phrases or trackers from the Gong calls where they reinforce the recommendation, '
+            + 'or surface contrary signals (concerns, churn risk) if present. '
             + 'Second section header: "## Recommended Actions" — a numbered list of 3 specific actions the CSM should take in the next 7 days. '
+            + 'Tie each action to either a Gong call (reference by title), a usage gap, or a whitespace number. '
             + 'Do NOT invent metrics. Reference only the signals above. '
             + 'Do NOT include SQL or data queries — this is synthesis, not a data lookup.';
+    }
+
+    private static String truncate(String s, Integer maxLen) {
+        if (s == null) return null;
+        s = s.replaceAll('\\s+', ' ').trim();
+        return s.length() > maxLen ? s.substring(0, maxLen) + '…' : s;
+    }
+
+    private static String extractTrackerNames(String trackersJson) {
+        if (String.isBlank(trackersJson)) return null;
+        try {
+            Object parsed = JSON.deserializeUntyped(trackersJson);
+            if (!(parsed instanceof List<Object>)) return null;
+            List<String> names = new List<String>();
+            for (Object item : (List<Object>) parsed) {
+                if (item instanceof Map<String, Object>) {
+                    Map<String, Object> m = (Map<String, Object>) item;
+                    Object n = m.get('name');
+                    if (n == null) n = m.get('Name');
+                    if (n != null) {
+                        Object count = m.get('count');
+                        names.add(count == null ? String.valueOf(n) : String.valueOf(n) + ' (x' + count + ')');
+                    }
+                }
+                if (names.size() >= 10) break;
+            }
+            return names.isEmpty() ? null : String.join(names, ', ');
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // ------------------------------------------------------------

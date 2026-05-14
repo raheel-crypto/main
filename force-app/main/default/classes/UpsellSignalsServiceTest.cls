@@ -84,19 +84,19 @@ private class UpsellSignalsServiceTest {
         UpsellSignalsService.skipNarrativeCall = true;
         UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>{
             new Map<String, Object>{
-                'title' => 'Discovery: expansion seats',
+                'title' => 'Catch-up call',
                 'gongCallId' => '111',
-                'createdDate' => Datetime.now().addDays(-1)
+                'callStart' => Datetime.now().addDays(-1)
             },
             new Map<String, Object>{
                 'title' => 'QBR',
                 'gongCallId' => '222',
-                'createdDate' => Datetime.now().addDays(-3)
+                'callStart' => Datetime.now().addDays(-3)
             },
             new Map<String, Object>{
                 'title' => 'Executive sync',
                 'gongCallId' => '333',
-                'createdDate' => Datetime.now().addDays(-5)
+                'callStart' => Datetime.now().addDays(-5)
             }
         };
 
@@ -110,8 +110,73 @@ private class UpsellSignalsServiceTest {
 
         for (UpsellSignalsService.Signal s : out.signals) {
             if (s.key == 'gong_signals') {
-                System.assertEquals(5, s.contributionPoints, '3 calls -> +5 bonus');
+                System.assertEquals(5, s.contributionPoints, '3 calls, no upsell/concern terms -> +5 base');
                 System.assert(s.detail.contains('3 calls'), 'detail mentions count: ' + s.detail);
+            }
+        }
+    }
+
+    @IsTest
+    static void compute_gongContentBumpsScoreWhenUpsellTalkPresent() {
+        UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
+        UpsellSignalsService.bearerTokenOverride = 'test-token';
+        UpsellSignalsService.skipNarrativeCall = true;
+        UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>{
+            new Map<String, Object>{
+                'title' => 'Discovery',
+                'callStart' => Datetime.now().addDays(-2),
+                'brief' => 'Customer asked about adding more seats and tier ii pricing.',
+                'keyPoints' => 'Interested in expansion to a second team.',
+                'trackersJson' => '[{"name":"Expansion","count":3},{"name":"Pricing","count":1}]'
+            }
+        };
+
+        Account a = buildAccount(true);
+        insert a;
+
+        Test.startTest();
+        UpsellSignalsService.UpsellOutput out =
+            UpsellSignalsService.compute(a.Id, 0.50, 0.62, 22.0);
+        Test.stopTest();
+
+        for (UpsellSignalsService.Signal s : out.signals) {
+            if (s.key == 'gong_signals') {
+                // 1 call -> +3 base; +1 upsell hit; total +4 (clamped to +5 max)
+                System.assertEquals(4, s.contributionPoints,
+                    'upsell content in brief should add +1, got ' + s.contributionPoints);
+                System.assert(s.detail.contains('upsell talk'), 'detail flags upsell talk: ' + s.detail);
+            }
+        }
+    }
+
+    @IsTest
+    static void compute_gongContentPenalizesWhenConcernTalkPresent() {
+        UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
+        UpsellSignalsService.bearerTokenOverride = 'test-token';
+        UpsellSignalsService.skipNarrativeCall = true;
+        UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>{
+            new Map<String, Object>{
+                'title' => 'Renewal review',
+                'callStart' => Datetime.now().addDays(-1),
+                'brief' => 'Customer is frustrated about pricing and is evaluating a competitor.',
+                'keyPoints' => 'Possible churn risk if renewal terms do not change.'
+            }
+        };
+
+        Account a = buildAccount(true);
+        insert a;
+
+        Test.startTest();
+        UpsellSignalsService.UpsellOutput out =
+            UpsellSignalsService.compute(a.Id, 0.50, 0.62, 22.0);
+        Test.stopTest();
+
+        for (UpsellSignalsService.Signal s : out.signals) {
+            if (s.key == 'gong_signals') {
+                // 1 call -> +3; -1 concern hit; +2 net
+                System.assertEquals(2, s.contributionPoints,
+                    'concern content should subtract, got ' + s.contributionPoints);
+                System.assert(s.detail.contains('concern talk'), 'detail flags concern: ' + s.detail);
             }
         }
     }
