@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/jobs/process-quote.ts": { "maxDuration": 300 },
+    "api/slack/quote.ts": { "maxDuration": 10 },
+    "api/slack/interactivity.ts": { "maxDuration": 10 }
+  }
+}
