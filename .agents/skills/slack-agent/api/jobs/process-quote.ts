@@ -21,12 +21,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).send("Bad job payload");
   }
 
-  // Acknowledge fast so the calling function can finish cleanly. Then do the
-  // real work — we have up to 5 minutes (vercel.json maxDuration: 300).
-  res.status(202).send("");
-
+  // Do the work BEFORE responding. Vercel Fluid Compute suspends the function
+  // once res.send() runs, even if there's pending async work. The caller
+  // (interactivity.ts) uses AbortController with a 2s timeout, so it doesn't
+  // wait for us anyway — but the function itself must stay alive.
   try {
     await processJob(job);
+    return res.status(200).send("");
   } catch (e) {
     console.error("process-quote failed:", e);
     if (job.requester.slack_user_id) {
@@ -39,6 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // best-effort
       }
     }
+    return res.status(500).send("Processing error");
   }
 }
 
