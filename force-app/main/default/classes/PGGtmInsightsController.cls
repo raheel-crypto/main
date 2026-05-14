@@ -543,53 +543,41 @@ public with sharing class PGGtmInsightsController {
         ];
     }
 
+    // GTMA meetings: no Nektar or Meeting_Type filter. GTMAs book a broader
+    // mix of meetings than AEs, and the team wants every Event they own to
+    // count — not just the Discovery / First Meeting pipe-gen subset.
     private static List<AggregateResult> queryEventMeetings(Set<Id> gtms, String windowLabel) {
         if (windowLabel == 'CW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
-                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
-                  AND NektarStatus__c = 'completed'
-                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
-                  AND ActivityDate = THIS_WEEK
+                WHERE OwnerId IN :gtms AND ActivityDate = THIS_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
         }
         if (windowLabel == 'PW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
-                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
-                  AND NektarStatus__c = 'completed'
-                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
-                  AND ActivityDate = LAST_WEEK
+                WHERE OwnerId IN :gtms AND ActivityDate = LAST_WEEK
                 GROUP BY OwnerId, Owner.Name
             ];
         }
         if (windowLabel == 'CM') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
-                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
-                  AND NektarStatus__c = 'completed'
-                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
-                  AND ActivityDate = THIS_MONTH
+                WHERE OwnerId IN :gtms AND ActivityDate = THIS_MONTH
                 GROUP BY OwnerId, Owner.Name
             ];
         }
         if (windowLabel == 'PM') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
-                WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
-                  AND NektarStatus__c = 'completed'
-                  AND Meeting_Type__c IN ('Discovery', 'First Meeting')
-                  AND ActivityDate = LAST_MONTH
+                WHERE OwnerId IN :gtms AND ActivityDate = LAST_MONTH
                 GROUP BY OwnerId, Owner.Name
             ];
         }
         return [
             SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
-            WHERE OwnerId IN :gtms AND NektarSender__c = 'Us'
-              AND NektarStatus__c = 'completed'
-              AND Meeting_Type__c IN ('Discovery', 'First Meeting')
-              AND ActivityDate = THIS_FISCAL_QUARTER
+            WHERE OwnerId IN :gtms AND ActivityDate = THIS_FISCAL_QUARTER
             GROUP BY OwnerId, Owner.Name
         ];
     }

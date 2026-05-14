@@ -192,7 +192,7 @@ private class PGGtmInsightsControllerTest {
         System.assertEquals(2, totalEmails,  '2 outbound emails from gtm1');
         System.assertEquals(1, totalCalls,   '1 call from gtm2');
         System.assertEquals(1, totalLinkedIn,'1 Sales Navigator Sent');
-        System.assertEquals(2, totalMeetings,'2 Discovery events');
+        System.assertEquals(2, totalMeetings,'2 events owned by GTMAs (no type filter)');
     }
 
     // ---- helpers --------------------------------------------------------------------

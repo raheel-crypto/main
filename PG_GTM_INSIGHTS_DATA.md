@@ -172,7 +172,7 @@ dropdown selection. The right (QTD) card is hard-wired to `QTD`.
 | OB Emails | `Task` | `TaskSubtype = 'Email'` AND `Status = 'Completed'` AND `NektarSender__c = 'Us'` AND `ActivityDate` in window |
 | OB Calls | `Task` | `TaskSubtype = 'Call'` AND `Status = 'Completed'` AND `ActivityDate` in window (Nektar tagging is null on Call records in this org) |
 | OB LinkedIn | `Task` | `TaskSubtype = 'Task'` AND `Subject LIKE '%Sales Navigator%'` AND `Subject LIKE '%Sent%'` AND `ActivityDate` in window |
-| Meetings | `Event` | `NektarSender__c = 'Us'` AND `NektarStatus__c = 'completed'` AND `Meeting_Type__c IN ('Discovery', 'First Meeting')` AND `ActivityDate` in window |
+| Meetings | `Event` | `ActivityDate` in window (no Nektar or Meeting_Type filter — every Event the GTMA owns counts; broader than the AE side intentionally) |
 | Total OB | computed | sum of the above four |
 
 Same `Group rows by manager` toggle. Same bar colors per column.
