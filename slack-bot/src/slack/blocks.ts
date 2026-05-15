@@ -887,15 +887,18 @@ export function nooksCallDigestCard(
     });
   }
 
+  const isValidHttpUrl = (u: string | undefined): u is string =>
+    typeof u === "string" && /^https?:\/\//i.test(u);
+
   const linkButtons: any[] = [];
-  if (d.recordingUrl) {
+  if (isValidHttpUrl(d.recordingUrl)) {
     linkButtons.push({
       type: "button",
       text: { type: "plain_text", text: "Recording" },
       url: d.recordingUrl,
     });
   }
-  if (d.transcriptUrl) {
+  if (isValidHttpUrl(d.transcriptUrl)) {
     linkButtons.push({
       type: "button",
       text: { type: "plain_text", text: "Transcript" },
