@@ -80,7 +80,7 @@ export default async function handler(
     })
   );
 
-  if (!body || typeof body !== "object" || !body.data?.call_id) {
+  if (!body || typeof body !== "object" || !body.callData?.callId) {
     console.log("[nooks/webhook] preflight-shaped body, returning 200:", JSON.stringify(body));
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");

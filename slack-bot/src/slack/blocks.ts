@@ -822,29 +822,29 @@ export function buySignalCreateOppModal(
 export function nooksCallDigestCard(
   payload: NooksWebhookPayload
 ): { blocks: KnownBlock[]; text: string } {
-  const d = payload.data;
-  const disposition = d.disposition ?? "(no disposition)";
-  const agentLabel = d.agent?.name
-    ? `${d.agent.name}${d.agent.email ? ` <${d.agent.email}>` : ""}`
-    : d.agent?.email ?? "(unknown agent)";
-  const prospectName = [d.prospect?.first_name, d.prospect?.last_name]
-    .filter(Boolean)
-    .join(" ");
+  const d = payload.callData;
+  const dispositionLabel = d.disposition?.name ?? "(no disposition)";
+  const agentLabel = d.userData?.name
+    ? `${d.userData.name}${d.userData.email ? ` <${d.userData.email}>` : ""}`
+    : d.userData?.email ?? "(unknown agent)";
   const prospectLabel =
-    prospectName || d.prospect?.email || d.prospect?.phone_number || "(unknown prospect)";
-  const companyLabel = d.prospect?.company_name ?? "(unknown company)";
+    d.prospectData?.name ||
+    d.prospectData?.email ||
+    d.prospectData?.phoneNumber ||
+    "(unknown prospect)";
+  const companyLabel = d.accountData?.name ?? "(unknown account)";
   const durationLabel =
-    d.duration_seconds != null ? `${d.duration_seconds}s` : "?";
-  const directionLabel = d.direction ?? "?";
+    d.durationSeconds != null ? `${d.durationSeconds}s` : "?";
+  const directionLabel = d.callDirection ?? "?";
 
-  const text = `Nooks call · ${disposition} · ${companyLabel}`;
+  const text = `Nooks call · ${dispositionLabel} · ${companyLabel}`;
 
   const blocks: KnownBlock[] = [
     {
       type: "header",
       text: {
         type: "plain_text",
-        text: `Nooks call · ${disposition}`.slice(0, 150),
+        text: `Nooks call · ${dispositionLabel}`.slice(0, 150),
       },
     },
     {
@@ -860,7 +860,7 @@ export function nooksCallDigestCard(
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Prospect*: ${prospectLabel}\n*Company*: ${companyLabel}`,
+        text: `*Prospect*: ${prospectLabel}\n*Account*: ${companyLabel}${d.accountData?.accountId ? `  \`${d.accountData.accountId}\`` : ""}`,
       },
     },
   ];
@@ -875,29 +875,35 @@ export function nooksCallDigestCard(
     });
   }
 
-  if (d.sequence?.sequence_name) {
+  if (d.sequenceData?.sequenceName) {
     blocks.push({
       type: "context",
       elements: [
         {
           type: "mrkdwn",
-          text: `Sequence: *${d.sequence.sequence_name}* (step ${d.sequence.step_number ?? "?"})`,
+          text: `Sequence: *${d.sequenceData.sequenceName}* (step ${d.sequenceData.sequenceStep ?? "?"})`,
         },
       ],
     });
   }
 
-  if (d.recording_url) {
-    blocks.push({
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Recording" },
-          url: d.recording_url,
-        },
-      ],
+  const linkButtons: any[] = [];
+  if (d.recordingUrl) {
+    linkButtons.push({
+      type: "button",
+      text: { type: "plain_text", text: "Recording" },
+      url: d.recordingUrl,
     });
+  }
+  if (d.transcriptUrl) {
+    linkButtons.push({
+      type: "button",
+      text: { type: "plain_text", text: "Transcript" },
+      url: d.transcriptUrl,
+    });
+  }
+  if (linkButtons.length > 0) {
+    blocks.push({ type: "actions", elements: linkButtons });
   }
 
   const rawJson = JSON.stringify(payload, null, 2);

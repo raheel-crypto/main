@@ -280,46 +280,57 @@ export interface RogoBatchResult {
   warnings?: string[];
 }
 
-export interface NooksAgent {
-  agent_id?: string;
+export interface NooksUserData {
+  userId?: string;
   email?: string;
   name?: string;
 }
 
-export interface NooksProspect {
-  prospect_id?: string;
-  first_name?: string;
-  last_name?: string;
-  phone_number?: string;
+export interface NooksProspectData {
+  prospectId?: string;
+  name?: string;
+  phoneNumber?: string;
   email?: string;
-  company_name?: string;
+  linkedInUrl?: string;
 }
 
-export interface NooksSequence {
-  sequence_id?: string;
-  sequence_name?: string;
-  step_number?: number;
+export interface NooksAccountData {
+  accountId?: string;
+  name?: string;
+}
+
+export interface NooksDisposition {
+  id?: string;
+  name?: string;
+}
+
+export interface NooksSequenceData {
+  sequenceName?: string;
+  sequenceStep?: string;
 }
 
 export interface NooksCallData {
-  call_id: string;
-  direction?: string;
+  callId: string;
+  workspaceId?: string;
+  userData?: NooksUserData;
+  prospectData?: NooksProspectData;
+  accountData?: NooksAccountData;
+  callDirection?: string;
   status?: string;
-  duration_seconds?: number;
-  disposition?: string;
+  disposition?: NooksDisposition;
+  startedAt?: string;
+  durationSeconds?: number;
+  recordingUrl?: string;
   notes?: string;
-  recording_url?: string;
-  agent?: NooksAgent;
-  prospect?: NooksProspect;
-  sequence?: NooksSequence;
+  transcriptUrl?: string;
+  sequenceData?: NooksSequenceData;
 }
 
 export interface NooksWebhookPayload {
-  event_id: string;
-  event_type: string;
-  created_at?: string;
-  workspace_id?: string;
-  data: NooksCallData;
+  event: string;
+  eventId: string;
+  occurredAt?: string;
+  callData: NooksCallData;
 }
 
 export interface PositiveApolloCall {

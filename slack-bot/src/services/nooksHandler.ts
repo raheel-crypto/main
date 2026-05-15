@@ -15,12 +15,13 @@ export async function handleNooksWebhook(
   console.log(
     "[nooks] received",
     JSON.stringify({
-      event_id: payload.event_id,
-      event_type: payload.event_type,
-      call_id: payload.data?.call_id,
-      disposition: payload.data?.disposition,
-      agent_email: payload.data?.agent?.email,
-      prospect_company: payload.data?.prospect?.company_name,
+      event: payload.event,
+      eventId: payload.eventId,
+      callId: payload.callData?.callId,
+      disposition: payload.callData?.disposition?.name,
+      agentEmail: payload.callData?.userData?.email,
+      accountId: payload.callData?.accountData?.accountId,
+      accountName: payload.callData?.accountData?.name,
     })
   );
   console.log("[nooks] full payload:", JSON.stringify(payload));
