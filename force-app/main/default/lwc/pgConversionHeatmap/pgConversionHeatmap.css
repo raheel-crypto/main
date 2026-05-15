@@ -58,6 +58,20 @@
     background: #ffffff;
 }
 
+.pg-heatmap__td-mgr {
+    background: #f1f5f9;
+    color: #0f172a;
+    font-weight: 700;
+    vertical-align: middle;
+    border-right: 1px solid #e2e8f0;
+}
+
+.pg-heatmap__td-ae {
+    padding-left: 1.25rem !important;
+    color: #1e293b;
+    font-weight: 500;
+}
+
 .pg-cell--green  { background: #86efac; }
 .pg-cell--lime   { background: #d9f99d; }
 .pg-cell--yellow { background: #fde68a; }

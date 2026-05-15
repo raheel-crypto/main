@@ -13,6 +13,7 @@ const TRANSITION_LABELS = {
 export default class PgConversionHeatmap extends LightningElement {
     grouping = 'AE';        // 'AE' | 'Pod'
     combineIB = false;
+    groupByManager = true;  // applies only in AE mode
     metric = 'count';       // 'count' | 'amount'
     rawRows;
     error;
@@ -35,12 +36,15 @@ export default class PgConversionHeatmap extends LightningElement {
     get amountToggleClass() { return 'pg-mini-toggle__btn' + (this.metric === 'amount' ? ' pg-mini-toggle__btn--active' : ''); }
     get isPodMode()      { return this.grouping === 'Pod'; }
     get isAmount()       { return this.metric === 'amount'; }
+    get showGroupByManager() { return this.grouping === 'AE'; }
+    get isGrouped()      { return this.showGroupByManager && this.groupByManager; }
 
     handleSelectAE()  { this.grouping = 'AE';  }
     handleSelectPod() { this.grouping = 'Pod'; }
     handleSelectCount()  { this.metric = 'count';  }
     handleSelectAmount() { this.metric = 'amount'; }
     handleToggleCombineIB(event) { this.combineIB = event.target.checked; }
+    handleToggleGroupByManager(event) { this.groupByManager = event.target.checked; }
 
     get rows() {
         if (!this.rawRows) return [];
@@ -74,6 +78,30 @@ export default class PgConversionHeatmap extends LightningElement {
     }
 
     get hasRows() { return this.rows.length > 0; }
+
+    // When grouped, bucket AE rows by manager. The manager header row has
+    // no rate cells — percentages can't be averaged without underlying
+    // numerators / denominators, which the Apex doesn't currently expose.
+    // It's purely a visual section break to keep an AE's report card next
+    // to their teammates'.
+    get rowGroups() {
+        if (!this.isGrouped) return null;
+        const rows = this.rows;
+        if (!rows.length) return [];
+        const buckets = new Map();
+        for (const r of rows) {
+            const key = r.managerName || '— No Manager —';
+            let b = buckets.get(key);
+            if (!b) {
+                b = { key, managerName: key, rows: [] };
+                buckets.set(key, b);
+            }
+            b.rows.push(r);
+        }
+        return Array.from(buckets.values()).sort(
+            (a, b) => a.managerName.localeCompare(b.managerName)
+        );
+    }
 
     fmt(val) {
         if (val == null) return 'N/A';

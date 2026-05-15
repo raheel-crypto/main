@@ -17,6 +17,12 @@
                         <span>Combine IB1 + IB2</span>
                     </label>
                 </template>
+                <template lwc:if={showGroupByManager}>
+                    <label class="pg-checkbox">
+                        <input type="checkbox" checked={groupByManager} onchange={handleToggleGroupByManager} />
+                        <span>Group by Manager</span>
+                    </label>
+                </template>
             </div>
         </header>
         <template lwc:if={hasRows}>
@@ -39,21 +45,40 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <template for:each={rows} for:item="row">
-                            <tr key={row.groupKey}>
-                                <template lwc:if={isPodMode}>
-                                    <td class="pg-heatmap__td-name">{row.ownerName}</td>
+                        <template lwc:if={isGrouped}>
+                            <template for:each={rowGroups} for:item="g">
+                                <template for:each={g.rows} for:item="row" for:index="i">
+                                    <tr key={row.groupKey}>
+                                        <template lwc:if={i.first}>
+                                            <td class="pg-heatmap__td-name pg-heatmap__td-mgr" rowspan={g.rows.length}>{g.managerName}</td>
+                                        </template>
+                                        <td class="pg-heatmap__td-name pg-heatmap__td-ae">{row.ownerName}</td>
+                                        <td class={row.demoToDiscoClass}           data-from-rank="1" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.demoToDiscoFmt}</td>
+                                        <td class={row.discoToPovClass}            data-from-rank="2" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.discoToPovFmt}</td>
+                                        <td class={row.povToProposalClass}         data-from-rank="3" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.povToProposalFmt}</td>
+                                        <td class={row.proposalToContractingClass} data-from-rank="4" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.proposalToContractingFmt}</td>
+                                        <td class={row.contractingToWonClass}      data-from-rank="5" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.contractingToWonFmt}</td>
+                                    </tr>
                                 </template>
-                                <template lwc:else>
-                                    <td class="pg-heatmap__td-name">{row.managerName}</td>
-                                    <td class="pg-heatmap__td-name">{row.ownerName}</td>
-                                </template>
-                                <td class={row.demoToDiscoClass}           data-from-rank="1" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.demoToDiscoFmt}</td>
-                                <td class={row.discoToPovClass}            data-from-rank="2" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.discoToPovFmt}</td>
-                                <td class={row.povToProposalClass}         data-from-rank="3" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.povToProposalFmt}</td>
-                                <td class={row.proposalToContractingClass} data-from-rank="4" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.proposalToContractingFmt}</td>
-                                <td class={row.contractingToWonClass}      data-from-rank="5" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.contractingToWonFmt}</td>
-                            </tr>
+                            </template>
+                        </template>
+                        <template lwc:else>
+                            <template for:each={rows} for:item="row">
+                                <tr key={row.groupKey}>
+                                    <template lwc:if={isPodMode}>
+                                        <td class="pg-heatmap__td-name">{row.ownerName}</td>
+                                    </template>
+                                    <template lwc:else>
+                                        <td class="pg-heatmap__td-name">{row.managerName}</td>
+                                        <td class="pg-heatmap__td-name">{row.ownerName}</td>
+                                    </template>
+                                    <td class={row.demoToDiscoClass}           data-from-rank="1" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.demoToDiscoFmt}</td>
+                                    <td class={row.discoToPovClass}            data-from-rank="2" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.discoToPovFmt}</td>
+                                    <td class={row.povToProposalClass}         data-from-rank="3" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.povToProposalFmt}</td>
+                                    <td class={row.proposalToContractingClass} data-from-rank="4" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.proposalToContractingFmt}</td>
+                                    <td class={row.contractingToWonClass}      data-from-rank="5" data-group-key={row.groupKey} data-owner-name={row.ownerName} onclick={handleCellClick}>{row.contractingToWonFmt}</td>
+                                </tr>
+                            </template>
                         </template>
                     </tbody>
                 </table>
