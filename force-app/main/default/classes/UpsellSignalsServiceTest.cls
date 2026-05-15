@@ -35,10 +35,11 @@ private class UpsellSignalsServiceTest {
     }
 
     @IsTest
-    static void compute_producesAllSixSignalsWhenDataPresent() {
+    static void compute_producesAllSevenSignalsWhenDataPresent() {
         UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
         UpsellSignalsService.bearerTokenOverride = 'test-token';
         UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>();
+        UpsellSignalsService.activitiesOverride = new List<Map<String, Object>>();
         Test.setMock(HttpCalloutMock.class, new AskMock());
 
         Account a = buildAccount(true);
@@ -59,7 +60,7 @@ private class UpsellSignalsServiceTest {
 
         System.assertEquals('Acme Capital', out.accountName);
         System.assertEquals('Tier I', out.accountTier);
-        System.assertEquals(6, out.signals.size());
+        System.assertEquals(7, out.signals.size(), '5 scored + Gong + Tasks/Events');
         System.assert(out.score > 0, 'score should be > 0 with mostly green signals');
         System.assert(out.score <= 100);
         System.assertEquals('narr_xyz', out.narrativeJobId);
@@ -75,6 +76,87 @@ private class UpsellSignalsServiceTest {
         System.assertEquals('present', byKey.get('gong_signals').status);
         System.assertEquals(0, byKey.get('gong_signals').contributionPoints,
             'no override calls -> 0 bonus');
+        System.assertEquals('present', byKey.get('tasks_events').status);
+        System.assertEquals(0, byKey.get('tasks_events').contributionPoints,
+            'no override activities -> 0 bonus');
+    }
+
+    @IsTest
+    static void compute_tasksAndEventsBumpsScoreWhenUpsellLanguageInDescription() {
+        UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
+        UpsellSignalsService.bearerTokenOverride = 'test-token';
+        UpsellSignalsService.skipNarrativeCall = true;
+        UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>();
+        UpsellSignalsService.activitiesOverride = new List<Map<String, Object>>{
+            new Map<String, Object>{
+                'kind' => 'Task',
+                'subject' => 'Re: Expansion proposal',
+                'description' => 'Customer asked about adding 5 more seats and upgrading to tier ii.',
+                'when' => Datetime.now().addDays(-2)
+            },
+            new Map<String, Object>{
+                'kind' => 'Event',
+                'subject' => 'QBR',
+                'description' => 'Reviewed Q2 progress and discussed expansion roadmap with the team.',
+                'when' => Datetime.now().addDays(-7)
+            }
+        };
+
+        Account a = buildAccount(true);
+        insert a;
+
+        Test.startTest();
+        UpsellSignalsService.UpsellOutput out =
+            UpsellSignalsService.compute(a.Id, 0.50, 0.62, 22.0);
+        Test.stopTest();
+
+        for (UpsellSignalsService.Signal s : out.signals) {
+            if (s.key == 'tasks_events') {
+                // 2 activities -> +2 base; 2 upsell hits -> +2; net +4
+                System.assertEquals(4, s.contributionPoints,
+                    'task + event with upsell terms should net +4, got ' + s.contributionPoints);
+                System.assert(s.detail.contains('upsell talk'),
+                    'detail flags upsell talk: ' + s.detail);
+                System.assert(s.detail.contains('1 email/task'),
+                    'detail shows email/task count: ' + s.detail);
+                System.assert(s.detail.contains('1 event'),
+                    'detail shows event count: ' + s.detail);
+            }
+        }
+    }
+
+    @IsTest
+    static void compute_tasksAndEventsPenalizesConcernLanguage() {
+        UpsellSignalsService.benchmarkCsvOverride = SAMPLE_CSV;
+        UpsellSignalsService.bearerTokenOverride = 'test-token';
+        UpsellSignalsService.skipNarrativeCall = true;
+        UpsellSignalsService.gongCallsOverride = new List<Map<String, Object>>();
+        UpsellSignalsService.activitiesOverride = new List<Map<String, Object>>{
+            new Map<String, Object>{
+                'kind' => 'Task',
+                'subject' => 'Following up on pricing concerns',
+                'description' => 'Customer is frustrated about pricing and is evaluating a competitor.',
+                'when' => Datetime.now().addDays(-1)
+            }
+        };
+
+        Account a = buildAccount(true);
+        insert a;
+
+        Test.startTest();
+        UpsellSignalsService.UpsellOutput out =
+            UpsellSignalsService.compute(a.Id, 0.50, 0.62, 22.0);
+        Test.stopTest();
+
+        for (UpsellSignalsService.Signal s : out.signals) {
+            if (s.key == 'tasks_events') {
+                // 1 activity -> +2 base; -1 concern hit; net +1
+                System.assertEquals(1, s.contributionPoints,
+                    'concern term should subtract 1, got ' + s.contributionPoints);
+                System.assert(s.detail.contains('concern talk'),
+                    'detail flags concern: ' + s.detail);
+            }
+        }
     }
 
     @IsTest

@@ -1,9 +1,12 @@
 public with sharing class UpsellSignalsService {
 
+    @TestVisible private static Integer LOOKBACK_DAYS = 14;
+
     @TestVisible private static String benchmarkCsvOverride;
     @TestVisible private static String bearerTokenOverride;
     @TestVisible private static Boolean skipNarrativeCall = false;
     @TestVisible private static List<Map<String, Object>> gongCallsOverride;
+    @TestVisible private static List<Map<String, Object>> activitiesOverride;
 
     public class Signal {
         @AuraEnabled public String key;
@@ -114,12 +117,14 @@ public with sharing class UpsellSignalsService {
         Map<String, Decimal> benchmark = loadBenchmark(a, out.warnings);
 
         List<Map<String, Object>> gongCallSummaries = new List<Map<String, Object>>();
+        List<Map<String, Object>> activitySummaries = new List<Map<String, Object>>();
         out.signals.add(scoreUsageVsBenchmark(dauWauObserved, wauEnrolledObserved, qpuObserved, benchmark));
         out.signals.add(scoreWhitespace(a));
         out.signals.add(scoreArrTamGap(a));
         out.signals.add(scoreOpportunityCadence(opps));
         out.signals.add(scoreHealth(a));
         out.signals.add(scoreGong(accountId, gongCallSummaries));
+        out.signals.add(scoreTasksAndEvents(accountId, activitySummaries));
 
         Decimal total = 0;
         for (Signal s : out.signals) {
@@ -133,7 +138,7 @@ public with sharing class UpsellSignalsService {
             try {
                 out.narrativeJobId = submitNarrativeJob(a, out,
                     dauWauObserved, wauEnrolledObserved, qpuObserved,
-                    gongCallSummaries);
+                    gongCallSummaries, activitySummaries);
             } catch (Exception e) {
                 out.warnings.add('Narrative generation skipped: ' + e.getMessage());
             }
@@ -384,7 +389,7 @@ public with sharing class UpsellSignalsService {
     private static Signal scoreGong(Id accountId, List<Map<String, Object>> outCalls) {
         Signal s = new Signal();
         s.key = 'gong_signals';
-        s.label = 'Gong Call Signals (last 7 days)';
+        s.label = 'Gong Call Signals (last ' + LOOKBACK_DAYS + ' days)';
         s.weight = 0; // additive modifier on top of the 100
 
         List<Map<String, Object>> calls;
@@ -399,7 +404,7 @@ public with sharing class UpsellSignalsService {
                 return s;
             }
             try {
-                DateTime since = DateTime.now().addDays(-7);
+                DateTime since = DateTime.now().addDays(-LOOKBACK_DAYS);
                 List<SObject> rows = Database.query(
                     'SELECT Id, Name, Gong__Title__c, Gong__Call_ID__c, ' +
                     'Gong__Call_Start__c, Gong__Call_Duration_sec__c, ' +
@@ -475,7 +480,7 @@ public with sharing class UpsellSignalsService {
 
         List<String> detailParts = new List<String>();
         if (count > 0) detailParts.add(count + ' call' + (count == 1 ? '' : 's'));
-        else           detailParts.add('No calls in last 7 days');
+        else           detailParts.add('No calls in last ' + LOOKBACK_DAYS + ' days');
         if (upsellHits > 0)  detailParts.add(upsellHits + ' with upsell talk');
         if (concernHits > 0) detailParts.add(concernHits + ' with concern talk');
 
@@ -489,6 +494,107 @@ public with sharing class UpsellSignalsService {
         return String.isNotBlank(a) ? a : (String.isNotBlank(b) ? b : null);
     }
     private static String nullToBlank(String s) { return s == null ? '' : s; }
+
+    // ------------------------------------------------------------
+    // Tasks & Events signal
+    // ------------------------------------------------------------
+
+    private static Signal scoreTasksAndEvents(Id accountId, List<Map<String, Object>> outActivities) {
+        Signal s = new Signal();
+        s.key = 'tasks_events';
+        s.label = 'Tasks & Events (last ' + LOOKBACK_DAYS + ' days)';
+        s.weight = 0; // additive modifier on top of the 100
+
+        List<Map<String, Object>> activities;
+        if (activitiesOverride != null) {
+            activities = activitiesOverride;
+        } else {
+            activities = new List<Map<String, Object>>();
+            try {
+                DateTime sinceDt = DateTime.now().addDays(-LOOKBACK_DAYS);
+                Date sinceDate = Date.today().addDays(-LOOKBACK_DAYS);
+                for (Task t : [
+                    SELECT Id, Subject, Description, CreatedDate, Type, Status
+                    FROM Task
+                    WHERE (AccountId = :accountId OR WhatId = :accountId)
+                      AND CreatedDate >= :sinceDt
+                    ORDER BY CreatedDate DESC
+                    LIMIT 50
+                ]) {
+                    activities.add(new Map<String, Object>{
+                        'kind'        => 'Task',
+                        'subject'     => t.Subject,
+                        'description' => t.Description,
+                        'when'        => t.CreatedDate,
+                        'type'        => t.Type,
+                        'status'      => t.Status
+                    });
+                }
+                for (Event e : [
+                    SELECT Id, Subject, Description, ActivityDate, StartDateTime, Type
+                    FROM Event
+                    WHERE (AccountId = :accountId OR WhatId = :accountId)
+                      AND ActivityDate >= :sinceDate
+                    ORDER BY ActivityDate DESC
+                    LIMIT 50
+                ]) {
+                    activities.add(new Map<String, Object>{
+                        'kind'        => 'Event',
+                        'subject'     => e.Subject,
+                        'description' => e.Description,
+                        'when'        => e.StartDateTime != null ? (Object) e.StartDateTime : (Object) e.ActivityDate,
+                        'type'        => e.Type
+                    });
+                }
+            } catch (Exception ex) {
+                s.contributionPoints = 0;
+                s.status = 'missing';
+                s.detail = 'Task/Event query failed: ' + ex.getMessage();
+                return s;
+            }
+        }
+
+        for (Map<String, Object> a : activities) outActivities.add(a);
+
+        Integer taskCount = 0;
+        Integer eventCount = 0;
+        Integer upsellHits = 0;
+        Integer concernHits = 0;
+        for (Map<String, Object> a : activities) {
+            String kind = (String) a.get('kind');
+            if (kind == 'Task') taskCount++;
+            else if (kind == 'Event') eventCount++;
+
+            String haystack = (
+                nullToBlank((String) a.get('subject')) + ' ' +
+                nullToBlank((String) a.get('description'))
+            ).toLowerCase();
+            for (String t : UPSELL_TERMS)  if (haystack.contains(t)) { upsellHits++; break; }
+            for (String t : CONCERN_TERMS) if (haystack.contains(t)) { concernHits++; break; }
+        }
+
+        Integer total = taskCount + eventCount;
+        Decimal pts;
+        if (total >= 4)      pts = 4;
+        else if (total >= 1) pts = 2;
+        else                 pts = 0;
+        pts += upsellHits;
+        pts -= concernHits;
+        if (pts > 5) pts = 5;
+        if (pts < -5) pts = -5;
+
+        List<String> detailParts = new List<String>();
+        if (taskCount > 0)  detailParts.add(taskCount + ' email/task' + (taskCount == 1 ? '' : 's'));
+        if (eventCount > 0) detailParts.add(eventCount + ' event' + (eventCount == 1 ? '' : 's'));
+        if (detailParts.isEmpty()) detailParts.add('No activity in last ' + LOOKBACK_DAYS + ' days');
+        if (upsellHits > 0)  detailParts.add(upsellHits + ' with upsell talk');
+        if (concernHits > 0) detailParts.add(concernHits + ' with concern talk');
+
+        s.contributionPoints = pts;
+        s.status = 'present';
+        s.detail = String.join(detailParts, ' · ');
+        return s;
+    }
 
     // ------------------------------------------------------------
     // Benchmark lookup
@@ -549,7 +655,8 @@ public with sharing class UpsellSignalsService {
     private static String submitNarrativeJob(
         Account a, UpsellOutput out,
         Decimal dauWau, Decimal wauEnr, Decimal qpu,
-        List<Map<String, Object>> gongCallSummaries
+        List<Map<String, Object>> gongCallSummaries,
+        List<Map<String, Object>> activitySummaries
     ) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint('callout:Rogo_Analytics/api/ask');
@@ -557,7 +664,7 @@ public with sharing class UpsellSignalsService {
         req.setHeader('Authorization', 'Bearer ' + getBearerToken());
         req.setHeader('Content-Type', 'application/json');
         req.setBody(JSON.serialize(new Map<String, Object>{
-            'question' => buildNarrativePrompt(a, out, dauWau, wauEnr, qpu, gongCallSummaries),
+            'question' => buildNarrativePrompt(a, out, dauWau, wauEnr, qpu, gongCallSummaries, activitySummaries),
             'user_name' => UserInfo.getUserName()
         }));
         req.setTimeout(60000);
@@ -573,11 +680,12 @@ public with sharing class UpsellSignalsService {
     private static String buildNarrativePrompt(
         Account a, UpsellOutput out,
         Decimal dauWau, Decimal wauEnr, Decimal qpu,
-        List<Map<String, Object>> gongCallSummaries
+        List<Map<String, Object>> gongCallSummaries,
+        List<Map<String, Object>> activitySummaries
     ) {
         String gongContext = '';
         if (gongCallSummaries != null && !gongCallSummaries.isEmpty()) {
-            gongContext = '\n\nRecent Gong calls (last 7 days, most recent first):\n';
+            gongContext = '\n\nRecent Gong calls (last ' + LOOKBACK_DAYS + ' days, most recent first):\n';
             Integer i = 0;
             for (Map<String, Object> c : gongCallSummaries) {
                 i++;
@@ -608,6 +716,28 @@ public with sharing class UpsellSignalsService {
             }
         }
 
+        String activityContext = '';
+        if (activitySummaries != null && !activitySummaries.isEmpty()) {
+            activityContext = '\n\nRecent emails / tasks / events (last ' + LOOKBACK_DAYS + ' days, most recent first):\n';
+            Integer i = 0;
+            for (Map<String, Object> ax : activitySummaries) {
+                i++;
+                if (i > 8) break;
+                String kind = (String) ax.get('kind');
+                String subject = (String) ax.get('subject');
+                Object whenObj = ax.get('when');
+                String dateStr = 'unknown date';
+                if (whenObj instanceof Datetime) dateStr = ((Datetime) whenObj).format('yyyy-MM-dd');
+                else if (whenObj instanceof Date) dateStr = String.valueOf(whenObj);
+                activityContext += i + ') ' + kind + ': "' + nz(subject) + '" (' + dateStr + ').';
+                String typeVal = (String) ax.get('type');
+                if (String.isNotBlank(typeVal)) activityContext += ' TYPE: ' + typeVal + '.';
+                String desc = truncate((String) ax.get('description'), 400);
+                if (String.isNotBlank(desc)) activityContext += ' DESC: ' + desc;
+                activityContext += '\n';
+            }
+        }
+
         return 'You are advising a Customer Success Manager on an upsell opportunity at a customer account. '
             + 'Account: "' + a.Name + '" (Salesforce id ' + a.Id + '). '
             + 'Business Type: ' + nz(a.Business_Type__c) + ', '
@@ -618,7 +748,8 @@ public with sharing class UpsellSignalsService {
             + 'Signals (JSON): ' + JSON.serialize(out.signals) + '. '
             + 'Observed last-28-day usage: DAU/WAU=' + pct(dauWau) + ', '
             + 'WAU/Enrolled=' + pct(wauEnr) + ', QPU=' + num(qpu) + '.'
-            + gongContext + '\n\n'
+            + gongContext
+            + activityContext + '\n\n'
             + 'Important framing rules: '
             + '(1) Tenure (e.g. "Customer 751d") is stickiness, NOT a sales gap — do not describe long tenure as "time since New Business" or "751-day gap". '
             + '(2) Renewals are annual; "2 renewals" means a 2-year+ customer who has stayed twice. '
@@ -629,7 +760,7 @@ public with sharing class UpsellSignalsService {
             + 'Respond in markdown with EXACTLY two sections. '
             + 'First section header: "## Upsell Opportunity" — 2 to 3 sentences identifying the most likely upsell '
             + '(seat expansion, product line, tier upgrade, or geo expansion) and which signals support it. '
-            + 'Quote specific phrases or trackers from the Gong calls where they reinforce the recommendation, '
+            + 'Quote specific phrases or trackers from the Gong calls, recent emails, or events where they reinforce the recommendation, '
             + 'or surface contrary signals (concerns, churn risk, renewal amount declines) if present. '
             + 'Second section header: "## Recommended Actions" — a numbered list of 3 specific actions the CSM should take in the next 7 days. '
             + 'Tie each action to either a Gong call (reference by title), a usage gap, a specific whitespace number, or the opportunity history. '
