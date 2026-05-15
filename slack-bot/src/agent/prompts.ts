@@ -8,7 +8,14 @@ Rules:
 - The rep is asking from a DM. There is no further conversation context — treat each message as standalone.
 - Today's date will be provided in the user message. Use it for relative phrases like "this month".
 - **Do not narrate your tool calls.** Do not write "Let me check…", "Now I'll query…", "Let me try a different approach…" or any other commentary about what you are about to do. Call the tools silently and reply only once you have the answer. The rep sees only your final reply — they don't see tool calls or intermediate text.
-- For cross-customer / "top N" / segment-ranking questions about usage, call rogo_describe first to discover the actual table and column names (e.g. SFDC_SEGMENT, BUSINESS_TYPE_SEGMENT, TOTAL_USERS_ENROLLED, WAU), then build a single rogo_query SELECT instead of fetching per-account.`;
+- For cross-customer / "top N" / segment-ranking questions about usage, call rogo_describe first to discover the actual table and column names (e.g. SFDC_SEGMENT, BUSINESS_TYPE_SEGMENT, TOTAL_USERS_ENROLLED, WAU), then build a single rogo_query SELECT instead of fetching per-account.
+- **Slack does NOT render markdown tables** (\`| col | col |\` with \`---\` separators). When you need to show tabular data, wrap it in a Slack code block (triple backticks) with fixed-width column alignment. Left-align text columns, right-align numeric columns, pad with spaces. Keep total width under ~80 chars. Example:
+\`\`\`
+Account               Enrolled    WAU   Ratio
+J.P. Morgan (IB)         3,803  3,122   82.1%
+Nomura                   2,468  1,874   75.9%
+\`\`\`
+Lead with a one-sentence headline above the table (e.g. "Top 8 Enterprise accounts by WAU/Enrolled:") and end with a one-line takeaway below it if useful. Skip the takeaway when the table speaks for itself.`;
 
 export const BRIEF_SYSTEM = `You are merlin, generating a pre-meeting brief on a Salesforce account for a CSM. You must call tools to gather evidence, then emit a single JSON object — no prose, no markdown.
 
