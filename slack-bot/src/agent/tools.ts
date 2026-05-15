@@ -11,6 +11,10 @@ import {
   findAccountsByName,
 } from "../services/sfReads.js";
 import { getUsageProvider } from "../services/usageDb.js";
+import {
+  bootstrap as rogoBootstrap,
+  query as rogoQueryRaw,
+} from "../services/rogoClient.js";
 import { BUY_SIGNAL_SUBJECT_PATTERN } from "../constants.js";
 
 export interface AgentToolCtx {
@@ -335,6 +339,81 @@ const sfGetRecentPositiveCalls: AgentTool = {
   },
 };
 
+const rogoDescribe: AgentTool = {
+  name: "rogo_describe",
+  definition: {
+    name: "rogo_describe",
+    description:
+      "Get the Rogo Analytics warehouse schema and a sample of the customer directory. Returns available_schemas, the data_model_doc markdown (full description of tables/columns/segments), and N sample customer_directory rows so you can see what columns exist and how Salesforce account IDs map to Rogo customers. **Call this FIRST** before using rogo_query, especially for cross-account questions about usage, segments, or rankings.",
+    input_schema: {
+      type: "object",
+      properties: {
+        sampleDirectoryRows: {
+          type: "number",
+          description: "How many customer_directory rows to include in the sample (default 5, max 20).",
+        },
+      },
+    },
+  },
+  async execute(input, _ctx) {
+    const sampleN = Math.min(
+      Math.max(Number((input as any).sampleDirectoryRows) || 5, 0),
+      20
+    );
+    const boot = await rogoBootstrap();
+    const directory = boot.customer_directory;
+    return {
+      contract_version: boot.contract_version,
+      database: boot.database,
+      available_schemas: boot.available_schemas,
+      guardrails: boot.guardrails,
+      data_model_doc: boot.data_model_doc?.content_md ?? null,
+      customer_directory_row_count:
+        directory?.row_count ?? directory?.rows?.length ?? 0,
+      customer_directory_sample: (directory?.rows ?? []).slice(0, sampleN),
+    };
+  },
+};
+
+const rogoQuery: AgentTool = {
+  name: "rogo_query",
+  definition: {
+    name: "rogo_query",
+    description:
+      "Run a read-only SELECT SQL query against the Rogo Analytics warehouse. Use this for ANY cross-customer analytics: ranking accounts by a metric, segment aggregations, joins between tables. Only SELECT is allowed (rejects INSERT/UPDATE/DELETE/UPSERT/MERGE). Rogo enforces its own row count and timeout guardrails. Call rogo_describe FIRST to learn the actual table and column names before constructing SQL.",
+    input_schema: {
+      type: "object",
+      properties: {
+        sql: {
+          type: "string",
+          description:
+            "A SELECT SQL statement against the Rogo warehouse (Snowflake-flavored SQL).",
+        },
+      },
+      required: ["sql"],
+    },
+  },
+  async execute(input, _ctx) {
+    const sql = String((input as any).sql ?? "").trim();
+    if (!/^\s*SELECT\b/i.test(sql)) {
+      throw new Error("Only SELECT queries are allowed");
+    }
+    if (REJECT_DML.test(sql)) {
+      throw new Error("DML keywords are not allowed");
+    }
+    const result = await rogoQueryRaw(sql);
+    return {
+      status: result.status,
+      columns: result.columns,
+      column_types: result.column_types,
+      rows: result.rows,
+      row_count: result.row_count,
+      truncated: result.truncated,
+      warnings: result.warnings,
+    };
+  },
+};
+
 export const ALL_TOOLS: AgentTool[] = [
   now,
   sfFindAccount,
@@ -344,6 +423,8 @@ export const ALL_TOOLS: AgentTool[] = [
   gongGetCalls,
   rogoGetUsage,
   sfGetRecentPositiveCalls,
+  rogoDescribe,
+  rogoQuery,
 ];
 
 export const TOOL_DEFINITIONS = ALL_TOOLS.map((t) => t.definition);
