@@ -32,6 +32,7 @@ export async function handleNooksWebhook(
       accountName: payload.callData?.accountData?.name,
     })
   );
+  console.log("[nooks] full payload:", JSON.stringify(payload));
 
   if (direction.toLowerCase() !== NOOKS_FILTER_DIRECTION.toLowerCase()) {
     console.log(
@@ -45,8 +46,6 @@ export async function handleNooksWebhook(
     );
     return { ok: true, reason: `filtered_disposition:${dispositionName}` };
   }
-
-  console.log("[nooks] full payload:", JSON.stringify(payload));
 
   const dmTo = config.nooks.testDmUserId;
   if (!dmTo) {
