@@ -38,46 +38,58 @@ export default async function handler(
     return;
   }
 
-  if (!config.nooks.webhookSecret) {
-    console.error("[nooks/webhook] NOOKS_WEBHOOK_SECRET not configured");
-    res.statusCode = 503;
-    res.end("Webhook not configured");
-    return;
+  if (config.nooks.webhookSecret) {
+    const headerToken = req.headers["x-nooks-secret"];
+    let queryToken: string | null = null;
+    try {
+      const url = new URL(req.url || "", "http://localhost");
+      queryToken = url.searchParams.get("token");
+    } catch {}
+    const provided =
+      typeof headerToken === "string" && headerToken
+        ? headerToken
+        : queryToken ?? "";
+    if (provided !== config.nooks.webhookSecret) {
+      res.statusCode = 401;
+      res.end("Unauthorized");
+      return;
+    }
+  } else {
+    console.warn(
+      "[nooks/webhook] NOOKS_WEBHOOK_SECRET not set — accepting unauthenticated POST"
+    );
   }
 
-  const headerToken = req.headers["x-nooks-secret"];
-  let queryToken: string | null = null;
+  let body: any;
   try {
-    const url = new URL(req.url || "", "http://localhost");
-    queryToken = url.searchParams.get("token");
-  } catch {}
-  const provided =
-    typeof headerToken === "string" && headerToken
-      ? headerToken
-      : queryToken ?? "";
-  if (provided !== config.nooks.webhookSecret) {
-    res.statusCode = 401;
-    res.end("Unauthorized");
-    return;
-  }
-
-  let body: NooksWebhookPayload;
-  try {
-    body = (await readJson(req)) as NooksWebhookPayload;
+    body = await readJson(req);
   } catch (err: any) {
-    res.statusCode = 400;
-    res.end(`Invalid JSON: ${err.message}`);
+    console.warn("[nooks/webhook] non-JSON body, treating as preflight:", err.message);
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ ok: true, kind: "preflight_non_json" }));
     return;
   }
+
+  console.log(
+    "[nooks/webhook] incoming",
+    JSON.stringify({
+      method: req.method,
+      headers: req.headers,
+      bodyKeys: body && typeof body === "object" ? Object.keys(body) : null,
+    })
+  );
 
   if (!body || typeof body !== "object" || !body.data?.call_id) {
-    res.statusCode = 400;
-    res.end("Missing data.call_id");
+    console.log("[nooks/webhook] preflight-shaped body, returning 200:", JSON.stringify(body));
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ ok: true, kind: "preflight" }));
     return;
   }
 
   try {
-    const result = await handleNooksWebhook(body);
+    const result = await handleNooksWebhook(body as NooksWebhookPayload);
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify(result));
