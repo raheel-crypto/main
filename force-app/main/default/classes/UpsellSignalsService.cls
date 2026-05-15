@@ -691,9 +691,9 @@ public with sharing class UpsellSignalsService {
                 i++;
                 if (i > 5) break;
                 String title = (String) c.get('title');
-                Datetime when = (Datetime) c.get('callStart');
-                if (when == null) when = (Datetime) c.get('createdDate');
-                String dateStr = when != null ? when.format('yyyy-MM-dd') : 'unknown date';
+                Datetime callDt = (Datetime) c.get('callStart');
+                if (callDt == null) callDt = (Datetime) c.get('createdDate');
+                String dateStr = callDt != null ? callDt.format('yyyy-MM-dd') : 'unknown date';
 
                 gongContext += i + ') "' + title + '" (' + dateStr + ')';
                 Decimal durSec = (Decimal) c.get('durationSec');
@@ -732,8 +732,8 @@ public with sharing class UpsellSignalsService {
                 activityContext += i + ') ' + kind + ': "' + nz(subject) + '" (' + dateStr + ').';
                 String typeVal = (String) ax.get('type');
                 if (String.isNotBlank(typeVal)) activityContext += ' TYPE: ' + typeVal + '.';
-                String desc = truncate((String) ax.get('description'), 400);
-                if (String.isNotBlank(desc)) activityContext += ' DESC: ' + desc;
+                String descText = truncate((String) ax.get('description'), 400);
+                if (String.isNotBlank(descText)) activityContext += ' DESC: ' + descText;
                 activityContext += '\n';
             }
         }
