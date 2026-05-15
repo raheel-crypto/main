@@ -1,138 +1,267 @@
-.section-heading {
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #54698d;
-    margin-top: 0.5rem;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
+:host {
+    --rogo-white: #ffffff;
+    --rogo-off-white: #f5f2e9;
+    --rogo-black: #191919;
+    --rogo-mint: #f2ffe8;
+    --rogo-forest: #19ba20;
+    --rogo-laurel: #ddebcf;
+    --rogo-sky: #d9effc;
+    --rogo-ocean: #0c71cf;
+    --rogo-carolina: #c0d7e1;
+    --rogo-apple: #ffe8e7;
+    --rogo-raspberry: #c2275f;
+    --rogo-hibiscus: #ebcfe0;
 }
 
+.section-heading {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--rogo-black);
+    opacity: 0.6;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+}
+
+.account-header {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--rogo-black);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.last-refreshed {
+    font-size: 0.75rem;
+    color: var(--rogo-black);
+    opacity: 0.55;
+    margin-bottom: 0.5rem;
+}
+
+/* ============================================================
+   Metric tiles (DAU/WAU, WAU/Enrolled, QPU)
+   ============================================================ */
+
 .metric-tile {
-    padding: 0.75rem 1rem;
-    border-radius: 0.25rem;
-    background: #f3f3f3;
+    padding: 1rem 1.1rem;
+    border-radius: 0.5rem;
+    background: var(--rogo-off-white);
+    border: 1px solid var(--rogo-carolina);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
     margin-bottom: 0.5rem;
 }
 
 .metric-label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #54698d;
-    margin-bottom: 0.25rem;
+    letter-spacing: 0.06em;
+    color: var(--rogo-black);
+    opacity: 0.65;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
 }
 
 .metric-value {
-    font-size: 1.75rem;
-    font-weight: 600;
-    line-height: 1.2;
-    color: #16325c;
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--rogo-black);
+    margin-bottom: 0.25rem;
 }
 
 .metric-sub {
     font-size: 0.75rem;
-    color: #54698d;
-    margin-top: 0.25rem;
+    color: var(--rogo-ocean);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
 }
 
 .metric-commentary {
-    font-size: 0.75rem;
-    color: #2b2826;
-    margin-top: 0.5rem;
-    line-height: 1.35;
+    font-size: 0.78rem;
+    color: var(--rogo-black);
+    line-height: 1.4;
+    opacity: 0.78;
     font-style: italic;
+    margin-top: auto;
 }
 
+/* ============================================================
+   Upsell score card — color graduates with score
+   ============================================================ */
+
 .score-card {
-    padding: 0.75rem 1rem;
-    border-radius: 0.25rem;
-    background: #eef4ff;
-    border: 1px solid #cee4ff;
+    padding: 1.25rem 1rem;
+    border-radius: 0.5rem;
     text-align: center;
     height: 100%;
+    box-sizing: border-box;
+    border: 2px solid;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: background 200ms ease, border-color 200ms ease;
+}
+
+.score-card .metric-label {
+    margin-bottom: 0.5rem;
+}
+
+.score-low {
+    background: var(--rogo-apple);
+    border-color: var(--rogo-raspberry);
+}
+.score-low .score-value,
+.score-low .score-band-label {
+    color: var(--rogo-raspberry);
+}
+
+.score-watch {
+    background: var(--rogo-hibiscus);
+    border-color: var(--rogo-raspberry);
+}
+.score-watch .score-value,
+.score-watch .score-band-label {
+    color: var(--rogo-raspberry);
+}
+
+.score-strong {
+    background: var(--rogo-sky);
+    border-color: var(--rogo-ocean);
+}
+.score-strong .score-value,
+.score-strong .score-band-label {
+    color: var(--rogo-ocean);
+}
+
+.score-top {
+    background: var(--rogo-mint);
+    border-color: var(--rogo-forest);
+}
+.score-top .score-value,
+.score-top .score-band-label {
+    color: var(--rogo-forest);
 }
 
 .score-value {
-    font-size: 3rem;
-    font-weight: 700;
+    font-size: 3.25rem;
+    font-weight: 800;
     line-height: 1;
-    color: #0070d2;
+    color: var(--rogo-black);
 }
 
 .score-out-of {
     font-size: 1rem;
-    color: #54698d;
+    color: var(--rogo-black);
+    opacity: 0.55;
     margin-left: 0.25rem;
+    font-weight: 500;
 }
 
+.score-band-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+/* ============================================================
+   Signal rows
+   ============================================================ */
+
 .signal-row {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--rogo-carolina);
+}
+.signal-row:last-child {
+    border-bottom: none;
 }
 
 .signal-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.3rem;
 }
 
 .signal-label {
     font-size: 0.85rem;
     font-weight: 600;
-    color: #16325c;
+    color: var(--rogo-black);
 }
 
 .signal-points {
     font-size: 0.75rem;
-    font-weight: 600;
-    color: #16325c;
+    font-weight: 700;
+    color: var(--rogo-ocean);
 }
 
 .signal-points-muted {
-    color: #aab0b6;
+    color: var(--rogo-black);
+    opacity: 0.4;
     font-weight: 400;
     font-style: italic;
 }
 
 .signal-detail {
     font-size: 0.75rem;
-    color: #54698d;
+    color: var(--rogo-black);
+    opacity: 0.68;
     margin-top: 0.25rem;
+    line-height: 1.4;
 }
 
+/* ============================================================
+   Narrative
+   ============================================================ */
+
 .narrative {
-    background: #fafaf9;
-    padding: 0.75rem 1rem;
-    border-radius: 0.25rem;
-    border-left: 3px solid #0070d2;
+    background: var(--rogo-off-white);
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    border-left: 4px solid var(--rogo-forest);
 }
 
 .narrative-section {
-    margin-bottom: 0.75rem;
+    margin-bottom: 0.85rem;
+}
+.narrative-section:last-child {
+    margin-bottom: 0;
 }
 
 .narrative-title {
     font-size: 0.85rem;
     font-weight: 700;
-    color: #16325c;
-    margin-bottom: 0.25rem;
+    color: var(--rogo-black);
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .narrative-item {
     font-size: 0.85rem;
-    color: #2b2826;
-    margin-bottom: 0.25rem;
+    color: var(--rogo-black);
+    margin-bottom: 0.3rem;
     padding-left: 0.5rem;
+    line-height: 1.5;
 }
+
+/* ============================================================
+   Raw response
+   ============================================================ */
 
 .raw-answer {
     white-space: pre-wrap;
     word-break: break-word;
     font-size: 0.75rem;
-    background: #f9f9f9;
-    padding: 0.5rem;
+    background: var(--rogo-off-white);
+    padding: 0.75rem;
     border-radius: 0.25rem;
     max-height: 240px;
     overflow: auto;
+    color: var(--rogo-black);
 }

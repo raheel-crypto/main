@@ -12,11 +12,10 @@
         <div class="slds-p-horizontal_medium slds-p-bottom_medium">
 
             <template lwc:if={hasLastRun}>
-                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
-                    Last refreshed
-                    <lightning-relative-date-time value={lastRunAt}></lightning-relative-date-time>
+                <p class="last-refreshed">
+                    Last refreshed&nbsp;<lightning-relative-date-time value={lastRunAt}></lightning-relative-date-time>
                     <template lwc:if={lastRunByName}>
-                        &middot; by {lastRunByName}
+                        &nbsp;&middot;&nbsp;by {lastRunByName}
                     </template>
                 </p>
             </template>
@@ -36,7 +35,7 @@
 
             <template lwc:if={metrics}>
                 <template lwc:if={accountHeader}>
-                    <p class="slds-text-title_caps slds-m-bottom_x-small">{accountHeader}</p>
+                    <p class="account-header">{accountHeader}</p>
                 </template>
 
                 <p class="section-heading">Usage &middot; rolling last 28 days</p>
@@ -72,10 +71,10 @@
                 <p class="section-heading slds-m-top_medium">Upsell Forecast</p>
                 <div class="slds-grid slds-gutters slds-wrap">
                     <div class="slds-col slds-size_1-of-3">
-                        <div class="score-card">
+                        <div class={scoreCardClass}>
                             <p class="metric-label">Upsell Score</p>
                             <p class="score-value">{upsell.score}<span class="score-out-of">/100</span></p>
-                            <p class="metric-sub">{scoreBand}</p>
+                            <p class="score-band-label">{scoreBand}</p>
                         </div>
                     </div>
                     <div class="slds-col slds-size_2-of-3">

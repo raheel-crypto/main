@@ -46,7 +46,7 @@ export default class UsageInsights extends LightningElement {
                 this.rawAnswer = payload.rawAnswer;
                 this.rawNarrative = payload.rawNarrative;
                 this.narrativeSections = parseNarrative(payload.rawNarrative);
-                this.lastRunAt = saved.lastRunAt;
+                this.lastRunAt = toIsoOrNull(saved.lastRunAt);
                 this.lastRunByName = saved.lastRunByName;
                 this.upsellWarningRows = (this.upsell && this.upsell.warnings && this.upsell.warnings.length)
                     ? this.upsell.warnings.map((w, i) => ({ id: `w${i}`, text: w }))
@@ -106,6 +106,16 @@ export default class UsageInsights extends LightningElement {
         if (s >= 45) return 'Strong candidate — pursue actively';
         if (s >= 25) return 'Watch — re-evaluate next quarter';
         return 'Low signal';
+    }
+
+    get scoreCardClass() {
+        const base = 'score-card';
+        if (!this.upsell) return base;
+        const s = this.upsell.score;
+        if (s >= 70) return `${base} score-top`;
+        if (s >= 45) return `${base} score-strong`;
+        if (s >= 25) return `${base} score-watch`;
+        return `${base} score-low`;
     }
 
     get signalRows() {
@@ -220,7 +230,7 @@ export default class UsageInsights extends LightningElement {
                 score: this.upsell.score
             });
             if (saved) {
-                this.lastRunAt = saved.lastRunAt;
+                this.lastRunAt = toIsoOrNull(saved.lastRunAt);
                 this.lastRunByName = saved.lastRunByName;
             }
         } catch (e) {
@@ -346,6 +356,15 @@ function fmtRangeNumber(stat) {
     const hi = stat.max;
     if (lo == null || hi == null) return '';
     return `Range ${Number(lo).toFixed(0)} – ${Number(hi).toFixed(0)}`;
+}
+
+// Apex returns DateTime as either an ISO 8601 string or a Long (epoch ms)
+// depending on the API version. Coerce both to a JS-Date-parseable ISO
+// string so lightning-relative-date-time doesn't render 'Invalid date'.
+function toIsoOrNull(v) {
+    if (v == null) return null;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 // Tolerate the previous flat-number shape in cached records by wrapping each
