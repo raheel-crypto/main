@@ -73,9 +73,12 @@
     font-weight: 500;
 }
 
-/* Thick divider between manager groups. */
-.pg-tr--group-start > td {
-    border-top: 3px solid #64748b;
+/* Thick divider between manager groups. border-top loses to the
+   table's border-collapse, so we paint it as an inset box-shadow on
+   each cell of the first row of the group — bypasses border merging
+   entirely. */
+.pg-tr--group-start td {
+    box-shadow: inset 0 3px 0 0 #475569;
 }
 
 .pg-cell--green  { background: #86efac; }
