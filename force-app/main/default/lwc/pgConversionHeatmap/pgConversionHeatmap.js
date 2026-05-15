@@ -98,9 +98,13 @@ export default class PgConversionHeatmap extends LightningElement {
             }
             b.rows.push(r);
         }
-        return Array.from(buckets.values()).sort(
-            (a, b) => a.managerName.localeCompare(b.managerName)
-        );
+        return Array.from(buckets.values())
+            .sort((a, b) => a.managerName.localeCompare(b.managerName))
+            .map(g => ({
+                ...g,
+                rowCount: g.rows.length,
+                rows: g.rows.map((r, idx) => ({ ...r, isFirstInGroup: idx === 0 }))
+            }));
     }
 
     fmt(val) {
