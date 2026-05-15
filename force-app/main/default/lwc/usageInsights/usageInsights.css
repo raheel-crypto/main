@@ -36,6 +36,14 @@
     margin-top: 0.25rem;
 }
 
+.metric-commentary {
+    font-size: 0.75rem;
+    color: #2b2826;
+    margin-top: 0.5rem;
+    line-height: 1.35;
+    font-style: italic;
+}
+
 .score-card {
     padding: 0.75rem 1rem;
     border-radius: 0.25rem;

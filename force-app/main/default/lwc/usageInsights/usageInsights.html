@@ -39,22 +39,31 @@
                     <p class="slds-text-title_caps slds-m-bottom_x-small">{accountHeader}</p>
                 </template>
 
-                <p class="section-heading">Usage &middot; last 28 days</p>
+                <p class="section-heading">Usage &middot; rolling last 28 days</p>
                 <div class="slds-grid slds-gutters slds-wrap">
                     <div class="slds-col slds-size_1-of-3 metric-tile">
-                        <p class="metric-label">DAU / WAU (stickiness)</p>
+                        <p class="metric-label">DAU / WAU (consistency)</p>
                         <p class="metric-value">{dauWauDisplay}</p>
                         <p class="metric-sub">{dauWauSub}</p>
+                        <template lwc:if={dauWauCommentary}>
+                            <p class="metric-commentary">{dauWauCommentary}</p>
+                        </template>
                     </div>
                     <div class="slds-col slds-size_1-of-3 metric-tile">
-                        <p class="metric-label">WAU / Enrolled</p>
+                        <p class="metric-label">WAU / Enrolled (activation)</p>
                         <p class="metric-value">{wauEnrolledDisplay}</p>
                         <p class="metric-sub">{wauEnrolledSub}</p>
+                        <template lwc:if={wauEnrolledCommentary}>
+                            <p class="metric-commentary">{wauEnrolledCommentary}</p>
+                        </template>
                     </div>
                     <div class="slds-col slds-size_1-of-3 metric-tile">
-                        <p class="metric-label">Queries per User</p>
+                        <p class="metric-label">Queries per User (engagement)</p>
                         <p class="metric-value">{qpuDisplay}</p>
                         <p class="metric-sub">{qpuSub}</p>
+                        <template lwc:if={qpuCommentary}>
+                            <p class="metric-commentary">{qpuCommentary}</p>
+                        </template>
                     </div>
                 </div>
             </template>

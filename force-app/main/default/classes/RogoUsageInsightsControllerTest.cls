@@ -12,9 +12,10 @@ private class RogoUsageInsightsControllerTest {
                 res.setStatusCode(200);
                 res.setBody(
                     '{"status":"completed","progress":1.0,' +
-                    '"result":{"text":"{\\"account\\":\\"Acme\\",\\"dau\\":12,\\"wau\\":40,' +
-                    '\\"enrolled\\":100,\\"queries\\":250,\\"dau_wau\\":0.3,' +
-                    '\\"wau_enrolled\\":0.4,\\"qpu\\":6.25}",' +
+                    '"result":{"text":"{\\"account\\":\\"Acme\\",\\"enrolled\\":7,' +
+                    '\\"dau_wau\\":{\\"mean\\":0.50,\\"min\\":0.347,\\"max\\":0.690,\\"commentary\\":\\"strong start, mid-period dip, partial recovery\\"},' +
+                    '\\"wau_enrolled\\":{\\"mean\\":0.857,\\"min\\":0.714,\\"max\\":1.0,\\"commentary\\":\\"100% on several days, recovering to 85.7%\\"},' +
+                    '\\"qpu\\":{\\"mean\\":74.0,\\"min\\":59.0,\\"max\\":99.0,\\"commentary\\":\\"exceptionally high engagement, peaked at 99 on May 14\\"}}",' +
                     '"analysis_mode":"sql_grounded"}}'
                 );
             } else {
@@ -65,13 +66,33 @@ private class RogoUsageInsightsControllerTest {
         System.assertEquals('completed', r.status);
         System.assertNotEquals(null, r.metrics);
         System.assertEquals('Acme', r.metrics.accountName);
-        System.assertEquals(12, r.metrics.dau);
-        System.assertEquals(40, r.metrics.wau);
-        System.assertEquals(100, r.metrics.enrolled);
-        System.assertEquals(250, r.metrics.queries);
-        System.assertEquals(Decimal.valueOf('0.3'), r.metrics.dauWau);
-        System.assertEquals(Decimal.valueOf('0.4'), r.metrics.wauEnrolled);
-        System.assertEquals(Decimal.valueOf('6.25'), r.metrics.qpu);
+        System.assertEquals(7, r.metrics.enrolled);
+
+        System.assertNotEquals(null, r.metrics.dauWau);
+        System.assertEquals(Decimal.valueOf('0.50'),  r.metrics.dauWau.mean);
+        System.assertEquals(Decimal.valueOf('0.347'), r.metrics.dauWau.min);
+        System.assertEquals(Decimal.valueOf('0.690'), r.metrics.dauWau.max);
+        System.assert(r.metrics.dauWau.commentary.contains('dip'),
+            'dauWau commentary should describe the trajectory');
+
+        System.assertEquals(Decimal.valueOf('0.857'), r.metrics.wauEnrolled.mean);
+        System.assertEquals(Decimal.valueOf('1.0'),   r.metrics.wauEnrolled.max);
+
+        System.assertEquals(Decimal.valueOf('74.0'), r.metrics.qpu.mean);
+        System.assertEquals(Decimal.valueOf('59.0'), r.metrics.qpu.min);
+        System.assertEquals(Decimal.valueOf('99.0'), r.metrics.qpu.max);
+    }
+
+    @IsTest
+    static void parseStat_acceptsLegacyFlatNumberAsMean() {
+        // Old saved insights persist the metrics as plain numbers. The parser
+        // wraps them as mean-only stats so cached records keep rendering.
+        Object legacy = 0.42;
+        RogoUsageInsightsController.MetricStat s =
+            RogoUsageInsightsController.parseStat(legacy);
+        System.assertEquals(Decimal.valueOf('0.42'), s.mean);
+        System.assertEquals(null, s.min);
+        System.assertEquals(null, s.max);
     }
 
     @IsTest

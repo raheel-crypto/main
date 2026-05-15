@@ -19,15 +19,19 @@ public with sharing class RogoUsageInsightsController {
         @AuraEnabled public String errorMessage;
     }
 
+    public class MetricStat {
+        @AuraEnabled public Decimal mean;
+        @AuraEnabled public Decimal min;
+        @AuraEnabled public Decimal max;
+        @AuraEnabled public String commentary;
+    }
+
     public class Metrics {
         @AuraEnabled public String accountName;
-        @AuraEnabled public Integer dau;
-        @AuraEnabled public Integer wau;
         @AuraEnabled public Integer enrolled;
-        @AuraEnabled public Integer queries;
-        @AuraEnabled public Decimal dauWau;
-        @AuraEnabled public Decimal wauEnrolled;
-        @AuraEnabled public Decimal qpu;
+        @AuraEnabled public MetricStat dauWau;
+        @AuraEnabled public MetricStat wauEnrolled;
+        @AuraEnabled public MetricStat qpu;
     }
 
     @AuraEnabled
@@ -126,30 +130,52 @@ public with sharing class RogoUsageInsightsController {
             Map<String, Object> parsed = (Map<String, Object>) JSON.deserializeUntyped(jsonText);
             Metrics m = new Metrics();
             m.accountName  = (String) parsed.get('account');
-            m.dau          = toInteger(parsed.get('dau'));
-            m.wau          = toInteger(parsed.get('wau'));
             m.enrolled     = toInteger(parsed.get('enrolled'));
-            m.queries      = toInteger(parsed.get('queries'));
-            m.dauWau       = toDecimal(parsed.get('dau_wau'));
-            m.wauEnrolled  = toDecimal(parsed.get('wau_enrolled'));
-            m.qpu          = toDecimal(parsed.get('qpu'));
+            m.dauWau       = parseStat(parsed.get('dau_wau'));
+            m.wauEnrolled  = parseStat(parsed.get('wau_enrolled'));
+            m.qpu          = parseStat(parsed.get('qpu'));
             return m;
         } catch (Exception e) {
             return null;
         }
     }
 
+    @TestVisible
+    private static MetricStat parseStat(Object raw) {
+        if (raw == null) return null;
+        // Tolerate the old flat shape (just a number) by treating it as the mean.
+        if (!(raw instanceof Map<String, Object>)) {
+            MetricStat fallback = new MetricStat();
+            fallback.mean = toDecimal(raw);
+            return fallback;
+        }
+        Map<String, Object> sm = (Map<String, Object>) raw;
+        MetricStat s = new MetricStat();
+        s.mean = toDecimal(sm.get('mean'));
+        s.min = toDecimal(sm.get('min'));
+        s.max = toDecimal(sm.get('max'));
+        s.commentary = (String) sm.get('commentary');
+        return s;
+    }
+
     private static String buildPrompt(Account a) {
         return 'For the customer account named "' + a.Name + '" '
-            + '(Salesforce account id: ' + a.Id + '), compute the following usage signals '
-            + 'over the last 28 days using the analytics warehouse: '
-            + '(1) DAU/WAU stickiness, '
-            + '(2) WAU divided by total enrolled users for the account, '
-            + '(3) QPU = total queries divided by active users. '
-            + 'Respond with ONLY a single JSON object, no prose, no markdown fences. '
-            + 'Keys: account (string), dau (int), wau (int), enrolled (int), queries (int), '
-            + 'dau_wau (number 0..1), wau_enrolled (number 0..1), qpu (number). '
-            + 'If a metric is unavailable, set it to null.';
+            + '(Salesforce account id: ' + a.Id + '), compute the following ROLLING daily '
+            + 'metrics across the last 28 days using the analytics warehouse: '
+            + '(1) DAU/WAU stickiness — for each day, that day\'s DAU divided by that day\'s WAU. '
+            + '(2) WAU/Enrolled activation — for each day, that day\'s WAU divided by total enrolled users for the account. '
+            + '(3) QPU engagement — for each day, count of queries in the prior 7 days divided by WAU on that day. '
+            + 'For each metric, report the MEAN, MIN, and MAX across the 28-day window, '
+            + 'plus a 1-2 sentence commentary on the trajectory '
+            + '(e.g. "strong start with mid-period dip, recovering"). '
+            + 'Also include the total enrolled user count for the account. '
+            + 'Respond with ONLY a single JSON object, no prose, no markdown fences, no triple backticks. '
+            + 'Schema: '
+            + '{"account": "<account name>", "enrolled": <int>, '
+            + '"dau_wau": {"mean": <0..1>, "min": <0..1>, "max": <0..1>, "commentary": "<text>"}, '
+            + '"wau_enrolled": {"mean": <0..1>, "min": <0..1>, "max": <0..1>, "commentary": "<text>"}, '
+            + '"qpu": {"mean": <number>, "min": <number>, "max": <number>, "commentary": "<text>"}}. '
+            + 'If a metric is unavailable, set its numeric fields to null and put the reason in commentary.';
     }
 
     private static String getBearerToken() {

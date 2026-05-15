@@ -41,7 +41,7 @@ export default class UsageInsights extends LightningElement {
             const saved = await getLastInsight({ accountId: this.recordId });
             if (saved && saved.payloadJson) {
                 const payload = JSON.parse(saved.payloadJson);
-                this.metrics = payload.metrics;
+                this.metrics = normalizeMetrics(payload.metrics);
                 this.upsell = payload.upsell;
                 this.rawAnswer = payload.rawAnswer;
                 this.rawNarrative = payload.rawNarrative;
@@ -81,21 +81,23 @@ export default class UsageInsights extends LightningElement {
         return null;
     }
 
-    get dauWauDisplay()    { return fmtRatio(this.metrics && this.metrics.dauWau); }
-    get wauEnrolledDisplay() { return fmtRatio(this.metrics && this.metrics.wauEnrolled); }
-    get qpuDisplay()       { return fmtNumber(this.metrics && this.metrics.qpu); }
-    get dauWauSub()        {
-        if (!this.metrics) return '';
-        return `DAU ${fmtInt(this.metrics.dau)} / WAU ${fmtInt(this.metrics.wau)}`;
-    }
+    get dauWauDisplay()      { return fmtRatio(statMean(this.metrics, 'dauWau')); }
+    get wauEnrolledDisplay() { return fmtRatio(statMean(this.metrics, 'wauEnrolled')); }
+    get qpuDisplay()         { return fmtNumber(statMean(this.metrics, 'qpu')); }
+
+    get dauWauSub()        { return fmtRangeRatio(this.metrics && this.metrics.dauWau); }
     get wauEnrolledSub()   {
-        if (!this.metrics) return '';
-        return `WAU ${fmtInt(this.metrics.wau)} / Enrolled ${fmtInt(this.metrics.enrolled)}`;
+        const range = fmtRangeRatio(this.metrics && this.metrics.wauEnrolled);
+        const enrolled = this.metrics && this.metrics.enrolled;
+        if (range && enrolled != null) return `${range} · ${enrolled} enrolled`;
+        if (enrolled != null) return `${enrolled} enrolled`;
+        return range;
     }
-    get qpuSub()           {
-        if (!this.metrics) return '';
-        return `${fmtInt(this.metrics.queries)} queries`;
-    }
+    get qpuSub()           { return fmtRangeNumber(this.metrics && this.metrics.qpu); }
+
+    get dauWauCommentary()      { return statCommentary(this.metrics, 'dauWau'); }
+    get wauEnrolledCommentary() { return statCommentary(this.metrics, 'wauEnrolled'); }
+    get qpuCommentary()         { return statCommentary(this.metrics, 'qpu'); }
 
     get scoreBand() {
         if (!this.upsell) return '';
@@ -171,9 +173,9 @@ export default class UsageInsights extends LightningElement {
         try {
             const out = await computeUpsell({
                 accountId: this.recordId,
-                dauWauObserved: this.metrics.dauWau,
-                wauEnrolledObserved: this.metrics.wauEnrolled,
-                qpuObserved: this.metrics.qpu
+                dauWauObserved: statMean(this.metrics, 'dauWau'),
+                wauEnrolledObserved: statMean(this.metrics, 'wauEnrolled'),
+                qpuObserved: statMean(this.metrics, 'qpu')
             });
             this.upsell = out;
             const warnings = (out.warnings && out.warnings.length)
@@ -316,6 +318,46 @@ function fmtNumber(v) {
 function fmtInt(v) {
     if (v == null) return '—';
     return String(v);
+}
+
+function statMean(metrics, key) {
+    if (!metrics || !metrics[key]) return null;
+    const stat = metrics[key];
+    if (typeof stat === 'number') return stat;
+    return stat.mean != null ? Number(stat.mean) : null;
+}
+
+function statCommentary(metrics, key) {
+    if (!metrics || !metrics[key] || typeof metrics[key] !== 'object') return '';
+    return metrics[key].commentary || '';
+}
+
+function fmtRangeRatio(stat) {
+    if (!stat || typeof stat !== 'object') return '';
+    const lo = stat.min;
+    const hi = stat.max;
+    if (lo == null || hi == null) return '';
+    return `Range ${(Number(lo) * 100).toFixed(1)}% – ${(Number(hi) * 100).toFixed(1)}%`;
+}
+
+function fmtRangeNumber(stat) {
+    if (!stat || typeof stat !== 'object') return '';
+    const lo = stat.min;
+    const hi = stat.max;
+    if (lo == null || hi == null) return '';
+    return `Range ${Number(lo).toFixed(0)} – ${Number(hi).toFixed(0)}`;
+}
+
+// Tolerate the previous flat-number shape in cached records by wrapping each
+// metric as a mean-only stat so the new tile renders without breaking.
+function normalizeMetrics(m) {
+    if (!m) return m;
+    for (const k of ['dauWau', 'wauEnrolled', 'qpu']) {
+        if (typeof m[k] === 'number') {
+            m[k] = { mean: m[k] };
+        }
+    }
+    return m;
 }
 
 function parseNarrative(md) {
