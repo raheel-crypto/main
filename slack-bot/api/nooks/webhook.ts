@@ -35,7 +35,16 @@ export default async function handler(
     return;
   }
 
-  const provided = req.headers["x-nooks-secret"];
+  const headerToken = req.headers["x-nooks-secret"];
+  let queryToken: string | null = null;
+  try {
+    const url = new URL(req.url || "", "http://localhost");
+    queryToken = url.searchParams.get("token");
+  } catch {}
+  const provided =
+    typeof headerToken === "string" && headerToken
+      ? headerToken
+      : queryToken ?? "";
   if (provided !== config.nooks.webhookSecret) {
     res.statusCode = 401;
     res.end("Unauthorized");
