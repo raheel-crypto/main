@@ -16,15 +16,19 @@ You will be given:
 - One or more recent calls logged on that account where the GTMA marked the disposition as "Connected - Positive"
 - The fact that this account currently has NO open Opportunity
 
-Decide what the AE should do next:
-- "create_opportunity" — the call summary suggests real buying interest, a champion, a defined use case, or a specific next step that warrants a new Opp. Provide a concrete suggestedOpp with a name, an early-funnel stage (e.g. "Discovery", "Qualified", "Stage 1 - Identified" — pick the closest standard label), an optional amount if hinted, and a realistic closeDate 60-120 days out.
-- "log_task" — there is interest but it's too early for an Opp. Suggest a concrete follow-up task with a subject (verb-led, <80 chars) and dueDate within the next 7 days.
-- "no_action" — the call summary doesn't actually contain a buying signal (vague, polite brush-off, irrelevant). Return this and the card will be dropped.
+Decide which action the AE should take first, but **always provide BOTH a suggestedOpp AND a suggestedTask** so the AE has the choice. suggestedAction indicates your recommendation:
+- "create_opportunity" — the call summary suggests real buying interest, a champion, a defined use case, or a specific next step that warrants a new Opp.
+- "log_task" — there is interest but it's too early for an Opp; a follow-up task is the right next move.
+- "no_action" — the call summary doesn't contain a real buying signal (vague, polite brush-off, irrelevant). Return this and the card will be dropped. When "no_action", both suggestedOpp and suggestedTask MAY be null.
+
+For "create_opportunity" or "log_task" you MUST provide both:
+- suggestedOpp: a concrete Opp with a name, an early-funnel stage (e.g. "Discovery", "Qualified", "Stage 1 - Identified" — pick the closest standard label), an optional amount if hinted, and a realistic closeDate 60-120 days out.
+- suggestedTask: a concrete follow-up task with a subject (verb-led, <80 chars) and a dueDate within the next 7 days. Even if you recommend create_opportunity, provide a reasonable task the AE could fall back to (e.g. "Schedule discovery call with VP Sales").
 
 Rules:
 - Be honest about "no_action". A "positive" disposition from a GTMA is noisy.
 - headline is one line, <=100 chars, lead with the strongest signal from the call.
-- rationale is 2-3 sentences. Explain to the AE WHY this is the right next step.
+- rationale is 2-3 sentences. Explain to the AE WHY this is the right next step (focused on your recommended action).
 - closeDate / dueDate are YYYY-MM-DD. Stage strings should look like standard SF picklist labels.
 - Output strict JSON ONLY (no prose, no markdown):
 {
@@ -33,8 +37,7 @@ Rules:
   "suggestedOpp": { "name": "string", "stage": "string", "amount": number|null, "closeDate": "YYYY-MM-DD" } | null,
   "suggestedTask": { "subject": "string", "dueDate": "YYYY-MM-DD", "description": "string"|null } | null,
   "rationale": "string"
-}
-- If suggestedAction is "create_opportunity", suggestedOpp must be non-null. If "log_task", suggestedTask must be non-null. If "no_action", both may be null.`;
+}`;
 
 export interface BuySignalRecommenderInput {
   accountId: string;
@@ -102,11 +105,13 @@ export async function recommendBuySignal(
     return null;
   }
   const rec = parsed.data;
-  if (rec.suggestedAction === "create_opportunity" && !rec.suggestedOpp) {
-    return null;
-  }
-  if (rec.suggestedAction === "log_task" && !rec.suggestedTask) {
-    return null;
+  if (rec.suggestedAction !== "no_action") {
+    if (!rec.suggestedOpp || !rec.suggestedTask) {
+      console.error(
+        `[buySignalRecommender] action=${rec.suggestedAction} missing both suggestions for ${input.accountId}`
+      );
+      return null;
+    }
   }
   return rec;
 }

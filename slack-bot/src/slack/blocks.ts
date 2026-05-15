@@ -672,22 +672,27 @@ export function buySignalCard(
     { type: "section", text: { type: "mrkdwn", text: `_${payload.rationale}_` } },
   ];
 
+  const oppIsPrimary = payload.suggestedAction === "create_opportunity";
+  const taskIsPrimary = payload.suggestedAction === "log_task";
+
   const buttons: any[] = [];
   if (payload.suggestedOpp) {
-    buttons.push({
+    const b: any = {
       type: "button",
-      style: "primary",
       text: { type: "plain_text", text: "Create opportunity" },
       action_id: actionId("buy_signal_create_opp", cardId),
-    });
+    };
+    if (oppIsPrimary) b.style = "primary";
+    buttons.push(b);
   }
   if (payload.suggestedTask) {
-    buttons.push({
+    const b: any = {
       type: "button",
-      style: payload.suggestedOpp ? undefined : "primary",
       text: { type: "plain_text", text: "Log follow-up task" },
       action_id: actionId("buy_signal_log_task", cardId),
-    });
+    };
+    if (taskIsPrimary) b.style = "primary";
+    buttons.push(b);
   }
   buttons.push({
     type: "button",
@@ -703,13 +708,7 @@ export function buySignalCard(
   blocks.push({
     type: "actions",
     block_id: "buy_signal_actions",
-    elements: buttons.map((b) => {
-      if (!b.style) {
-        const { style: _ignore, ...rest } = b;
-        return rest;
-      }
-      return b;
-    }),
+    elements: buttons,
   });
 
   return {
