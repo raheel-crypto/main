@@ -22,6 +22,16 @@ export default async function handler(
   req: IncomingMessage,
   res: ServerResponse
 ) {
+  if (req.method === "GET" || req.method === "HEAD") {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      req.method === "HEAD"
+        ? ""
+        : JSON.stringify({ status: "ok", endpoint: "nooks/webhook" })
+    );
+    return;
+  }
   if (req.method !== "POST") {
     res.statusCode = 405;
     res.end("Method Not Allowed");
