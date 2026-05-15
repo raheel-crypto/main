@@ -63,6 +63,7 @@ export const config = {
   },
   nooks: {
     webhookSecret: optional("NOOKS_WEBHOOK_SECRET"),
+    signingKey: optional("NOOKS_SIGNING_KEY"),
     testDmUserId: optional("NOOKS_TEST_DM_USER_ID"),
   },
 };
