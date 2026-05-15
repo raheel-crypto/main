@@ -53,7 +53,6 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     { role: "user", content: userMessage },
   ];
   const toolCalls: AgentToolCall[] = [];
-  const textParts: string[] = [];
 
   const anthropic = getClient();
   let response = await anthropic.messages.create({
@@ -71,9 +70,6 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     const toolUseBlocks = assistantContent.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
-    for (const b of assistantContent) {
-      if (b.type === "text") textParts.push(b.text);
-    }
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const tu of toolUseBlocks) {
@@ -101,12 +97,13 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     });
   }
 
+  const finalParts: string[] = [];
   for (const b of response.content) {
-    if (b.type === "text") textParts.push(b.text);
+    if (b.type === "text") finalParts.push(b.text);
   }
 
   return {
-    finalText: textParts.join("\n").trim(),
+    finalText: finalParts.join("\n").trim(),
     toolCalls,
     stopReason: response.stop_reason ?? null,
   };
