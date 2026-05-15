@@ -19,12 +19,14 @@ import {
 import { buildContext } from "./opportunityContext.js";
 import { recommendForOpp } from "./recommender.js";
 import { postAudit } from "./auditChannel.js";
+import { runBuySignalsForUser } from "./buySignals.js";
 
 export interface RunResult {
   ran: boolean;
   reason?: string;
   oppsConsidered?: number;
   cardsPosted?: number;
+  buySignalCardsPosted?: number;
 }
 
 export async function runStandupForUser(slackUserId: string): Promise<RunResult> {
@@ -77,14 +79,41 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
   });
 
   if (opps.length === 0) {
-    await slack.chat.postMessage({
-      channel: slackUserId,
-      unfurl_links: false,
-      unfurl_media: false,
-      text: "No open opportunities found today. Nothing to review.",
-    });
+    let buySignalResult = { cardsPosted: 0 };
+    try {
+      const res = await runBuySignalsForUser({
+        slackUserId,
+        conn,
+        slack,
+        sfUserId,
+        channelId: null,
+        threadTs: null,
+        instanceUrl: conn.instanceUrl!,
+      });
+      buySignalResult = { cardsPosted: res.cardsPosted };
+    } catch (err: any) {
+      console.error("[buy_signals] failed:", err);
+      await appendAudit({
+        slackUserId,
+        action: "buy_signal_dropped",
+        metadata: { reason: "pipeline_error", error: err?.message ?? String(err) },
+      });
+    }
+    if (buySignalResult.cardsPosted === 0) {
+      await slack.chat.postMessage({
+        channel: slackUserId,
+        unfurl_links: false,
+        unfurl_media: false,
+        text: "No open opportunities found today. Nothing to review.",
+      });
+    }
     await markToday(user.slackUserId, user.timezone);
-    return { ran: true, oppsConsidered: 0, cardsPosted: 0 };
+    return {
+      ran: true,
+      oppsConsidered: 0,
+      cardsPosted: 0,
+      buySignalCardsPosted: buySignalResult.cardsPosted,
+    };
   }
 
   const limit = pLimit(RECOMMENDER_CONCURRENCY);
@@ -145,14 +174,36 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
     }
   }
 
+  let buySignalCardsPosted = 0;
+  try {
+    const res = await runBuySignalsForUser({
+      slackUserId,
+      conn,
+      slack,
+      sfUserId,
+      channelId: channel,
+      threadTs,
+      instanceUrl: conn.instanceUrl!,
+    });
+    buySignalCardsPosted = res.cardsPosted;
+  } catch (err: any) {
+    console.error("[buy_signals] failed:", err);
+    await appendAudit({
+      slackUserId,
+      action: "buy_signal_dropped",
+      metadata: { reason: "pipeline_error", error: err?.message ?? String(err) },
+    });
+  }
+
   await markToday(user.slackUserId, user.timezone);
   await postAudit(
-    `Standup ran for <@${slackUserId}>: ${present.length} cards across ${opps.length} opps.`
+    `Standup ran for <@${slackUserId}>: ${present.length} opp cards + ${buySignalCardsPosted} buy-signal cards across ${opps.length} opps.`
   );
   return {
     ran: true,
     oppsConsidered: opps.length,
     cardsPosted: present.length,
+    buySignalCardsPosted,
   };
 }
 

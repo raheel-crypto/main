@@ -91,3 +91,146 @@ export function fieldsFromRecommendation(
     oldValue: f.currentValue,
   }));
 }
+
+export interface CreateOpportunityInput {
+  conn: Connection;
+  slackUserId: string;
+  accountId: string;
+  name: string;
+  stage: string;
+  amount: number | null;
+  closeDate: string;
+}
+
+export interface CreateOpportunityResult {
+  ok: boolean;
+  opportunityId?: string;
+  error?: string;
+  dryRun?: boolean;
+}
+
+export async function createOpportunity(
+  input: CreateOpportunityInput
+): Promise<CreateOpportunityResult> {
+  const { conn, slackUserId, accountId, name, stage, amount, closeDate } = input;
+  const payload: Record<string, unknown> = {
+    AccountId: accountId,
+    Name: name,
+    StageName: stage,
+    CloseDate: closeDate.slice(0, 10),
+  };
+  if (amount != null && Number.isFinite(amount)) payload.Amount = amount;
+
+  if (config.dryRun) {
+    await appendAudit({
+      slackUserId,
+      action: "opportunity_created",
+      newValue: name,
+      metadata: { dryRun: true, accountId, stage, amount, closeDate },
+    });
+    return { ok: true, dryRun: true };
+  }
+
+  try {
+    const result = await conn.sobject("Opportunity").create(payload as any);
+    const created = Array.isArray(result) ? result[0] : result;
+    if (!created.success) {
+      const errMsg = (created.errors ?? []).map((e: any) => e.message).join("; ");
+      await appendAudit({
+        slackUserId,
+        action: "opportunity_create_failed",
+        newValue: name,
+        metadata: { accountId, error: errMsg },
+      });
+      return { ok: false, error: errMsg || "create_failed" };
+    }
+    await appendAudit({
+      slackUserId,
+      opportunityId: created.id,
+      action: "opportunity_created",
+      newValue: name,
+      metadata: { accountId, stage, amount, closeDate },
+    });
+    return { ok: true, opportunityId: created.id };
+  } catch (err: any) {
+    await appendAudit({
+      slackUserId,
+      action: "opportunity_create_failed",
+      newValue: name,
+      metadata: { accountId, error: err.message },
+    });
+    return { ok: false, error: err.message };
+  }
+}
+
+export interface CreateTaskInput {
+  conn: Connection;
+  slackUserId: string;
+  whatId: string;
+  ownerId: string;
+  subject: string;
+  dueDate: string;
+  description: string | null;
+}
+
+export interface CreateTaskResult {
+  ok: boolean;
+  taskId?: string;
+  error?: string;
+  dryRun?: boolean;
+}
+
+export async function createTask(
+  input: CreateTaskInput
+): Promise<CreateTaskResult> {
+  const { conn, slackUserId, whatId, ownerId, subject, dueDate, description } =
+    input;
+  const payload: Record<string, unknown> = {
+    WhatId: whatId,
+    OwnerId: ownerId,
+    Subject: subject,
+    ActivityDate: dueDate.slice(0, 10),
+    Status: "Open",
+  };
+  if (description) payload.Description = description;
+
+  if (config.dryRun) {
+    await appendAudit({
+      slackUserId,
+      action: "task_created",
+      newValue: subject,
+      metadata: { dryRun: true, whatId, dueDate },
+    });
+    return { ok: true, dryRun: true };
+  }
+
+  try {
+    const result = await conn.sobject("Task").create(payload as any);
+    const created = Array.isArray(result) ? result[0] : result;
+    if (!created.success) {
+      const errMsg = (created.errors ?? []).map((e: any) => e.message).join("; ");
+      await appendAudit({
+        slackUserId,
+        action: "task_create_failed",
+        newValue: subject,
+        metadata: { whatId, error: errMsg },
+      });
+      return { ok: false, error: errMsg || "create_failed" };
+    }
+    await appendAudit({
+      slackUserId,
+      action: "task_created",
+      newValue: subject,
+      metadata: { whatId, dueDate, taskId: created.id },
+    });
+    return { ok: true, taskId: created.id };
+  } catch (err: any) {
+    await appendAudit({
+      slackUserId,
+      action: "task_create_failed",
+      newValue: subject,
+      metadata: { whatId, error: err.message },
+    });
+    return { ok: false, error: err.message };
+  }
+}

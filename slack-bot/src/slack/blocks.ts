@@ -3,6 +3,7 @@ import { TZ_OPTIONS } from "../constants.js";
 import type {
   BriefPayload,
   BriefSuggestion,
+  BuySignalPayload,
   Recommendation,
   RecommendedField,
 } from "../types.js";
@@ -15,7 +16,10 @@ export type ActionVerb =
   | "brief_apply"
   | "brief_skip"
   | "brief_apply_all"
-  | "brief_pick_account";
+  | "brief_pick_account"
+  | "buy_signal_create_opp"
+  | "buy_signal_log_task"
+  | "buy_signal_skip";
 
 const VALID_VERBS: ActionVerb[] = [
   "accept",
@@ -26,6 +30,9 @@ const VALID_VERBS: ActionVerb[] = [
   "brief_skip",
   "brief_apply_all",
   "brief_pick_account",
+  "buy_signal_create_opp",
+  "buy_signal_log_task",
+  "buy_signal_skip",
 ];
 
 export function actionId(
@@ -587,5 +594,287 @@ export function channelMentionReply(): { blocks: KnownBlock[]; text: string } {
   return {
     text,
     blocks: [{ type: "section", text: { type: "mrkdwn", text } }],
+  };
+}
+
+export function buySignalThreadParent(args: {
+  cardCount: number;
+}): { blocks: KnownBlock[]; text: string } {
+  const summary = `*Buy signals* — ${args.cardCount} account${args.cardCount === 1 ? "" : "s"} with recent positive calls and no open opp.`;
+  return {
+    text: summary,
+    blocks: [
+      { type: "section", text: { type: "mrkdwn", text: summary } },
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: "Create an opportunity, log a follow-up task, or skip.",
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function actionLabel(payload: BuySignalPayload): string {
+  if (payload.suggestedAction === "create_opportunity" && payload.suggestedOpp) {
+    const amt =
+      payload.suggestedOpp.amount != null
+        ? ` · ${formatValue(payload.suggestedOpp.amount)}`
+        : "";
+    return `*Suggested: create opportunity*\n\`${payload.suggestedOpp.name}\` — _${payload.suggestedOpp.stage}_${amt} · close ${payload.suggestedOpp.closeDate}`;
+  }
+  if (payload.suggestedAction === "log_task" && payload.suggestedTask) {
+    return `*Suggested: log follow-up task*\n\`${payload.suggestedTask.subject}\` — due ${payload.suggestedTask.dueDate}`;
+  }
+  return "*Suggested: review the call*";
+}
+
+export function buySignalCard(
+  cardId: string,
+  payload: BuySignalPayload,
+  opts: { instanceUrl: string }
+): { blocks: KnownBlock[]; text: string } {
+  const accountUrl = `${opts.instanceUrl}/${payload.accountId}`;
+  const mostRecent = payload.calls[0];
+  const who = mostRecent?.ownerName ? `GTMA ${mostRecent.ownerName}` : "GTMA";
+  const when = payload.mostRecentCallDate ?? "recently";
+  const countLine =
+    payload.callCount > 1
+      ? ` · ${payload.callCount} positive calls in last 7 days`
+      : "";
+  const callSummary = mostRecent?.description
+    ? mostRecent.description.slice(0, 600)
+    : "(no summary recorded)";
+
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `[Buy signal] ${payload.accountName}`.slice(0, 150),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `${who} · ${when}${countLine}`,
+        },
+      ],
+    },
+    { type: "section", text: { type: "mrkdwn", text: `*${payload.headline}*` } },
+    { type: "section", text: { type: "mrkdwn", text: `> ${callSummary}` } },
+    { type: "section", text: { type: "mrkdwn", text: actionLabel(payload) } },
+    { type: "section", text: { type: "mrkdwn", text: `_${payload.rationale}_` } },
+  ];
+
+  const buttons: any[] = [];
+  if (payload.suggestedOpp) {
+    buttons.push({
+      type: "button",
+      style: "primary",
+      text: { type: "plain_text", text: "Create opportunity" },
+      action_id: actionId("buy_signal_create_opp", cardId),
+    });
+  }
+  if (payload.suggestedTask) {
+    buttons.push({
+      type: "button",
+      style: payload.suggestedOpp ? undefined : "primary",
+      text: { type: "plain_text", text: "Log follow-up task" },
+      action_id: actionId("buy_signal_log_task", cardId),
+    });
+  }
+  buttons.push({
+    type: "button",
+    text: { type: "plain_text", text: "Skip" },
+    action_id: actionId("buy_signal_skip", cardId),
+  });
+  buttons.push({
+    type: "button",
+    text: { type: "plain_text", text: "Open Account" },
+    url: accountUrl,
+  });
+
+  blocks.push({
+    type: "actions",
+    block_id: "buy_signal_actions",
+    elements: buttons.map((b) => {
+      if (!b.style) {
+        const { style: _ignore, ...rest } = b;
+        return rest;
+      }
+      return b;
+    }),
+  });
+
+  return {
+    blocks,
+    text: `[Buy signal] ${payload.accountName} — ${payload.headline}`,
+  };
+}
+
+export function buySignalCardResolved(
+  prevBlocks: KnownBlock[] | undefined,
+  status: "applied_opp" | "applied_task" | "skipped",
+  detail?: string
+): KnownBlock[] {
+  if (!prevBlocks) return [];
+  const replacement: KnownBlock = {
+    type: "context",
+    block_id: "buy_signal_actions",
+    elements: [
+      {
+        type: "mrkdwn",
+        text:
+          status === "applied_opp"
+            ? `:white_check_mark: Opportunity created${detail ? ` — ${detail}` : ""}`
+            : status === "applied_task"
+              ? `:white_check_mark: Task logged${detail ? ` — ${detail}` : ""}`
+              : ":no_entry_sign: Skipped",
+      },
+    ],
+  };
+  return prevBlocks.map((block) => {
+    if (block.type !== "actions") return block;
+    if ((block as any).block_id !== "buy_signal_actions") return block;
+    return replacement;
+  });
+}
+
+export function buySignalCreateOppModal(
+  cardId: string,
+  payload: BuySignalPayload
+): View {
+  const opp = payload.suggestedOpp!;
+  return {
+    type: "modal",
+    callback_id: `buy_signal_create_opp:${cardId}`,
+    private_metadata: JSON.stringify({ cardId }),
+    title: { type: "plain_text", text: "New opportunity" },
+    submit: { type: "plain_text", text: "Create" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `For *${payload.accountName}* — based on ${payload.callCount} positive call${payload.callCount === 1 ? "" : "s"}.`,
+          },
+        ],
+      },
+      {
+        type: "input",
+        block_id: "name_block",
+        label: { type: "plain_text", text: "Name" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          initial_value: opp.name.slice(0, 120),
+        },
+      },
+      {
+        type: "input",
+        block_id: "stage_block",
+        label: { type: "plain_text", text: "Stage" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          initial_value: opp.stage,
+        },
+      },
+      {
+        type: "input",
+        block_id: "amount_block",
+        optional: true,
+        label: { type: "plain_text", text: "Amount" },
+        element: {
+          type: "number_input",
+          action_id: "value",
+          is_decimal_allowed: true,
+          initial_value:
+            opp.amount != null && Number.isFinite(opp.amount)
+              ? String(opp.amount)
+              : undefined,
+        },
+      },
+      {
+        type: "input",
+        block_id: "close_date_block",
+        label: { type: "plain_text", text: "Close date" },
+        element: {
+          type: "datepicker",
+          action_id: "value",
+          initial_date: /^\d{4}-\d{2}-\d{2}/.test(opp.closeDate)
+            ? opp.closeDate
+            : undefined,
+        },
+      },
+    ],
+  };
+}
+
+export function buySignalLogTaskModal(
+  cardId: string,
+  payload: BuySignalPayload
+): View {
+  const task = payload.suggestedTask!;
+  return {
+    type: "modal",
+    callback_id: `buy_signal_log_task:${cardId}`,
+    private_metadata: JSON.stringify({ cardId }),
+    title: { type: "plain_text", text: "Log follow-up task" },
+    submit: { type: "plain_text", text: "Create" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `On *${payload.accountName}*.`,
+          },
+        ],
+      },
+      {
+        type: "input",
+        block_id: "subject_block",
+        label: { type: "plain_text", text: "Subject" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          initial_value: task.subject.slice(0, 200),
+        },
+      },
+      {
+        type: "input",
+        block_id: "due_date_block",
+        label: { type: "plain_text", text: "Due date" },
+        element: {
+          type: "datepicker",
+          action_id: "value",
+          initial_date: /^\d{4}-\d{2}-\d{2}/.test(task.dueDate)
+            ? task.dueDate
+            : undefined,
+        },
+      },
+      {
+        type: "input",
+        block_id: "description_block",
+        optional: true,
+        label: { type: "plain_text", text: "Notes" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          multiline: true,
+          initial_value: task.description ?? payload.rationale ?? "",
+        },
+      },
+    ],
   };
 }

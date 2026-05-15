@@ -11,6 +11,7 @@ import {
   findAccountsByName,
 } from "../services/sfReads.js";
 import { getUsageProvider } from "../services/usageDb.js";
+import { BUY_SIGNAL_SUBJECT_PATTERN } from "../constants.js";
 
 export interface AgentToolCtx {
   conn: Connection;
@@ -269,6 +270,71 @@ const rogoGetUsage: AgentTool = {
   },
 };
 
+const sfGetRecentPositiveCalls: AgentTool = {
+  name: "sf_get_recent_positive_calls",
+  definition: {
+    name: "sf_get_recent_positive_calls",
+    description:
+      "Fetch recent 'Connected - Positive' Apollo/Nooks dialer Tasks. Filter by ownerId (GTMA) and/or accountId. Returns Task records with subject, ActivityDate, owner, and description (the call summary).",
+    input_schema: {
+      type: "object",
+      properties: {
+        ownerId: {
+          type: "string",
+          description: "Filter to tasks owned by this Salesforce user (e.g. a specific GTMA). Optional.",
+        },
+        accountId: {
+          type: "string",
+          description: "Filter to tasks on this Account (WhatId). Optional.",
+        },
+        sinceIso: {
+          type: "string",
+          description: "Start date (YYYY-MM-DD or ISO). Defaults to 7 days ago.",
+        },
+        limit: {
+          type: "number",
+          description: "Max records to return (default 50, max 200).",
+        },
+      },
+    },
+  },
+  async execute(input, ctx) {
+    const ownerId = (input as any).ownerId as string | undefined;
+    const accountId = (input as any).accountId as string | undefined;
+    const sinceIso =
+      ((input as any).sinceIso as string | undefined) ??
+      DateTime.utc().minus({ days: 7 }).toISODate()!;
+    const limit = Math.min(Math.max(Number((input as any).limit) || 50, 1), 200);
+    const sinceDate = sinceIso.slice(0, 10);
+    const filters: string[] = [
+      `Subject LIKE '${escapeSoql(BUY_SIGNAL_SUBJECT_PATTERN)}'`,
+      `ActivityDate >= ${sinceDate}`,
+    ];
+    if (ownerId) filters.push(`OwnerId = '${escapeSoql(ownerId)}'`);
+    if (accountId) filters.push(`WhatId = '${escapeSoql(accountId)}'`);
+    const soql = `
+      SELECT Id, WhatId, OwnerId, Owner.Name, Subject, ActivityDate, CreatedDate, Description
+        FROM Task
+       WHERE ${filters.join(" AND ")}
+       ORDER BY ActivityDate DESC, CreatedDate DESC
+       LIMIT ${limit}`;
+    const result = await ctx.conn.query(soql);
+    return {
+      totalSize: result.totalSize,
+      records: (result.records as any[]).map((r) => ({
+        id: r.Id,
+        accountId: r.WhatId,
+        ownerId: r.OwnerId,
+        ownerName: r.Owner?.Name ?? null,
+        subject: r.Subject ?? "",
+        activityDate: r.ActivityDate ?? null,
+        createdDate: r.CreatedDate ?? null,
+        description: r.Description ?? null,
+      })),
+    };
+  },
+};
+
 export const ALL_TOOLS: AgentTool[] = [
   now,
   sfFindAccount,
@@ -277,6 +343,7 @@ export const ALL_TOOLS: AgentTool[] = [
   sfQuery,
   gongGetCalls,
   rogoGetUsage,
+  sfGetRecentPositiveCalls,
 ];
 
 export const TOOL_DEFINITIONS = ALL_TOOLS.map((t) => t.definition);

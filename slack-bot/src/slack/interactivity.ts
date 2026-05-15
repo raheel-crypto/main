@@ -5,17 +5,25 @@ import {
   appendAudit,
   getPendingCard,
   getUser,
+  setCardStatus,
   upsertUser,
 } from "../db/queries.js";
 import {
   getConnectionForUser,
   SfNotConnectedError,
 } from "../services/salesforceClient.js";
-import { applyFields } from "../services/sfWriter.js";
+import {
+  applyFields,
+  createOpportunity,
+  createTask,
+} from "../services/sfWriter.js";
 import { runBriefForUser } from "../services/brief.js";
 import {
   briefSuggestionField,
   briefSuggestionResolved,
+  buySignalCardResolved,
+  buySignalCreateOppModal,
+  buySignalLogTaskModal,
   cardWithFieldResolved,
   editFieldModal,
   parseActionId,
@@ -23,6 +31,7 @@ import {
 import type {
   BriefPendingCard,
   BriefSuggestion,
+  BuySignalPendingCard,
   PendingCard,
   RecommendedField,
 } from "../types.js";
@@ -119,6 +128,77 @@ export function registerInteractivity(app: App): void {
       valueState.selected_time ??
       "";
     await handleEditSubmit(app, body, meta.cardId, meta.field, newValue);
+  });
+
+  app.action(/^buy_signal_create_opp:.+/, async ({ ack, body, client }) => {
+    await ack();
+    const action = (body as any).actions?.[0];
+    const parsed = parseActionId(action?.action_id ?? "");
+    if (!parsed) return;
+    const card = await getPendingCard(parsed.cardId);
+    if (!card || card.kind !== "buy_signal") return;
+    if (!card.recommendation.suggestedOpp) return;
+    await client.views.open({
+      trigger_id: (body as any).trigger_id,
+      view: buySignalCreateOppModal(parsed.cardId, card.recommendation),
+    });
+  });
+
+  app.action(/^buy_signal_log_task:.+/, async ({ ack, body, client }) => {
+    await ack();
+    const action = (body as any).actions?.[0];
+    const parsed = parseActionId(action?.action_id ?? "");
+    if (!parsed) return;
+    const card = await getPendingCard(parsed.cardId);
+    if (!card || card.kind !== "buy_signal") return;
+    if (!card.recommendation.suggestedTask) return;
+    await client.views.open({
+      trigger_id: (body as any).trigger_id,
+      view: buySignalLogTaskModal(parsed.cardId, card.recommendation),
+    });
+  });
+
+  app.action(/^buy_signal_skip:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed) return;
+    await handleBuySignalSkip(app, body, parsed.cardId);
+  });
+
+  app.view(/^buy_signal_create_opp:.+/, async ({ ack, body, view }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata || "{}") as {
+      cardId: string;
+    };
+    const values = view.state.values;
+    const name = values["name_block"]?.["value"]?.value ?? "";
+    const stage = values["stage_block"]?.["value"]?.value ?? "";
+    const amountStr = values["amount_block"]?.["value"]?.value ?? "";
+    const closeDate = values["close_date_block"]?.["value"]?.selected_date ?? "";
+    const amount = amountStr ? Number(amountStr) : null;
+    await handleBuySignalCreateOppSubmit(app, body, meta.cardId, {
+      name,
+      stage,
+      amount: amount != null && Number.isFinite(amount) ? amount : null,
+      closeDate,
+    });
+  });
+
+  app.view(/^buy_signal_log_task:.+/, async ({ ack, body, view }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata || "{}") as {
+      cardId: string;
+    };
+    const values = view.state.values;
+    const subject = values["subject_block"]?.["value"]?.value ?? "";
+    const dueDate = values["due_date_block"]?.["value"]?.selected_date ?? "";
+    const description =
+      values["description_block"]?.["value"]?.value ?? null;
+    await handleBuySignalLogTaskSubmit(app, body, meta.cardId, {
+      subject,
+      dueDate,
+      description: description || null,
+    });
   });
 }
 
@@ -446,6 +526,198 @@ async function handleBriefPickAccount(
     accountQuery: accountName,
     slack,
   });
+}
+
+async function getBuySignalCardBlocks(
+  app: App,
+  card: BuySignalPendingCard,
+  body: any
+): Promise<any[]> {
+  let blocks = body.message?.blocks;
+  if (!blocks) {
+    const fresh = await app.client.conversations.history({
+      channel: card.slackChannel,
+      latest: card.slackMessageTs,
+      inclusive: true,
+      limit: 1,
+    });
+    blocks = (fresh.messages as any[])?.[0]?.blocks ?? [];
+  }
+  return blocks ?? [];
+}
+
+async function handleBuySignalSkip(
+  app: App,
+  body: any,
+  cardId: string
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "buy_signal") return;
+  const slackUserId = body.user.id as string;
+  await appendAudit({
+    slackUserId,
+    action: "skipped",
+    metadata: {
+      cardKind: "buy_signal",
+      cardId,
+      accountId: card.recommendation.accountId,
+    },
+  });
+  await setCardStatus(cardId, "skipped");
+  const newBlocks = buySignalCardResolved(
+    body.message?.blocks,
+    "skipped"
+  );
+  await app.client.chat.update({
+    channel: body.channel.id,
+    ts: body.message.ts,
+    blocks: newBlocks,
+    text: body.message.text || "Skipped",
+  });
+}
+
+async function handleBuySignalCreateOppSubmit(
+  app: App,
+  body: any,
+  cardId: string,
+  input: { name: string; stage: string; amount: number | null; closeDate: string }
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "buy_signal") return;
+  const slackUserId = body.user.id as string;
+  if (!input.name || !input.stage || !input.closeDate) return;
+
+  let conn;
+  try {
+    conn = await getConnectionForUser(slackUserId);
+  } catch (err) {
+    if (err instanceof SfNotConnectedError) {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackThreadTs,
+        text: "Salesforce isn't connected. Run `/standup connect`.",
+      });
+    }
+    return;
+  }
+
+  const result = await createOpportunity({
+    conn,
+    slackUserId,
+    accountId: card.recommendation.accountId,
+    name: input.name,
+    stage: input.stage,
+    amount: input.amount,
+    closeDate: input.closeDate,
+  });
+
+  const blocks = await getBuySignalCardBlocks(app, card, body);
+  if (result.ok) {
+    const url = result.opportunityId
+      ? `${conn.instanceUrl}/${result.opportunityId}`
+      : null;
+    const detail = url ? `<${url}|${input.name}>` : input.name;
+    const updated = buySignalCardResolved(blocks, "applied_opp", detail);
+    await app.client.chat.update({
+      channel: card.slackChannel,
+      ts: card.slackMessageTs,
+      blocks: updated,
+      text: `Opportunity created: ${input.name}`,
+    });
+    await setCardStatus(cardId, "applied");
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackThreadTs,
+      text: result.dryRun
+        ? `:test_tube: (dry-run) Would have created Opp *${input.name}* on *${card.recommendation.accountName}*.`
+        : `:white_check_mark: Opportunity created → ${detail}`,
+    });
+  } else {
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackThreadTs,
+      text: `:warning: Failed to create opportunity: ${result.error ?? "unknown error"}`,
+    });
+  }
+}
+
+async function handleBuySignalLogTaskSubmit(
+  app: App,
+  body: any,
+  cardId: string,
+  input: { subject: string; dueDate: string; description: string | null }
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "buy_signal") return;
+  const slackUserId = body.user.id as string;
+  if (!input.subject || !input.dueDate) return;
+
+  let conn;
+  try {
+    conn = await getConnectionForUser(slackUserId);
+  } catch (err) {
+    if (err instanceof SfNotConnectedError) {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackThreadTs,
+        text: "Salesforce isn't connected. Run `/standup connect`.",
+      });
+    }
+    return;
+  }
+
+  let ownerId: string | null = null;
+  try {
+    const ident = await conn.identity();
+    ownerId = (ident as any).user_id ?? null;
+  } catch {}
+  if (!ownerId) {
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackThreadTs,
+      text: ":warning: Could not resolve your Salesforce user — task not created.",
+    });
+    return;
+  }
+
+  const result = await createTask({
+    conn,
+    slackUserId,
+    whatId: card.recommendation.accountId,
+    ownerId,
+    subject: input.subject,
+    dueDate: input.dueDate,
+    description: input.description,
+  });
+
+  const blocks = await getBuySignalCardBlocks(app, card, body);
+  if (result.ok) {
+    const updated = buySignalCardResolved(
+      blocks,
+      "applied_task",
+      `\`${input.subject}\` due ${input.dueDate}`
+    );
+    await app.client.chat.update({
+      channel: card.slackChannel,
+      ts: card.slackMessageTs,
+      blocks: updated,
+      text: `Task logged: ${input.subject}`,
+    });
+    await setCardStatus(cardId, "applied");
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackThreadTs,
+      text: result.dryRun
+        ? `:test_tube: (dry-run) Would have logged task *${input.subject}* on *${card.recommendation.accountName}*.`
+        : `:white_check_mark: Task logged: *${input.subject}* (due ${input.dueDate}).`,
+    });
+  } else {
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackThreadTs,
+      text: `:warning: Failed to log task: ${result.error ?? "unknown error"}`,
+    });
+  }
 }
 
 export async function saveUserPrefs(args: {

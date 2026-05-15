@@ -1,5 +1,5 @@
 import { Connection } from "jsforce";
-import type { SfActivity } from "../types.js";
+import type { PositiveApolloCall, SfActivity } from "../types.js";
 
 export function escapeSoql(value: string): string {
   return value.replace(/'/g, "\\'");
@@ -127,6 +127,75 @@ export async function fetchOpportunitiesForAccount(
     isWon: !!r.IsWon,
     nextStep: r.NextStep ?? null,
     ownerId: r.OwnerId,
+  }));
+}
+
+export interface OwnedAccount {
+  id: string;
+  name: string;
+}
+
+export async function fetchAccountsOwnedBy(
+  conn: Connection,
+  ownerId: string,
+  limit = 500
+): Promise<OwnedAccount[]> {
+  const q = `
+    SELECT Id, Name
+      FROM Account
+     WHERE OwnerId = '${escapeSoql(ownerId)}'
+     ORDER BY Name
+     LIMIT ${limit}`;
+  const result = await conn.query(q);
+  return (result.records as any[]).map((r) => ({ id: r.Id, name: r.Name }));
+}
+
+export async function fetchAccountIdsWithOpenOpp(
+  conn: Connection,
+  accountIds: string[]
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  if (accountIds.length === 0) return out;
+  const ids = accountIds.map((id) => `'${escapeSoql(id)}'`).join(",");
+  const q = `
+    SELECT AccountId
+      FROM Opportunity
+     WHERE AccountId IN (${ids}) AND IsClosed = false`;
+  const result = await conn.query(q);
+  for (const r of result.records as any[]) {
+    if (r.AccountId) out.add(r.AccountId);
+  }
+  return out;
+}
+
+export async function fetchPositiveApolloCalls(
+  conn: Connection,
+  accountIds: string[],
+  sinceIso: string,
+  subjectPattern: string
+): Promise<PositiveApolloCall[]> {
+  if (accountIds.length === 0) return [];
+  const sinceDate = sinceIso.slice(0, 10);
+  const ids = accountIds.map((id) => `'${escapeSoql(id)}'`).join(",");
+  const pattern = escapeSoql(subjectPattern);
+  const q = `
+    SELECT Id, WhatId, OwnerId, Owner.Name, Subject, ActivityDate, CreatedDate, Description
+      FROM Task
+     WHERE WhatId IN (${ids})
+       AND Subject LIKE '${pattern}'
+       AND ActivityDate >= ${sinceDate}
+     ORDER BY ActivityDate DESC, CreatedDate DESC
+     LIMIT 500`;
+  const result = await conn.query(q);
+  return (result.records as any[]).map((r) => ({
+    taskId: r.Id,
+    accountId: r.WhatId,
+    ownerId: r.OwnerId,
+    ownerName: r.Owner?.Name ?? null,
+    subject: r.Subject ?? "",
+    activityDate: r.ActivityDate ?? null,
+    createdDate: r.CreatedDate ?? null,
+    description: r.Description ?? null,
   }));
 }
 

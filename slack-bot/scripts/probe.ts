@@ -7,9 +7,21 @@ import {
   bootstrap as rogoBootstrap,
   lookupRogoCustomer,
 } from "../src/services/rogoClient.js";
-import { getUser } from "../src/db/queries.js";
+import { getRecentBuySignalAccountIds, getUser } from "../src/db/queries.js";
 import { runAgent } from "../src/agent/runner.js";
 import { BRIEF_SYSTEM, QA_SYSTEM } from "../src/agent/prompts.js";
+import {
+  BUY_SIGNAL_DEDUP_DAYS,
+  BUY_SIGNAL_LOOKBACK_DAYS,
+  BUY_SIGNAL_MAX_CARDS_PER_RUN,
+  BUY_SIGNAL_SUBJECT_PATTERN,
+} from "../src/constants.js";
+import {
+  fetchAccountIdsWithOpenOpp,
+  fetchAccountsOwnedBy,
+  fetchPositiveApolloCalls,
+} from "../src/services/sfReads.js";
+import { recommendBuySignal } from "../src/services/buySignalRecommender.js";
 
 async function main() {
   const [_, __, kind, ...rest] = process.argv;
@@ -133,8 +145,86 @@ async function main() {
     );
     return;
   }
+  if (kind === "buy-signals") {
+    const slackUserId = rest[0];
+    if (!slackUserId) {
+      console.error("usage: probe buy-signals <slack_user_id>");
+      process.exit(1);
+    }
+    const user = await getUser(slackUserId);
+    if (!user) throw new Error(`No user row for ${slackUserId}`);
+    const conn = await getConnectionForUser(slackUserId);
+    const ident = await conn.identity();
+    const sfUserId = (ident as any).user_id as string;
+
+    const owned = await fetchAccountsOwnedBy(conn, sfUserId);
+    const accountIds = owned.map((a) => a.id);
+    const sinceIso = DateTime.utc()
+      .minus({ days: BUY_SIGNAL_LOOKBACK_DAYS })
+      .toISODate()!;
+    const [calls, withOpenOpp, dedupSet] = await Promise.all([
+      fetchPositiveApolloCalls(
+        conn,
+        accountIds,
+        sinceIso,
+        BUY_SIGNAL_SUBJECT_PATTERN
+      ),
+      fetchAccountIdsWithOpenOpp(conn, accountIds),
+      getRecentBuySignalAccountIds(slackUserId, BUY_SIGNAL_DEDUP_DAYS),
+    ]);
+
+    const nameById = new Map(owned.map((a) => [a.id, a.name]));
+    const byAccount = new Map<string, typeof calls>();
+    for (const c of calls) {
+      if (withOpenOpp.has(c.accountId)) continue;
+      if (dedupSet.has(c.accountId)) continue;
+      if (!nameById.has(c.accountId)) continue;
+      const arr = byAccount.get(c.accountId) ?? [];
+      arr.push(c);
+      byAccount.set(c.accountId, arr);
+    }
+
+    const candidates = [...byAccount.entries()]
+      .map(([accountId, accountCalls]) => ({ accountId, calls: accountCalls }))
+      .sort((a, b) => {
+        const da = a.calls[0]?.activityDate ?? "";
+        const db = b.calls[0]?.activityDate ?? "";
+        return db.localeCompare(da);
+      })
+      .slice(0, BUY_SIGNAL_MAX_CARDS_PER_RUN);
+
+    const todayIso = DateTime.utc().toISODate()!;
+    const recs = await Promise.all(
+      candidates.map(async (c) => {
+        const rec = await recommendBuySignal({
+          accountId: c.accountId,
+          accountName: nameById.get(c.accountId)!,
+          industry: null,
+          calls: c.calls,
+          todayIso,
+        });
+        return { accountId: c.accountId, accountName: nameById.get(c.accountId)!, callCount: c.calls.length, rec };
+      })
+    );
+
+    console.log(
+      JSON.stringify(
+        {
+          accountsOwned: owned.length,
+          callsFound: calls.length,
+          accountsWithOpenOpp: withOpenOpp.size,
+          dedupedFromRecent: dedupSet.size,
+          candidateAccounts: candidates.length,
+          recommendations: recs,
+        },
+        null,
+        2
+      )
+    );
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals> <args...>"
   );
   process.exit(1);
 }

@@ -2,6 +2,7 @@ import { getPool } from "./client.js";
 import type {
   AuditAction,
   BriefPayload,
+  BuySignalPayload,
   PendingCard,
   PendingCardKind,
   Recommendation,
@@ -176,7 +177,7 @@ export async function insertPendingCard(c: {
   slackThreadTs: string;
   slackMessageTs?: string;
   opportunityId: string | null;
-  recommendation: Recommendation | BriefPayload;
+  recommendation: Recommendation | BriefPayload | BuySignalPayload;
   kind?: PendingCardKind;
 }): Promise<string> {
   const pool = getPool();
@@ -229,7 +230,12 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
     slackMessageTs: r.slack_message_ts,
     status: r.status,
   };
-  const kind: PendingCardKind = r.kind === "brief" ? "brief" : "standup";
+  const kind: PendingCardKind =
+    r.kind === "brief"
+      ? "brief"
+      : r.kind === "buy_signal"
+        ? "buy_signal"
+        : "standup";
   if (kind === "brief") {
     return {
       ...base,
@@ -238,12 +244,40 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
       recommendation: recommendation as BriefPayload,
     };
   }
+  if (kind === "buy_signal") {
+    return {
+      ...base,
+      kind: "buy_signal",
+      opportunityId: null,
+      recommendation: recommendation as BuySignalPayload,
+    };
+  }
   return {
     ...base,
     kind: "standup",
     opportunityId: r.opportunity_id,
     recommendation: recommendation as Recommendation,
   };
+}
+
+export async function getRecentBuySignalAccountIds(
+  slackUserId: string,
+  withinDays: number
+): Promise<Set<string>> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT recommendation->>'accountId' AS account_id
+       FROM pending_cards
+      WHERE slack_user_id = $1
+        AND kind = 'buy_signal'
+        AND created_at > now() - ($2::int || ' days')::interval`,
+    [slackUserId, withinDays]
+  );
+  const out = new Set<string>();
+  for (const r of rows as { account_id: string | null }[]) {
+    if (r.account_id) out.add(r.account_id);
+  }
+  return out;
 }
 
 export async function setCardStatus(

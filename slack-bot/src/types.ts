@@ -90,7 +90,7 @@ export const RecommendationSchema = z.object({
 export type RecommendedField = z.infer<typeof RecommendedFieldSchema>;
 export type Recommendation = z.infer<typeof RecommendationSchema>;
 
-export type PendingCardKind = "standup" | "brief";
+export type PendingCardKind = "standup" | "brief" | "buy_signal";
 
 export interface PendingCardBase {
   id: string;
@@ -113,7 +113,16 @@ export interface BriefPendingCard extends PendingCardBase {
   recommendation: BriefPayload;
 }
 
-export type PendingCard = StandupPendingCard | BriefPendingCard;
+export interface BuySignalPendingCard extends PendingCardBase {
+  kind: "buy_signal";
+  opportunityId: null;
+  recommendation: BuySignalPayload;
+}
+
+export type PendingCard =
+  | StandupPendingCard
+  | BriefPendingCard
+  | BuySignalPendingCard;
 
 export type AuditAction =
   | "recommended"
@@ -126,7 +135,13 @@ export type AuditAction =
   | "briefed"
   | "brief_failed"
   | "qa_answered"
-  | "qa_failed";
+  | "qa_failed"
+  | "buy_signal_surfaced"
+  | "buy_signal_dropped"
+  | "opportunity_created"
+  | "opportunity_create_failed"
+  | "task_created"
+  | "task_create_failed";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",
@@ -264,3 +279,70 @@ export interface RogoBatchResult {
   datasets: RogoBatchResultDataset[];
   warnings?: string[];
 }
+
+export interface PositiveApolloCall {
+  taskId: string;
+  accountId: string;
+  ownerId: string;
+  ownerName: string | null;
+  subject: string;
+  activityDate: string | null;
+  createdDate: string | null;
+  description: string | null;
+}
+
+const BUY_SIGNAL_ACTION_KINDS = [
+  "create_opportunity",
+  "log_task",
+  "no_action",
+] as const;
+
+export const BuySignalSuggestedOppSchema = z.object({
+  name: z.string().min(1),
+  stage: z.string().min(1),
+  amount: z.number().nullable().optional(),
+  closeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const BuySignalSuggestedTaskSchema = z.object({
+  subject: z.string().min(1),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  description: z.string().nullable().optional(),
+});
+
+export const BuySignalRecommendationSchema = z.object({
+  headline: z.string().min(1),
+  suggestedAction: z.enum(BUY_SIGNAL_ACTION_KINDS),
+  suggestedOpp: BuySignalSuggestedOppSchema.nullable().optional(),
+  suggestedTask: BuySignalSuggestedTaskSchema.nullable().optional(),
+  rationale: z.string().min(1),
+});
+
+export const BuySignalCallSummarySchema = z.object({
+  taskId: z.string(),
+  ownerName: z.string().nullable().optional(),
+  activityDate: z.string().nullable().optional(),
+  subject: z.string(),
+  description: z.string().nullable().optional(),
+});
+
+export const BuySignalPayloadSchema = z.object({
+  accountId: z.string(),
+  accountName: z.string(),
+  callCount: z.number().int().nonnegative(),
+  mostRecentCallDate: z.string().nullable().optional(),
+  calls: z.array(BuySignalCallSummarySchema).default([]),
+  headline: z.string(),
+  suggestedAction: z.enum(BUY_SIGNAL_ACTION_KINDS),
+  suggestedOpp: BuySignalSuggestedOppSchema.nullable().optional(),
+  suggestedTask: BuySignalSuggestedTaskSchema.nullable().optional(),
+  rationale: z.string(),
+});
+
+export type BuySignalSuggestedOpp = z.infer<typeof BuySignalSuggestedOppSchema>;
+export type BuySignalSuggestedTask = z.infer<typeof BuySignalSuggestedTaskSchema>;
+export type BuySignalRecommendation = z.infer<
+  typeof BuySignalRecommendationSchema
+>;
+export type BuySignalPayload = z.infer<typeof BuySignalPayloadSchema>;
+export type BuySignalActionKind = (typeof BUY_SIGNAL_ACTION_KINDS)[number];
