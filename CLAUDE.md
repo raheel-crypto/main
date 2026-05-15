@@ -108,6 +108,7 @@ Entrypoints under `slack-bot/api/`:
 - `GET /api/oauth/sf/start?slack_user_id=…` + `GET /api/oauth/sf/callback` — per-rep PKCE flow against the existing Salesforce Connected App. Add the Vercel `/api/oauth/sf/callback` URL to the Connected App's allowed callbacks.
 - `POST /api/cron/tick` — fires every 5 minutes via Vercel Cron; matches reps whose preferred local time is in the last 5 minutes and triggers `/api/standup/run` per rep.
 - `POST /api/standup/run` — runs the standup pipeline for one rep (gated by `STANDUP_INTERNAL_SECRET`). `maxDuration: 300`.
+- `POST /api/nooks/webhook` — receives Nooks `call.completed` events. Auth: `x-nooks-secret` header against `NOOKS_WEBHOOK_SECRET`. v1 just logs the payload and DMs `NOOKS_TEST_DM_USER_ID` (a single Slack user id) with a digest card + raw JSON so you can see what Nooks sends. No persistence, no SF writes. See `src/services/nooksHandler.ts`.
 
 Persistent state lives in **Vercel Postgres** (or any `POSTGRES_URL`-compatible DB). Tables: `users`, `sf_tokens`, `sf_oauth_state`, `pending_cards`, `audit_log`. Apply with `npm run migrate -w slack-bot` against `POSTGRES_URL`.
 

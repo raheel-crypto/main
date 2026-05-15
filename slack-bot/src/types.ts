@@ -280,6 +280,48 @@ export interface RogoBatchResult {
   warnings?: string[];
 }
 
+export interface NooksAgent {
+  agent_id?: string;
+  email?: string;
+  name?: string;
+}
+
+export interface NooksProspect {
+  prospect_id?: string;
+  first_name?: string;
+  last_name?: string;
+  phone_number?: string;
+  email?: string;
+  company_name?: string;
+}
+
+export interface NooksSequence {
+  sequence_id?: string;
+  sequence_name?: string;
+  step_number?: number;
+}
+
+export interface NooksCallData {
+  call_id: string;
+  direction?: string;
+  status?: string;
+  duration_seconds?: number;
+  disposition?: string;
+  notes?: string;
+  recording_url?: string;
+  agent?: NooksAgent;
+  prospect?: NooksProspect;
+  sequence?: NooksSequence;
+}
+
+export interface NooksWebhookPayload {
+  event_id: string;
+  event_type: string;
+  created_at?: string;
+  workspace_id?: string;
+  data: NooksCallData;
+}
+
 export interface PositiveApolloCall {
   taskId: string;
   accountId: string;

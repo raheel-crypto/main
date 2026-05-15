@@ -61,6 +61,10 @@ export const config = {
       process.env.DATABASE_URL ||
       "",
   },
+  nooks: {
+    webhookSecret: optional("NOOKS_WEBHOOK_SECRET"),
+    testDmUserId: optional("NOOKS_TEST_DM_USER_ID"),
+  },
 };
 
 export function assertProduction() {

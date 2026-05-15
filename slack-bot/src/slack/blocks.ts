@@ -4,6 +4,7 @@ import type {
   BriefPayload,
   BriefSuggestion,
   BuySignalPayload,
+  NooksWebhookPayload,
   Recommendation,
   RecommendedField,
 } from "../types.js";
@@ -816,6 +817,99 @@ export function buySignalCreateOppModal(
       },
     ],
   };
+}
+
+export function nooksCallDigestCard(
+  payload: NooksWebhookPayload
+): { blocks: KnownBlock[]; text: string } {
+  const d = payload.data;
+  const disposition = d.disposition ?? "(no disposition)";
+  const agentLabel = d.agent?.name
+    ? `${d.agent.name}${d.agent.email ? ` <${d.agent.email}>` : ""}`
+    : d.agent?.email ?? "(unknown agent)";
+  const prospectName = [d.prospect?.first_name, d.prospect?.last_name]
+    .filter(Boolean)
+    .join(" ");
+  const prospectLabel =
+    prospectName || d.prospect?.email || d.prospect?.phone_number || "(unknown prospect)";
+  const companyLabel = d.prospect?.company_name ?? "(unknown company)";
+  const durationLabel =
+    d.duration_seconds != null ? `${d.duration_seconds}s` : "?";
+  const directionLabel = d.direction ?? "?";
+
+  const text = `Nooks call · ${disposition} · ${companyLabel}`;
+
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `Nooks call · ${disposition}`.slice(0, 150),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `*Agent*: ${agentLabel}  ·  *${directionLabel}* · ${durationLabel}`,
+        },
+      ],
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Prospect*: ${prospectLabel}\n*Company*: ${companyLabel}`,
+      },
+    },
+  ];
+
+  if (d.notes) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Notes*\n> ${d.notes.slice(0, 1500)}`,
+      },
+    });
+  }
+
+  if (d.sequence?.sequence_name) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `Sequence: *${d.sequence.sequence_name}* (step ${d.sequence.step_number ?? "?"})`,
+        },
+      ],
+    });
+  }
+
+  if (d.recording_url) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Recording" },
+          url: d.recording_url,
+        },
+      ],
+    });
+  }
+
+  const rawJson = JSON.stringify(payload, null, 2);
+  const truncated =
+    rawJson.length > 2800 ? rawJson.slice(0, 2800) + "\n…(truncated)" : rawJson;
+  blocks.push({ type: "divider" });
+  blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: `*Raw payload*\n\`\`\`${truncated}\`\`\`` },
+  });
+
+  return { blocks, text };
 }
 
 export function buySignalLogTaskModal(
