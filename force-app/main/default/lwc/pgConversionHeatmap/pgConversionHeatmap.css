@@ -59,17 +59,23 @@
 }
 
 .pg-heatmap__td-mgr {
-    background: #f1f5f9;
+    background: #e2e8f0;
     color: #0f172a;
     font-weight: 700;
     vertical-align: middle;
-    border-right: 1px solid #e2e8f0;
+    border-right: 2px solid #94a3b8;
+    text-align: left;
 }
 
 .pg-heatmap__td-ae {
     padding-left: 1.25rem !important;
     color: #1e293b;
     font-weight: 500;
+}
+
+/* Thick divider between manager groups. */
+.pg-tr--group-start > td {
+    border-top: 3px solid #64748b;
 }
 
 .pg-cell--green  { background: #86efac; }

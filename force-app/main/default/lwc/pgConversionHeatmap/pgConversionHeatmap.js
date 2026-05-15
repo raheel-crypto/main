@@ -100,10 +100,14 @@ export default class PgConversionHeatmap extends LightningElement {
         }
         return Array.from(buckets.values())
             .sort((a, b) => a.managerName.localeCompare(b.managerName))
-            .map(g => ({
+            .map((g, gIdx) => ({
                 ...g,
                 rowCount: g.rows.length,
-                rows: g.rows.map((r, idx) => ({ ...r, isFirstInGroup: idx === 0 }))
+                rows: g.rows.map((r, idx) => ({
+                    ...r,
+                    isFirstInGroup: idx === 0,
+                    rowClass: idx === 0 && gIdx > 0 ? 'pg-tr--group-start' : ''
+                }))
             }));
     }
 

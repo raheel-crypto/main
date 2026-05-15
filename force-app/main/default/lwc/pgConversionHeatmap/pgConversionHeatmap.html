@@ -48,7 +48,7 @@
                         <template lwc:if={isGrouped}>
                             <template for:each={rowGroups} for:item="g">
                                 <template for:each={g.rows} for:item="row">
-                                    <tr key={row.groupKey}>
+                                    <tr key={row.groupKey} class={row.rowClass}>
                                         <template lwc:if={row.isFirstInGroup}>
                                             <td class="pg-heatmap__td-name pg-heatmap__td-mgr" rowspan={g.rowCount}>{g.managerName}</td>
                                         </template>
