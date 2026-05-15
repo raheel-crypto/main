@@ -1,5 +1,9 @@
 import { WebClient } from "@slack/web-api";
 import { config } from "../config.js";
+import {
+  NOOKS_FILTER_DIRECTION,
+  NOOKS_FILTER_DISPOSITION,
+} from "../constants.js";
 import { nooksCallDigestCard } from "../slack/blocks.js";
 import type { NooksWebhookPayload } from "../types.js";
 
@@ -12,18 +16,36 @@ export interface NooksHandleResult {
 export async function handleNooksWebhook(
   payload: NooksWebhookPayload
 ): Promise<NooksHandleResult> {
+  const direction = payload.callData?.callDirection ?? "";
+  const dispositionName = payload.callData?.disposition?.name ?? "";
+
   console.log(
     "[nooks] received",
     JSON.stringify({
       event: payload.event,
       eventId: payload.eventId,
       callId: payload.callData?.callId,
-      disposition: payload.callData?.disposition?.name,
+      direction,
+      disposition: dispositionName,
       agentEmail: payload.callData?.userData?.email,
       accountId: payload.callData?.accountData?.accountId,
       accountName: payload.callData?.accountData?.name,
     })
   );
+
+  if (direction.toLowerCase() !== NOOKS_FILTER_DIRECTION.toLowerCase()) {
+    console.log(
+      `[nooks] filtered: direction='${direction}' (want '${NOOKS_FILTER_DIRECTION}')`
+    );
+    return { ok: true, reason: `filtered_direction:${direction}` };
+  }
+  if (dispositionName.toLowerCase() !== NOOKS_FILTER_DISPOSITION.toLowerCase()) {
+    console.log(
+      `[nooks] filtered: disposition='${dispositionName}' (want '${NOOKS_FILTER_DISPOSITION}')`
+    );
+    return { ok: true, reason: `filtered_disposition:${dispositionName}` };
+  }
+
   console.log("[nooks] full payload:", JSON.stringify(payload));
 
   const dmTo = config.nooks.testDmUserId;

@@ -824,71 +824,67 @@ export function nooksCallDigestCard(
 ): { blocks: KnownBlock[]; text: string } {
   const d = payload.callData;
   const dispositionLabel = d.disposition?.name ?? "(no disposition)";
-  const agentLabel = d.userData?.name
-    ? `${d.userData.name}${d.userData.email ? ` <${d.userData.email}>` : ""}`
-    : d.userData?.email ?? "(unknown agent)";
-  const prospectLabel =
-    d.prospectData?.name ||
-    d.prospectData?.email ||
-    d.prospectData?.phoneNumber ||
-    "(unknown prospect)";
   const companyLabel = d.accountData?.name ?? "(unknown account)";
-  const durationLabel =
-    d.durationSeconds != null ? `${d.durationSeconds}s` : "?";
-  const directionLabel = d.callDirection ?? "?";
 
-  const text = `Nooks call · ${dispositionLabel} · ${companyLabel}`;
+  const isValidHttpUrl = (u: string | undefined): u is string =>
+    typeof u === "string" && /^https?:\/\//i.test(u);
+
+  const text = `Nooks · ${companyLabel} · ${dispositionLabel}`;
 
   const blocks: KnownBlock[] = [
     {
       type: "header",
       text: {
         type: "plain_text",
-        text: `Nooks call · ${dispositionLabel}`.slice(0, 150),
-      },
-    },
-    {
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `*Agent*: ${agentLabel}  ·  *${directionLabel}* · ${durationLabel}`,
-        },
-      ],
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*Prospect*: ${prospectLabel}\n*Account*: ${companyLabel}${d.accountData?.accountId ? `  \`${d.accountData.accountId}\`` : ""}`,
+        text: `${companyLabel} · ${dispositionLabel}`.slice(0, 150),
       },
     },
   ];
+
+  const prospectLines: string[] = [];
+  if (d.prospectData?.name) prospectLines.push(`*Name*: ${d.prospectData.name}`);
+  if (d.prospectData?.email && d.prospectData.email.includes("@"))
+    prospectLines.push(`*Email*: ${d.prospectData.email}`);
+  if (
+    d.prospectData?.phoneNumber &&
+    /\d/.test(d.prospectData.phoneNumber)
+  )
+    prospectLines.push(`*Phone*: ${d.prospectData.phoneNumber}`);
+  if (isValidHttpUrl(d.prospectData?.linkedInUrl))
+    prospectLines.push(`*LinkedIn*: <${d.prospectData!.linkedInUrl}|profile>`);
+  if (prospectLines.length > 0) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Prospect*\n${prospectLines.join("\n")}`,
+      },
+    });
+  }
+
+  const accountLines: string[] = [];
+  if (d.accountData?.name) accountLines.push(`*Name*: ${d.accountData.name}`);
+  if (d.accountData?.accountId)
+    accountLines.push(`*Id*: \`${d.accountData.accountId}\``);
+  if (accountLines.length > 0) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Account*\n${accountLines.join("\n")}`,
+      },
+    });
+  }
 
   if (d.notes) {
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Notes*\n> ${d.notes.slice(0, 1500)}`,
+        text: `*Notes*\n> ${d.notes.slice(0, 2000)}`,
       },
     });
   }
-
-  if (d.sequenceData?.sequenceName) {
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `Sequence: *${d.sequenceData.sequenceName}* (step ${d.sequenceData.sequenceStep ?? "?"})`,
-        },
-      ],
-    });
-  }
-
-  const isValidHttpUrl = (u: string | undefined): u is string =>
-    typeof u === "string" && /^https?:\/\//i.test(u);
 
   const linkButtons: any[] = [];
   if (isValidHttpUrl(d.recordingUrl)) {
@@ -908,15 +904,6 @@ export function nooksCallDigestCard(
   if (linkButtons.length > 0) {
     blocks.push({ type: "actions", elements: linkButtons });
   }
-
-  const rawJson = JSON.stringify(payload, null, 2);
-  const truncated =
-    rawJson.length > 2800 ? rawJson.slice(0, 2800) + "\n…(truncated)" : rawJson;
-  blocks.push({ type: "divider" });
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: `*Raw payload*\n\`\`\`${truncated}\`\`\`` },
-  });
 
   return { blocks, text };
 }
