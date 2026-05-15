@@ -73,12 +73,14 @@
     font-weight: 500;
 }
 
-/* Thick divider between manager groups. border-top loses to the
-   table's border-collapse, so we paint it as an inset box-shadow on
-   each cell of the first row of the group — bypasses border merging
-   entirely. */
-.pg-tr--group-start td {
-    box-shadow: inset 0 3px 0 0 #475569;
+/* Thick divider between manager groups. Targets any row that contains
+   the rowspan'd manager cell (i.e. the first row of a group), skipping
+   the very first row in tbody so the top of the table isn't doubled.
+   border-top loses to border-collapse, so we paint with both box-shadow
+   (reliable) and border-top !important (fallback). */
+.pg-heatmap tbody tr:has(td.pg-heatmap__td-mgr):not(:first-child) td {
+    box-shadow: inset 0 4px 0 0 #475569;
+    border-top: 4px solid #475569 !important;
 }
 
 .pg-cell--green  { background: #86efac; }
