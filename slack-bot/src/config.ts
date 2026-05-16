@@ -34,6 +34,9 @@ export const config = {
     accessKey: optional("GONG_ACCESS_KEY"),
     accessKeySecret: optional("GONG_ACCESS_KEY_SECRET"),
     baseUrl: optional("GONG_BASE_URL", "https://api.gong.io"),
+    webhookToken: optional("GONG_WEBHOOK_TOKEN"),
+    jwtPublicKey: optional("GONG_JWT_PUBLIC_KEY"),
+    jwtSecret: optional("GONG_JWT_SECRET"),
   },
   rogo: {
     baseUrl: optional(

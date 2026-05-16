@@ -10,8 +10,39 @@ import type {
   UserPrefs,
 } from "../types.js";
 
+interface UserRow {
+  slack_user_id: string;
+  slack_team_id: string;
+  email: string;
+  timezone: string;
+  preferred_hour: number;
+  preferred_minute: number;
+  last_run_date: string | Date | null;
+  active: boolean;
+  gong_realtime_enabled: boolean | null;
+}
+
+function rowToUserPrefs(r: UserRow): UserPrefs {
+  return {
+    slackUserId: r.slack_user_id,
+    slackTeamId: r.slack_team_id,
+    email: r.email,
+    timezone: r.timezone,
+    preferredHour: r.preferred_hour,
+    preferredMinute: r.preferred_minute,
+    lastRunDate: r.last_run_date ? String(r.last_run_date) : null,
+    active: r.active,
+    gongRealtimeEnabled: r.gong_realtime_enabled ?? false,
+  };
+}
+
+const USER_SELECT_COLUMNS = `slack_user_id, slack_team_id, email, timezone, preferred_hour,
+            preferred_minute, last_run_date, active, gong_realtime_enabled`;
+
 export async function upsertUser(
-  p: Omit<UserPrefs, "lastRunDate" | "active"> & { active?: boolean }
+  p: Omit<UserPrefs, "lastRunDate" | "active" | "gongRealtimeEnabled"> & {
+    active?: boolean;
+  }
 ): Promise<void> {
   const pool = getPool();
   await pool.query(
@@ -39,42 +70,48 @@ export async function upsertUser(
 export async function getUser(slackUserId: string): Promise<UserPrefs | null> {
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT slack_user_id, slack_team_id, email, timezone, preferred_hour,
-            preferred_minute, last_run_date, active
+    `SELECT ${USER_SELECT_COLUMNS}
        FROM users WHERE slack_user_id = $1`,
     [slackUserId]
   );
-  const r = rows[0];
+  const r = rows[0] as UserRow | undefined;
   if (!r) return null;
-  return {
-    slackUserId: r.slack_user_id,
-    slackTeamId: r.slack_team_id,
-    email: r.email,
-    timezone: r.timezone,
-    preferredHour: r.preferred_hour,
-    preferredMinute: r.preferred_minute,
-    lastRunDate: r.last_run_date ? String(r.last_run_date) : null,
-    active: r.active,
-  };
+  return rowToUserPrefs(r);
+}
+
+export async function getUserByEmail(email: string): Promise<UserPrefs | null> {
+  if (!email) return null;
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT ${USER_SELECT_COLUMNS}
+       FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+    [email]
+  );
+  const r = rows[0] as UserRow | undefined;
+  if (!r) return null;
+  return rowToUserPrefs(r);
+}
+
+export async function updateSubscriptionPrefs(
+  slackUserId: string,
+  patch: { gongRealtimeEnabled?: boolean }
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE users
+        SET gong_realtime_enabled = COALESCE($2, gong_realtime_enabled)
+      WHERE slack_user_id = $1`,
+    [slackUserId, patch.gongRealtimeEnabled ?? null]
+  );
 }
 
 export async function getDueUsers(): Promise<UserPrefs[]> {
   const pool = getPool();
   const { rows } = await pool.query(
-    `SELECT slack_user_id, slack_team_id, email, timezone, preferred_hour,
-            preferred_minute, last_run_date, active
+    `SELECT ${USER_SELECT_COLUMNS}
        FROM users WHERE active = true`
   );
-  return rows.map((r) => ({
-    slackUserId: r.slack_user_id,
-    slackTeamId: r.slack_team_id,
-    email: r.email,
-    timezone: r.timezone,
-    preferredHour: r.preferred_hour,
-    preferredMinute: r.preferred_minute,
-    lastRunDate: r.last_run_date ? String(r.last_run_date) : null,
-    active: r.active,
-  }));
+  return (rows as UserRow[]).map(rowToUserPrefs);
 }
 
 export async function markRunComplete(

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { DateTime } from "luxon";
 import { getCallsForUserToday } from "../src/services/gong.js";
 import { getConnectionForUser } from "../src/services/salesforceClient.js";
@@ -8,6 +9,7 @@ import {
   lookupRogoCustomer,
 } from "../src/services/rogoClient.js";
 import { getRecentBuySignalAccountIds, getUser } from "../src/db/queries.js";
+import { handleGongWebhook } from "../src/services/gongWebhookHandler.js";
 import { runAgent } from "../src/agent/runner.js";
 import { BRIEF_SYSTEM, QA_SYSTEM } from "../src/agent/prompts.js";
 import {
@@ -223,8 +225,20 @@ async function main() {
     );
     return;
   }
+  if (kind === "gong-webhook") {
+    const filePath = rest[0];
+    if (!filePath) {
+      console.error("usage: probe gong-webhook <path/to/payload.json>");
+      process.exit(1);
+    }
+    const raw = fs.readFileSync(filePath, "utf8");
+    const payload = JSON.parse(raw);
+    const result = await handleGongWebhook(payload);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook> <args...>"
   );
   process.exit(1);
 }

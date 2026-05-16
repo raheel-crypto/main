@@ -9,6 +9,7 @@ export interface UserPrefs {
   preferredMinute: number;
   lastRunDate: string | null;
   active: boolean;
+  gongRealtimeEnabled: boolean;
 }
 
 export interface SfTokens {
@@ -141,7 +142,9 @@ export type AuditAction =
   | "opportunity_created"
   | "opportunity_create_failed"
   | "task_created"
-  | "task_create_failed";
+  | "task_create_failed"
+  | "gong_realtime_surfaced"
+  | "gong_realtime_dropped";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",
@@ -331,6 +334,29 @@ export interface NooksWebhookPayload {
   eventId: string;
   occurredAt?: string;
   callData: NooksCallData;
+}
+
+export interface GongWebhookParty {
+  emailAddress?: string | null;
+  name?: string | null;
+  affiliation?: "internal" | "external" | string | null;
+  isHost?: boolean | null;
+  speakerId?: string | null;
+}
+
+export interface GongWebhookPayload {
+  callId: string;
+  url?: string | null;
+  title?: string | null;
+  scheduledStart?: string | null;
+  started?: string | null;
+  duration?: number | null;
+  hostEmail?: string | null;
+  hostName?: string | null;
+  parties?: GongWebhookParty[] | null;
+  brief?: string | null;
+  outcome?: string | null;
+  [key: string]: unknown;
 }
 
 export interface PositiveApolloCall {

@@ -6,6 +6,7 @@ import oauthCallback from "../api/oauth/sf/callback.js";
 import cronTick from "../api/cron/tick.js";
 import standupRun from "../api/standup/run.js";
 import nooksWebhook from "../api/nooks/webhook.js";
+import gongWebhook from "../api/gong/webhook.js";
 import health from "../api/health.js";
 
 const routes: Record<string, any> = {
@@ -15,6 +16,7 @@ const routes: Record<string, any> = {
   "/api/cron/tick": cronTick,
   "/api/standup/run": standupRun,
   "/api/nooks/webhook": nooksWebhook,
+  "/api/gong/webhook": gongWebhook,
   "/api/health": health,
 };
 

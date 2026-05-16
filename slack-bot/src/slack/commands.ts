@@ -5,6 +5,7 @@ import { getUser } from "../db/queries.js";
 import { startAuthorization } from "../services/salesforceAuth.js";
 import { configModal, connectPrompt } from "./blocks.js";
 import { ensureUserRow } from "./ensureUser.js";
+import { subscriptionsModalView } from "./subscriptionsModal.js";
 
 async function openConfigModal(app: App, command: { user_id: string; team_id: string; trigger_id: string }) {
   await ensureUserRow(command.user_id, command.team_id, app);
@@ -19,13 +20,37 @@ async function openConfigModal(app: App, command: { user_id: string; team_id: st
   });
 }
 
+async function openSubscriptionsModal(
+  app: App,
+  command: { user_id: string; team_id: string; trigger_id: string }
+) {
+  await ensureUserRow(command.user_id, command.team_id, app);
+  const user = await getUser(command.user_id);
+  await app.client.views.open({
+    trigger_id: command.trigger_id,
+    view: subscriptionsModalView(user),
+  });
+}
+
 export function registerCommands(app: App): void {
+  app.command(
+    /\/(subscriptions)(?:_dev)?/,
+    async ({ command, ack }) => {
+      await ack();
+      await openSubscriptionsModal(app, command);
+    }
+  );
+
   app.command(/\/(standup|merlin)(?:_dev)?/, async ({ command, ack, respond, client }) => {
     await ack();
     const sub = (command.text || "").trim().split(/\s+/)[0];
 
     if (sub === "config") {
       await openConfigModal(app, command);
+      return;
+    }
+    if (sub === "subscriptions") {
+      await openSubscriptionsModal(app, command);
       return;
     }
     if (sub === "connect") {

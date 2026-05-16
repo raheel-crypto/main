@@ -4,6 +4,7 @@ import type {
   BriefPayload,
   BriefSuggestion,
   BuySignalPayload,
+  GongWebhookPayload,
   NooksWebhookPayload,
   Recommendation,
   RecommendedField,
@@ -904,6 +905,100 @@ export function nooksCallDigestCard(
   if (linkButtons.length > 0) {
     blocks.push({ type: "actions", elements: linkButtons });
   }
+
+  return { blocks, text };
+}
+
+export function gongCallDigestCard(
+  payload: GongWebhookPayload,
+  opts: { hostName?: string | null } = {}
+): { blocks: KnownBlock[]; text: string } {
+  const isValidHttpUrl = (u: string | null | undefined): u is string =>
+    typeof u === "string" && /^https?:\/\//i.test(u);
+
+  const title =
+    typeof payload.title === "string" && payload.title.trim()
+      ? payload.title.trim()
+      : "Gong call";
+
+  const hostLabel =
+    opts.hostName ||
+    payload.hostName ||
+    payload.hostEmail ||
+    "(unknown host)";
+
+  const durationMin =
+    typeof payload.duration === "number" && payload.duration > 0
+      ? Math.round(payload.duration / 60)
+      : null;
+
+  const parties = payload.parties ?? [];
+  const internal = parties.filter(
+    (p) => p?.affiliation === "internal"
+  ).length;
+  const external = parties.filter(
+    (p) => p?.affiliation === "external"
+  ).length;
+  const partySummary =
+    parties.length > 0
+      ? `${parties.length} on call (${internal} internal, ${external} external)`
+      : null;
+
+  const contextParts: string[] = [hostLabel];
+  if (durationMin) contextParts.push(`${durationMin} min`);
+  if (partySummary) contextParts.push(partySummary);
+
+  const text = `Gong · ${title}`;
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `Gong · ${title}`.slice(0, 150),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: contextParts.join(" · ") },
+      ],
+    },
+  ];
+
+  const brief =
+    typeof payload.brief === "string" ? payload.brief.trim() : "";
+  if (brief) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `> ${brief.slice(0, 2000)}`,
+      },
+    });
+  }
+
+  if (isValidHttpUrl(payload.url)) {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Open in Gong" },
+          url: payload.url,
+        },
+      ],
+    });
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `Call ID: \`${payload.callId}\``,
+      },
+    ],
+  });
 
   return { blocks, text };
 }

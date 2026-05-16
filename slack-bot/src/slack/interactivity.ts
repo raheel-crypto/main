@@ -6,8 +6,13 @@ import {
   getPendingCard,
   getUser,
   setCardStatus,
+  updateSubscriptionPrefs,
   upsertUser,
 } from "../db/queries.js";
+import {
+  GONG_REALTIME_OPTION_VALUE,
+  SUBSCRIPTIONS_CALLBACK_ID,
+} from "./subscriptionsModal.js";
 import {
   getConnectionForUser,
   SfNotConnectedError,
@@ -735,6 +740,25 @@ export async function saveUserPrefs(args: {
     timezone: args.timezone,
     preferredHour: args.hour,
     preferredMinute: args.minute,
+  });
+}
+
+export function registerSubscriptionsSubmit(app: App): void {
+  app.view(SUBSCRIPTIONS_CALLBACK_ID, async ({ ack, body, view }) => {
+    await ack();
+    const selected =
+      view.state.values["gong_block"]?.["value"]?.selected_options ?? [];
+    const gongRealtimeEnabled = selected.some(
+      (o: { value?: string }) => o.value === GONG_REALTIME_OPTION_VALUE
+    );
+    await updateSubscriptionPrefs(body.user.id, { gongRealtimeEnabled });
+    await app.client.chat.postEphemeral({
+      channel: body.user.id,
+      user: body.user.id,
+      text: gongRealtimeEnabled
+        ? "Saved. Real-time Gong DMs are *on*."
+        : "Saved. Real-time Gong DMs are *off*.",
+    });
   });
 }
 

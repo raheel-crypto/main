@@ -7,8 +7,11 @@ CREATE TABLE IF NOT EXISTS users (
   preferred_minute SMALLINT NOT NULL DEFAULT 0,
   last_run_date DATE,
   active BOOLEAN NOT NULL DEFAULT true,
+  gong_realtime_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gong_realtime_enabled BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));
 
 CREATE TABLE IF NOT EXISTS sf_tokens (
   slack_user_id TEXT PRIMARY KEY REFERENCES users(slack_user_id) ON DELETE CASCADE,
