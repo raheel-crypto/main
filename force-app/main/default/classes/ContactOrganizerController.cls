@@ -97,9 +97,31 @@ public with sharing class ContactOrganizerController {
         if (excludeIds != null) {
             excludeSet.addAll(excludeIds);
         }
+        Boolean hasExcludes = !excludeSet.isEmpty();
+        Boolean hasTerm = String.isNotBlank(searchTerm);
+        String term = hasTerm ? '%' + searchTerm.trim() + '%' : null;
 
         List<Contact> rows;
-        if (String.isBlank(searchTerm)) {
+        if (hasTerm && hasExcludes) {
+            rows = [
+                SELECT Id, Name, Title, Email
+                FROM Contact
+                WHERE AccountId = :accountId
+                  AND Id NOT IN :excludeSet
+                  AND (Name LIKE :term OR Title LIKE :term OR Email LIKE :term)
+                ORDER BY Name ASC
+                LIMIT :SEARCH_LIMIT
+            ];
+        } else if (hasTerm) {
+            rows = [
+                SELECT Id, Name, Title, Email
+                FROM Contact
+                WHERE AccountId = :accountId
+                  AND (Name LIKE :term OR Title LIKE :term OR Email LIKE :term)
+                ORDER BY Name ASC
+                LIMIT :SEARCH_LIMIT
+            ];
+        } else if (hasExcludes) {
             rows = [
                 SELECT Id, Name, Title, Email
                 FROM Contact
@@ -109,13 +131,10 @@ public with sharing class ContactOrganizerController {
                 LIMIT :SEARCH_LIMIT
             ];
         } else {
-            String term = '%' + searchTerm.trim() + '%';
             rows = [
                 SELECT Id, Name, Title, Email
                 FROM Contact
                 WHERE AccountId = :accountId
-                  AND Id NOT IN :excludeSet
-                  AND (Name LIKE :term OR Title LIKE :term OR Email LIKE :term)
                 ORDER BY Name ASC
                 LIMIT :SEARCH_LIMIT
             ];
