@@ -70,3 +70,33 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_user_time ON audit_log(slack_user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS gc_tokens (
+  slack_user_id TEXT PRIMARY KEY REFERENCES users(slack_user_id) ON DELETE CASCADE,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  google_email TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS gc_oauth_state (
+  state TEXT PRIMARY KEY,
+  slack_user_id TEXT NOT NULL,
+  code_verifier TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS meeting_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slack_user_id TEXT NOT NULL,
+  gcal_event_id TEXT NOT NULL,
+  phase TEXT NOT NULL,
+  account_id_resolved TEXT,
+  fired_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(slack_user_id, gcal_event_id, phase)
+);
+CREATE INDEX IF NOT EXISTS idx_meeting_runs_user ON meeting_runs(slack_user_id, fired_at DESC);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_pre_enabled  BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_post_enabled BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_users_calendar_pre  ON users(calendar_pre_enabled)  WHERE calendar_pre_enabled  = true;
+CREATE INDEX IF NOT EXISTS idx_users_calendar_post ON users(calendar_post_enabled) WHERE calendar_post_enabled = true;

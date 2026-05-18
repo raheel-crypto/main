@@ -10,6 +10,7 @@ import {
 } from "../src/services/rogoClient.js";
 import { getRecentBuySignalAccountIds, getUser } from "../src/db/queries.js";
 import { handleGongWebhook } from "../src/services/gongWebhookHandler.js";
+import { listEvents } from "../src/services/googleClient.js";
 import { runAgent } from "../src/agent/runner.js";
 import { BRIEF_SYSTEM, QA_SYSTEM } from "../src/agent/prompts.js";
 import {
@@ -237,8 +238,46 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
+  if (kind === "gcal") {
+    const slackUserId = rest[0];
+    if (!slackUserId) {
+      console.error("usage: probe gcal <slack_user_id>");
+      process.exit(1);
+    }
+    const now = DateTime.utc();
+    const events = await listEvents(
+      slackUserId,
+      now.toISO()!,
+      now.plus({ days: 7 }).toISO()!,
+      { maxResults: 10 }
+    );
+    console.log(
+      JSON.stringify(
+        events.map((e) => ({
+          id: e.id,
+          summary: e.summary,
+          status: e.status,
+          start: e.start?.dateTime ?? e.start?.date ?? null,
+          end: e.end?.dateTime ?? e.end?.date ?? null,
+          organizer: e.organizer?.email ?? null,
+          attendees:
+            e.attendees?.map((a) => ({
+              email: a.email,
+              displayName: a.displayName,
+              self: a.self,
+              organizer: a.organizer,
+              responseStatus: a.responseStatus,
+            })) ?? [],
+          htmlLink: e.htmlLink,
+        })),
+        null,
+        2
+      )
+    );
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal> <args...>"
   );
   process.exit(1);
 }

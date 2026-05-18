@@ -3,6 +3,8 @@ import { config } from "../src/config.js";
 import slackEvents from "../api/slack/events.js";
 import oauthStart from "../api/oauth/sf/start.js";
 import oauthCallback from "../api/oauth/sf/callback.js";
+import googleOauthStart from "../api/oauth/google/start.js";
+import googleOauthCallback from "../api/oauth/google/callback.js";
 import cronTick from "../api/cron/tick.js";
 import standupRun from "../api/standup/run.js";
 import nooksWebhook from "../api/nooks/webhook.js";
@@ -13,6 +15,8 @@ const routes: Record<string, any> = {
   "/api/slack/events": slackEvents,
   "/api/oauth/sf/start": oauthStart,
   "/api/oauth/sf/callback": oauthCallback,
+  "/api/oauth/google/start": googleOauthStart,
+  "/api/oauth/google/callback": googleOauthCallback,
   "/api/cron/tick": cronTick,
   "/api/standup/run": standupRun,
   "/api/nooks/webhook": nooksWebhook,

@@ -3,6 +3,8 @@ import type {
   AuditAction,
   BriefPayload,
   BuySignalPayload,
+  GcTokens,
+  MeetingRun,
   PendingCard,
   PendingCardKind,
   Recommendation,
@@ -23,6 +25,8 @@ interface UserRow {
   gong_firehose_enabled: boolean | null;
   nooks_realtime_enabled: boolean | null;
   nooks_firehose_enabled: boolean | null;
+  calendar_pre_enabled: boolean | null;
+  calendar_post_enabled: boolean | null;
 }
 
 function rowToUserPrefs(r: UserRow): UserPrefs {
@@ -39,12 +43,15 @@ function rowToUserPrefs(r: UserRow): UserPrefs {
     gongFirehoseEnabled: r.gong_firehose_enabled ?? false,
     nooksRealtimeEnabled: r.nooks_realtime_enabled ?? false,
     nooksFirehoseEnabled: r.nooks_firehose_enabled ?? false,
+    calendarPreEnabled: r.calendar_pre_enabled ?? false,
+    calendarPostEnabled: r.calendar_post_enabled ?? false,
   };
 }
 
 const USER_SELECT_COLUMNS = `slack_user_id, slack_team_id, email, timezone, preferred_hour,
             preferred_minute, last_run_date, active, gong_realtime_enabled,
-            gong_firehose_enabled, nooks_realtime_enabled, nooks_firehose_enabled`;
+            gong_firehose_enabled, nooks_realtime_enabled, nooks_firehose_enabled,
+            calendar_pre_enabled, calendar_post_enabled`;
 
 export async function upsertUser(
   p: Omit<
@@ -55,6 +62,8 @@ export async function upsertUser(
     | "gongFirehoseEnabled"
     | "nooksRealtimeEnabled"
     | "nooksFirehoseEnabled"
+    | "calendarPreEnabled"
+    | "calendarPostEnabled"
   > & {
     active?: boolean;
   }
@@ -114,6 +123,8 @@ export async function updateSubscriptionPrefs(
     gongFirehoseEnabled?: boolean;
     nooksRealtimeEnabled?: boolean;
     nooksFirehoseEnabled?: boolean;
+    calendarPreEnabled?: boolean;
+    calendarPostEnabled?: boolean;
   }
 ): Promise<void> {
   const pool = getPool();
@@ -122,7 +133,9 @@ export async function updateSubscriptionPrefs(
         SET gong_realtime_enabled  = COALESCE($2, gong_realtime_enabled),
             gong_firehose_enabled  = COALESCE($3, gong_firehose_enabled),
             nooks_realtime_enabled = COALESCE($4, nooks_realtime_enabled),
-            nooks_firehose_enabled = COALESCE($5, nooks_firehose_enabled)
+            nooks_firehose_enabled = COALESCE($5, nooks_firehose_enabled),
+            calendar_pre_enabled   = COALESCE($6, calendar_pre_enabled),
+            calendar_post_enabled  = COALESCE($7, calendar_post_enabled)
       WHERE slack_user_id = $1`,
     [
       slackUserId,
@@ -130,8 +143,121 @@ export async function updateSubscriptionPrefs(
       patch.gongFirehoseEnabled ?? null,
       patch.nooksRealtimeEnabled ?? null,
       patch.nooksFirehoseEnabled ?? null,
+      patch.calendarPreEnabled ?? null,
+      patch.calendarPostEnabled ?? null,
     ]
   );
+}
+
+export async function getCalendarEnrolledUsers(): Promise<UserPrefs[]> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT ${USER_SELECT_COLUMNS}
+       FROM users
+      WHERE calendar_pre_enabled = true OR calendar_post_enabled = true`
+  );
+  return (rows as UserRow[]).map(rowToUserPrefs);
+}
+
+export async function upsertGcTokens(t: GcTokens): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO gc_tokens (slack_user_id, access_token, refresh_token, expires_at, google_email, updated_at)
+     VALUES ($1, $2, $3, $4, $5, now())
+     ON CONFLICT (slack_user_id) DO UPDATE SET
+       access_token = EXCLUDED.access_token,
+       refresh_token = EXCLUDED.refresh_token,
+       expires_at = EXCLUDED.expires_at,
+       google_email = EXCLUDED.google_email,
+       updated_at = now()`,
+    [t.slackUserId, t.accessToken, t.refreshToken, t.expiresAt, t.googleEmail]
+  );
+}
+
+export async function getGcTokens(slackUserId: string): Promise<GcTokens | null> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT slack_user_id, access_token, refresh_token, expires_at, google_email
+       FROM gc_tokens WHERE slack_user_id = $1`,
+    [slackUserId]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    slackUserId: r.slack_user_id,
+    accessToken: r.access_token,
+    refreshToken: r.refresh_token,
+    expiresAt: r.expires_at instanceof Date ? r.expires_at.toISOString() : String(r.expires_at),
+    googleEmail: r.google_email ?? null,
+  };
+}
+
+export async function updateGcAccessToken(
+  slackUserId: string,
+  accessToken: string,
+  expiresAtIso: string
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE gc_tokens SET access_token = $2, expires_at = $3, updated_at = now()
+      WHERE slack_user_id = $1`,
+    [slackUserId, accessToken, expiresAtIso]
+  );
+}
+
+export async function insertGcOauthState(
+  state: string,
+  slackUserId: string,
+  codeVerifier: string
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO gc_oauth_state (state, slack_user_id, code_verifier) VALUES ($1, $2, $3)`,
+    [state, slackUserId, codeVerifier]
+  );
+}
+
+export async function consumeGcOauthState(
+  state: string
+): Promise<{ slackUserId: string; codeVerifier: string } | null> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `DELETE FROM gc_oauth_state WHERE state = $1 RETURNING slack_user_id, code_verifier`,
+    [state]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return { slackUserId: r.slack_user_id, codeVerifier: r.code_verifier };
+}
+
+export async function insertMeetingRun(row: {
+  slackUserId: string;
+  gcalEventId: string;
+  phase: "pre" | "post" | "picker";
+  accountIdResolved?: string | null;
+}): Promise<{ inserted: boolean }> {
+  const pool = getPool();
+  const result = await pool.query(
+    `INSERT INTO meeting_runs (slack_user_id, gcal_event_id, phase, account_id_resolved)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (slack_user_id, gcal_event_id, phase) DO NOTHING
+     RETURNING id`,
+    [row.slackUserId, row.gcalEventId, row.phase, row.accountIdResolved ?? null]
+  );
+  return { inserted: (result.rowCount ?? 0) > 0 };
+}
+
+export async function meetingRunExists(
+  slackUserId: string,
+  gcalEventId: string,
+  phase: "pre" | "post" | "picker"
+): Promise<boolean> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT 1 FROM meeting_runs WHERE slack_user_id = $1 AND gcal_event_id = $2 AND phase = $3 LIMIT 1`,
+    [slackUserId, gcalEventId, phase]
+  );
+  return rows.length > 0;
 }
 
 export async function getFirehoseSubscribers(

@@ -69,6 +69,19 @@ export const config = {
     signingKey: optional("NOOKS_SIGNING_KEY"),
     testDmUserId: optional("NOOKS_TEST_DM_USER_ID"),
   },
+  google: {
+    clientId: optional("GOOGLE_CLIENT_ID"),
+    clientSecret: optional("GOOGLE_CLIENT_SECRET"),
+    callbackUrl:
+      optional("STANDUP_PUBLIC_URL", "http://localhost:3002") +
+      "/api/oauth/google/callback",
+  },
+  calendar: {
+    internalDomains: optional("INTERNAL_EMAIL_DOMAINS", "rogo.ai")
+      .split(",")
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean),
+  },
 };
 
 export function assertProduction() {

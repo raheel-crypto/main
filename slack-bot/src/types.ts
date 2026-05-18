@@ -13,6 +13,49 @@ export interface UserPrefs {
   gongFirehoseEnabled: boolean;
   nooksRealtimeEnabled: boolean;
   nooksFirehoseEnabled: boolean;
+  calendarPreEnabled: boolean;
+  calendarPostEnabled: boolean;
+}
+
+export interface GcTokens {
+  slackUserId: string;
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: string;
+  googleEmail: string | null;
+}
+
+export interface GcalAttendee {
+  email: string;
+  displayName?: string | null;
+  responseStatus?: string | null;
+  organizer?: boolean | null;
+  self?: boolean | null;
+  resource?: boolean | null;
+  optional?: boolean | null;
+}
+
+export interface GcalEvent {
+  id: string;
+  status?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  start?: { dateTime?: string | null; date?: string | null; timeZone?: string | null };
+  end?: { dateTime?: string | null; date?: string | null; timeZone?: string | null };
+  organizer?: { email?: string | null; displayName?: string | null; self?: boolean | null };
+  attendees?: GcalAttendee[];
+  htmlLink?: string | null;
+  hangoutLink?: string | null;
+  conferenceData?: { conferenceId?: string | null };
+}
+
+export interface MeetingRun {
+  id: string;
+  slackUserId: string;
+  gcalEventId: string;
+  phase: "pre" | "post" | "picker";
+  accountIdResolved: string | null;
+  firedAt: string;
 }
 
 export interface SfTokens {
@@ -149,7 +192,13 @@ export type AuditAction =
   | "gong_realtime_surfaced"
   | "gong_realtime_dropped"
   | "nooks_realtime_surfaced"
-  | "nooks_realtime_dropped";
+  | "nooks_realtime_dropped"
+  | "contact_created"
+  | "contact_create_failed"
+  | "meeting_briefed"
+  | "meeting_brief_failed"
+  | "meeting_post_surfaced"
+  | "meeting_picker_surfaced";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",
