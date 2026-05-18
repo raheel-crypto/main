@@ -30,6 +30,7 @@ export interface PreMeetingResult {
 export async function runPreMeeting(args: {
   slackUserId: string;
   eventId: string;
+  overrideAccount?: { id: string; name: string };
 }): Promise<PreMeetingResult> {
   const { slackUserId, eventId } = args;
   const user = await getUser(slackUserId);
@@ -71,7 +72,15 @@ export async function runPreMeeting(args: {
   if (!channelId) return { ok: false, reason: "im_open_failed" };
 
   const externalEmails = externals.map((a) => a.email.toLowerCase());
-  const resolved = await resolveAccount(conn, externalEmails);
+  const resolved = args.overrideAccount
+    ? {
+        source: "contact_match" as const,
+        accountId: args.overrideAccount.id,
+        accountName: args.overrideAccount.name,
+        candidates: [],
+        matchedContacts: [],
+      }
+    : await resolveAccount(conn, externalEmails);
 
   const ins = await insertMeetingRun({
     slackUserId,

@@ -273,6 +273,23 @@ export async function fetchAccountsByDomain(
   }));
 }
 
+export async function fetchOpportunityStagePicklist(
+  conn: Connection
+): Promise<string[]> {
+  try {
+    const meta = await conn.sobject("Opportunity").describe();
+    const stage = (meta.fields as any[]).find((f) => f.name === "StageName");
+    const values = stage?.picklistValues ?? [];
+    return values
+      .filter((v: any) => v.active !== false)
+      .map((v: any) => v.value)
+      .filter((v: any): v is string => typeof v === "string" && v.length > 0);
+  } catch (err: any) {
+    console.error(`[sf] describe Opportunity failed:`, err?.message ?? err);
+    return [];
+  }
+}
+
 export async function fetchLastStageChangesForOpps(
   conn: Connection,
   oppIds: string[]

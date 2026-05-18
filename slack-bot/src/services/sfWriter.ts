@@ -180,6 +180,77 @@ export interface CreateTaskResult {
   dryRun?: boolean;
 }
 
+export interface CreateContactInput {
+  conn: Connection;
+  slackUserId: string;
+  accountId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  title?: string | null;
+}
+
+export interface CreateContactResult {
+  ok: boolean;
+  contactId?: string;
+  error?: string;
+  dryRun?: boolean;
+}
+
+export async function createContact(
+  input: CreateContactInput
+): Promise<CreateContactResult> {
+  const { conn, slackUserId, accountId, firstName, lastName, email, title } =
+    input;
+  const payload: Record<string, unknown> = {
+    AccountId: accountId,
+    FirstName: firstName || "",
+    LastName: lastName || "(unknown)",
+    Email: email,
+  };
+  if (title && title.trim()) payload.Title = title.trim();
+
+  if (config.dryRun) {
+    await appendAudit({
+      slackUserId,
+      action: "contact_created",
+      newValue: `${firstName} ${lastName} <${email}>`,
+      metadata: { dryRun: true, accountId, title: title ?? null },
+    });
+    return { ok: true, dryRun: true };
+  }
+
+  try {
+    const result = await conn.sobject("Contact").create(payload as any);
+    const created = Array.isArray(result) ? result[0] : result;
+    if (!created.success) {
+      const errMsg = (created.errors ?? []).map((e: any) => e.message).join("; ");
+      await appendAudit({
+        slackUserId,
+        action: "contact_create_failed",
+        newValue: email,
+        metadata: { accountId, error: errMsg },
+      });
+      return { ok: false, error: errMsg || "create_failed" };
+    }
+    await appendAudit({
+      slackUserId,
+      action: "contact_created",
+      newValue: `${firstName} ${lastName} <${email}>`,
+      metadata: { accountId, contactId: created.id, title: title ?? null },
+    });
+    return { ok: true, contactId: created.id };
+  } catch (err: any) {
+    await appendAudit({
+      slackUserId,
+      action: "contact_create_failed",
+      newValue: email,
+      metadata: { accountId, error: err.message },
+    });
+    return { ok: false, error: err.message };
+  }
+}
+
 export async function createTask(
   input: CreateTaskInput
 ): Promise<CreateTaskResult> {

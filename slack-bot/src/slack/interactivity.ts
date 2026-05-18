@@ -28,10 +28,13 @@ import {
 } from "../services/salesforceClient.js";
 import {
   applyFields,
+  createContact,
   createOpportunity,
   createTask,
 } from "../services/sfWriter.js";
 import { runBriefForUser } from "../services/brief.js";
+import { runPreMeeting } from "../services/preMeeting.js";
+import { fetchOpportunityStagePicklist } from "../services/sfReads.js";
 import {
   briefSuggestionField,
   briefSuggestionResolved,
@@ -41,12 +44,17 @@ import {
   cardWithFieldResolved,
   editFieldModal,
   parseActionId,
+  postMeetingAddContactModal,
+  postMeetingLogTaskModal,
+  postMeetingUpdateOppModal,
 } from "./blocks.js";
 import type {
   BriefPendingCard,
   BriefSuggestion,
   BuySignalPendingCard,
   PendingCard,
+  PostMeetingPendingCard,
+  MeetingPickerPendingCard,
   RecommendedField,
 } from "../types.js";
 
@@ -214,6 +222,403 @@ export function registerInteractivity(app: App): void {
       description: description || null,
     });
   });
+
+  app.action(/^add_contact:.+/, async ({ ack, body, client }) => {
+    await ack();
+    const action = (body as any).actions?.[0];
+    const parsed = parseActionId(action?.action_id ?? "");
+    if (!parsed || !parsed.field) return;
+    const card = await getPendingCard(parsed.cardId);
+    if (!card || card.kind !== "post_meeting") return;
+    const idx = Number(parsed.field);
+    const attendee = card.recommendation.unmatchedAttendees[idx];
+    if (!attendee) return;
+    const { firstName, lastName } = splitName(
+      attendee.displayName ?? "",
+      attendee.email
+    );
+    await client.views.open({
+      trigger_id: (body as any).trigger_id,
+      view: postMeetingAddContactModal(parsed.cardId, idx, {
+        accountName: card.recommendation.accountName,
+        email: attendee.email,
+        firstName,
+        lastName,
+      }),
+    });
+  });
+
+  app.action(/^update_meeting_opp:.+/, async ({ ack, body, client }) => {
+    await ack();
+    const action = (body as any).actions?.[0];
+    const parsed = parseActionId(action?.action_id ?? "");
+    if (!parsed || !parsed.field) return;
+    const card = await getPendingCard(parsed.cardId);
+    if (!card || card.kind !== "post_meeting") return;
+    const oppId = parsed.field;
+    const opp = card.recommendation.openOpportunities.find((o) => o.id === oppId);
+    if (!opp) return;
+    let stageOptions: string[] = [];
+    try {
+      const conn = await getConnectionForUser(card.slackUserId);
+      stageOptions = await fetchOpportunityStagePicklist(conn);
+    } catch (err) {
+      console.error("[post-meeting] stage picklist fetch failed:", err);
+    }
+    await client.views.open({
+      trigger_id: (body as any).trigger_id,
+      view: postMeetingUpdateOppModal(parsed.cardId, {
+        opportunityId: opp.id,
+        opportunityName: opp.name,
+        currentStage: opp.stage,
+        currentNextStep: opp.nextStep,
+        currentCloseDate: opp.closeDate,
+        stageOptions,
+      }),
+    });
+  });
+
+  app.action(/^log_meeting_task:.+/, async ({ ack, body, client }) => {
+    await ack();
+    const action = (body as any).actions?.[0];
+    const parsed = parseActionId(action?.action_id ?? "");
+    if (!parsed) return;
+    const card = await getPendingCard(parsed.cardId);
+    if (!card || card.kind !== "post_meeting") return;
+    const attendeeSummary = [
+      card.recommendation.matchedContacts.length > 0
+        ? "Attendees in SF: " +
+          card.recommendation.matchedContacts
+            .map((c) => c.name ?? c.email)
+            .join(", ")
+        : null,
+      card.recommendation.unmatchedAttendees.length > 0
+        ? "New attendees: " +
+          card.recommendation.unmatchedAttendees
+            .map((a) => `${a.displayName ?? a.email}`)
+            .join(", ")
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const todayIso = new Date().toISOString().slice(0, 10);
+    await client.views.open({
+      trigger_id: (body as any).trigger_id,
+      view: postMeetingLogTaskModal(parsed.cardId, {
+        accountName: card.recommendation.accountName,
+        eventTitle: card.recommendation.eventTitle,
+        attendeeSummary,
+        todayIso,
+      }),
+    });
+  });
+
+  app.action(/^post_meeting_skip:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed) return;
+    const card = await getPendingCard(parsed.cardId);
+    if (!card || card.kind !== "post_meeting") return;
+    await setCardStatus(parsed.cardId, "skipped");
+    await appendAudit({
+      slackUserId: card.slackUserId,
+      action: "skipped",
+      metadata: { kind: "post_meeting", cardId: parsed.cardId },
+    });
+    await app.client.chat.update({
+      channel: card.slackChannel,
+      ts: card.slackMessageTs,
+      text: `Post-meeting · ${card.recommendation.eventTitle} (dismissed)`,
+      blocks: [
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `:wastebasket: Dismissed post-meeting card for *${card.recommendation.accountName}*.`,
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  app.action(/^meeting_pick_account:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed || !parsed.field) return;
+    const card = await getPendingCard(parsed.cardId);
+    if (!card || card.kind !== "meeting_picker") return;
+    const accountId = parsed.field;
+    const candidate = card.recommendation.candidates.find((c) => c.id === accountId);
+    if (!candidate) return;
+    await setCardStatus(parsed.cardId, "applied");
+    await app.client.chat.update({
+      channel: card.slackChannel,
+      ts: card.slackMessageTs,
+      text: `Picked ${candidate.name} — researching brief…`,
+      blocks: [
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: `:hourglass_flowing_sand: Researching brief for *${candidate.name}*…`,
+            },
+          ],
+        },
+      ],
+    });
+    try {
+      await runPreMeeting({
+        slackUserId: card.slackUserId,
+        eventId: card.recommendation.gcalEventId,
+        overrideAccount: { id: candidate.id, name: candidate.name },
+      });
+    } catch (err: any) {
+      console.error("[meeting-pick-account] runPreMeeting failed:", err);
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        text: `:warning: I couldn't generate the brief for *${candidate.name}*: ${err.message}`,
+      });
+    }
+  });
+
+  app.view(/^add_contact:.+/, async ({ ack, body, view }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata || "{}") as {
+      cardId: string;
+      attendeeIndex: number;
+    };
+    const card = await getPendingCard(meta.cardId);
+    if (!card || card.kind !== "post_meeting") return;
+    const values = view.state.values;
+    const firstName = (values["first_name_block"]?.["value"]?.value ?? "").trim();
+    const lastName = (values["last_name_block"]?.["value"]?.value ?? "").trim();
+    const email = (values["email_block"]?.["value"]?.value ?? "").trim();
+    const title = (values["title_block"]?.["value"]?.value ?? "").trim() || null;
+    if (!lastName || !email) {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackMessageTs,
+        text: `:warning: Couldn't add contact — last name and email are required.`,
+      });
+      return;
+    }
+    let conn;
+    try {
+      conn = await getConnectionForUser(card.slackUserId);
+    } catch (err) {
+      if (err instanceof SfNotConnectedError) {
+        await app.client.chat.postMessage({
+          channel: card.slackChannel,
+          thread_ts: card.slackMessageTs,
+          text: "Salesforce isn't connected. Run `/standup connect`.",
+        });
+        return;
+      }
+      throw err;
+    }
+    const result = await createContact({
+      conn,
+      slackUserId: card.slackUserId,
+      accountId: card.recommendation.accountId,
+      firstName,
+      lastName,
+      email,
+      title,
+    });
+    if (result.ok) {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackMessageTs,
+        text: result.dryRun
+          ? `:test_tube: (dry-run) Would have added *${firstName} ${lastName}* <${email}> to *${card.recommendation.accountName}*.`
+          : `:white_check_mark: Added *${firstName} ${lastName}* <${email}> to *${card.recommendation.accountName}*.`,
+      });
+    } else {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackMessageTs,
+        text: `:warning: Failed to add contact: ${result.error ?? "unknown error"}`,
+      });
+    }
+  });
+
+  app.view(/^update_meeting_opp:.+/, async ({ ack, body, view }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata || "{}") as {
+      cardId: string;
+      opportunityId: string;
+      currentStage: string;
+      currentNextStep: string | null;
+      currentCloseDate: string | null;
+    };
+    const card = await getPendingCard(meta.cardId);
+    if (!card || card.kind !== "post_meeting") return;
+
+    const values = view.state.values;
+    const stage =
+      values["stage_block"]?.["value"]?.selected_option?.value ?? null;
+    const nextStep = values["next_step_block"]?.["value"]?.value ?? null;
+    const closeDate =
+      values["close_date_block"]?.["value"]?.selected_date ?? null;
+
+    const fields: { field: string; newValue: unknown; oldValue: unknown }[] = [];
+    if (stage && stage !== meta.currentStage) {
+      fields.push({ field: "StageName", newValue: stage, oldValue: meta.currentStage });
+    }
+    if (
+      nextStep != null &&
+      (nextStep || "").trim() !== (meta.currentNextStep ?? "").trim()
+    ) {
+      fields.push({
+        field: "NextStep",
+        newValue: nextStep || null,
+        oldValue: meta.currentNextStep,
+      });
+    }
+    if (
+      closeDate &&
+      closeDate.slice(0, 10) !== (meta.currentCloseDate ?? "").slice(0, 10)
+    ) {
+      fields.push({
+        field: "CloseDate",
+        newValue: closeDate,
+        oldValue: meta.currentCloseDate,
+      });
+    }
+
+    if (fields.length === 0) {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackMessageTs,
+        text: ":information_source: No changes to apply.",
+      });
+      return;
+    }
+
+    let conn;
+    try {
+      conn = await getConnectionForUser(card.slackUserId);
+    } catch (err) {
+      if (err instanceof SfNotConnectedError) {
+        await app.client.chat.postMessage({
+          channel: card.slackChannel,
+          thread_ts: card.slackMessageTs,
+          text: "Salesforce isn't connected. Run `/standup connect`.",
+        });
+        return;
+      }
+      throw err;
+    }
+
+    const results = await applyFields({
+      conn,
+      slackUserId: card.slackUserId,
+      opportunityId: meta.opportunityId,
+      fields,
+    });
+    const okFields = results.filter((r) => r.ok).map((r) => r.field);
+    const failFields = results.filter((r) => !r.ok);
+    const lines: string[] = [];
+    if (okFields.length > 0) {
+      lines.push(
+        `:white_check_mark: Updated ${okFields.join(", ")} on *${
+          card.recommendation.openOpportunities.find(
+            (o) => o.id === meta.opportunityId
+          )?.name ?? "opportunity"
+        }*.`
+      );
+    }
+    for (const f of failFields) {
+      lines.push(`:warning: Failed to update ${f.field}: ${f.error ?? "unknown"}`);
+    }
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackMessageTs,
+      text: lines.join("\n"),
+    });
+  });
+
+  app.view(/^log_meeting_task:.+/, async ({ ack, body, view }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata || "{}") as {
+      cardId: string;
+    };
+    const card = await getPendingCard(meta.cardId);
+    if (!card || card.kind !== "post_meeting") return;
+    const values = view.state.values;
+    const subject = (values["subject_block"]?.["value"]?.value ?? "").trim();
+    const dueDate = values["due_date_block"]?.["value"]?.selected_date ?? "";
+    const description =
+      (values["description_block"]?.["value"]?.value ?? null) || null;
+    if (!subject || !dueDate) {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackMessageTs,
+        text: ":warning: Subject and date are required.",
+      });
+      return;
+    }
+    let conn;
+    try {
+      conn = await getConnectionForUser(card.slackUserId);
+    } catch (err) {
+      if (err instanceof SfNotConnectedError) {
+        await app.client.chat.postMessage({
+          channel: card.slackChannel,
+          thread_ts: card.slackMessageTs,
+          text: "Salesforce isn't connected. Run `/standup connect`.",
+        });
+        return;
+      }
+      throw err;
+    }
+    const ident = await conn.identity();
+    const ownerId = (ident as any).user_id as string;
+    const result = await createTask({
+      conn,
+      slackUserId: card.slackUserId,
+      whatId: card.recommendation.accountId,
+      ownerId,
+      subject,
+      dueDate,
+      description,
+    });
+    if (result.ok) {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackMessageTs,
+        text: result.dryRun
+          ? `:test_tube: (dry-run) Would have logged task *${subject}* on *${card.recommendation.accountName}*.`
+          : `:white_check_mark: Logged task *${subject}* on *${card.recommendation.accountName}* (due ${dueDate}).`,
+      });
+    } else {
+      await app.client.chat.postMessage({
+        channel: card.slackChannel,
+        thread_ts: card.slackMessageTs,
+        text: `:warning: Failed to log task: ${result.error ?? "unknown error"}`,
+      });
+    }
+  });
+}
+
+function splitName(
+  displayName: string,
+  email: string
+): { firstName: string; lastName: string } {
+  const trimmed = displayName.trim();
+  if (trimmed) {
+    const parts = trimmed.split(/\s+/);
+    if (parts.length === 1) return { firstName: "", lastName: parts[0] };
+    return {
+      firstName: parts[0],
+      lastName: parts.slice(1).join(" "),
+    };
+  }
+  const localPart = email.split("@")[0] ?? email;
+  return { firstName: "", lastName: localPart };
 }
 
 async function handleAccept(
