@@ -129,6 +129,28 @@ export default class ContactOrganizer extends LightningElement {
         return this.searchResultsToRender.length > 0;
     }
 
+    get showSearchSpinner() {
+        return this.isSearching;
+    }
+
+    get showSearchResults() {
+        return !this.isSearching && this.hasSearchResults;
+    }
+
+    get showSearchEmpty() {
+        return !this.isSearching && !this.hasSearchResults;
+    }
+
+    get searchEmptyMessage() {
+        if (this.searchTerm) {
+            return `No matches for "${this.searchTerm}".`;
+        }
+        if (this.totalContacts === 0) {
+            return 'This Account has no contacts.';
+        }
+        return 'Start typing to search this Account’s contacts.';
+    }
+
     get totalContactsLabel() {
         const n = (this.totalContacts || 0).toLocaleString();
         return this.totalContacts === 1 ? '1 contact on Account' : `${n} contacts on Account`;
@@ -154,7 +176,10 @@ export default class ContactOrganizer extends LightningElement {
     }
 
     handleSearchChange(event) {
-        this.searchTerm = event.target.value || '';
+        const detailValue = event.detail && event.detail.value;
+        const targetValue = event.target && event.target.value;
+        const next = detailValue != null ? detailValue : (targetValue != null ? targetValue : '');
+        this.searchTerm = next;
         if (this.debounceHandle) {
             clearTimeout(this.debounceHandle);
         }

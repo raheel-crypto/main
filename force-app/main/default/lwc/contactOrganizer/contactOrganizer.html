@@ -56,12 +56,13 @@
                             </lightning-input>
                         </div>
                         <div class="search-panel__body">
-                            <template lwc:if={isSearching}>
+                            <template lwc:if={showSearchSpinner}>
                                 <div class="search-panel__status">
                                     <lightning-spinner alternative-text="Searching" size="x-small" variant="inverse"></lightning-spinner>
                                 </div>
                             </template>
-                            <template lwc:elif={hasSearchResults}>
+
+                            <template lwc:if={showSearchResults}>
                                 <template for:each={searchResultsToRender} for:item="c">
                                     <div
                                         key={c.id}
@@ -92,15 +93,9 @@
                                     </div>
                                 </template>
                             </template>
-                            <template lwc:else>
-                                <div class="search-panel__empty">
-                                    <template lwc:if={searchTerm}>
-                                        No matching contacts.
-                                    </template>
-                                    <template lwc:else>
-                                        Start typing to search this Account's contacts.
-                                    </template>
-                                </div>
+
+                            <template lwc:if={showSearchEmpty}>
+                                <div class="search-panel__empty">{searchEmptyMessage}</div>
                             </template>
                         </div>
                         <div class="search-panel__footer slds-text-body_small slds-text-color_weak">

@@ -87,7 +87,7 @@ public with sharing class ContactOrganizerController {
         return data;
     }
 
-    @AuraEnabled(cacheable=true)
+    @AuraEnabled
     public static List<ContactWrapper> searchAccountContacts(Id accountId, String searchTerm, List<Id> excludeIds) {
         List<ContactWrapper> results = new List<ContactWrapper>();
         if (accountId == null) {
