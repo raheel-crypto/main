@@ -1,9 +1,9 @@
 import type { ApprovalRouting, DealContext, PricingBreakdown, QuoteForm } from "./types.js";
 
 const TIER_BOUNDS = {
-  DEAL_DESK_LOW: 0.15,
-  POD_LEADER_LOW: 0.25,
-  JAMES_LOW: 0.4,
+  DEAL_DESK_LOW: 0.2,
+  POD_LEADER_LOW: 0.3,
+  JAMES_LOW: 0.5,
 } as const;
 
 /**
@@ -12,10 +12,10 @@ const TIER_BOUNDS = {
  * Rules:
  * - Enterprise package → Pod Leader (Opp.Owner.Manager). James countersigns ENT
  *   order forms at the end of the day, so we don't double-route through him here.
- * - discount < 15% → auto-approved, posts to deal desk channel for visibility only.
- * - 15% ≤ discount < 25% → any of the three Deal Desk (RevOps) approvers.
- * - 25% ≤ discount < 40% → Pod Leader.
- * - discount ≥ 40% → James OR any of the three RevOps approvers (escalation
+ * - discount < 20% → auto-approved (reps can do), posts to deal desk channel for visibility only.
+ * - 20% ≤ discount < 30% → any of the three Deal Desk (RevOps) approvers.
+ * - 30% ≤ discount < 50% → Pod Leader.
+ * - discount ≥ 50% → James OR any of the three RevOps approvers (escalation
  *   shouldn't block on one person's availability).
  *
  * Approvals are FINAL at each tier — no further escalation.
@@ -48,7 +48,7 @@ export function routeApproval(
       reason:
         pct == null
           ? "No discount applicable"
-          : `Discount ${formatPct(pct)} below 15% threshold`,
+          : `Discount ${formatPct(pct)} below 20% threshold`,
     };
   }
 
@@ -57,7 +57,7 @@ export function routeApproval(
       tier: "deal_desk",
       allowed_approver_ids: revops,
       tier_label: `Discount ${formatPct(pct)} — Deal Desk approval required`,
-      reason: "Discount between 15% and 25% — any RevOps approver",
+      reason: "Discount between 20% and 30% — any RevOps approver",
     };
   }
 
@@ -68,7 +68,7 @@ export function routeApproval(
       tier: "pod_leader",
       allowed_approver_ids: podLeaderId ? [podLeaderId] : [],
       tier_label: `Discount ${formatPct(pct)} — ${podLeaderName} approval required`,
-      reason: "Discount between 25% and 40% — Opp Owner's Manager",
+      reason: "Discount between 30% and 50% — Opp Owner's Manager",
     };
   }
 
@@ -77,7 +77,7 @@ export function routeApproval(
     tier: "james",
     allowed_approver_ids: allowed,
     tier_label: `Discount ${formatPct(pct)} — James or Deal Desk approval required`,
-    reason: "Discount ≥ 40% — James or any RevOps approver",
+    reason: "Discount ≥ 50% — James or any RevOps approver",
   };
 }
 
