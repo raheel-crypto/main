@@ -430,24 +430,37 @@ public with sharing class ContactOrganizerController {
         DateTime gongMax;
 
         if (opportunityId != null) {
-            AggregateResult ta = [
-                SELECT COUNT(Id) total, MAX(ActivityDate) lastDate
-                FROM Task
+            taskTotal = [
+                SELECT COUNT() FROM Task
                 WHERE Status = 'Completed'
                   AND (WhatId = :opportunityId OR WhatId = :accountId)
                   AND WhoId != null
             ];
-            taskTotal = (Integer) ta.get('total');
-            taskMax = (Date) ta.get('lastDate');
+            List<Task> latestTask = [
+                SELECT ActivityDate FROM Task
+                WHERE Status = 'Completed'
+                  AND (WhatId = :opportunityId OR WhatId = :accountId)
+                  AND WhoId != null
+                  AND ActivityDate != null
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 1
+            ];
+            if (!latestTask.isEmpty()) taskMax = latestTask[0].ActivityDate;
 
-            AggregateResult ea = [
-                SELECT COUNT(Id) total, MAX(ActivityDate) lastDate
-                FROM Event
+            eventTotal = [
+                SELECT COUNT() FROM Event
                 WHERE (WhatId = :opportunityId OR WhatId = :accountId)
                   AND WhoId != null
             ];
-            eventTotal = (Integer) ea.get('total');
-            eventMax = (Date) ea.get('lastDate');
+            List<Event> latestEvent = [
+                SELECT ActivityDate FROM Event
+                WHERE (WhatId = :opportunityId OR WhatId = :accountId)
+                  AND WhoId != null
+                  AND ActivityDate != null
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 1
+            ];
+            if (!latestEvent.isEmpty()) eventMax = latestEvent[0].ActivityDate;
 
             AggregateResult ga = [
                 SELECT COUNT(Id) total, MAX(Gong__Gong_Call__r.Gong__Call_Start__c) lastDate
@@ -474,21 +487,30 @@ public with sharing class ContactOrganizerController {
                   WHERE ActivityDate >= :cutoff30
                   AND (WhatId = :opportunityId OR WhatId = :accountId) AND WhoId != null];
         } else {
-            AggregateResult ta = [
-                SELECT COUNT(Id) total, MAX(ActivityDate) lastDate
-                FROM Task
+            taskTotal = [
+                SELECT COUNT() FROM Task
                 WHERE Status = 'Completed' AND AccountId = :accountId AND WhoId != null
             ];
-            taskTotal = (Integer) ta.get('total');
-            taskMax = (Date) ta.get('lastDate');
+            List<Task> latestTask = [
+                SELECT ActivityDate FROM Task
+                WHERE Status = 'Completed' AND AccountId = :accountId AND WhoId != null
+                  AND ActivityDate != null
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 1
+            ];
+            if (!latestTask.isEmpty()) taskMax = latestTask[0].ActivityDate;
 
-            AggregateResult ea = [
-                SELECT COUNT(Id) total, MAX(ActivityDate) lastDate
-                FROM Event
+            eventTotal = [
+                SELECT COUNT() FROM Event
                 WHERE AccountId = :accountId AND WhoId != null
             ];
-            eventTotal = (Integer) ea.get('total');
-            eventMax = (Date) ea.get('lastDate');
+            List<Event> latestEvent = [
+                SELECT ActivityDate FROM Event
+                WHERE AccountId = :accountId AND WhoId != null AND ActivityDate != null
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 1
+            ];
+            if (!latestEvent.isEmpty()) eventMax = latestEvent[0].ActivityDate;
 
             AggregateResult ga = [
                 SELECT COUNT(Id) total, MAX(Gong__Gong_Call__r.Gong__Call_Start__c) lastDate
