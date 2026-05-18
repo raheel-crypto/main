@@ -84,10 +84,6 @@ function formatCount(n: number): string {
 
 function formatContractLength(months: number | null): string {
   if (months == null) return "";
-  if (months % 12 === 0) {
-    const years = months / 12;
-    return `${years} year${years === 1 ? "" : "s"}`;
-  }
   return `${months} months`;
 }
 
