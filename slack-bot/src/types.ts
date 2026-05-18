@@ -404,6 +404,14 @@ export interface GongWebhookPayload {
   [key: string]: unknown;
 }
 
+export const GongCallInsightSchema = z.object({
+  summary: z.string(),
+  positives: z.array(z.string()).default([]),
+  negatives: z.array(z.string()).default([]),
+  nextSteps: z.array(z.string()).default([]),
+});
+export type GongCallInsight = z.infer<typeof GongCallInsightSchema>;
+
 export interface PositiveApolloCall {
   taskId: string;
   accountId: string;

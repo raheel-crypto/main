@@ -4,6 +4,7 @@ import type {
   BriefPayload,
   BriefSuggestion,
   BuySignalPayload,
+  GongCallInsight,
   GongWebhookPayload,
   NooksWebhookPayload,
   Recommendation,
@@ -926,7 +927,10 @@ function gongFieldValue(
 
 export function gongCallDigestCard(
   payload: GongWebhookPayload,
-  opts: { hostName?: string | null } = {}
+  opts: {
+    hostName?: string | null;
+    insights?: GongCallInsight | null;
+  } = {}
 ): { blocks: KnownBlock[]; text: string } {
   const isValidHttpUrl = (u: string | null | undefined): u is string =>
     typeof u === "string" && /^https?:\/\//i.test(u);
@@ -1014,6 +1018,43 @@ export function gongCallDigestCard(
     blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: sfLines.join("\n") },
+    });
+  }
+
+  const insights = opts.insights;
+  if (insights?.summary) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Summary*\n${insights.summary}` },
+    });
+  }
+  const bulletList = (items: string[]): string =>
+    items.map((s) => `• ${s}`).join("\n");
+  if (insights?.positives?.length) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Positives*\n${bulletList(insights.positives)}`,
+      },
+    });
+  }
+  if (insights?.negatives?.length) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Concerns*\n${bulletList(insights.negatives)}`,
+      },
+    });
+  }
+  if (insights?.nextSteps?.length) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Next steps*\n${bulletList(insights.nextSteps)}`,
+      },
     });
   }
 

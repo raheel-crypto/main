@@ -6,6 +6,7 @@ import {
   getUserByEmail,
 } from "../db/queries.js";
 import { gongCallDigestCard } from "../slack/blocks.js";
+import { summarizeGongCall } from "./gongCallInsights.js";
 import type { GongWebhookPayload, GongWebhookParty } from "../types.js";
 
 export interface GongHandleResult {
@@ -121,6 +122,8 @@ export async function handleGongWebhook(
     });
   }
 
+  const insights = await summarizeGongCall(payload);
+
   if (config.dryRun) {
     console.log(
       `[gong] dry-run: would DM ${[...targets.keys()].join(", ")} for call ${callId}`
@@ -133,7 +136,7 @@ export async function handleGongWebhook(
   }
 
   const slack = new WebClient(config.slack.botToken);
-  const card = gongCallDigestCard(payload, { hostName });
+  const card = gongCallDigestCard(payload, { hostName, insights });
   const sent: string[] = [];
   for (const [slackUserId, routing] of targets) {
     try {
