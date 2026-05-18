@@ -34,3 +34,17 @@ Then save with Cmd+S.
 
 ## Stopping Servers
 Remind the user to press `Ctrl+C` in each terminal window before restarting.
+
+## Slack Quote Bot Deploys
+The slack-agent at `.agents/skills/slack-agent/` is a Vercel-hosted project,
+but the user CANNOT run the Vercel CLI (`vercel deploy`, `vercel dev`, etc.).
+They manage deploys manually outside this environment.
+
+When changes ship to that folder, only provide:
+```
+cd ~/sf-visualizer
+git pull
+```
+and mention if dependencies changed (so they know `npm install` is needed
+inside `.agents/skills/slack-agent/` before their manual deploy step).
+Do NOT include any `npx vercel ...` commands.
