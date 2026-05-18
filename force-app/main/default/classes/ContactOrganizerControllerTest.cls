@@ -28,17 +28,17 @@ private class ContactOrganizerControllerTest {
     }
 
     @isTest
-    static void loadOrganizerReturnsContactsAndAssignments() {
+    static void loadOrganizerReturnsAssignmentsAndTotal() {
         Opportunity opp = setupOppWithContacts(3);
         List<Contact> contacts = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId ORDER BY LastName];
 
-        Relationship_Map__c existing = new Relationship_Map__c(
+        insert new Relationship_Map__c(
             Contact__c = contacts[0].Id,
             Account__c = opp.AccountId,
             Opportunity__c = opp.Id,
-            Role__c = 'C-Suite/Executive'
+            Role__c = 'C-Suite/Executive',
+            Champion__c = true
         );
-        insert existing;
 
         Test.startTest();
         ContactOrganizerController.OrganizerData data = ContactOrganizerController.loadOrganizer(opp.Id);
@@ -46,45 +46,70 @@ private class ContactOrganizerControllerTest {
 
         System.assertEquals(opp.Id, data.opportunityId);
         System.assertEquals(opp.AccountId, data.accountId);
-        System.assertEquals(3, data.contacts.size());
-        System.assertEquals(1, data.existingAssignments.size());
-        System.assertEquals('C-Suite/Executive', data.existingAssignments[0].role);
+        System.assertEquals(3, data.totalContacts);
+        System.assertEquals(1, data.assignments.size());
+        System.assertEquals('C-Suite/Executive', data.assignments[0].role);
+        System.assertEquals(true, data.assignments[0].isChampion);
     }
 
     @isTest
-    static void saveAssignmentsInsertsRecords() {
+    static void searchAccountContactsFiltersByTermAndExcludes() {
+        Opportunity opp = setupOppWithContacts(5);
+        List<Contact> contacts = [SELECT Id, LastName FROM Contact WHERE AccountId = :opp.AccountId ORDER BY LastName];
+        Id excludedId = contacts[0].Id;
+
+        Test.startTest();
+        List<ContactOrganizerController.ContactWrapper> noFilter =
+            ContactOrganizerController.searchAccountContacts(opp.AccountId, '', new List<Id>{ excludedId });
+        List<ContactOrganizerController.ContactWrapper> withTerm =
+            ContactOrganizerController.searchAccountContacts(opp.AccountId, 'Last2', new List<Id>());
+        Test.stopTest();
+
+        System.assertEquals(4, noFilter.size(), 'Excluded id should be omitted');
+        for (ContactOrganizerController.ContactWrapper w : noFilter) {
+            System.assertNotEquals(excludedId, w.id);
+        }
+        System.assertEquals(1, withTerm.size());
+        System.assertEquals('First2 Last2', withTerm[0].name);
+    }
+
+    @isTest
+    static void saveAssignmentsInsertsWithChampion() {
         Opportunity opp = setupOppWithContacts(2);
-        List<Contact> contacts = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId];
+        List<Contact> contacts = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId ORDER BY LastName];
 
         List<ContactOrganizerController.RelationshipMapInput> inputs =
             new List<ContactOrganizerController.RelationshipMapInput>();
         ContactOrganizerController.RelationshipMapInput a = new ContactOrganizerController.RelationshipMapInput();
         a.contactId = contacts[0].Id;
         a.role = 'Senior User';
+        a.isChampion = true;
         inputs.add(a);
         ContactOrganizerController.RelationshipMapInput b = new ContactOrganizerController.RelationshipMapInput();
         b.contactId = contacts[1].Id;
         b.role = 'Junior User';
+        b.isChampion = false;
         inputs.add(b);
 
         Test.startTest();
         ContactOrganizerController.saveAssignments(opp.Id, inputs);
         Test.stopTest();
 
-        List<Relationship_Map__c> created = [
-            SELECT Contact__c, Role__c, Account__c, Opportunity__c
+        Map<Id, Relationship_Map__c> byContact = new Map<Id, Relationship_Map__c>();
+        for (Relationship_Map__c rm : [
+            SELECT Id, Contact__c, Role__c, Champion__c, Account__c, Opportunity__c
             FROM Relationship_Map__c
             WHERE Opportunity__c = :opp.Id
-        ];
-        System.assertEquals(2, created.size());
-        for (Relationship_Map__c rm : created) {
-            System.assertEquals(opp.AccountId, rm.Account__c);
-            System.assertEquals(opp.Id, rm.Opportunity__c);
+        ]) {
+            byContact.put(rm.Contact__c, rm);
         }
+        System.assertEquals(2, byContact.size());
+        System.assertEquals(true, byContact.get(contacts[0].Id).Champion__c);
+        System.assertEquals(false, byContact.get(contacts[1].Id).Champion__c);
     }
 
     @isTest
-    static void saveAssignmentsUpdatesAndDeletes() {
+    static void saveAssignmentsUpdatesChampionAndDeletesUnmapped() {
         Opportunity opp = setupOppWithContacts(2);
         List<Contact> contacts = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId ORDER BY LastName];
 
@@ -93,13 +118,15 @@ private class ContactOrganizerControllerTest {
                 Contact__c = contacts[0].Id,
                 Account__c = opp.AccountId,
                 Opportunity__c = opp.Id,
-                Role__c = 'Junior User'
+                Role__c = 'Junior User',
+                Champion__c = false
             ),
             new Relationship_Map__c(
                 Contact__c = contacts[1].Id,
                 Account__c = opp.AccountId,
                 Opportunity__c = opp.Id,
-                Role__c = 'Senior User'
+                Role__c = 'Senior User',
+                Champion__c = false
             )
         };
 
@@ -108,6 +135,7 @@ private class ContactOrganizerControllerTest {
         ContactOrganizerController.RelationshipMapInput a = new ContactOrganizerController.RelationshipMapInput();
         a.contactId = contacts[0].Id;
         a.role = 'C-Suite/Executive';
+        a.isChampion = true;
         inputs.add(a);
 
         Test.startTest();
@@ -115,13 +143,14 @@ private class ContactOrganizerControllerTest {
         Test.stopTest();
 
         List<Relationship_Map__c> remaining = [
-            SELECT Contact__c, Role__c
+            SELECT Contact__c, Role__c, Champion__c
             FROM Relationship_Map__c
             WHERE Opportunity__c = :opp.Id
         ];
         System.assertEquals(1, remaining.size());
         System.assertEquals(contacts[0].Id, remaining[0].Contact__c);
         System.assertEquals('C-Suite/Executive', remaining[0].Role__c);
+        System.assertEquals(true, remaining[0].Champion__c);
     }
 
     @isTest

@@ -16,76 +16,175 @@
         </div>
 
         <div class="slds-p-horizontal_medium">
-            <template if:true={isLoading}>
+            <template lwc:if={isLoading}>
                 <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
             </template>
 
-            <template if:true={errorMessage}>
+            <template lwc:elif={errorMessage}>
                 <div class="slds-text-color_error slds-p-vertical_small">{errorMessage}</div>
             </template>
 
-            <template if:false={isLoading}>
-                <template if:false={hasAccount}>
-                    <div class="slds-text-body_regular slds-p-vertical_small">
-                        This Opportunity is not linked to an Account. Set an Account on the Opportunity to organize contacts.
+            <template lwc:elif={hasAccount}>
+                <div class="organizer-meta">
+                    <div>
+                        <span class="slds-text-title_caps">Account:</span>
+                        <span class="slds-text-body_regular slds-m-left_xx-small">{accountName}</span>
                     </div>
-                </template>
-
-                <template if:true={hasAccount}>
-                    <div class="slds-text-title_caps slds-m-bottom_small">
-                        Account: <span class="slds-text-body_regular">{accountName}</span>
+                    <div class="organizer-meta__stats">
+                        <span class="slds-text-body_small slds-text-color_weak">{totalContactsLabel}</span>
+                        <span class="slds-text-body_small slds-text-color_weak organizer-meta__dot">•</span>
+                        <span class="slds-text-body_small slds-text-color_weak">{assignedCountLabel}</span>
                     </div>
+                </div>
 
-                    <template if:false={hasContacts}>
-                        <div class="slds-text-body_regular slds-p-vertical_small">
-                            No contacts found on this Account.
+                <div class="organizer-layout">
+                    <div
+                        class="search-panel"
+                        ondragover={handleDragOver}
+                        ondragleave={handleDragLeave}
+                        ondrop={handleDropOnSearch}>
+                        <div class="search-panel__header">
+                            <lightning-input
+                                type="search"
+                                label="Search contacts"
+                                variant="label-hidden"
+                                placeholder={searchPlaceholder}
+                                value={searchTerm}
+                                onchange={handleSearchChange}>
+                            </lightning-input>
                         </div>
-                    </template>
-
-                    <template if:true={hasContacts}>
-                        <div class="board">
-                            <template for:each={columns} for:item="col">
-                                <div
-                                    key={col.key}
-                                    class={col.cssClass}
-                                    data-bucket-key={col.key}
-                                    ondragover={handleDragOver}
-                                    ondragleave={handleDragLeave}
-                                    ondrop={handleDrop}>
-                                    <div class="bucket__header">
-                                        <span class="bucket__title">{col.label}</span>
-                                        <span class="bucket__count">{col.count}</span>
-                                    </div>
-                                    <div class="bucket__body">
-                                        <template for:each={col.contacts} for:item="c">
-                                            <div
-                                                key={c.id}
-                                                class={c.cssClass}
-                                                draggable="true"
+                        <div class="search-panel__body">
+                            <template lwc:if={isSearching}>
+                                <div class="search-panel__status">
+                                    <lightning-spinner alternative-text="Searching" size="x-small" variant="inverse"></lightning-spinner>
+                                </div>
+                            </template>
+                            <template lwc:elif={hasSearchResults}>
+                                <template for:each={searchResultsToRender} for:item="c">
+                                    <div
+                                        key={c.id}
+                                        class={c.cssClass}
+                                        draggable="true"
+                                        data-contact-id={c.id}
+                                        ondragstart={handleDragStart}>
+                                        <div class="contact-tile__main">
+                                            <div class="contact-tile__name">{c.name}</div>
+                                            <template lwc:if={c.title}>
+                                                <div class="contact-tile__meta">{c.title}</div>
+                                            </template>
+                                        </div>
+                                        <div class="contact-tile__actions">
+                                            <lightning-button-menu
+                                                alternative-text="Add to bucket"
+                                                icon-name="utility:add"
+                                                icon-size="x-small"
+                                                menu-alignment="right"
                                                 data-contact-id={c.id}
-                                                ondragstart={handleDragStart}>
-                                                <div class="contact-tile__name">{c.name}</div>
-                                                <template if:true={c.title}>
-                                                    <div class="contact-tile__meta">{c.title}</div>
-                                                </template>
-                                            </div>
-                                        </template>
-                                        <template if:true={col.isUnassigned}>
-                                            <template if:false={col.count}>
-                                                <div class="bucket__empty">All contacts are assigned.</div>
-                                            </template>
-                                        </template>
-                                        <template if:false={col.isUnassigned}>
-                                            <template if:false={col.count}>
-                                                <div class="bucket__empty">Drag a contact here</div>
-                                            </template>
-                                        </template>
+                                                onselect={handleMoveMenu}>
+                                                <lightning-menu-item value="C-Suite/Executive" label="Add to C-Suite / Executive"></lightning-menu-item>
+                                                <lightning-menu-item value="Technology/Ops" label="Add to Technology / Ops"></lightning-menu-item>
+                                                <lightning-menu-item value="Senior User" label="Add to Senior User"></lightning-menu-item>
+                                                <lightning-menu-item value="Junior User" label="Add to Junior User"></lightning-menu-item>
+                                            </lightning-button-menu>
+                                        </div>
                                     </div>
+                                </template>
+                            </template>
+                            <template lwc:else>
+                                <div class="search-panel__empty">
+                                    <template lwc:if={searchTerm}>
+                                        No matching contacts.
+                                    </template>
+                                    <template lwc:else>
+                                        Start typing to search this Account's contacts.
+                                    </template>
                                 </div>
                             </template>
                         </div>
-                    </template>
-                </template>
+                        <div class="search-panel__footer slds-text-body_small slds-text-color_weak">
+                            Drag onto a bucket, or use the menu. Drag back here to unassign.
+                        </div>
+                    </div>
+
+                    <div class="bucket-grid">
+                        <template for:each={bucketColumns} for:item="col">
+                            <div
+                                key={col.key}
+                                class="bucket"
+                                data-role={col.key}
+                                ondragover={handleDragOver}
+                                ondragleave={handleDragLeave}
+                                ondrop={handleDropOnBucket}>
+                                <div class="bucket__header">
+                                    <span class="bucket__title">{col.label}</span>
+                                    <span class="bucket__count">{col.count}</span>
+                                </div>
+                                <div class="bucket__body">
+                                    <template lwc:if={col.isEmpty}>
+                                        <div class="bucket__empty">Drag a contact here</div>
+                                    </template>
+                                    <template for:each={col.tiles} for:item="t">
+                                        <div
+                                            key={t.contactId}
+                                            class={t.cssClass}
+                                            draggable="true"
+                                            data-contact-id={t.contactId}
+                                            ondragstart={handleDragStart}>
+                                            <div class="contact-tile__main">
+                                                <div class="contact-tile__name-row">
+                                                    <span class="contact-tile__name">{t.name}</span>
+                                                    <template lwc:if={t.isChampion}>
+                                                        <span class="champion-pill" title="Champion">
+                                                            <lightning-icon
+                                                                icon-name="utility:favorite"
+                                                                size="xx-small"
+                                                                variant="inverse">
+                                                            </lightning-icon>
+                                                            <span class="champion-pill__label">Champion</span>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                                <template lwc:if={t.title}>
+                                                    <div class="contact-tile__meta">{t.title}</div>
+                                                </template>
+                                            </div>
+                                            <div class="contact-tile__actions">
+                                                <lightning-button-icon
+                                                    icon-name={t.championIcon}
+                                                    variant={t.championVariant}
+                                                    size="small"
+                                                    alternative-text={t.championAlt}
+                                                    title={t.championAlt}
+                                                    data-contact-id={t.contactId}
+                                                    onclick={handleToggleChampion}>
+                                                </lightning-button-icon>
+                                                <lightning-button-menu
+                                                    alternative-text="Actions"
+                                                    icon-size="small"
+                                                    menu-alignment="right"
+                                                    data-contact-id={t.contactId}
+                                                    onselect={handleMoveMenu}>
+                                                    <lightning-menu-item value="C-Suite/Executive" label="Move to C-Suite / Executive"></lightning-menu-item>
+                                                    <lightning-menu-item value="Technology/Ops" label="Move to Technology / Ops"></lightning-menu-item>
+                                                    <lightning-menu-item value="Senior User" label="Move to Senior User"></lightning-menu-item>
+                                                    <lightning-menu-item value="Junior User" label="Move to Junior User"></lightning-menu-item>
+                                                    <lightning-menu-divider></lightning-menu-divider>
+                                                    <lightning-menu-item value="UNASSIGN" label="Remove from buckets"></lightning-menu-item>
+                                                </lightning-button-menu>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+
+            <template lwc:else>
+                <div class="slds-text-body_regular slds-p-vertical_small">
+                    This Opportunity is not linked to an Account. Set an Account on the Opportunity to organize contacts.
+                </div>
             </template>
         </div>
     </lightning-card>

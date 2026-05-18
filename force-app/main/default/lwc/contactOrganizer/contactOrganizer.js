@@ -3,8 +3,8 @@ import { refreshApex } from '@salesforce/apex';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import loadOrganizer from '@salesforce/apex/ContactOrganizerController.loadOrganizer';
 import saveAssignments from '@salesforce/apex/ContactOrganizerController.saveAssignments';
+import searchAccountContacts from '@salesforce/apex/ContactOrganizerController.searchAccountContacts';
 
-const UNASSIGNED = 'UNASSIGNED';
 const ROLES = [
     { key: 'C-Suite/Executive', label: 'C-Suite / Executive' },
     { key: 'Technology/Ops', label: 'Technology / Ops' },
@@ -12,18 +12,24 @@ const ROLES = [
     { key: 'Junior User', label: 'Junior User' }
 ];
 
+const SEARCH_DEBOUNCE_MS = 250;
+
 export default class ContactOrganizer extends LightningElement {
     @api recordId;
 
-    @track contactsById = {};
-    @track buckets = {};
+    @track assignments = {};
+    @track searchResults = [];
     accountName;
     accountId;
+    totalContacts = 0;
     isLoading = true;
     isSaving = false;
+    isSearching = false;
     isDirty = false;
     errorMessage;
     wiredResult;
+    searchTerm = '';
+    debounceHandle;
     draggedContactId;
 
     @wire(loadOrganizer, { opportunityId: '$recordId' })
@@ -34,6 +40,7 @@ export default class ContactOrganizer extends LightningElement {
             this.hydrate(data);
             this.isLoading = false;
             this.errorMessage = undefined;
+            this.runSearch();
         } else if (error) {
             this.isLoading = false;
             this.errorMessage = this.extractError(error);
@@ -43,76 +50,122 @@ export default class ContactOrganizer extends LightningElement {
     hydrate(data) {
         this.accountName = data.accountName;
         this.accountId = data.accountId;
-
-        const contactsById = {};
-        for (const c of data.contacts || []) {
-            contactsById[c.id] = c;
+        this.totalContacts = data.totalContacts || 0;
+        const map = {};
+        for (const a of data.assignments || []) {
+            map[a.contactId] = {
+                contactId: a.contactId,
+                name: a.name,
+                title: a.title,
+                email: a.email,
+                role: a.role,
+                isChampion: !!a.isChampion
+            };
         }
-        this.contactsById = contactsById;
-
-        const buckets = { [UNASSIGNED]: [] };
-        for (const role of ROLES) {
-            buckets[role.key] = [];
-        }
-
-        const assignedIds = new Set();
-        for (const assignment of data.existingAssignments || []) {
-            if (buckets[assignment.role] && contactsById[assignment.contactId]) {
-                buckets[assignment.role].push(assignment.contactId);
-                assignedIds.add(assignment.contactId);
-            }
-        }
-        for (const c of data.contacts || []) {
-            if (!assignedIds.has(c.id)) {
-                buckets[UNASSIGNED].push(c.id);
-            }
-        }
-
-        this.buckets = buckets;
+        this.assignments = map;
         this.isDirty = false;
     }
 
-    get columns() {
-        const unassigned = {
-            key: UNASSIGNED,
-            label: 'Unassigned Contacts',
-            isUnassigned: true,
-            contacts: this.contactsFor(UNASSIGNED),
-            count: (this.buckets[UNASSIGNED] || []).length,
-            cssClass: 'bucket bucket--unassigned'
-        };
-        const roleColumns = ROLES.map((r) => ({
-            key: r.key,
-            label: r.label,
-            isUnassigned: false,
-            contacts: this.contactsFor(r.key),
-            count: (this.buckets[r.key] || []).length,
-            cssClass: 'bucket bucket--role'
-        }));
-        return [unassigned, ...roleColumns];
+    get bucketColumns() {
+        return ROLES.map((r) => {
+            const tiles = Object.values(this.assignments)
+                .filter((a) => a.role === r.key)
+                .sort((x, y) => (x.name || '').localeCompare(y.name || ''))
+                .map((a) => ({
+                    contactId: a.contactId,
+                    name: a.name,
+                    title: a.title,
+                    email: a.email,
+                    isChampion: a.isChampion,
+                    cssClass: a.isChampion
+                        ? 'contact-tile contact-tile--bucket contact-tile--champion'
+                        : 'contact-tile contact-tile--bucket',
+                    championIcon: a.isChampion ? 'utility:favorite' : 'utility:favorite',
+                    championVariant: a.isChampion ? 'brand' : 'border-filled',
+                    championAlt: a.isChampion ? 'Unmark Champion' : 'Mark as Champion'
+                }));
+            return {
+                key: r.key,
+                label: r.label,
+                tiles,
+                count: tiles.length,
+                isEmpty: tiles.length === 0
+            };
+        });
     }
 
-    contactsFor(bucketKey) {
-        const ids = this.buckets[bucketKey] || [];
-        return ids
-            .map((id) => this.contactsById[id])
-            .filter(Boolean)
+    get searchResultsToRender() {
+        return this.searchResults
+            .filter((c) => !this.assignments[c.id])
             .map((c) => ({
-                ...c,
-                cssClass: 'contact-tile'
+                id: c.id,
+                name: c.name,
+                title: c.title,
+                email: c.email,
+                cssClass: 'contact-tile contact-tile--search'
             }));
-    }
-
-    get hasContacts() {
-        return Object.keys(this.contactsById).length > 0;
     }
 
     get hasAccount() {
         return !!this.accountId;
     }
 
+    get hasSearchResults() {
+        return this.searchResultsToRender.length > 0;
+    }
+
+    get totalContactsLabel() {
+        const n = (this.totalContacts || 0).toLocaleString();
+        return this.totalContacts === 1 ? '1 contact on Account' : `${n} contacts on Account`;
+    }
+
+    get assignedCount() {
+        return Object.keys(this.assignments).length;
+    }
+
+    get assignedCountLabel() {
+        return `${this.assignedCount} mapped`;
+    }
+
     get saveDisabled() {
         return this.isSaving || !this.isDirty;
+    }
+
+    get searchPlaceholder() {
+        if (this.totalContacts > 50) {
+            return 'Search by name, title, or email…';
+        }
+        return 'Search contacts…';
+    }
+
+    handleSearchChange(event) {
+        this.searchTerm = event.target.value || '';
+        if (this.debounceHandle) {
+            clearTimeout(this.debounceHandle);
+        }
+        this.debounceHandle = setTimeout(() => this.runSearch(), SEARCH_DEBOUNCE_MS);
+    }
+
+    async runSearch() {
+        if (!this.accountId) return;
+        this.isSearching = true;
+        try {
+            const excludeIds = Object.keys(this.assignments);
+            const results = await searchAccountContacts({
+                accountId: this.accountId,
+                searchTerm: this.searchTerm,
+                excludeIds
+            });
+            this.searchResults = results || [];
+        } catch (error) {
+            this.dispatchEvent(new ShowToastEvent({
+                title: 'Search failed',
+                message: this.extractError(error),
+                variant: 'error'
+            }));
+        } finally {
+            this.isSearching = false;
+        }
     }
 
     handleDragStart(event) {
@@ -121,68 +174,109 @@ export default class ContactOrganizer extends LightningElement {
         try {
             event.dataTransfer.setData('text/plain', this.draggedContactId);
         } catch (e) {
-            // some browsers throw if called on a non-text drag — safe to ignore
+            // some browsers throw — safe to ignore
         }
     }
 
     handleDragOver(event) {
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
-        event.currentTarget.classList.add('bucket--drop-target');
+        event.currentTarget.classList.add('drop-target');
     }
 
     handleDragLeave(event) {
-        event.currentTarget.classList.remove('bucket--drop-target');
+        event.currentTarget.classList.remove('drop-target');
     }
 
-    handleDrop(event) {
+    handleDropOnBucket(event) {
         event.preventDefault();
-        event.currentTarget.classList.remove('bucket--drop-target');
-        const targetBucket = event.currentTarget.dataset.bucketKey;
+        event.currentTarget.classList.remove('drop-target');
+        const targetRole = event.currentTarget.dataset.role;
         const contactId = this.draggedContactId || event.dataTransfer.getData('text/plain');
         this.draggedContactId = null;
-        if (!contactId || !targetBucket) {
-            return;
-        }
-        this.moveContact(contactId, targetBucket);
+        if (!contactId || !targetRole) return;
+        this.assignContact(contactId, targetRole);
     }
 
-    moveContact(contactId, targetBucket) {
-        const next = {};
-        let changed = false;
-        for (const key of Object.keys(this.buckets)) {
-            const before = this.buckets[key];
-            const filtered = before.filter((id) => id !== contactId);
-            if (filtered.length !== before.length) {
-                changed = true;
+    handleDropOnSearch(event) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('drop-target');
+        const contactId = this.draggedContactId || event.dataTransfer.getData('text/plain');
+        this.draggedContactId = null;
+        if (!contactId) return;
+        this.unassignContact(contactId);
+    }
+
+    assignContact(contactId, role) {
+        const existing = this.assignments[contactId];
+        if (existing) {
+            if (existing.role !== role) {
+                this.assignments = {
+                    ...this.assignments,
+                    [contactId]: { ...existing, role }
+                };
+                this.isDirty = true;
             }
-            next[key] = filtered;
+            return;
         }
-        if (!next[targetBucket]) {
-            next[targetBucket] = [];
-        }
-        if (!next[targetBucket].includes(contactId)) {
-            next[targetBucket].push(contactId);
-            changed = true;
-        }
-        if (changed) {
-            this.buckets = next;
-            this.isDirty = true;
+        const fromSearch = this.searchResults.find((c) => c.id === contactId);
+        if (!fromSearch) return;
+        this.assignments = {
+            ...this.assignments,
+            [contactId]: {
+                contactId,
+                name: fromSearch.name,
+                title: fromSearch.title,
+                email: fromSearch.email,
+                role,
+                isChampion: false
+            }
+        };
+        this.isDirty = true;
+    }
+
+    unassignContact(contactId) {
+        if (!this.assignments[contactId]) return;
+        const next = { ...this.assignments };
+        delete next[contactId];
+        this.assignments = next;
+        this.isDirty = true;
+        this.runSearch();
+    }
+
+    handleToggleChampion(event) {
+        const contactId = event.currentTarget.dataset.contactId;
+        const existing = this.assignments[contactId];
+        if (!existing) return;
+        this.assignments = {
+            ...this.assignments,
+            [contactId]: { ...existing, isChampion: !existing.isChampion }
+        };
+        this.isDirty = true;
+    }
+
+    handleMoveMenu(event) {
+        const contactId = event.currentTarget.dataset.contactId;
+        const value = event.detail.value;
+        if (!contactId || !value) return;
+        if (value === 'UNASSIGN') {
+            this.unassignContact(contactId);
+        } else {
+            this.assignContact(contactId, value);
         }
     }
 
     async handleSave() {
         this.isSaving = true;
-        const assignments = [];
-        for (const role of ROLES) {
-            for (const contactId of this.buckets[role.key] || []) {
-                assignments.push({ contactId, role: role.key });
-            }
-        }
+        const inputs = Object.values(this.assignments).map((a) => ({
+            contactId: a.contactId,
+            role: a.role,
+            isChampion: !!a.isChampion
+        }));
         try {
             await saveAssignments({
                 opportunityId: this.recordId,
-                assignments
+                assignments: inputs
             });
             this.isDirty = false;
             this.dispatchEvent(new ShowToastEvent({
@@ -191,6 +285,7 @@ export default class ContactOrganizer extends LightningElement {
                 variant: 'success'
             }));
             await refreshApex(this.wiredResult);
+            this.runSearch();
         } catch (error) {
             this.dispatchEvent(new ShowToastEvent({
                 title: 'Save failed',
@@ -206,6 +301,7 @@ export default class ContactOrganizer extends LightningElement {
         this.isLoading = true;
         try {
             await refreshApex(this.wiredResult);
+            this.runSearch();
         } finally {
             this.isLoading = false;
         }
