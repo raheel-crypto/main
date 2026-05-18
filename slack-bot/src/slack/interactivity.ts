@@ -59,6 +59,15 @@ import type {
 } from "../types.js";
 
 export function registerInteractivity(app: App): void {
+  // URL-only buttons that link out to Salesforce/Gong/Nooks etc. still need
+  // an action_id (or Slack auto-fills one) AND a 200 ack, otherwise the user
+  // sees a "we couldn't process this action" grey warning even though the
+  // browser tab opens fine. All such buttons use the `linkout:` prefix; this
+  // handler just acks them.
+  app.action(/^linkout:/, async ({ ack }) => {
+    await ack();
+  });
+
   app.action(/^accept:.+/, async ({ ack, body, action, client }) => {
     await ack();
     const parsed = parseActionId((action as any).action_id);

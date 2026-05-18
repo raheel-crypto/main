@@ -2,7 +2,7 @@ import { WebClient } from "@slack/web-api";
 import { config } from "../config.js";
 import {
   NOOKS_FILTER_DIRECTION,
-  NOOKS_FILTER_DISPOSITION,
+  NOOKS_FILTER_DISPOSITIONS,
 } from "../constants.js";
 import {
   appendAudit,
@@ -46,9 +46,11 @@ export async function handleNooksWebhook(
     );
     return { ok: true, reason: `filtered_direction:${direction}` };
   }
-  if (dispositionName.toLowerCase() !== NOOKS_FILTER_DISPOSITION.toLowerCase()) {
+  const dispositionLower = dispositionName.toLowerCase();
+  const allowed = NOOKS_FILTER_DISPOSITIONS.map((d) => d.toLowerCase());
+  if (!allowed.includes(dispositionLower)) {
     console.log(
-      `[nooks] filtered: disposition='${dispositionName}' (want '${NOOKS_FILTER_DISPOSITION}')`
+      `[nooks] filtered: disposition='${dispositionName}' (want one of '${NOOKS_FILTER_DISPOSITIONS.join("', '")}')`
     );
     return { ok: true, reason: `filtered_disposition:${dispositionName}` };
   }

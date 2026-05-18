@@ -112,6 +112,7 @@ export function oppCard(
       elements: [
         {
           type: "button",
+          action_id: `linkout:open_in_sf:${rec.opportunityId}`,
           text: { type: "plain_text", text: "Open in Salesforce" },
           url: oppUrl,
         },
@@ -330,6 +331,7 @@ export function connectPrompt(authUrl: string): {
         elements: [
           {
             type: "button",
+            action_id: "linkout:connect_sf",
             style: "primary",
             text: { type: "plain_text", text: "Connect Salesforce" },
             url: authUrl,
@@ -390,6 +392,7 @@ export function briefCard(
       elements: [
         {
           type: "button",
+          action_id: `linkout:open_account_brief:${cardId}`,
           text: { type: "plain_text", text: "Open Account" },
           url: accountUrl,
         },
@@ -716,6 +719,7 @@ export function buySignalCard(
   });
   buttons.push({
     type: "button",
+    action_id: `linkout:open_account_bs:${cardId}`,
     text: { type: "plain_text", text: "Open Account" },
     url: accountUrl,
   });
@@ -904,6 +908,7 @@ export function nooksCallDigestCard(
   if (isValidHttpUrl(d.recordingUrl)) {
     linkButtons.push({
       type: "button",
+      action_id: `linkout:nooks_recording:${d.callId}`,
       text: { type: "plain_text", text: "Recording" },
       url: d.recordingUrl,
     });
@@ -911,6 +916,7 @@ export function nooksCallDigestCard(
   if (isValidHttpUrl(d.transcriptUrl)) {
     linkButtons.push({
       type: "button",
+      action_id: `linkout:nooks_transcript:${d.callId}`,
       text: { type: "plain_text", text: "Transcript" },
       url: d.transcriptUrl,
     });
@@ -1090,6 +1096,7 @@ export function gongCallDigestCard(
       elements: [
         {
           type: "button",
+          action_id: `linkout:gong:${callId}`,
           text: { type: "plain_text", text: "Open in Gong" },
           url: meta!.url!,
         },

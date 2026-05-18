@@ -12,7 +12,11 @@ export const BUY_SIGNAL_MAX_CARDS_PER_RUN = 5;
 export const BUY_SIGNAL_SUBJECT_PATTERN = "%[Apollo]%Connected - Positive%";
 
 export const NOOKS_FILTER_DIRECTION = "outbound";
-export const NOOKS_FILTER_DISPOSITION = "Connected - Positive";
+export const NOOKS_FILTER_DISPOSITIONS = [
+  "Connected - Positive",
+  "Connected - Neutral",
+  "Connected - Negative",
+];
 export const TZ_OPTIONS = [
   "America/Los_Angeles",
   "America/Denver",
