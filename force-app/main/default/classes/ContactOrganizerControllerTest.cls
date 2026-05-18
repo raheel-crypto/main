@@ -487,6 +487,208 @@ private class ContactOrganizerControllerTest {
     }
 
     @isTest
+    static void getContactDetailParsesGongInsights() {
+        Opportunity opp = setupOppWithContacts(1);
+        Contact c = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId LIMIT 1];
+
+        // Topics: includes filter-worthy entries that should be skipped
+        String topicsJson =
+            '[' +
+            '{"Name":"Pricing"},' +
+            '{"Name":"Call Setup"},' +
+            '{"Name":"Competitors"},' +
+            '{"Name":"[SMART] Internal"},' +
+            '{"Name":"Wrap-Up"}' +
+            ']';
+        // Trackers: [SMART] prefix should be stripped + merged with the plain name
+        String trackersJson =
+            '[' +
+            '{"Name":"Pricing","Gong__Tracker_Occurrences__c":3,"Gong__Tracker_Phrase__c":"discounts"},' +
+            '{"Name":"[SMART] Pricing","Gong__Tracker_Occurrences__c":2,"Gong__Tracker_Phrase__c":"-"},' +
+            '{"Name":"Competitor","Gong__Tracker_Occurrences__c":5,"Gong__Tracker_Phrase__c":"alternative"}' +
+            ']';
+        String keyPointsHtml =
+            '<p>1. Customer is interested in upsell to enterprise tier.<br>' +
+            '2. Budget approval expected within Q2.<br>' +
+            '3. Two competitors evaluated, ours is preferred.</p>';
+
+        Gong__Gong_Call__c call = new Gong__Gong_Call__c(
+            Gong__Call_ID__c = 'test-call-001',
+            Gong__Call_Start__c = DateTime.now().addDays(-4),
+            Gong__Call_Brief__c = 'Productive call covering pricing and competitive positioning.',
+            Gong__Call_Key_Points__c = keyPointsHtml,
+            Gong__Call_Highlights_Next_Steps__c = 'Send proposal, schedule technical deep-dive.',
+            Gong__Related_Topics_json__c = topicsJson,
+            Gong__Related_Trackers_json__c = trackersJson,
+            Gong__Primary_Opportunity__c = opp.Id,
+            Gong__Primary_Account__c = opp.AccountId
+        );
+        insert call;
+
+        insert new Gong__Call_Participant__c(
+            Gong__Gong_Call__c = call.Id,
+            Gong__Contact_Participant__c = c.Id,
+            Gong__Affiliation__c = 'External'
+        );
+
+        Test.startTest();
+        ContactOrganizerController.ContactDetail detail =
+            ContactOrganizerController.getContactDetail(opp.Id, c.Id);
+        Test.stopTest();
+
+        // Topic filtering: Call Setup, Wrap-Up, and the [SMART]-prefixed
+        // entry should be excluded
+        System.assertEquals(2, detail.gongTopics.size(), 'Filtered topics: ' + detail.gongTopics);
+        System.assert(detail.gongTopics.contains('Pricing'));
+        System.assert(detail.gongTopics.contains('Competitors'));
+
+        // Tracker merging: [SMART] Pricing → Pricing (occurrences 3 + 2 = 5)
+        Map<String, ContactOrganizerController.TrackerInsight> byName =
+            new Map<String, ContactOrganizerController.TrackerInsight>();
+        for (ContactOrganizerController.TrackerInsight ti : detail.gongTrackers) {
+            byName.put(ti.name, ti);
+        }
+        System.assertEquals(2, byName.size());
+        System.assertEquals(5, byName.get('Pricing').occurrences);
+        System.assertEquals('discounts', byName.get('Pricing').phrase);
+        System.assertEquals(5, byName.get('Competitor').occurrences);
+
+        // Key points: HTML tags stripped, list-prefix removed, 3 points
+        System.assertEquals(3, detail.gongKeyPoints.size());
+        System.assert(detail.gongKeyPoints[0].startsWith('Customer is interested'));
+
+        // Brief + next steps set on the latest call
+        System.assertNotEquals(null, detail.gongLatestBrief);
+        System.assertNotEquals(null, detail.gongLatestNextSteps);
+        System.assertEquals(Date.today().addDays(-4), detail.gongLatestCallDate);
+    }
+
+    @isTest
+    static void getContactDetailParsesGranolaNote() {
+        Opportunity opp = setupOppWithContacts(1);
+        Contact c = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId LIMIT 1];
+
+        String description =
+            'Granola Link: https://example.com/note/abc\n' +
+            '── Granola Generated Notes ──\n' +
+            '### Discussion Highlights\n' +
+            '- Customer happy with implementation pace.\n' +
+            '- Concerns about scaling beyond 50 users.\n' +
+            '### Risks\n' +
+            '- Procurement timeline tightening.\n' +
+            '### Action Items\n' +
+            '- AE: Share enterprise pricing sheet by Wednesday.\n' +
+            '- CSM: Set up quarterly business review.\n' +
+            '- Customer: Identify executive sponsor.\n';
+
+        insert new Event(
+            WhoId = c.Id,
+            WhatId = opp.Id,
+            Subject = 'Granola - Weekly Sync',
+            Description = description,
+            ActivityDateTime = DateTime.now().addDays(-1),
+            DurationInMinutes = 30
+        );
+
+        Test.startTest();
+        ContactOrganizerController.ContactDetail detail =
+            ContactOrganizerController.getContactDetail(opp.Id, c.Id);
+        Test.stopTest();
+
+        // Topics: Discussion Highlights and Risks (Action Items excluded)
+        System.assertEquals(2, detail.granolaTopics.size());
+        System.assert(detail.granolaTopics.contains('Discussion Highlights'));
+        System.assert(detail.granolaTopics.contains('Risks'));
+
+        // Action items: 3 captured
+        System.assertEquals(3, detail.granolaActionItems.size());
+        System.assert(detail.granolaActionItems[0].startsWith('AE:'));
+
+        // Summary: captured from first section bullets
+        System.assertNotEquals(null, detail.granolaLatestSummary);
+        System.assert(detail.granolaLatestSummary.contains('Customer happy'));
+        System.assertEquals(Date.today().addDays(-1), detail.granolaLatestDate);
+    }
+
+    @isTest
+    static void getContactDetailGranolaViaEventRelation() {
+        Opportunity opp = setupOppWithContacts(2);
+        List<Contact> contacts = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId ORDER BY LastName];
+        Contact primary = contacts[0];
+        Contact extra = contacts[1];
+
+        // Granola event whose WhoId is the primary contact; extra contact
+        // attends via EventRelation only.
+        Event granolaEvent = new Event(
+            WhoId = primary.Id,
+            WhatId = opp.Id,
+            Subject = 'Granola - Group Call',
+            Description = 'Granola Link: x\n### Topic A\n- Discussed roadmap.\n### Action Items\n- Follow up next week.\n',
+            ActivityDateTime = DateTime.now().addDays(-2),
+            DurationInMinutes = 60
+        );
+        insert granolaEvent;
+        insert new EventRelation(
+            EventId = granolaEvent.Id,
+            RelationId = extra.Id,
+            IsWhat = false
+        );
+
+        Test.startTest();
+        ContactOrganizerController.ContactDetail detail =
+            ContactOrganizerController.getContactDetail(opp.Id, extra.Id);
+        Test.stopTest();
+
+        System.assert(
+            detail.granolaTopics.contains('Topic A'),
+            'Extra contact should see Granola insights via EventRelation: ' + detail.granolaTopics
+        );
+        System.assert(detail.granolaActionItems.size() > 0);
+    }
+
+    @isTest
+    static void getContactDetailAccountOnlyBranches() {
+        // Exercise the else (accountId-only) branches in
+        // enrichContactWithGong / enrichContactWithGranola by calling
+        // getContactDetail with opportunityId = null.
+        Account acc = new Account(Name = 'Account-Only Test');
+        insert acc;
+        Contact c = new Contact(LastName = 'Solo', AccountId = acc.Id);
+        insert c;
+
+        Gong__Gong_Call__c call = new Gong__Gong_Call__c(
+            Gong__Call_ID__c = 'account-only-call',
+            Gong__Call_Start__c = DateTime.now().addDays(-1),
+            Gong__Related_Topics_json__c = '[{"Name":"Renewal"}]',
+            Gong__Primary_Account__c = acc.Id
+        );
+        insert call;
+        insert new Gong__Call_Participant__c(
+            Gong__Gong_Call__c = call.Id,
+            Gong__Contact_Participant__c = c.Id,
+            Gong__Affiliation__c = 'External'
+        );
+
+        insert new Event(
+            WhoId = c.Id,
+            WhatId = acc.Id,
+            Subject = 'Granola - Solo Sync',
+            Description = '### Renewal Plan\n- Confirm budget.\n### Action Items\n- Send pricing.\n',
+            ActivityDateTime = DateTime.now().addDays(-1),
+            DurationInMinutes = 15
+        );
+
+        Test.startTest();
+        ContactOrganizerController.ContactDetail detail =
+            ContactOrganizerController.getContactDetail(null, c.Id);
+        Test.stopTest();
+
+        System.assert(detail.gongTopics.contains('Renewal'));
+        System.assert(detail.granolaTopics.contains('Renewal Plan'));
+        System.assertEquals(1, detail.granolaActionItems.size());
+    }
+
+    @isTest
     static void saveAssignmentsThrowsOnMalformedJson() {
         Opportunity opp = setupOppWithContacts(1);
         Boolean threw = false;
