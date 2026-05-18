@@ -14,11 +14,69 @@ const ROLES = [
 
 const SEARCH_DEBOUNCE_MS = 250;
 
+const MS_PER_DAY = 86400000;
+
+function relativeDays(dateString) {
+    if (!dateString) return null;
+    const then = new Date(dateString);
+    if (isNaN(then.getTime())) return null;
+    const now = new Date();
+    const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const thenUtc = Date.UTC(then.getUTCFullYear(), then.getUTCMonth(), then.getUTCDate());
+    return Math.floor((todayUtc - thenUtc) / MS_PER_DAY);
+}
+
+function formatRelative(days) {
+    if (days == null) return '';
+    if (days <= 0) return 'today';
+    if (days === 1) return '1d ago';
+    if (days < 7) return `${days}d ago`;
+    if (days < 30) return `${Math.floor(days / 7)}w ago`;
+    if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+    return `${Math.floor(days / 365)}y ago`;
+}
+
+function buildActivityBadge(activity) {
+    const total = (activity && activity.total) || 0;
+    if (!total) {
+        return {
+            hasActivity: false,
+            cssClass: 'activity-pill activity-pill--cold',
+            label: 'No engagement',
+            countLabel: '0',
+            relativeLabel: '',
+            tooltip: 'No tracked activity'
+        };
+    }
+    const days = relativeDays(activity.lastActivityDate);
+    let freshness = 'cold';
+    if (days != null) {
+        if (days < 7) freshness = 'hot';
+        else if (days < 30) freshness = 'warm';
+    }
+    const relative = formatRelative(days);
+    const parts = [];
+    if (activity.emails) parts.push(`${activity.emails} email${activity.emails === 1 ? '' : 's'}`);
+    if (activity.meetings) parts.push(`${activity.meetings} meeting${activity.meetings === 1 ? '' : 's'}`);
+    if (activity.gongCalls) parts.push(`${activity.gongCalls} Gong call${activity.gongCalls === 1 ? '' : 's'}`);
+    if (activity.last7d) parts.push(`${activity.last7d} in last 7d`);
+    const tooltip = parts.length ? parts.join(' · ') : `${total} activities`;
+    return {
+        hasActivity: true,
+        cssClass: `activity-pill activity-pill--${freshness}`,
+        countLabel: `${total}`,
+        relativeLabel: relative,
+        tooltip,
+        label: relative ? `${total} · ${relative}` : `${total}`
+    };
+}
+
 export default class ContactOrganizer extends LightningElement {
     @api recordId;
 
     @track assignments = {};
     @track searchResults = [];
+    @track summary = {};
     accountName;
     accountId;
     totalContacts = 0;
@@ -54,6 +112,7 @@ export default class ContactOrganizer extends LightningElement {
         this.accountName = data.accountName;
         this.accountId = data.accountId;
         this.totalContacts = data.totalContacts || 0;
+        this.summary = data.summary || {};
         const map = {};
         for (const a of data.assignments || []) {
             map[a.contactId] = {
@@ -62,7 +121,8 @@ export default class ContactOrganizer extends LightningElement {
                 title: a.title,
                 email: a.email,
                 role: a.role,
-                isChampion: !!a.isChampion
+                isChampion: !!a.isChampion,
+                activity: a.activity || {}
             };
         }
         this.assignments = map;
@@ -74,19 +134,25 @@ export default class ContactOrganizer extends LightningElement {
             const tiles = Object.values(this.assignments)
                 .filter((a) => a.role === r.key)
                 .sort((x, y) => (x.name || '').localeCompare(y.name || ''))
-                .map((a) => ({
-                    contactId: a.contactId,
-                    name: a.name,
-                    title: a.title,
-                    email: a.email,
-                    isChampion: a.isChampion,
-                    cssClass: a.isChampion
-                        ? 'contact-tile contact-tile--bucket contact-tile--champion'
-                        : 'contact-tile contact-tile--bucket',
-                    championIcon: a.isChampion ? 'utility:favorite' : 'utility:favorite',
-                    championVariant: a.isChampion ? 'brand' : 'border-filled',
-                    championAlt: a.isChampion ? 'Unmark Champion' : 'Mark as Champion'
-                }));
+                .map((a) => {
+                    const badge = buildActivityBadge(a.activity);
+                    return {
+                        contactId: a.contactId,
+                        name: a.name,
+                        title: a.title,
+                        email: a.email,
+                        isChampion: a.isChampion,
+                        cssClass: a.isChampion
+                            ? 'contact-tile contact-tile--bucket contact-tile--champion'
+                            : 'contact-tile contact-tile--bucket',
+                        championIcon: 'utility:favorite',
+                        championVariant: a.isChampion ? 'brand' : 'border-filled',
+                        championAlt: a.isChampion ? 'Unmark Champion' : 'Mark as Champion',
+                        activityBadge: badge,
+                        hasActivity: badge.hasActivity,
+                        showNoActivity: !badge.hasActivity
+                    };
+                });
             return {
                 key: r.key,
                 label: r.label,
@@ -100,13 +166,19 @@ export default class ContactOrganizer extends LightningElement {
     get searchResultsToRender() {
         return this.searchResults
             .filter((c) => !this.assignments[c.id])
-            .map((c) => ({
-                id: c.id,
-                name: c.name,
-                title: c.title,
-                email: c.email,
-                cssClass: 'contact-tile contact-tile--search'
-            }));
+            .map((c) => {
+                const badge = buildActivityBadge(c.activity);
+                return {
+                    id: c.id,
+                    name: c.name,
+                    title: c.title,
+                    email: c.email,
+                    cssClass: 'contact-tile contact-tile--search',
+                    activityBadge: badge,
+                    hasActivity: badge.hasActivity,
+                    showNoActivity: !badge.hasActivity
+                };
+            });
     }
 
     get hasAccount() {
@@ -164,6 +236,26 @@ export default class ContactOrganizer extends LightningElement {
         return `${this.assignedCount} mapped`;
     }
 
+    get summaryStats() {
+        const s = this.summary || {};
+        const total = s.totalActivities || 0;
+        const last7 = s.activitiesLast7d || 0;
+        const engaged = s.engagedContacts || 0;
+        const lastDays = relativeDays(s.lastActivityDate);
+        const lastLabel = lastDays != null ? formatRelative(lastDays) : '—';
+        return [
+            { key: 'activities', label: 'Activities', value: total.toLocaleString() },
+            { key: 'recent', label: 'Last 7d', value: last7.toLocaleString() },
+            { key: 'engaged', label: 'Engaged', value: `${engaged.toLocaleString()} / ${this.totalContacts.toLocaleString()}` },
+            { key: 'last', label: 'Last touch', value: lastLabel }
+        ];
+    }
+
+    get hasSummary() {
+        const s = this.summary || {};
+        return (s.totalActivities || 0) > 0;
+    }
+
     get saveDisabled() {
         return this.isSaving || !this.isDirty;
     }
@@ -193,6 +285,7 @@ export default class ContactOrganizer extends LightningElement {
             const excludeIds = Object.keys(this.assignments);
             const results = await searchAccountContacts({
                 accountId: this.accountId,
+                opportunityId: this.recordId,
                 searchTerm: this.searchTerm,
                 excludeIds
             });

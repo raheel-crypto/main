@@ -39,6 +39,15 @@
                     </div>
                 </div>
 
+                <div class="summary-strip">
+                    <template for:each={summaryStats} for:item="stat">
+                        <div key={stat.key} class="summary-stat">
+                            <div class="summary-stat__label">{stat.label}</div>
+                            <div class="summary-stat__value">{stat.value}</div>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="organizer-layout">
                     <div
                         class="search-panel"
@@ -74,6 +83,16 @@
                                             <div class="contact-tile__name">{c.name}</div>
                                             <template lwc:if={c.title}>
                                                 <div class="contact-tile__meta">{c.title}</div>
+                                            </template>
+                                            <template lwc:if={c.hasActivity}>
+                                                <span class={c.activityBadge.cssClass} title={c.activityBadge.tooltip}>
+                                                    <lightning-icon icon-name="utility:activity" size="xx-small"></lightning-icon>
+                                                    <span class="activity-pill__count">{c.activityBadge.countLabel}</span>
+                                                    <template lwc:if={c.activityBadge.relativeLabel}>
+                                                        <span class="activity-pill__sep">·</span>
+                                                        <span class="activity-pill__rel">{c.activityBadge.relativeLabel}</span>
+                                                    </template>
+                                                </span>
                                             </template>
                                         </div>
                                         <div class="contact-tile__actions">
@@ -143,6 +162,16 @@
                                                 </div>
                                                 <template lwc:if={t.title}>
                                                     <div class="contact-tile__meta">{t.title}</div>
+                                                </template>
+                                                <template lwc:if={t.hasActivity}>
+                                                    <span class={t.activityBadge.cssClass} title={t.activityBadge.tooltip}>
+                                                        <lightning-icon icon-name="utility:activity" size="xx-small"></lightning-icon>
+                                                        <span class="activity-pill__count">{t.activityBadge.countLabel}</span>
+                                                        <template lwc:if={t.activityBadge.relativeLabel}>
+                                                            <span class="activity-pill__sep">·</span>
+                                                            <span class="activity-pill__rel">{t.activityBadge.relativeLabel}</span>
+                                                        </template>
+                                                    </span>
                                                 </template>
                                             </div>
                                             <div class="contact-tile__actions">

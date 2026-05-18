@@ -226,3 +226,91 @@
 .champion-pill__label {
     line-height: 1;
 }
+
+.summary-strip {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.5rem;
+    margin: 0 0 0.75rem 0;
+    padding: 0.5rem 0.75rem;
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+    border: 1px solid #dddbda;
+    border-radius: 6px;
+}
+
+@media (max-width: 720px) {
+    .summary-strip {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.summary-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+}
+
+.summary-stat__label {
+    font-size: 0.68rem;
+    color: #54698d;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+}
+
+.summary-stat__value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #16325c;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.activity-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+    padding: 0.05rem 0.45rem 0.05rem 0.35rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.activity-pill lightning-icon {
+    --sds-c-icon-color-foreground-default: currentColor;
+}
+
+.activity-pill--hot {
+    background-color: #e4f5e6;
+    color: #1f8a36;
+    border: 1px solid #c4ecc9;
+}
+
+.activity-pill--warm {
+    background-color: #fff4d6;
+    color: #8b6a00;
+    border: 1px solid #f7e3a4;
+}
+
+.activity-pill--cold {
+    background-color: #f0f1f3;
+    color: #6c7a92;
+    border: 1px solid #d8dde6;
+}
+
+.activity-pill__count {
+    font-weight: 700;
+}
+
+.activity-pill__sep {
+    opacity: 0.5;
+}
+
+.activity-pill__rel {
+    font-weight: 500;
+}

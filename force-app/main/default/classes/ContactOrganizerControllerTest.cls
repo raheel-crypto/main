@@ -60,17 +60,54 @@ private class ContactOrganizerControllerTest {
 
         Test.startTest();
         List<ContactOrganizerController.ContactWrapper> noFilter =
-            ContactOrganizerController.searchAccountContacts(opp.AccountId, '', new List<Id>{ excludedId });
+            ContactOrganizerController.searchAccountContacts(opp.AccountId, opp.Id, '', new List<Id>{ excludedId });
         List<ContactOrganizerController.ContactWrapper> withTerm =
-            ContactOrganizerController.searchAccountContacts(opp.AccountId, 'Last2', new List<Id>());
+            ContactOrganizerController.searchAccountContacts(opp.AccountId, opp.Id, 'Last2', new List<Id>());
         Test.stopTest();
 
         System.assertEquals(4, noFilter.size(), 'Excluded id should be omitted');
         for (ContactOrganizerController.ContactWrapper w : noFilter) {
             System.assertNotEquals(excludedId, w.id);
+            System.assertNotEquals(null, w.activity, 'Activity stats wrapper should always be present');
         }
         System.assertEquals(1, withTerm.size());
         System.assertEquals('First2 Last2', withTerm[0].name);
+    }
+
+    @isTest
+    static void loadOrganizerIncludesActivityRollups() {
+        Opportunity opp = setupOppWithContacts(2);
+        List<Contact> contacts = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId ORDER BY LastName];
+
+        insert new Relationship_Map__c(
+            Contact__c = contacts[0].Id,
+            Account__c = opp.AccountId,
+            Opportunity__c = opp.Id,
+            Role__c = 'Senior User'
+        );
+        insert new Task(
+            WhoId = contacts[0].Id,
+            WhatId = opp.Id,
+            Status = 'Completed',
+            Subject = 'Test email',
+            TaskSubtype = 'Email',
+            ActivityDate = Date.today().addDays(-2)
+        );
+
+        Test.startTest();
+        ContactOrganizerController.OrganizerData data = ContactOrganizerController.loadOrganizer(opp.Id);
+        Test.stopTest();
+
+        System.assertNotEquals(null, data.summary);
+        System.assertEquals(1, data.assignments.size());
+        ContactOrganizerController.ActivityStats stats = data.assignments[0].activity;
+        System.assertNotEquals(null, stats);
+        System.assertEquals(1, stats.total);
+        System.assertEquals(1, stats.emails);
+        System.assertEquals(1, stats.last7d);
+        System.assertEquals(Date.today().addDays(-2), stats.lastActivityDate);
+        System.assertEquals(1, data.summary.totalActivities);
+        System.assertEquals(1, data.summary.engagedContacts);
     }
 
     @isTest
