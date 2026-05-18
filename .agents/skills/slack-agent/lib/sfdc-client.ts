@@ -30,6 +30,7 @@ export interface SFDCOpportunity {
   Amount?: number;
   CloseDate: string;
   AccountId: string;
+  Segment__c?: string;
   Account?: {
     Id: string;
     Name: string;
@@ -89,7 +90,9 @@ export function toDealContext(opp: SFDCOpportunity): DealContext {
     account: {
       id: opp.Account?.Id ?? opp.AccountId,
       name: opp.Account?.Name ?? "(unknown)",
-      segment: opp.Account?.Segment__c ?? null,
+      // Segment__c lives on the Opportunity in this org; fall back to the
+      // Account field for older records where it may only be set there.
+      segment: opp.Segment__c ?? opp.Account?.Segment__c ?? null,
     },
     opportunity: {
       id: opp.Id,
@@ -108,7 +111,7 @@ export function toDealContext(opp: SFDCOpportunity): DealContext {
 
 function selectOpportunityFields(): string {
   return (
-    `SELECT Id, Name, StageName, Amount, CloseDate, AccountId, ` +
+    `SELECT Id, Name, StageName, Amount, CloseDate, AccountId, Segment__c, ` +
     `Account.Id, Account.Name, Account.Segment__c, Account.Type, Account.Industry, ` +
     `Owner.Id, Owner.Name, Owner.Email, Owner.Slack_User_Id__c, ` +
     `Owner.Manager.Id, Owner.Manager.Name, Owner.Manager.Slack_User_Id__c`
