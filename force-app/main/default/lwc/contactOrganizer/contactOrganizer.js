@@ -26,6 +26,7 @@ export default class ContactOrganizer extends LightningElement {
     isSaving = false;
     isSearching = false;
     isDirty = false;
+    hasLoadedData = false;
     errorMessage;
     wiredResult;
     searchTerm = '';
@@ -38,12 +39,14 @@ export default class ContactOrganizer extends LightningElement {
         const { data, error } = result;
         if (data) {
             this.hydrate(data);
-            this.isLoading = false;
             this.errorMessage = undefined;
+            this.hasLoadedData = true;
+            this.isLoading = false;
             this.runSearch();
         } else if (error) {
-            this.isLoading = false;
             this.errorMessage = this.extractError(error);
+            this.hasLoadedData = true;
+            this.isLoading = false;
         }
     }
 
@@ -108,6 +111,18 @@ export default class ContactOrganizer extends LightningElement {
 
     get hasAccount() {
         return !!this.accountId;
+    }
+
+    get showError() {
+        return !this.isLoading && !!this.errorMessage;
+    }
+
+    get showMainUI() {
+        return !this.isLoading && this.hasLoadedData && !this.errorMessage && !!this.accountId;
+    }
+
+    get showNoAccountMessage() {
+        return !this.isLoading && this.hasLoadedData && !this.errorMessage && !this.accountId;
     }
 
     get hasSearchResults() {

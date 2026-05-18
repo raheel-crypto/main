@@ -17,14 +17,16 @@
 
         <div class="slds-p-horizontal_medium">
             <template lwc:if={isLoading}>
-                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                <div class="slds-is-relative slds-p-vertical_large">
+                    <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                </div>
             </template>
 
-            <template lwc:elif={errorMessage}>
+            <template lwc:if={showError}>
                 <div class="slds-text-color_error slds-p-vertical_small">{errorMessage}</div>
             </template>
 
-            <template lwc:elif={hasAccount}>
+            <template lwc:if={showMainUI}>
                 <div class="organizer-meta">
                     <div>
                         <span class="slds-text-title_caps">Account:</span>
@@ -181,7 +183,7 @@
                 </div>
             </template>
 
-            <template lwc:else>
+            <template lwc:if={showNoAccountMessage}>
                 <div class="slds-text-body_regular slds-p-vertical_small">
                     This Opportunity is not linked to an Account. Set an Account on the Opportunity to organize contacts.
                 </div>
