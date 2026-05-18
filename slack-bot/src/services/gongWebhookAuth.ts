@@ -43,19 +43,34 @@ function verifyHs256(
   return crypto.timingSafeEqual(expected, signature);
 }
 
+function publicKeyCandidates(input: string): string[] {
+  const trimmed = input.trim();
+  if (trimmed.startsWith("-----BEGIN")) return [trimmed];
+  const body = trimmed.replace(/\s+/g, "");
+  const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? body;
+  return [
+    `-----BEGIN PUBLIC KEY-----\n${wrapped}\n-----END PUBLIC KEY-----`,
+    `-----BEGIN RSA PUBLIC KEY-----\n${wrapped}\n-----END RSA PUBLIC KEY-----`,
+  ];
+}
+
 function verifyRs256(
   signed: string,
   signature: Buffer,
   pem: string
 ): boolean {
-  try {
-    return crypto
-      .createVerify("RSA-SHA256")
-      .update(signed)
-      .verify(pem, signature);
-  } catch {
-    return false;
+  for (const candidate of publicKeyCandidates(pem)) {
+    try {
+      const ok = crypto
+        .createVerify("RSA-SHA256")
+        .update(signed)
+        .verify(candidate, signature);
+      if (ok) return true;
+    } catch {
+      // try next candidate
+    }
   }
+  return false;
 }
 
 export function verifyJwt(
