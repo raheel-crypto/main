@@ -407,15 +407,23 @@ export default class ContactOrganizer extends LightningElement {
             isChampion: !!a.isChampion
         }));
         try {
-            await saveAssignments({
+            const result = await saveAssignments({
                 opportunityId: this.recordId,
                 assignments: inputs
             });
             this.isDirty = false;
+            const r = result || {};
+            const changed = (r.inserted || 0) + (r.updated || 0) + (r.deleted || 0);
+            const variant =
+                inputs.length > 0 && changed === 0 ? 'warning' : 'success';
+            const message =
+                inputs.length > 0 && changed === 0
+                    ? `Sent ${inputs.length} but server saved 0 — check field permissions or validation rules.`
+                    : `Inserted ${r.inserted || 0} · Updated ${r.updated || 0} · Removed ${r.deleted || 0}`;
             this.dispatchEvent(new ShowToastEvent({
-                title: 'Saved',
-                message: 'Relationship map updated.',
-                variant: 'success'
+                title: variant === 'success' ? 'Saved' : 'No changes persisted',
+                message,
+                variant
             }));
             await refreshApex(this.wiredResult);
             this.runSearch();

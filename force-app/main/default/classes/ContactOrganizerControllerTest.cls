@@ -129,8 +129,15 @@ private class ContactOrganizerControllerTest {
         inputs.add(b);
 
         Test.startTest();
-        ContactOrganizerController.saveAssignments(opp.Id, inputs);
+        ContactOrganizerController.SaveResult result =
+            ContactOrganizerController.saveAssignments(opp.Id, inputs);
         Test.stopTest();
+
+        System.assertEquals(2, result.received);
+        System.assertEquals(2, result.inserted);
+        System.assertEquals(0, result.updated);
+        System.assertEquals(0, result.deleted);
+        System.assertEquals(0, result.skipped);
 
         Map<Id, Relationship_Map__c> byContact = new Map<Id, Relationship_Map__c>();
         for (Relationship_Map__c rm : [

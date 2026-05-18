@@ -193,14 +193,24 @@ public with sharing class ContactOrganizerController {
         return results;
     }
 
+    public class SaveResult {
+        @AuraEnabled public Integer inserted = 0;
+        @AuraEnabled public Integer updated = 0;
+        @AuraEnabled public Integer deleted = 0;
+        @AuraEnabled public Integer received = 0;
+        @AuraEnabled public Integer skipped = 0;
+    }
+
     @AuraEnabled
-    public static void saveAssignments(Id opportunityId, List<RelationshipMapInput> assignments) {
+    public static SaveResult saveAssignments(Id opportunityId, List<RelationshipMapInput> assignments) {
+        SaveResult outcome = new SaveResult();
         if (opportunityId == null) {
             throw new AuraHandledException('Opportunity Id is required.');
         }
         if (assignments == null) {
             assignments = new List<RelationshipMapInput>();
         }
+        outcome.received = assignments.size();
 
         List<Opportunity> opps = [
             SELECT Id, AccountId
@@ -219,6 +229,7 @@ public with sharing class ContactOrganizerController {
         Map<Id, RelationshipMapInput> desired = new Map<Id, RelationshipMapInput>();
         for (RelationshipMapInput input : assignments) {
             if (input.contactId == null || String.isBlank(input.role)) {
+                outcome.skipped++;
                 continue;
             }
             if (!VALID_ROLES.contains(input.role)) {
@@ -279,6 +290,11 @@ public with sharing class ContactOrganizerController {
         if (!toInsert.isEmpty()) insert toInsert;
         if (!toUpdate.isEmpty()) update toUpdate;
         if (!toDelete.isEmpty()) delete toDelete;
+
+        outcome.inserted = toInsert.size();
+        outcome.updated = toUpdate.size();
+        outcome.deleted = toDelete.size();
+        return outcome;
     }
 
     // ── Activity rollup helpers ──────────────────────────────────────────
