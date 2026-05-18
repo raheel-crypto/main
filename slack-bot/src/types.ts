@@ -10,6 +10,9 @@ export interface UserPrefs {
   lastRunDate: string | null;
   active: boolean;
   gongRealtimeEnabled: boolean;
+  gongFirehoseEnabled: boolean;
+  nooksRealtimeEnabled: boolean;
+  nooksFirehoseEnabled: boolean;
 }
 
 export interface SfTokens {
@@ -144,7 +147,9 @@ export type AuditAction =
   | "task_created"
   | "task_create_failed"
   | "gong_realtime_surfaced"
-  | "gong_realtime_dropped";
+  | "gong_realtime_dropped"
+  | "nooks_realtime_surfaced"
+  | "nooks_realtime_dropped";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",

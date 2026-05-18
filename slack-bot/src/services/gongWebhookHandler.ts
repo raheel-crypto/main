@@ -1,13 +1,17 @@
 import { WebClient } from "@slack/web-api";
 import { config } from "../config.js";
-import { appendAudit, getUserByEmail } from "../db/queries.js";
+import {
+  appendAudit,
+  getFirehoseSubscribers,
+  getUserByEmail,
+} from "../db/queries.js";
 import { gongCallDigestCard } from "../slack/blocks.js";
 import type { GongWebhookPayload, GongWebhookParty } from "../types.js";
 
 export interface GongHandleResult {
   ok: boolean;
   reason?: string;
-  dmTo?: string;
+  dmTo?: string[];
 }
 
 export function pickHost(payload: GongWebhookPayload): {
@@ -74,52 +78,78 @@ export async function handleGongWebhook(
   if (!callId) {
     return { ok: true, reason: "no_call_id" };
   }
-  if (!hostEmail) {
-    return { ok: true, reason: "no_host_email" };
+
+  const targets = new Map<string, "host" | "firehose">();
+
+  if (hostEmail) {
+    const host = await getUserByEmail(hostEmail);
+    if (host?.gongRealtimeEnabled) {
+      targets.set(host.slackUserId, "host");
+    } else if (!host) {
+      console.log(`[gong] no enrolled user for hostEmail=${hostEmail}`);
+    }
   }
 
-  const user = await getUserByEmail(hostEmail);
-  if (!user) {
-    console.log(`[gong] no enrolled user for hostEmail=${hostEmail}`);
-    return { ok: true, reason: "user_not_enrolled" };
+  const firehoseSubs = await getFirehoseSubscribers("gong");
+  for (const sub of firehoseSubs) {
+    if (!targets.has(sub.slackUserId)) {
+      targets.set(sub.slackUserId, "firehose");
+    }
   }
-  if (!user.gongRealtimeEnabled) {
-    return { ok: true, reason: "opted_out" };
+
+  if (targets.size === 0) {
+    return {
+      ok: true,
+      reason: hostEmail ? "no_subscribers" : "no_host_email_no_firehose",
+    };
   }
 
   if (!config.slack.botToken) {
     return { ok: true, reason: "no_slack_bot_token" };
   }
 
-  await appendAudit({
-    slackUserId: user.slackUserId,
-    action: "gong_realtime_surfaced",
-    metadata: {
-      callId,
-      hostEmail,
-      title: callData?.metaData?.title ?? null,
-    },
-  });
+  for (const [slackUserId, routing] of targets) {
+    await appendAudit({
+      slackUserId,
+      action: "gong_realtime_surfaced",
+      metadata: {
+        callId,
+        hostEmail,
+        title: callData?.metaData?.title ?? null,
+        routing,
+      },
+    });
+  }
 
   if (config.dryRun) {
     console.log(
-      `[gong] dry-run: would DM ${user.slackUserId} for call ${callId}`
+      `[gong] dry-run: would DM ${[...targets.keys()].join(", ")} for call ${callId}`
     );
-    return { ok: true, dmTo: user.slackUserId, reason: "dry_run" };
+    return {
+      ok: true,
+      dmTo: [...targets.keys()],
+      reason: "dry_run",
+    };
   }
 
   const slack = new WebClient(config.slack.botToken);
   const card = gongCallDigestCard(payload, { hostName });
-  try {
-    await slack.chat.postMessage({
-      channel: user.slackUserId,
-      unfurl_links: false,
-      unfurl_media: false,
-      ...card,
-    });
-    return { ok: true, dmTo: user.slackUserId };
-  } catch (err: any) {
-    console.error("[gong] DM failed:", err?.message ?? err);
-    return { ok: false, reason: `dm_failed: ${err?.message ?? String(err)}` };
+  const sent: string[] = [];
+  for (const [slackUserId, routing] of targets) {
+    try {
+      await slack.chat.postMessage({
+        channel: slackUserId,
+        unfurl_links: false,
+        unfurl_media: false,
+        ...card,
+      });
+      sent.push(slackUserId);
+    } catch (err: any) {
+      console.error(
+        `[gong] DM to ${slackUserId} (${routing}) failed:`,
+        err?.message ?? err
+      );
+    }
   }
+  return { ok: true, dmTo: sent };
 }

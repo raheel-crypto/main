@@ -10,7 +10,12 @@ import {
   upsertUser,
 } from "../db/queries.js";
 import {
-  GONG_REALTIME_OPTION_VALUE,
+  GONG_BLOCK_ID,
+  GONG_FIREHOSE_VALUE,
+  GONG_HOST_VALUE,
+  NOOKS_BLOCK_ID,
+  NOOKS_FIREHOSE_VALUE,
+  NOOKS_HOST_VALUE,
   SUBSCRIPTIONS_CALLBACK_ID,
 } from "./subscriptionsModal.js";
 import {
@@ -746,18 +751,31 @@ export async function saveUserPrefs(args: {
 export function registerSubscriptionsSubmit(app: App): void {
   app.view(SUBSCRIPTIONS_CALLBACK_ID, async ({ ack, body, view }) => {
     await ack();
-    const selected =
-      view.state.values["gong_block"]?.["value"]?.selected_options ?? [];
-    const gongRealtimeEnabled = selected.some(
-      (o: { value?: string }) => o.value === GONG_REALTIME_OPTION_VALUE
-    );
-    await updateSubscriptionPrefs(body.user.id, { gongRealtimeEnabled });
+    const gongSelected =
+      view.state.values[GONG_BLOCK_ID]?.["value"]?.selected_options ?? [];
+    const nooksSelected =
+      view.state.values[NOOKS_BLOCK_ID]?.["value"]?.selected_options ?? [];
+    const has = (
+      arr: Array<{ value?: string }>,
+      v: string
+    ): boolean => arr.some((o) => o.value === v);
+    const prefs = {
+      gongRealtimeEnabled: has(gongSelected, GONG_HOST_VALUE),
+      gongFirehoseEnabled: has(gongSelected, GONG_FIREHOSE_VALUE),
+      nooksRealtimeEnabled: has(nooksSelected, NOOKS_HOST_VALUE),
+      nooksFirehoseEnabled: has(nooksSelected, NOOKS_FIREHOSE_VALUE),
+    };
+    await updateSubscriptionPrefs(body.user.id, prefs);
+
+    const onOff = (b: boolean) => (b ? "on" : "off");
     await app.client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
-      text: gongRealtimeEnabled
-        ? "Saved. Real-time Gong DMs are *on*."
-        : "Saved. Real-time Gong DMs are *off*.",
+      text: `Saved.  Gong host: *${onOff(prefs.gongRealtimeEnabled)}* · Gong firehose: *${onOff(
+        prefs.gongFirehoseEnabled
+      )}* · Nooks host: *${onOff(prefs.nooksRealtimeEnabled)}* · Nooks firehose: *${onOff(
+        prefs.nooksFirehoseEnabled
+      )}*.`,
     });
   });
 }

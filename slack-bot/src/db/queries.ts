@@ -20,6 +20,9 @@ interface UserRow {
   last_run_date: string | Date | null;
   active: boolean;
   gong_realtime_enabled: boolean | null;
+  gong_firehose_enabled: boolean | null;
+  nooks_realtime_enabled: boolean | null;
+  nooks_firehose_enabled: boolean | null;
 }
 
 function rowToUserPrefs(r: UserRow): UserPrefs {
@@ -33,14 +36,26 @@ function rowToUserPrefs(r: UserRow): UserPrefs {
     lastRunDate: r.last_run_date ? String(r.last_run_date) : null,
     active: r.active,
     gongRealtimeEnabled: r.gong_realtime_enabled ?? false,
+    gongFirehoseEnabled: r.gong_firehose_enabled ?? false,
+    nooksRealtimeEnabled: r.nooks_realtime_enabled ?? false,
+    nooksFirehoseEnabled: r.nooks_firehose_enabled ?? false,
   };
 }
 
 const USER_SELECT_COLUMNS = `slack_user_id, slack_team_id, email, timezone, preferred_hour,
-            preferred_minute, last_run_date, active, gong_realtime_enabled`;
+            preferred_minute, last_run_date, active, gong_realtime_enabled,
+            gong_firehose_enabled, nooks_realtime_enabled, nooks_firehose_enabled`;
 
 export async function upsertUser(
-  p: Omit<UserPrefs, "lastRunDate" | "active" | "gongRealtimeEnabled"> & {
+  p: Omit<
+    UserPrefs,
+    | "lastRunDate"
+    | "active"
+    | "gongRealtimeEnabled"
+    | "gongFirehoseEnabled"
+    | "nooksRealtimeEnabled"
+    | "nooksFirehoseEnabled"
+  > & {
     active?: boolean;
   }
 ): Promise<void> {
@@ -94,15 +109,42 @@ export async function getUserByEmail(email: string): Promise<UserPrefs | null> {
 
 export async function updateSubscriptionPrefs(
   slackUserId: string,
-  patch: { gongRealtimeEnabled?: boolean }
+  patch: {
+    gongRealtimeEnabled?: boolean;
+    gongFirehoseEnabled?: boolean;
+    nooksRealtimeEnabled?: boolean;
+    nooksFirehoseEnabled?: boolean;
+  }
 ): Promise<void> {
   const pool = getPool();
   await pool.query(
     `UPDATE users
-        SET gong_realtime_enabled = COALESCE($2, gong_realtime_enabled)
+        SET gong_realtime_enabled  = COALESCE($2, gong_realtime_enabled),
+            gong_firehose_enabled  = COALESCE($3, gong_firehose_enabled),
+            nooks_realtime_enabled = COALESCE($4, nooks_realtime_enabled),
+            nooks_firehose_enabled = COALESCE($5, nooks_firehose_enabled)
       WHERE slack_user_id = $1`,
-    [slackUserId, patch.gongRealtimeEnabled ?? null]
+    [
+      slackUserId,
+      patch.gongRealtimeEnabled ?? null,
+      patch.gongFirehoseEnabled ?? null,
+      patch.nooksRealtimeEnabled ?? null,
+      patch.nooksFirehoseEnabled ?? null,
+    ]
   );
+}
+
+export async function getFirehoseSubscribers(
+  feed: "gong" | "nooks"
+): Promise<UserPrefs[]> {
+  const pool = getPool();
+  const column =
+    feed === "gong" ? "gong_firehose_enabled" : "nooks_firehose_enabled";
+  const { rows } = await pool.query(
+    `SELECT ${USER_SELECT_COLUMNS}
+       FROM users WHERE ${column} = true`
+  );
+  return (rows as UserRow[]).map(rowToUserPrefs);
 }
 
 export async function getDueUsers(): Promise<UserPrefs[]> {

@@ -8,10 +8,18 @@ CREATE TABLE IF NOT EXISTS users (
   last_run_date DATE,
   active BOOLEAN NOT NULL DEFAULT true,
   gong_realtime_enabled BOOLEAN NOT NULL DEFAULT false,
+  gong_firehose_enabled BOOLEAN NOT NULL DEFAULT false,
+  nooks_realtime_enabled BOOLEAN NOT NULL DEFAULT false,
+  nooks_firehose_enabled BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS gong_realtime_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS gong_firehose_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_realtime_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_firehose_enabled BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_users_gong_firehose ON users(gong_firehose_enabled) WHERE gong_firehose_enabled = true;
+CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose ON users(nooks_firehose_enabled) WHERE nooks_firehose_enabled = true;
 
 CREATE TABLE IF NOT EXISTS sf_tokens (
   slack_user_id TEXT PRIMARY KEY REFERENCES users(slack_user_id) ON DELETE CASCADE,
