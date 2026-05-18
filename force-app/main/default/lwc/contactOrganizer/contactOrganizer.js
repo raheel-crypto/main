@@ -362,7 +362,8 @@ export default class ContactOrganizer extends LightningElement {
                 title: fromSearch.title,
                 email: fromSearch.email,
                 role,
-                isChampion: false
+                isChampion: false,
+                activity: fromSearch.activity || {}
             }
         };
         this.isDirty = true;
