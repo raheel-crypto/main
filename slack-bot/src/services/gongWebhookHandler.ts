@@ -2,7 +2,7 @@ import { WebClient } from "@slack/web-api";
 import { config } from "../config.js";
 import { appendAudit, getUserByEmail } from "../db/queries.js";
 import { gongCallDigestCard } from "../slack/blocks.js";
-import type { GongWebhookPayload } from "../types.js";
+import type { GongWebhookPayload, GongWebhookParty } from "../types.js";
 
 export interface GongHandleResult {
   ok: boolean;
@@ -10,48 +10,70 @@ export interface GongHandleResult {
   dmTo?: string;
 }
 
-function pickHostEmail(payload: GongWebhookPayload): {
+export function pickHost(payload: GongWebhookPayload): {
   email: string | null;
   name: string | null;
+  userId: string | null;
 } {
-  if (payload.hostEmail) {
-    return { email: payload.hostEmail, name: payload.hostName ?? null };
+  const callData = payload.callData;
+  if (!callData) return { email: null, name: null, userId: null };
+  const parties: GongWebhookParty[] = callData.parties ?? [];
+  const primaryUserId = callData.metaData?.primaryUserId ?? null;
+  if (primaryUserId) {
+    const host = parties.find((p) => p?.userId === primaryUserId);
+    if (host?.emailAddress) {
+      return {
+        email: host.emailAddress,
+        name: host.name ?? null,
+        userId: primaryUserId,
+      };
+    }
   }
-  const parties = payload.parties ?? [];
-  const flaggedHost = parties.find(
+  const internal = parties.find(
     (p) =>
-      p?.isHost === true &&
+      String(p?.affiliation ?? "").toLowerCase() === "internal" &&
       typeof p.emailAddress === "string" &&
-      (p.affiliation == null || p.affiliation === "internal")
+      p.emailAddress.length > 0
   );
-  if (flaggedHost?.emailAddress) {
+  if (internal?.emailAddress) {
     return {
-      email: flaggedHost.emailAddress,
-      name: flaggedHost.name ?? null,
+      email: internal.emailAddress,
+      name: internal.name ?? null,
+      userId: internal.userId ?? null,
     };
   }
-  return { email: null, name: null };
+  return { email: null, name: null, userId: primaryUserId };
 }
 
 export async function handleGongWebhook(
   payload: GongWebhookPayload,
   headers?: Record<string, unknown>
 ): Promise<GongHandleResult> {
-  const { email: hostEmail, name: hostName } = pickHostEmail(payload);
+  const callData = payload.callData;
+  const callId = callData?.metaData?.id ?? null;
+  const { email: hostEmail, name: hostName, userId: hostUserId } =
+    pickHost(payload);
+
   console.log(
     "[gong] received",
     JSON.stringify({
-      callId: payload.callId,
-      title: payload.title,
+      callId,
+      title: callData?.metaData?.title ?? null,
+      started: callData?.metaData?.started ?? null,
+      duration: callData?.metaData?.duration ?? null,
       hostEmail,
       hostName,
-      partiesCount: payload.parties?.length ?? 0,
-      hasBrief: typeof payload.brief === "string" && payload.brief.length > 0,
+      hostUserId,
+      partiesCount: callData?.parties?.length ?? 0,
+      isTest: payload.isTest ?? null,
     })
   );
   console.log("[gong] full payload:", JSON.stringify(payload));
   if (headers) console.log("[gong] headers:", JSON.stringify(headers));
 
+  if (!callId) {
+    return { ok: true, reason: "no_call_id" };
+  }
   if (!hostEmail) {
     return { ok: true, reason: "no_host_email" };
   }
@@ -73,15 +95,15 @@ export async function handleGongWebhook(
     slackUserId: user.slackUserId,
     action: "gong_realtime_surfaced",
     metadata: {
-      callId: payload.callId,
+      callId,
       hostEmail,
-      title: payload.title ?? null,
+      title: callData?.metaData?.title ?? null,
     },
   });
 
   if (config.dryRun) {
     console.log(
-      `[gong] dry-run: would DM ${user.slackUserId} for call ${payload.callId}`
+      `[gong] dry-run: would DM ${user.slackUserId} for call ${callId}`
     );
     return { ok: true, dmTo: user.slackUserId, reason: "dry_run" };
   }

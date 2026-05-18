@@ -337,25 +337,65 @@ export interface NooksWebhookPayload {
 }
 
 export interface GongWebhookParty {
-  emailAddress?: string | null;
+  id?: string | null;
   name?: string | null;
-  affiliation?: "internal" | "external" | string | null;
-  isHost?: boolean | null;
+  emailAddress?: string | null;
+  userId?: string | null;
   speakerId?: string | null;
+  title?: string | null;
+  affiliation?: "Internal" | "External" | "Unknown" | string | null;
+  methods?: string[] | null;
+  phoneNumber?: string | null;
+}
+
+export interface GongWebhookMetaData {
+  id: string;
+  url?: string | null;
+  title?: string | null;
+  started?: string | null;
+  scheduled?: string | null;
+  duration?: number | null;
+  primaryUserId?: string | null;
+  direction?: string | null;
+  scope?: string | null;
+  language?: string | null;
+  workspaceId?: string | null;
+}
+
+export interface GongContextField {
+  name: string;
+  value: unknown;
+}
+
+export interface GongContextObject {
+  objectType: string;
+  objectId: string;
+  fields?: GongContextField[] | null;
+  timing?: string | null;
+}
+
+export interface GongContextBlock {
+  system: string;
+  objects?: GongContextObject[] | null;
+}
+
+export interface GongContentTopic {
+  name: string;
+  duration?: number | null;
+}
+
+export interface GongWebhookCallData {
+  metaData: GongWebhookMetaData;
+  parties?: GongWebhookParty[] | null;
+  context?: GongContextBlock[] | null;
+  content?: { topics?: GongContentTopic[] | null; [key: string]: unknown } | null;
+  [key: string]: unknown;
 }
 
 export interface GongWebhookPayload {
-  callId: string;
-  url?: string | null;
-  title?: string | null;
-  scheduledStart?: string | null;
-  started?: string | null;
-  duration?: number | null;
-  hostEmail?: string | null;
-  hostName?: string | null;
-  parties?: GongWebhookParty[] | null;
-  brief?: string | null;
-  outcome?: string | null;
+  callData: GongWebhookCallData;
+  isTest?: boolean | null;
+  isPrivate?: boolean | null;
   [key: string]: unknown;
 }
 

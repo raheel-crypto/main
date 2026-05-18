@@ -78,14 +78,13 @@ export default async function handler(
     return;
   }
 
-  if (
-    !body ||
-    typeof body !== "object" ||
-    !(body as GongWebhookPayload).callId
-  ) {
+  const callId =
+    body &&
+    typeof body === "object" &&
+    (body as GongWebhookPayload).callData?.metaData?.id;
+  if (!callId) {
     console.log(
-      "[gong/webhook] preflight-shaped body, returning 200:",
-      JSON.stringify(body)
+      "[gong/webhook] preflight-shaped body (no callData.metaData.id), returning 200"
     );
     res.statusCode = 200;
     res.setHeader("Content-Type", "application/json");

@@ -909,6 +909,21 @@ export function nooksCallDigestCard(
   return { blocks, text };
 }
 
+function gongFieldValue(
+  obj: { fields?: { name: string; value: unknown }[] | null } | undefined,
+  name: string
+): string | null {
+  const v = obj?.fields?.find((f) => f.name === name)?.value;
+  if (v == null) return null;
+  if (typeof v === "string") return v;
+  if (typeof v === "number") return String(v);
+  if (Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number")) {
+    const [y, m, d] = v as number[];
+    return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+  return String(v);
+}
+
 export function gongCallDigestCard(
   payload: GongWebhookPayload,
   opts: { hostName?: string | null } = {}
@@ -916,28 +931,34 @@ export function gongCallDigestCard(
   const isValidHttpUrl = (u: string | null | undefined): u is string =>
     typeof u === "string" && /^https?:\/\//i.test(u);
 
+  const callData = payload.callData;
+  const meta = callData?.metaData;
+  const callId = meta?.id ?? "";
   const title =
-    typeof payload.title === "string" && payload.title.trim()
-      ? payload.title.trim()
+    typeof meta?.title === "string" && meta.title.trim()
+      ? meta.title.trim()
       : "Gong call";
 
+  const parties = callData?.parties ?? [];
+  const primaryUserId = meta?.primaryUserId ?? null;
+  const hostParty =
+    parties.find((p) => primaryUserId && p?.userId === primaryUserId) ?? null;
   const hostLabel =
     opts.hostName ||
-    payload.hostName ||
-    payload.hostEmail ||
+    hostParty?.name ||
+    hostParty?.emailAddress ||
     "(unknown host)";
 
   const durationMin =
-    typeof payload.duration === "number" && payload.duration > 0
-      ? Math.round(payload.duration / 60)
+    typeof meta?.duration === "number" && meta.duration > 0
+      ? Math.round(meta.duration / 60)
       : null;
 
-  const parties = payload.parties ?? [];
   const internal = parties.filter(
-    (p) => p?.affiliation === "internal"
+    (p) => String(p?.affiliation ?? "").toLowerCase() === "internal"
   ).length;
   const external = parties.filter(
-    (p) => p?.affiliation === "external"
+    (p) => String(p?.affiliation ?? "").toLowerCase() === "external"
   ).length;
   const partySummary =
     parties.length > 0
@@ -959,46 +980,78 @@ export function gongCallDigestCard(
     },
     {
       type: "context",
-      elements: [
-        { type: "mrkdwn", text: contextParts.join(" · ") },
-      ],
+      elements: [{ type: "mrkdwn", text: contextParts.join(" · ") }],
     },
   ];
 
-  const brief =
-    typeof payload.brief === "string" ? payload.brief.trim() : "";
-  if (brief) {
+  const sfContext = callData?.context?.find(
+    (c) => String(c?.system ?? "").toLowerCase() === "salesforce"
+  );
+  const sfAccount = sfContext?.objects?.find(
+    (o) => o.objectType === "Account"
+  );
+  const sfOpp = sfContext?.objects?.find(
+    (o) => o.objectType === "Opportunity"
+  );
+
+  const sfLines: string[] = [];
+  if (sfAccount) {
+    const name = gongFieldValue(sfAccount, "Name") ?? sfAccount.objectId;
+    sfLines.push(`*Account*: ${name}`);
+  }
+  if (sfOpp) {
+    const oppName = gongFieldValue(sfOpp, "Name") ?? sfOpp.objectId;
+    const stage = gongFieldValue(sfOpp, "StageName");
+    const amount = gongFieldValue(sfOpp, "Amount");
+    const closeDate = gongFieldValue(sfOpp, "CloseDate");
+    const oppBits = [oppName];
+    if (stage) oppBits.push(stage);
+    if (amount) oppBits.push(`$${Number(amount).toLocaleString()}`);
+    if (closeDate) oppBits.push(`closes ${closeDate}`);
+    sfLines.push(`*Opportunity*: ${oppBits.join(" · ")}`);
+  }
+  if (sfLines.length > 0) {
     blocks.push({
       type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `> ${brief.slice(0, 2000)}`,
-      },
+      text: { type: "mrkdwn", text: sfLines.join("\n") },
     });
   }
 
-  if (isValidHttpUrl(payload.url)) {
+  const topics = callData?.content?.topics ?? [];
+  const topicLine = topics
+    .filter((t) => typeof t?.duration === "number" && (t.duration ?? 0) > 0)
+    .sort((a, b) => (b.duration ?? 0) - (a.duration ?? 0))
+    .slice(0, 4)
+    .map((t) => `${t.name} (${Math.round((t.duration ?? 0) / 60)}m)`)
+    .join(" · ");
+  if (topicLine) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Topics*: ${topicLine}` },
+    });
+  }
+
+  if (isValidHttpUrl(meta?.url)) {
     blocks.push({
       type: "actions",
       elements: [
         {
           type: "button",
           text: { type: "plain_text", text: "Open in Gong" },
-          url: payload.url,
+          url: meta!.url!,
         },
       ],
     });
   }
 
-  blocks.push({
-    type: "context",
-    elements: [
-      {
-        type: "mrkdwn",
-        text: `Call ID: \`${payload.callId}\``,
-      },
-    ],
-  });
+  if (callId) {
+    blocks.push({
+      type: "context",
+      elements: [
+        { type: "mrkdwn", text: `Call ID: \`${callId}\`` },
+      ],
+    });
+  }
 
   return { blocks, text };
 }
