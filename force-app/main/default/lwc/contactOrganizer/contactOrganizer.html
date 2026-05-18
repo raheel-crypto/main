@@ -96,6 +96,15 @@
                                             </template>
                                         </div>
                                         <div class="contact-tile__actions">
+                                            <lightning-button-icon
+                                                icon-name="utility:info"
+                                                variant="bare"
+                                                size="small"
+                                                alternative-text="View details"
+                                                title="View details"
+                                                data-contact-id={c.id}
+                                                onclick={handleOpenDetail}>
+                                            </lightning-button-icon>
                                             <lightning-button-menu
                                                 alternative-text="Add to bucket"
                                                 icon-name="utility:add"
@@ -176,6 +185,15 @@
                                             </div>
                                             <div class="contact-tile__actions">
                                                 <lightning-button-icon
+                                                    icon-name="utility:info"
+                                                    variant="bare"
+                                                    size="small"
+                                                    alternative-text="View details"
+                                                    title="View details"
+                                                    data-contact-id={t.contactId}
+                                                    onclick={handleOpenDetail}>
+                                                </lightning-button-icon>
+                                                <lightning-button-icon
                                                     icon-name={t.championIcon}
                                                     variant={t.championVariant}
                                                     size="small"
@@ -214,4 +232,181 @@
             </template>
         </div>
     </lightning-card>
+
+    <template lwc:if={isDetailOpen}>
+        <section
+            class="detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="detail-modal-title"
+            onclick={handleDetailBackdrop}>
+            <div class="detail-modal__panel">
+                <header class="detail-modal__header">
+                    <div class="detail-modal__title-wrap">
+                        <h2 id="detail-modal-title" class="detail-modal__title">{detailHeaderLabel}</h2>
+                        <template lwc:if={contactDetail.title}>
+                            <div class="detail-modal__subtitle">{contactDetail.title}</div>
+                        </template>
+                        <template lwc:if={contactDetail.email}>
+                            <div class="detail-modal__email">{contactDetail.email}</div>
+                        </template>
+                    </div>
+                    <lightning-button-icon
+                        icon-name="utility:close"
+                        variant="bare"
+                        size="medium"
+                        alternative-text="Close"
+                        title="Close"
+                        onclick={handleCloseDetail}>
+                    </lightning-button-icon>
+                </header>
+
+                <div class="detail-modal__body">
+                    <template lwc:if={isLoadingDetail}>
+                        <div class="detail-modal__loading">
+                            <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                        </div>
+                    </template>
+
+                    <template lwc:if={detailError}>
+                        <div class="slds-text-color_error slds-p-vertical_small">{detailError}</div>
+                    </template>
+
+                    <template lwc:if={detailHasContent}>
+                        <div class="detail-section">
+                            <div class="summary-strip detail-summary">
+                                <template for:each={detailStats} for:item="stat">
+                                    <div key={stat.key} class="summary-stat">
+                                        <div class="summary-stat__label">{stat.label}</div>
+                                        <div class="summary-stat__value">{stat.value}</div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="detail-breakdown">
+                                <template for:each={detailBreakdown} for:item="b">
+                                    <div key={b.key} class="detail-breakdown__item">
+                                        <lightning-icon icon-name={b.icon} size="xx-small"></lightning-icon>
+                                        <span class="detail-breakdown__value">{b.value}</span>
+                                        <span class="detail-breakdown__label">{b.label}</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <div class="detail-columns">
+                            <div class="detail-col">
+                                <template lwc:if={hasTimeline}>
+                                    <div class="detail-section">
+                                        <h3 class="detail-section__title">Recent activity</h3>
+                                        <ul class="timeline">
+                                            <template for:each={detailTimeline} for:item="item">
+                                                <li key={item.key} class="timeline__item">
+                                                    <div class="timeline__top">
+                                                        <span class="timeline__type">{item.type}</span>
+                                                        <span class="timeline__date">{item.relative}</span>
+                                                    </div>
+                                                    <div class="timeline__subject">{item.subject}</div>
+                                                </li>
+                                            </template>
+                                        </ul>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="detail-col">
+                                <template lwc:if={hasAnyGong}>
+                                    <div class="detail-section">
+                                        <h3 class="detail-section__title">Gong insights</h3>
+
+                                        <template lwc:if={hasGongTopics}>
+                                            <div class="detail-subsection">
+                                                <div class="detail-subsection__label">Topics discussed</div>
+                                                <div class="chip-row">
+                                                    <template for:each={detailGongTopics} for:item="t">
+                                                        <span key={t.key} class="chip chip--topic">{t.label}</span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <template lwc:if={hasGongTrackers}>
+                                            <div class="detail-subsection">
+                                                <div class="detail-subsection__label">Trackers</div>
+                                                <div class="chip-row">
+                                                    <template for:each={detailGongTrackers} for:item="t">
+                                                        <span key={t.key} class="chip chip--tracker" title={t.phrase}>
+                                                            {t.name}
+                                                            <span class="chip__count">{t.occurrences}</span>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <template lwc:if={hasGongLatestCall}>
+                                            <div class="detail-subsection">
+                                                <div class="detail-subsection__label">
+                                                    Latest call · {detailGongLatestDateLabel}
+                                                </div>
+                                                <template lwc:if={detailGongLatestBrief}>
+                                                    <p class="detail-paragraph">{detailGongLatestBrief}</p>
+                                                </template>
+                                                <template lwc:if={hasGongKeyPoints}>
+                                                    <div class="detail-subsection__sublabel">Key points</div>
+                                                    <ul class="detail-list">
+                                                        <template for:each={detailGongKeyPoints} for:item="kp">
+                                                            <li key={kp.key}>{kp.text}</li>
+                                                        </template>
+                                                    </ul>
+                                                </template>
+                                                <template lwc:if={detailGongLatestNextSteps}>
+                                                    <div class="detail-subsection__sublabel">Next steps</div>
+                                                    <p class="detail-paragraph">{detailGongLatestNextSteps}</p>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+
+                                <template lwc:if={hasAnyGranola}>
+                                    <div class="detail-section">
+                                        <h3 class="detail-section__title">Meeting notes</h3>
+                                        <template lwc:if={hasGranolaTopics}>
+                                            <div class="detail-subsection">
+                                                <div class="detail-subsection__label">Topics</div>
+                                                <div class="chip-row">
+                                                    <template for:each={detailGranolaTopics} for:item="t">
+                                                        <span key={t.key} class="chip chip--note">{t.label}</span>
+                                                    </template>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={hasGranolaSummary}>
+                                            <div class="detail-subsection">
+                                                <div class="detail-subsection__label">
+                                                    Latest summary · {detailGranolaDateLabel}
+                                                </div>
+                                                <p class="detail-paragraph">{detailGranolaSummary}</p>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={hasGranolaActionItems}>
+                                            <div class="detail-subsection">
+                                                <div class="detail-subsection__label">Action items</div>
+                                                <ul class="detail-list">
+                                                    <template for:each={detailGranolaActionItems} for:item="a">
+                                                        <li key={a.key}>{a.text}</li>
+                                                    </template>
+                                                </ul>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </section>
+    </template>
 </template>

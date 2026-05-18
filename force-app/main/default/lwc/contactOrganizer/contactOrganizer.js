@@ -4,6 +4,7 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import loadOrganizer from '@salesforce/apex/ContactOrganizerController.loadOrganizer';
 import saveAssignments from '@salesforce/apex/ContactOrganizerController.saveAssignments';
 import searchAccountContacts from '@salesforce/apex/ContactOrganizerController.searchAccountContacts';
+import getContactDetail from '@salesforce/apex/ContactOrganizerController.getContactDetail';
 
 const ROLES = [
     { key: 'C-Suite/Executive', label: 'C-Suite / Executive' },
@@ -77,6 +78,7 @@ export default class ContactOrganizer extends LightningElement {
     @track assignments = {};
     @track searchResults = [];
     @track summary = {};
+    @track contactDetail;
     accountName;
     accountId;
     totalContacts = 0;
@@ -90,6 +92,9 @@ export default class ContactOrganizer extends LightningElement {
     searchTerm = '';
     debounceHandle;
     draggedContactId;
+    isDetailOpen = false;
+    isLoadingDetail = false;
+    detailError;
 
     @wire(loadOrganizer, { opportunityId: '$recordId' })
     wiredLoad(result) {
@@ -447,6 +452,193 @@ export default class ContactOrganizer extends LightningElement {
         } finally {
             this.isLoading = false;
         }
+    }
+
+    async handleOpenDetail(event) {
+        event.stopPropagation();
+        const contactId = event.currentTarget.dataset.contactId;
+        if (!contactId) return;
+        this.isDetailOpen = true;
+        this.isLoadingDetail = true;
+        this.detailError = undefined;
+        this.contactDetail = undefined;
+        try {
+            const result = await getContactDetail({
+                opportunityId: this.recordId,
+                contactId
+            });
+            this.contactDetail = result || {};
+        } catch (error) {
+            this.detailError = this.extractError(error);
+        } finally {
+            this.isLoadingDetail = false;
+        }
+    }
+
+    handleCloseDetail() {
+        this.isDetailOpen = false;
+        this.contactDetail = undefined;
+        this.detailError = undefined;
+    }
+
+    handleDetailBackdrop(event) {
+        if (event.target === event.currentTarget) {
+            this.handleCloseDetail();
+        }
+    }
+
+    get detailHasContent() {
+        return !!this.contactDetail;
+    }
+
+    get detailHeaderLabel() {
+        return this.contactDetail ? this.contactDetail.name : 'Contact details';
+    }
+
+    get detailStats() {
+        const d = this.contactDetail || {};
+        const s = d.stats || {};
+        const lastDays = relativeDays(s.lastActivityDate);
+        return [
+            { key: 'total', label: 'Activities', value: (s.total || 0).toLocaleString() },
+            { key: 'last7', label: 'Last 7d', value: (s.last7d || 0).toLocaleString() },
+            { key: 'last30', label: 'Last 30d', value: (s.last30d || 0).toLocaleString() },
+            {
+                key: 'last',
+                label: 'Last touch',
+                value: lastDays != null ? formatRelative(lastDays) : '—'
+            }
+        ];
+    }
+
+    get detailBreakdown() {
+        const s = (this.contactDetail && this.contactDetail.stats) || {};
+        return [
+            { key: 'emails', label: 'Emails', value: s.emails || 0, icon: 'utility:email' },
+            { key: 'meetings', label: 'Meetings', value: s.meetings || 0, icon: 'utility:event' },
+            { key: 'gong', label: 'Gong calls', value: s.gongCalls || 0, icon: 'utility:call' }
+        ];
+    }
+
+    get detailTimeline() {
+        const t = (this.contactDetail && this.contactDetail.timeline) || [];
+        return t.map((it, idx) => {
+            const days = relativeDays(it.activityDate);
+            return {
+                key: `${idx}-${it.activityDate || ''}`,
+                type: it.type || 'Activity',
+                subject: it.subject || '(no subject)',
+                relative: days != null ? formatRelative(days) : '',
+                cssClass: 'timeline-row'
+            };
+        });
+    }
+
+    get hasTimeline() {
+        return this.detailTimeline.length > 0;
+    }
+
+    get detailGongTopics() {
+        return ((this.contactDetail && this.contactDetail.gongTopics) || []).map((t, i) => ({
+            key: `gt-${i}`,
+            label: t
+        }));
+    }
+
+    get hasGongTopics() {
+        return this.detailGongTopics.length > 0;
+    }
+
+    get detailGongTrackers() {
+        return ((this.contactDetail && this.contactDetail.gongTrackers) || []).map((t, i) => ({
+            key: `gtr-${i}`,
+            name: t.name,
+            occurrences: t.occurrences,
+            phrase: t.phrase,
+            hasPhrase: !!t.phrase
+        }));
+    }
+
+    get hasGongTrackers() {
+        return this.detailGongTrackers.length > 0;
+    }
+
+    get detailGongKeyPoints() {
+        return ((this.contactDetail && this.contactDetail.gongKeyPoints) || []).map((p, i) => ({
+            key: `kp-${i}`,
+            text: p
+        }));
+    }
+
+    get hasGongKeyPoints() {
+        return this.detailGongKeyPoints.length > 0;
+    }
+
+    get detailGongLatestBrief() {
+        return (this.contactDetail && this.contactDetail.gongLatestBrief) || '';
+    }
+
+    get detailGongLatestNextSteps() {
+        return (this.contactDetail && this.contactDetail.gongLatestNextSteps) || '';
+    }
+
+    get detailGongLatestDateLabel() {
+        const d = this.contactDetail && this.contactDetail.gongLatestCallDate;
+        const days = relativeDays(d);
+        return days != null ? formatRelative(days) : '';
+    }
+
+    get hasGongLatestCall() {
+        return !!(this.contactDetail && this.contactDetail.gongLatestCallDate);
+    }
+
+    get hasAnyGong() {
+        return (
+            this.hasGongTopics ||
+            this.hasGongTrackers ||
+            this.hasGongKeyPoints ||
+            this.hasGongLatestCall
+        );
+    }
+
+    get detailGranolaTopics() {
+        return ((this.contactDetail && this.contactDetail.granolaTopics) || []).map((t, i) => ({
+            key: `grt-${i}`,
+            label: t
+        }));
+    }
+
+    get hasGranolaTopics() {
+        return this.detailGranolaTopics.length > 0;
+    }
+
+    get detailGranolaActionItems() {
+        return ((this.contactDetail && this.contactDetail.granolaActionItems) || []).map((a, i) => ({
+            key: `gra-${i}`,
+            text: a
+        }));
+    }
+
+    get hasGranolaActionItems() {
+        return this.detailGranolaActionItems.length > 0;
+    }
+
+    get detailGranolaSummary() {
+        return (this.contactDetail && this.contactDetail.granolaLatestSummary) || '';
+    }
+
+    get detailGranolaDateLabel() {
+        const d = this.contactDetail && this.contactDetail.granolaLatestDate;
+        const days = relativeDays(d);
+        return days != null ? formatRelative(days) : '';
+    }
+
+    get hasGranolaSummary() {
+        return !!this.detailGranolaSummary;
+    }
+
+    get hasAnyGranola() {
+        return this.hasGranolaTopics || this.hasGranolaActionItems || this.hasGranolaSummary;
     }
 
     extractError(error) {

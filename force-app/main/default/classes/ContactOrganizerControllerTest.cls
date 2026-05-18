@@ -433,6 +433,60 @@ private class ContactOrganizerControllerTest {
     }
 
     @isTest
+    static void getContactDetailThrowsWhenContactNull() {
+        Boolean threw = false;
+        try {
+            ContactOrganizerController.getContactDetail(null, null);
+        } catch (AuraHandledException e) {
+            threw = true;
+        }
+        System.assert(threw, 'Expected exception for null Contact Id');
+    }
+
+    @isTest
+    static void getContactDetailBuildsTimelineAndStats() {
+        Opportunity opp = setupOppWithContacts(1);
+        Contact c = [SELECT Id FROM Contact WHERE AccountId = :opp.AccountId LIMIT 1];
+
+        insert new Task(
+            WhoId = c.Id, WhatId = opp.Id, Status = 'Completed',
+            Subject = 'Intro email', TaskSubtype = 'Email',
+            ActivityDate = Date.today().addDays(-3)
+        );
+        insert new Event(
+            WhoId = c.Id, WhatId = opp.Id,
+            Subject = 'Discovery',
+            ActivityDateTime = DateTime.now().addDays(-2), DurationInMinutes = 30
+        );
+
+        Test.startTest();
+        ContactOrganizerController.ContactDetail detail =
+            ContactOrganizerController.getContactDetail(opp.Id, c.Id);
+        Test.stopTest();
+
+        System.assertEquals(c.Id, detail.contactId);
+        System.assertNotEquals(null, detail.stats);
+        System.assertEquals(2, detail.stats.total);
+        System.assertEquals(1, detail.stats.emails);
+        System.assertEquals(1, detail.stats.meetings);
+        System.assertEquals(2, detail.timeline.size());
+        // Sorted desc — event (-2) should come before task (-3)
+        System.assertEquals('Meeting', detail.timeline[0].type);
+        System.assertEquals('Email', detail.timeline[1].type);
+    }
+
+    @isTest
+    static void getContactDetailReturnsEmptyWhenNoAccount() {
+        Contact c = new Contact(LastName = 'Orphan');
+        insert c;
+        ContactOrganizerController.ContactDetail detail =
+            ContactOrganizerController.getContactDetail(null, c.Id);
+        System.assertEquals(c.Id, detail.contactId);
+        System.assertEquals(0, detail.stats.total);
+        System.assertEquals(0, detail.timeline.size());
+    }
+
+    @isTest
     static void saveAssignmentsThrowsOnMalformedJson() {
         Opportunity opp = setupOppWithContacts(1);
         Boolean threw = false;

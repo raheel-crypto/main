@@ -60,6 +60,37 @@ public with sharing class ContactOrganizerController {
         @AuraEnabled public Boolean isChampion;
     }
 
+    public class ContactDetail {
+        @AuraEnabled public Id contactId;
+        @AuraEnabled public String name;
+        @AuraEnabled public String title;
+        @AuraEnabled public String email;
+        @AuraEnabled public ActivityStats stats;
+        @AuraEnabled public List<TimelineItem> timeline;
+        @AuraEnabled public List<String> gongTopics;
+        @AuraEnabled public List<TrackerInsight> gongTrackers;
+        @AuraEnabled public List<String> gongKeyPoints;
+        @AuraEnabled public String gongLatestBrief;
+        @AuraEnabled public String gongLatestNextSteps;
+        @AuraEnabled public Date gongLatestCallDate;
+        @AuraEnabled public List<String> granolaTopics;
+        @AuraEnabled public List<String> granolaActionItems;
+        @AuraEnabled public String granolaLatestSummary;
+        @AuraEnabled public Date granolaLatestDate;
+    }
+
+    public class TimelineItem {
+        @AuraEnabled public String type;
+        @AuraEnabled public Date activityDate;
+        @AuraEnabled public String subject;
+    }
+
+    public class TrackerInsight {
+        @AuraEnabled public String name;
+        @AuraEnabled public String phrase;
+        @AuraEnabled public Integer occurrences;
+    }
+
     @AuraEnabled(cacheable=true)
     public static OrganizerData loadOrganizer(Id opportunityId) {
         if (opportunityId == null) {
@@ -308,6 +339,459 @@ public with sharing class ContactOrganizerController {
         outcome.updated = toUpdate.size();
         outcome.deleted = toDelete.size();
         return outcome;
+    }
+
+    // ── Per-contact detail (popup) ───────────────────────────────────────
+
+    @AuraEnabled(cacheable=true)
+    public static ContactDetail getContactDetail(Id opportunityId, Id contactId) {
+        if (contactId == null) {
+            throw new AuraHandledException('Contact Id is required.');
+        }
+
+        List<Contact> contacts = [
+            SELECT Id, Name, Title, Email, AccountId
+            FROM Contact
+            WHERE Id = :contactId
+            LIMIT 1
+        ];
+        if (contacts.isEmpty()) {
+            throw new AuraHandledException('Contact not found.');
+        }
+        Contact c = contacts[0];
+
+        ContactDetail detail = new ContactDetail();
+        detail.contactId = c.Id;
+        detail.name = c.Name;
+        detail.title = c.Title;
+        detail.email = c.Email;
+        detail.timeline = new List<TimelineItem>();
+        detail.gongTopics = new List<String>();
+        detail.gongTrackers = new List<TrackerInsight>();
+        detail.gongKeyPoints = new List<String>();
+        detail.granolaTopics = new List<String>();
+        detail.granolaActionItems = new List<String>();
+        detail.stats = new ActivityStats();
+
+        Id accountId = c.AccountId;
+        if (accountId == null) return detail;
+
+        Set<Id> oneId = new Set<Id>{ contactId };
+        Map<Id, ActivityStats> statsMap = getActivityStats(oneId, accountId, opportunityId);
+        if (statsMap.containsKey(contactId)) detail.stats = statsMap.get(contactId);
+
+        detail.timeline = buildContactTimeline(contactId, accountId, opportunityId);
+        enrichContactWithGong(detail, contactId, accountId, opportunityId);
+        enrichContactWithGranola(detail, contactId, accountId, opportunityId);
+
+        return detail;
+    }
+
+    private static List<TimelineItem> buildContactTimeline(Id contactId, Id accountId, Id opportunityId) {
+        List<TimelineItem> items = new List<TimelineItem>();
+
+        List<Task> tasks;
+        if (opportunityId != null) {
+            tasks = [
+                SELECT ActivityDate, Subject, TaskSubtype, CreatedDate
+                FROM Task
+                WHERE WhoId = :contactId
+                  AND Status = 'Completed'
+                  AND (WhatId = :opportunityId OR WhatId = :accountId)
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 20
+            ];
+        } else {
+            tasks = [
+                SELECT ActivityDate, Subject, TaskSubtype, CreatedDate
+                FROM Task
+                WHERE WhoId = :contactId
+                  AND Status = 'Completed'
+                  AND AccountId = :accountId
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 20
+            ];
+        }
+        for (Task t : tasks) {
+            TimelineItem it = new TimelineItem();
+            it.activityDate = t.ActivityDate != null
+                ? t.ActivityDate
+                : (t.CreatedDate != null ? t.CreatedDate.date() : null);
+            it.subject = t.Subject;
+            it.type = (t.TaskSubtype == 'Email' || t.TaskSubtype == 'ListEmail')
+                ? 'Email'
+                : (t.TaskSubtype != null ? t.TaskSubtype : 'Task');
+            items.add(it);
+        }
+
+        List<Event> events;
+        if (opportunityId != null) {
+            events = [
+                SELECT ActivityDate, Subject, StartDateTime
+                FROM Event
+                WHERE WhoId = :contactId
+                  AND (WhatId = :opportunityId OR WhatId = :accountId)
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 20
+            ];
+        } else {
+            events = [
+                SELECT ActivityDate, Subject, StartDateTime
+                FROM Event
+                WHERE WhoId = :contactId
+                  AND AccountId = :accountId
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 20
+            ];
+        }
+        for (Event e : events) {
+            TimelineItem it = new TimelineItem();
+            it.activityDate = e.ActivityDate != null
+                ? e.ActivityDate
+                : (e.StartDateTime != null ? e.StartDateTime.date() : null);
+            it.subject = e.Subject;
+            it.type = 'Meeting';
+            items.add(it);
+        }
+
+        // Sort merged list by date desc, return top 15
+        for (Integer i = 0; i < items.size(); i++) {
+            for (Integer j = i + 1; j < items.size(); j++) {
+                Date di = items[i].activityDate;
+                Date dj = items[j].activityDate;
+                Boolean jWins = (di == null && dj != null) || (di != null && dj != null && dj > di);
+                if (jWins) {
+                    TimelineItem tmp = items[i];
+                    items[i] = items[j];
+                    items[j] = tmp;
+                }
+            }
+        }
+        if (items.size() > 15) {
+            List<TimelineItem> trimmed = new List<TimelineItem>();
+            for (Integer i = 0; i < 15; i++) trimmed.add(items[i]);
+            items = trimmed;
+        }
+        return items;
+    }
+
+    private static void enrichContactWithGong(ContactDetail detail, Id contactId, Id accountId, Id opportunityId) {
+        List<Gong__Call_Participant__c> participants;
+        if (opportunityId != null) {
+            participants = [
+                SELECT Gong__Gong_Call__r.Gong__Call_Start__c,
+                       Gong__Gong_Call__r.Gong__Call_Brief__c,
+                       Gong__Gong_Call__r.Gong__Call_Key_Points__c,
+                       Gong__Gong_Call__r.Gong__Call_Highlights_Next_Steps__c,
+                       Gong__Gong_Call__r.Gong__Related_Topics_json__c,
+                       Gong__Gong_Call__r.Gong__Related_Trackers_json__c
+                FROM Gong__Call_Participant__c
+                WHERE Gong__Contact_Participant__c = :contactId
+                  AND Gong__Affiliation__c = 'External'
+                  AND (Gong__Gong_Call__r.Gong__Primary_Account__c = :accountId
+                       OR Gong__Gong_Call__r.Gong__Primary_Opportunity__c = :opportunityId)
+                ORDER BY Gong__Gong_Call__r.Gong__Call_Start__c DESC NULLS LAST
+                LIMIT 100
+            ];
+        } else {
+            participants = [
+                SELECT Gong__Gong_Call__r.Gong__Call_Start__c,
+                       Gong__Gong_Call__r.Gong__Call_Brief__c,
+                       Gong__Gong_Call__r.Gong__Call_Key_Points__c,
+                       Gong__Gong_Call__r.Gong__Call_Highlights_Next_Steps__c,
+                       Gong__Gong_Call__r.Gong__Related_Topics_json__c,
+                       Gong__Gong_Call__r.Gong__Related_Trackers_json__c
+                FROM Gong__Call_Participant__c
+                WHERE Gong__Contact_Participant__c = :contactId
+                  AND Gong__Affiliation__c = 'External'
+                  AND Gong__Gong_Call__r.Gong__Primary_Account__c = :accountId
+                ORDER BY Gong__Gong_Call__r.Gong__Call_Start__c DESC NULLS LAST
+                LIMIT 100
+            ];
+        }
+
+        Set<String> topicSeen = new Set<String>();
+        Map<String, TrackerInsight> trackerByName = new Map<String, TrackerInsight>();
+        for (Gong__Call_Participant__c gp : participants) {
+            if (gp.Gong__Gong_Call__r == null) continue;
+            DateTime callStart = gp.Gong__Gong_Call__r.Gong__Call_Start__c;
+            Date callDate = callStart != null ? callStart.date() : null;
+
+            // Latest call fields go first in result order
+            if (detail.gongLatestCallDate == null && callDate != null) {
+                detail.gongLatestCallDate = callDate;
+                detail.gongLatestBrief = decodeHtml(gp.Gong__Gong_Call__r.Gong__Call_Brief__c);
+                detail.gongLatestNextSteps = decodeHtml(gp.Gong__Gong_Call__r.Gong__Call_Highlights_Next_Steps__c);
+                detail.gongKeyPoints = parseKeyPoints(gp.Gong__Gong_Call__r.Gong__Call_Key_Points__c, 6);
+            }
+
+            for (String t : parseTopics(gp.Gong__Gong_Call__r.Gong__Related_Topics_json__c)) {
+                if (!topicSeen.contains(t)) {
+                    topicSeen.add(t);
+                    detail.gongTopics.add(t);
+                }
+            }
+            mergeTrackers(trackerByName, gp.Gong__Gong_Call__r.Gong__Related_Trackers_json__c);
+        }
+        detail.gongTrackers = sortedTrackers(trackerByName);
+        if (detail.gongTopics.size() > 12) {
+            List<String> trimmed = new List<String>();
+            for (Integer i = 0; i < 12; i++) trimmed.add(detail.gongTopics[i]);
+            detail.gongTopics = trimmed;
+        }
+        if (detail.gongTrackers.size() > 8) {
+            List<TrackerInsight> trimmed = new List<TrackerInsight>();
+            for (Integer i = 0; i < 8; i++) trimmed.add(detail.gongTrackers[i]);
+            detail.gongTrackers = trimmed;
+        }
+    }
+
+    private static void enrichContactWithGranola(ContactDetail detail, Id contactId, Id accountId, Id opportunityId) {
+        Date lookback = Date.today().addDays(-180);
+        List<Event> granolaEvents;
+        if (opportunityId != null) {
+            granolaEvents = [
+                SELECT Id, ActivityDate, Description, Subject
+                FROM Event
+                WHERE WhoId = :contactId
+                  AND Subject LIKE '%Granola%'
+                  AND ActivityDate >= :lookback
+                  AND (WhatId = :opportunityId OR WhatId = :accountId OR AccountId = :accountId)
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 30
+            ];
+        } else {
+            granolaEvents = [
+                SELECT Id, ActivityDate, Description, Subject
+                FROM Event
+                WHERE WhoId = :contactId
+                  AND Subject LIKE '%Granola%'
+                  AND ActivityDate >= :lookback
+                  AND AccountId = :accountId
+                ORDER BY ActivityDate DESC NULLS LAST
+                LIMIT 30
+            ];
+        }
+        // Also pull in Granola events via EventRelation
+        Set<Id> seenEventIds = new Set<Id>();
+        for (Event e : granolaEvents) seenEventIds.add(e.Id);
+        List<Id> erEventIds = new List<Id>();
+        for (EventRelation er : [
+            SELECT EventId
+            FROM EventRelation
+            WHERE RelationId = :contactId AND IsWhat = false
+            LIMIT 200
+        ]) {
+            if (!seenEventIds.contains(er.EventId)) erEventIds.add(er.EventId);
+        }
+        if (!erEventIds.isEmpty()) {
+            List<Event> moreEvents;
+            if (opportunityId != null) {
+                moreEvents = [
+                    SELECT Id, ActivityDate, Description, Subject
+                    FROM Event
+                    WHERE Id IN :erEventIds
+                      AND Subject LIKE '%Granola%'
+                      AND ActivityDate >= :lookback
+                      AND (WhatId = :opportunityId OR WhatId = :accountId OR AccountId = :accountId)
+                    ORDER BY ActivityDate DESC NULLS LAST
+                    LIMIT 30
+                ];
+            } else {
+                moreEvents = [
+                    SELECT Id, ActivityDate, Description, Subject
+                    FROM Event
+                    WHERE Id IN :erEventIds
+                      AND Subject LIKE '%Granola%'
+                      AND ActivityDate >= :lookback
+                      AND AccountId = :accountId
+                    ORDER BY ActivityDate DESC NULLS LAST
+                    LIMIT 30
+                ];
+            }
+            granolaEvents.addAll(moreEvents);
+        }
+
+        Set<String> topicSeen = new Set<String>();
+        Set<String> actionSeen = new Set<String>();
+        for (Event e : granolaEvents) {
+            if (String.isBlank(e.Description)) continue;
+            GranolaNote g = parseGranolaNote(e.Description);
+            if (detail.granolaLatestDate == null && e.ActivityDate != null) {
+                detail.granolaLatestDate = e.ActivityDate;
+                detail.granolaLatestSummary = g.summary;
+            }
+            for (String t : g.topics) {
+                if (!topicSeen.contains(t)) {
+                    topicSeen.add(t);
+                    detail.granolaTopics.add(t);
+                }
+            }
+            for (String item : g.actionItems) {
+                if (!actionSeen.contains(item) && detail.granolaActionItems.size() < 10) {
+                    actionSeen.add(item);
+                    detail.granolaActionItems.add(item);
+                }
+            }
+        }
+        if (detail.granolaTopics.size() > 10) {
+            List<String> trimmed = new List<String>();
+            for (Integer i = 0; i < 10; i++) trimmed.add(detail.granolaTopics[i]);
+            detail.granolaTopics = trimmed;
+        }
+    }
+
+    // ── Insight parsing helpers (mirrored from MultithreadHeatmapController) ──
+
+    private static String decodeHtml(String input) {
+        if (String.isBlank(input)) return input;
+        return input
+            .replace('&#39;', '\'')
+            .replace('&amp;', '&')
+            .replace('&lt;', '<')
+            .replace('&gt;', '>')
+            .replace('&quot;', '"')
+            .replace('&nbsp;', ' ');
+    }
+
+    private static List<String> parseTopics(String jsonStr) {
+        List<String> topics = new List<String>();
+        if (String.isBlank(jsonStr)) return topics;
+        try {
+            List<Object> parsed = (List<Object>) JSON.deserializeUntyped(jsonStr);
+            Set<String> seen = new Set<String>();
+            for (Object item : parsed) {
+                Map<String, Object> m = (Map<String, Object>) item;
+                String name = (String) m.get('Name');
+                if (name != null && !seen.contains(name) && !name.startsWith('[')
+                    && name != 'Call Setup' && name != 'Wrap-Up' && name != 'Small Talk') {
+                    seen.add(name);
+                    topics.add(name);
+                }
+            }
+        } catch (Exception e) { /* skip */ }
+        return topics;
+    }
+
+    private static void mergeTrackers(Map<String, TrackerInsight> merged, String jsonStr) {
+        if (String.isBlank(jsonStr)) return;
+        try {
+            List<Object> parsed = (List<Object>) JSON.deserializeUntyped(jsonStr);
+            for (Object item : parsed) {
+                Map<String, Object> m = (Map<String, Object>) item;
+                String name = (String) m.get('Name');
+                if (name == null) continue;
+                if (name.startsWith('[SMART] ')) name = name.substring(8);
+                if (name == 'Call Setup' || name == 'Wrap-Up' || name == 'Small Talk') continue;
+
+                Integer occ = m.get('Gong__Tracker_Occurrences__c') != null
+                    ? ((Decimal) m.get('Gong__Tracker_Occurrences__c')).intValue() : 1;
+                String phrase = (String) m.get('Gong__Tracker_Phrase__c');
+
+                if (merged.containsKey(name)) {
+                    merged.get(name).occurrences += occ;
+                } else {
+                    TrackerInsight ti = new TrackerInsight();
+                    ti.name = name;
+                    ti.phrase = (phrase != null && phrase != '-') ? phrase : null;
+                    ti.occurrences = occ;
+                    merged.put(name, ti);
+                }
+            }
+        } catch (Exception e) { /* skip */ }
+    }
+
+    private static List<TrackerInsight> sortedTrackers(Map<String, TrackerInsight> merged) {
+        List<TrackerInsight> trackers = new List<TrackerInsight>(merged.values());
+        for (Integer i = 0; i < trackers.size(); i++) {
+            for (Integer j = i + 1; j < trackers.size(); j++) {
+                if (trackers[j].occurrences > trackers[i].occurrences) {
+                    TrackerInsight tmp = trackers[i];
+                    trackers[i] = trackers[j];
+                    trackers[j] = tmp;
+                }
+            }
+        }
+        return trackers;
+    }
+
+    private static List<String> parseKeyPoints(String html, Integer maxPoints) {
+        List<String> points = new List<String>();
+        if (String.isBlank(html)) return points;
+        List<String> parts = html.split('<br>');
+        for (String part : parts) {
+            String clean = part.replaceAll('<[^>]+>', '').trim();
+            clean = clean.replaceAll('^\\d+\\.\\s*', '');
+            clean = clean.replaceAll('^\\*\\s*', '');
+            clean = decodeHtml(clean.trim());
+            if (String.isNotBlank(clean) && clean.length() > 5) {
+                if (clean.length() > 200) clean = clean.substring(0, 197) + '...';
+                points.add(clean);
+                if (points.size() >= maxPoints) break;
+            }
+        }
+        return points;
+    }
+
+    private class GranolaNote {
+        public List<String> topics = new List<String>();
+        public List<String> actionItems = new List<String>();
+        public String summary;
+    }
+
+    private static GranolaNote parseGranolaNote(String description) {
+        GranolaNote g = new GranolaNote();
+        List<String> lines = description.split('\n');
+        Boolean inActionItems = false;
+        Boolean capturingFirstSection = false;
+        String firstSectionContent = '';
+        Integer firstSectionLines = 0;
+
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith('Granola Link:') || trimmed.startsWith('Granola Note ID:')
+                || trimmed.contains('Granola Generated Notes') || trimmed.startsWith('---')
+                || trimmed.startsWith('Chat with meeting transcript:')) {
+                continue;
+            }
+            if (trimmed.startsWith('### ')) {
+                String topic = trimmed.substring(4).trim();
+                String topicLower = topic.toLowerCase();
+                if (topicLower.contains('action item') || topicLower.contains('next step')) {
+                    inActionItems = true;
+                    capturingFirstSection = false;
+                } else {
+                    inActionItems = false;
+                    g.topics.add(topic);
+                    if (g.topics.size() == 1) {
+                        capturingFirstSection = true;
+                        firstSectionLines = 0;
+                    } else {
+                        capturingFirstSection = false;
+                    }
+                }
+                continue;
+            }
+            if (inActionItems && trimmed.startsWith('- ')) {
+                String item = trimmed.substring(2).trim();
+                if (item.length() > 150) item = item.substring(0, 147) + '...';
+                if (g.actionItems.size() < 8) g.actionItems.add(item);
+            }
+            if (capturingFirstSection && firstSectionLines < 6 && String.isNotBlank(trimmed)
+                && !trimmed.startsWith('###')) {
+                if (String.isNotBlank(firstSectionContent)) firstSectionContent += ' ';
+                String clean = trimmed.replaceAll('^[-*]\\s*', '');
+                firstSectionContent += clean;
+                firstSectionLines++;
+            }
+        }
+        if (String.isNotBlank(firstSectionContent)) {
+            if (firstSectionContent.length() > 400) {
+                firstSectionContent = firstSectionContent.substring(0, 397) + '...';
+            }
+            g.summary = firstSectionContent;
+        }
+        return g;
     }
 
     // ── Activity rollup helpers ──────────────────────────────────────────
