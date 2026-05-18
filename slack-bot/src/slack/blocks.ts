@@ -842,25 +842,43 @@ export function nooksCallDigestCard(
 ): { blocks: KnownBlock[]; text: string } {
   const d = payload.callData;
   const dispositionLabel = d.disposition?.name ?? "(no disposition)";
-  const companyLabel = d.accountData?.name ?? "(unknown account)";
+  const accountName = d.accountData?.name ?? null;
+  const prospectName = d.prospectData?.name ?? null;
+  const rogoCaller =
+    d.userData?.name ?? d.userData?.email ?? null;
 
   const isValidHttpUrl = (u: string | undefined): u is string =>
     typeof u === "string" && /^https?:\/\//i.test(u);
 
-  const text = `Nooks · ${companyLabel} · ${dispositionLabel}`;
+  const headerText =
+    prospectName && accountName
+      ? `${prospectName} · ${accountName}`
+      : prospectName
+        ? prospectName
+        : accountName
+          ? accountName
+          : "Nooks call";
+
+  const text = `Nooks · ${headerText} · ${dispositionLabel}`;
 
   const blocks: KnownBlock[] = [
     {
       type: "header",
       text: {
         type: "plain_text",
-        text: `${companyLabel} · ${dispositionLabel}`.slice(0, 150),
+        text: headerText.slice(0, 150),
       },
     },
   ];
 
+  const contextParts: string[] = [`*${dispositionLabel}*`];
+  if (rogoCaller) contextParts.push(`called by ${rogoCaller}`);
+  blocks.push({
+    type: "context",
+    elements: [{ type: "mrkdwn", text: contextParts.join(" · ") }],
+  });
+
   const prospectLines: string[] = [];
-  if (d.prospectData?.name) prospectLines.push(`*Name*: ${d.prospectData.name}`);
   if (d.prospectData?.email && d.prospectData.email.includes("@"))
     prospectLines.push(`*Email*: ${d.prospectData.email}`);
   if (
@@ -880,16 +898,12 @@ export function nooksCallDigestCard(
     });
   }
 
-  const accountLines: string[] = [];
-  if (d.accountData?.name) accountLines.push(`*Name*: ${d.accountData.name}`);
-  if (d.accountData?.accountId)
-    accountLines.push(`*Id*: \`${d.accountData.accountId}\``);
-  if (accountLines.length > 0) {
+  if (d.accountData?.accountId) {
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Account*\n${accountLines.join("\n")}`,
+        text: `*Salesforce Account*\n\`${d.accountData.accountId}\``,
       },
     });
   }
