@@ -7,6 +7,7 @@ import googleOauthStart from "../api/oauth/google/start.js";
 import googleOauthCallback from "../api/oauth/google/callback.js";
 import cronTick from "../api/cron/tick.js";
 import standupRun from "../api/standup/run.js";
+import calendarRun from "../api/calendar/run.js";
 import nooksWebhook from "../api/nooks/webhook.js";
 import gongWebhook from "../api/gong/webhook.js";
 import health from "../api/health.js";
@@ -19,6 +20,7 @@ const routes: Record<string, any> = {
   "/api/oauth/google/callback": googleOauthCallback,
   "/api/cron/tick": cronTick,
   "/api/standup/run": standupRun,
+  "/api/calendar/run": calendarRun,
   "/api/nooks/webhook": nooksWebhook,
   "/api/gong/webhook": gongWebhook,
   "/api/health": health,

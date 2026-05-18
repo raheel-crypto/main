@@ -3,6 +3,7 @@ import { WebClient } from "@slack/web-api";
 import { config } from "../config.js";
 import {
   appendAudit,
+  getGcTokens,
   getPendingCard,
   getUser,
   setCardStatus,
@@ -10,6 +11,9 @@ import {
   upsertUser,
 } from "../db/queries.js";
 import {
+  CALENDAR_BLOCK_ID,
+  CALENDAR_POST_VALUE,
+  CALENDAR_PRE_VALUE,
   GONG_BLOCK_ID,
   GONG_FIREHOSE_VALUE,
   GONG_HOST_VALUE,
@@ -755,6 +759,8 @@ export function registerSubscriptionsSubmit(app: App): void {
       view.state.values[GONG_BLOCK_ID]?.["value"]?.selected_options ?? [];
     const nooksSelected =
       view.state.values[NOOKS_BLOCK_ID]?.["value"]?.selected_options ?? [];
+    const calendarSelected =
+      view.state.values[CALENDAR_BLOCK_ID]?.["value"]?.selected_options ?? [];
     const has = (
       arr: Array<{ value?: string }>,
       v: string
@@ -764,18 +770,34 @@ export function registerSubscriptionsSubmit(app: App): void {
       gongFirehoseEnabled: has(gongSelected, GONG_FIREHOSE_VALUE),
       nooksRealtimeEnabled: has(nooksSelected, NOOKS_HOST_VALUE),
       nooksFirehoseEnabled: has(nooksSelected, NOOKS_FIREHOSE_VALUE),
+      calendarPreEnabled: has(calendarSelected, CALENDAR_PRE_VALUE),
+      calendarPostEnabled: has(calendarSelected, CALENDAR_POST_VALUE),
     };
     await updateSubscriptionPrefs(body.user.id, prefs);
 
     const onOff = (b: boolean) => (b ? "on" : "off");
+    const summary = `Saved.  Gong host: *${onOff(prefs.gongRealtimeEnabled)}* · Gong firehose: *${onOff(
+      prefs.gongFirehoseEnabled
+    )}* · Nooks host: *${onOff(prefs.nooksRealtimeEnabled)}* · Nooks firehose: *${onOff(
+      prefs.nooksFirehoseEnabled
+    )}* · Calendar pre: *${onOff(prefs.calendarPreEnabled)}* · Calendar post: *${onOff(
+      prefs.calendarPostEnabled
+    )}*.`;
+
+    let text = summary;
+    if (prefs.calendarPreEnabled || prefs.calendarPostEnabled) {
+      const gc = await getGcTokens(body.user.id);
+      if (!gc) {
+        const connectUrl = `${config.publicUrl}/api/oauth/google/start?slack_user_id=${encodeURIComponent(
+          body.user.id
+        )}`;
+        text += `\n\n:warning: Calendar briefs require Google Calendar access. <${connectUrl}|Connect Google Calendar> (one tap).`;
+      }
+    }
     await app.client.chat.postEphemeral({
       channel: body.user.id,
       user: body.user.id,
-      text: `Saved.  Gong host: *${onOff(prefs.gongRealtimeEnabled)}* · Gong firehose: *${onOff(
-        prefs.gongFirehoseEnabled
-      )}* · Nooks host: *${onOff(prefs.nooksRealtimeEnabled)}* · Nooks firehose: *${onOff(
-        prefs.nooksFirehoseEnabled
-      )}*.`,
+      text,
     });
   });
 }

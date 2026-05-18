@@ -7,9 +7,12 @@ export const GONG_HOST_VALUE = "gong_realtime";
 export const GONG_FIREHOSE_VALUE = "gong_firehose";
 export const NOOKS_HOST_VALUE = "nooks_realtime";
 export const NOOKS_FIREHOSE_VALUE = "nooks_firehose";
+export const CALENDAR_PRE_VALUE = "calendar_pre";
+export const CALENDAR_POST_VALUE = "calendar_post";
 
 export const GONG_BLOCK_ID = "gong_block";
 export const NOOKS_BLOCK_ID = "nooks_block";
+export const CALENDAR_BLOCK_ID = "calendar_block";
 
 const GONG_HOST_OPTION = {
   value: GONG_HOST_VALUE,
@@ -31,6 +34,16 @@ const NOOKS_FIREHOSE_OPTION = {
   text: { type: "plain_text" as const, text: "(Admin) DM me every Nooks call across the org" },
   description: { type: "plain_text" as const, text: "Firehose, same filter as above." },
 };
+const CALENDAR_PRE_OPTION = {
+  value: CALENDAR_PRE_VALUE,
+  text: { type: "plain_text" as const, text: "DM me a brief 5-10 min before each customer meeting" },
+  description: { type: "plain_text" as const, text: "Only fires when an external attendee is on the invite." },
+};
+const CALENDAR_POST_OPTION = {
+  value: CALENDAR_POST_VALUE,
+  text: { type: "plain_text" as const, text: "DM me a SF-update card ~5 min after each customer meeting ends" },
+  description: { type: "plain_text" as const, text: "Surfaces missing contacts + quick opp updates." },
+};
 
 type Prefs = Pick<
   UserPrefs,
@@ -38,6 +51,8 @@ type Prefs = Pick<
   | "gongFirehoseEnabled"
   | "nooksRealtimeEnabled"
   | "nooksFirehoseEnabled"
+  | "calendarPreEnabled"
+  | "calendarPostEnabled"
 >;
 
 export function subscriptionsModalView(prefs: Prefs | null): View {
@@ -46,6 +61,8 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
     gongFirehoseEnabled: false,
     nooksRealtimeEnabled: false,
     nooksFirehoseEnabled: false,
+    calendarPreEnabled: false,
+    calendarPostEnabled: false,
   };
 
   const gongInitial = [
@@ -57,6 +74,11 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
     p.nooksRealtimeEnabled ? NOOKS_HOST_OPTION : null,
     p.nooksFirehoseEnabled ? NOOKS_FIREHOSE_OPTION : null,
   ].filter(Boolean) as Array<typeof NOOKS_HOST_OPTION>;
+
+  const calendarInitial = [
+    p.calendarPreEnabled ? CALENDAR_PRE_OPTION : null,
+    p.calendarPostEnabled ? CALENDAR_POST_OPTION : null,
+  ].filter(Boolean) as Array<typeof CALENDAR_PRE_OPTION>;
 
   return {
     type: "modal",
@@ -94,6 +116,19 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
           action_id: "value",
           initial_options: nooksInitial.length > 0 ? nooksInitial : undefined,
           options: [NOOKS_HOST_OPTION, NOOKS_FIREHOSE_OPTION],
+        },
+      },
+      {
+        type: "input",
+        block_id: CALENDAR_BLOCK_ID,
+        optional: true,
+        label: { type: "plain_text", text: "Calendar" },
+        element: {
+          type: "checkboxes",
+          action_id: "value",
+          initial_options:
+            calendarInitial.length > 0 ? calendarInitial : undefined,
+          options: [CALENDAR_PRE_OPTION, CALENDAR_POST_OPTION],
         },
       },
     ],

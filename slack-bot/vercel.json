@@ -8,6 +8,7 @@
   "functions": {
     "api/standup/run.ts": { "maxDuration": 300 },
     "api/cron/tick.ts": { "maxDuration": 60 },
+    "api/calendar/run.ts": { "maxDuration": 60 },
     "api/slack/events.ts": { "maxDuration": 60 }
   }
 }
