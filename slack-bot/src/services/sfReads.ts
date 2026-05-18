@@ -199,6 +199,80 @@ export async function fetchPositiveApolloCalls(
   }));
 }
 
+export interface ContactRow {
+  id: string;
+  email: string;
+  name: string | null;
+  title: string | null;
+  accountId: string | null;
+  accountName: string | null;
+}
+
+export async function fetchContactsByEmail(
+  conn: Connection,
+  emails: string[]
+): Promise<ContactRow[]> {
+  if (emails.length === 0) return [];
+  const lowered = Array.from(new Set(emails.map((e) => e.toLowerCase()).filter(Boolean)));
+  const chunks: string[][] = [];
+  const CHUNK = 200;
+  for (let i = 0; i < lowered.length; i += CHUNK) {
+    chunks.push(lowered.slice(i, i + CHUNK));
+  }
+  const out: ContactRow[] = [];
+  for (const batch of chunks) {
+    const list = batch.map((e) => `'${escapeSoql(e)}'`).join(",");
+    const q = `
+      SELECT Id, Email, Name, Title, AccountId, Account.Name
+        FROM Contact
+       WHERE Email IN (${list})`;
+    const result = await conn.query(q);
+    for (const r of result.records as any[]) {
+      if (!r.Email) continue;
+      out.push({
+        id: r.Id,
+        email: String(r.Email).toLowerCase(),
+        name: r.Name ?? null,
+        title: r.Title ?? null,
+        accountId: r.AccountId ?? null,
+        accountName: r.Account?.Name ?? null,
+      });
+    }
+  }
+  return out;
+}
+
+export interface AccountByDomainRow {
+  id: string;
+  name: string;
+  website: string | null;
+}
+
+export async function fetchAccountsByDomain(
+  conn: Connection,
+  domains: string[]
+): Promise<AccountByDomainRow[]> {
+  if (domains.length === 0) return [];
+  const cleaned = Array.from(
+    new Set(domains.map((d) => d.toLowerCase().trim()).filter(Boolean))
+  );
+  if (cleaned.length === 0) return [];
+  const clauses = cleaned
+    .map((d) => `Website LIKE '%${escapeSoql(d)}%'`)
+    .join(" OR ");
+  const q = `
+    SELECT Id, Name, Website
+      FROM Account
+     WHERE ${clauses}
+     LIMIT 50`;
+  const result = await conn.query(q);
+  return (result.records as any[]).map((r) => ({
+    id: r.Id,
+    name: r.Name,
+    website: r.Website ?? null,
+  }));
+}
+
 export async function fetchLastStageChangesForOpps(
   conn: Connection,
   oppIds: string[]

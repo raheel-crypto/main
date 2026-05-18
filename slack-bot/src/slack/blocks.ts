@@ -6,7 +6,9 @@ import type {
   BuySignalPayload,
   GongCallInsight,
   GongWebhookPayload,
+  MeetingPickerCandidate,
   NooksWebhookPayload,
+  PostMeetingPayload,
   Recommendation,
   RecommendedField,
 } from "../types.js";
@@ -22,7 +24,12 @@ export type ActionVerb =
   | "brief_pick_account"
   | "buy_signal_create_opp"
   | "buy_signal_log_task"
-  | "buy_signal_skip";
+  | "buy_signal_skip"
+  | "add_contact"
+  | "update_meeting_opp"
+  | "log_meeting_task"
+  | "post_meeting_skip"
+  | "meeting_pick_account";
 
 const VALID_VERBS: ActionVerb[] = [
   "accept",
@@ -36,6 +43,11 @@ const VALID_VERBS: ActionVerb[] = [
   "buy_signal_create_opp",
   "buy_signal_log_task",
   "buy_signal_skip",
+  "add_contact",
+  "update_meeting_opp",
+  "log_meeting_task",
+  "post_meeting_skip",
+  "meeting_pick_account",
 ];
 
 export function actionId(
@@ -1151,6 +1163,401 @@ export function buySignalLogTaskModal(
           action_id: "value",
           multiline: true,
           initial_value: task.description ?? payload.rationale ?? "",
+        },
+      },
+    ],
+  };
+}
+
+export function meetingPickerCard(
+  cardId: string,
+  args: {
+    eventTitle: string;
+    startLabel: string;
+    externalEmails: string[];
+    candidates: MeetingPickerCandidate[];
+  }
+): { blocks: KnownBlock[]; text: string } {
+  const text = `Pick an account for "${args.eventTitle}"`;
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `Pick an account · ${args.eventTitle}`.slice(0, 150),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `Meeting at ${args.startLabel} · external attendees: ${args.externalEmails.join(", ")}`,
+        },
+      ],
+    },
+  ];
+
+  if (args.candidates.length === 0) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "I couldn't find a Salesforce account from the attendee list. No brief will fire for this meeting.",
+      },
+    });
+    return { blocks, text };
+  }
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: "I couldn't auto-resolve a single Salesforce account. Pick one to brief:",
+    },
+  });
+
+  for (const c of args.candidates) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${c.name}*\n_${c.reason}_`,
+      },
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "Brief this account" },
+        action_id: actionId("meeting_pick_account", cardId, c.id),
+        value: c.id,
+      },
+    });
+  }
+
+  return { blocks, text };
+}
+
+export function postMeetingCard(
+  cardId: string,
+  payload: PostMeetingPayload,
+  instanceUrl: string
+): { blocks: KnownBlock[]; text: string } {
+  const accountUrl = `${instanceUrl}/${payload.accountId}`;
+  const text = `Post-meeting · ${payload.eventTitle}`;
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `Post-meeting · ${payload.eventTitle}`.slice(0, 150),
+      },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Account:* <${accountUrl}|${payload.accountName}>`,
+      },
+    },
+  ];
+
+  if (payload.matchedContacts.length > 0) {
+    const lines = payload.matchedContacts
+      .map((c) => `• ${c.name ?? c.email}${c.title ? ` — _${c.title}_` : ""}`)
+      .join("\n");
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Attendees already in Salesforce*\n${lines}`,
+      },
+    });
+  }
+
+  if (payload.unmatchedAttendees.length > 0) {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Attendees not yet in Salesforce* — click to add under *${payload.accountName}*`,
+      },
+    });
+    for (let i = 0; i < payload.unmatchedAttendees.length; i++) {
+      const a = payload.unmatchedAttendees[i];
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `• ${a.displayName ?? "(no name)"} — ${a.email}`,
+        },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "Add to Salesforce" },
+          action_id: actionId("add_contact", cardId, String(i)),
+          value: a.email,
+        },
+      });
+    }
+  }
+
+  if (payload.openOpportunities.length > 0) {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Open opportunities on ${payload.accountName}*`,
+      },
+    });
+    for (const opp of payload.openOpportunities) {
+      const oppUrl = `${instanceUrl}/${opp.id}`;
+      const lines: string[] = [`*<${oppUrl}|${opp.name}>* — ${opp.stage}`];
+      if (opp.amount != null)
+        lines.push(`Amount: $${Number(opp.amount).toLocaleString()}`);
+      if (opp.closeDate) lines.push(`Close date: ${opp.closeDate}`);
+      if (opp.nextStep) lines.push(`Next step: ${opp.nextStep}`);
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: lines.join("\n") },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "Update Opp" },
+          action_id: actionId("update_meeting_opp", cardId, opp.id),
+          value: opp.id,
+        },
+      });
+    }
+  }
+
+  blocks.push({ type: "divider" });
+  blocks.push({
+    type: "actions",
+    block_id: "post_meeting_actions",
+    elements: [
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Log meeting as task" },
+        action_id: actionId("log_meeting_task", cardId),
+        value: cardId,
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Dismiss" },
+        action_id: actionId("post_meeting_skip", cardId),
+        value: cardId,
+        style: "danger",
+      },
+    ],
+  });
+  return { blocks, text };
+}
+
+export function postMeetingAddContactModal(
+  cardId: string,
+  attendeeIndex: number,
+  args: {
+    accountName: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+  }
+): View {
+  return {
+    type: "modal",
+    callback_id: actionId("add_contact", cardId, String(attendeeIndex)),
+    private_metadata: JSON.stringify({ cardId, attendeeIndex }),
+    title: { type: "plain_text", text: "Add Contact" },
+    submit: { type: "plain_text", text: "Add to Salesforce" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `Adding under account *${args.accountName}*.`,
+        },
+      },
+      {
+        type: "input",
+        block_id: "first_name_block",
+        label: { type: "plain_text", text: "First name" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          initial_value: args.firstName.slice(0, 40),
+        },
+      },
+      {
+        type: "input",
+        block_id: "last_name_block",
+        label: { type: "plain_text", text: "Last name" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          initial_value: args.lastName.slice(0, 80),
+        },
+      },
+      {
+        type: "input",
+        block_id: "email_block",
+        label: { type: "plain_text", text: "Email" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          initial_value: args.email.slice(0, 80),
+        },
+      },
+      {
+        type: "input",
+        block_id: "title_block",
+        optional: true,
+        label: { type: "plain_text", text: "Title" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+        },
+      },
+    ],
+  };
+}
+
+export function postMeetingUpdateOppModal(
+  cardId: string,
+  args: {
+    opportunityId: string;
+    opportunityName: string;
+    currentStage: string;
+    currentNextStep: string | null;
+    currentCloseDate: string | null;
+    stageOptions: string[];
+  }
+): View {
+  const stages = args.stageOptions.length > 0
+    ? args.stageOptions
+    : [args.currentStage];
+  const stageOpts = stages.map((s) => ({
+    text: { type: "plain_text" as const, text: s.slice(0, 75) },
+    value: s,
+  }));
+  return {
+    type: "modal",
+    callback_id: actionId("update_meeting_opp", cardId, args.opportunityId),
+    private_metadata: JSON.stringify({
+      cardId,
+      opportunityId: args.opportunityId,
+      currentStage: args.currentStage,
+      currentNextStep: args.currentNextStep,
+      currentCloseDate: args.currentCloseDate,
+    }),
+    title: { type: "plain_text", text: "Update Opportunity" },
+    submit: { type: "plain_text", text: "Save" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*${args.opportunityName}*`,
+        },
+      },
+      {
+        type: "input",
+        block_id: "stage_block",
+        optional: true,
+        label: { type: "plain_text", text: "Stage" },
+        element: {
+          type: "static_select",
+          action_id: "value",
+          initial_option: {
+            text: { type: "plain_text", text: args.currentStage.slice(0, 75) },
+            value: args.currentStage,
+          },
+          options: stageOpts,
+        },
+      },
+      {
+        type: "input",
+        block_id: "next_step_block",
+        optional: true,
+        label: { type: "plain_text", text: "Next step" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          multiline: true,
+          initial_value: (args.currentNextStep ?? "").slice(0, 1000),
+        },
+      },
+      {
+        type: "input",
+        block_id: "close_date_block",
+        optional: true,
+        label: { type: "plain_text", text: "Close date" },
+        element: {
+          type: "datepicker",
+          action_id: "value",
+          initial_date: args.currentCloseDate
+            ? args.currentCloseDate.slice(0, 10)
+            : undefined,
+        },
+      },
+    ],
+  };
+}
+
+export function postMeetingLogTaskModal(
+  cardId: string,
+  args: {
+    accountName: string;
+    eventTitle: string;
+    attendeeSummary: string;
+    todayIso: string;
+  }
+): View {
+  return {
+    type: "modal",
+    callback_id: actionId("log_meeting_task", cardId),
+    private_metadata: JSON.stringify({ cardId }),
+    title: { type: "plain_text", text: "Log meeting" },
+    submit: { type: "plain_text", text: "Log task" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `Logging on account *${args.accountName}*.`,
+        },
+      },
+      {
+        type: "input",
+        block_id: "subject_block",
+        label: { type: "plain_text", text: "Subject" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          initial_value: `Meeting: ${args.eventTitle}`.slice(0, 200),
+        },
+      },
+      {
+        type: "input",
+        block_id: "due_date_block",
+        label: { type: "plain_text", text: "Date" },
+        element: {
+          type: "datepicker",
+          action_id: "value",
+          initial_date: args.todayIso.slice(0, 10),
+        },
+      },
+      {
+        type: "input",
+        block_id: "description_block",
+        optional: true,
+        label: { type: "plain_text", text: "Notes" },
+        element: {
+          type: "plain_text_input",
+          action_id: "value",
+          multiline: true,
+          initial_value: args.attendeeSummary.slice(0, 2000),
         },
       },
     ],

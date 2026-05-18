@@ -4,9 +4,11 @@ import type {
   BriefPayload,
   BuySignalPayload,
   GcTokens,
+  MeetingPickerPayload,
   MeetingRun,
   PendingCard,
   PendingCardKind,
+  PostMeetingPayload,
   Recommendation,
   SfTokens,
   UserPrefs,
@@ -382,7 +384,12 @@ export async function insertPendingCard(c: {
   slackThreadTs: string;
   slackMessageTs?: string;
   opportunityId: string | null;
-  recommendation: Recommendation | BriefPayload | BuySignalPayload;
+  recommendation:
+    | Recommendation
+    | BriefPayload
+    | BuySignalPayload
+    | PostMeetingPayload
+    | MeetingPickerPayload;
   kind?: PendingCardKind;
 }): Promise<string> {
   const pool = getPool();
@@ -440,7 +447,11 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
       ? "brief"
       : r.kind === "buy_signal"
         ? "buy_signal"
-        : "standup";
+        : r.kind === "post_meeting"
+          ? "post_meeting"
+          : r.kind === "meeting_picker"
+            ? "meeting_picker"
+            : "standup";
   if (kind === "brief") {
     return {
       ...base,
@@ -455,6 +466,22 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
       kind: "buy_signal",
       opportunityId: null,
       recommendation: recommendation as BuySignalPayload,
+    };
+  }
+  if (kind === "post_meeting") {
+    return {
+      ...base,
+      kind: "post_meeting",
+      opportunityId: null,
+      recommendation: recommendation as PostMeetingPayload,
+    };
+  }
+  if (kind === "meeting_picker") {
+    return {
+      ...base,
+      kind: "meeting_picker",
+      opportunityId: null,
+      recommendation: recommendation as MeetingPickerPayload,
     };
   }
   return {

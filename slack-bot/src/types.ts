@@ -137,7 +137,12 @@ export const RecommendationSchema = z.object({
 export type RecommendedField = z.infer<typeof RecommendedFieldSchema>;
 export type Recommendation = z.infer<typeof RecommendationSchema>;
 
-export type PendingCardKind = "standup" | "brief" | "buy_signal";
+export type PendingCardKind =
+  | "standup"
+  | "brief"
+  | "buy_signal"
+  | "post_meeting"
+  | "meeting_picker";
 
 export interface PendingCardBase {
   id: string;
@@ -166,10 +171,74 @@ export interface BuySignalPendingCard extends PendingCardBase {
   recommendation: BuySignalPayload;
 }
 
+export interface PostMeetingMatchedContact {
+  id: string;
+  name: string | null;
+  email: string;
+  title: string | null;
+}
+
+export interface PostMeetingUnmatchedAttendee {
+  email: string;
+  displayName: string | null;
+  domain: string;
+}
+
+export interface PostMeetingOpportunity {
+  id: string;
+  name: string;
+  stage: string;
+  amount: number | null;
+  closeDate: string | null;
+  nextStep: string | null;
+}
+
+export interface PostMeetingPayload {
+  gcalEventId: string;
+  eventTitle: string;
+  startIso: string | null;
+  endIso: string | null;
+  accountId: string;
+  accountName: string;
+  matchedContacts: PostMeetingMatchedContact[];
+  unmatchedAttendees: PostMeetingUnmatchedAttendee[];
+  openOpportunities: PostMeetingOpportunity[];
+}
+
+export interface PostMeetingPendingCard extends PendingCardBase {
+  kind: "post_meeting";
+  opportunityId: null;
+  recommendation: PostMeetingPayload;
+}
+
+export interface MeetingPickerCandidate {
+  id: string;
+  name: string;
+  reason: string;
+}
+
+export interface MeetingPickerPayload {
+  kind: "meeting_picker";
+  gcalEventId: string;
+  eventTitle: string;
+  startIso: string | null;
+  externalEmails: string[];
+  externalDomains: string[];
+  candidates: MeetingPickerCandidate[];
+}
+
+export interface MeetingPickerPendingCard extends PendingCardBase {
+  kind: "meeting_picker";
+  opportunityId: null;
+  recommendation: MeetingPickerPayload;
+}
+
 export type PendingCard =
   | StandupPendingCard
   | BriefPendingCard
-  | BuySignalPendingCard;
+  | BuySignalPendingCard
+  | PostMeetingPendingCard
+  | MeetingPickerPendingCard;
 
 export type AuditAction =
   | "recommended"

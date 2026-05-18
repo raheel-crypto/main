@@ -11,6 +11,9 @@ import {
 import { getRecentBuySignalAccountIds, getUser } from "../src/db/queries.js";
 import { handleGongWebhook } from "../src/services/gongWebhookHandler.js";
 import { listEvents } from "../src/services/googleClient.js";
+import { runPreMeeting } from "../src/services/preMeeting.js";
+import { runPostMeeting } from "../src/services/postMeeting.js";
+import { resolveAccount } from "../src/services/accountResolver.js";
 import { runAgent } from "../src/agent/runner.js";
 import { BRIEF_SYSTEM, QA_SYSTEM } from "../src/agent/prompts.js";
 import {
@@ -276,8 +279,44 @@ async function main() {
     );
     return;
   }
+  if (kind === "pre-meeting") {
+    const slackUserId = rest[0];
+    const eventId = rest[1];
+    if (!slackUserId || !eventId) {
+      console.error("usage: probe pre-meeting <slack_user_id> <event_id>");
+      process.exit(1);
+    }
+    const result = await runPreMeeting({ slackUserId, eventId });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (kind === "post-meeting") {
+    const slackUserId = rest[0];
+    const eventId = rest[1];
+    if (!slackUserId || !eventId) {
+      console.error("usage: probe post-meeting <slack_user_id> <event_id>");
+      process.exit(1);
+    }
+    const result = await runPostMeeting({ slackUserId, eventId });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (kind === "resolve-account") {
+    const slackUserId = rest[0];
+    const emails = (rest[1] || "").split(",").filter(Boolean);
+    if (!slackUserId || emails.length === 0) {
+      console.error(
+        "usage: probe resolve-account <slack_user_id> <email,email,...>"
+      );
+      process.exit(1);
+    }
+    const conn = await getConnectionForUser(slackUserId);
+    const result = await resolveAccount(conn, emails);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal|pre-meeting|post-meeting|resolve-account> <args...>"
   );
   process.exit(1);
 }
