@@ -1,0 +1,92 @@
+<template>
+    <lightning-card title="Contact Organizer" icon-name="standard:relationship">
+        <div slot="actions">
+            <lightning-button
+                label="Reset"
+                onclick={handleReset}
+                disabled={isSaving}
+                class="slds-m-right_x-small">
+            </lightning-button>
+            <lightning-button
+                variant="brand"
+                label="Save"
+                onclick={handleSave}
+                disabled={saveDisabled}>
+            </lightning-button>
+        </div>
+
+        <div class="slds-p-horizontal_medium">
+            <template if:true={isLoading}>
+                <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+            </template>
+
+            <template if:true={errorMessage}>
+                <div class="slds-text-color_error slds-p-vertical_small">{errorMessage}</div>
+            </template>
+
+            <template if:false={isLoading}>
+                <template if:false={hasAccount}>
+                    <div class="slds-text-body_regular slds-p-vertical_small">
+                        This Opportunity is not linked to an Account. Set an Account on the Opportunity to organize contacts.
+                    </div>
+                </template>
+
+                <template if:true={hasAccount}>
+                    <div class="slds-text-title_caps slds-m-bottom_small">
+                        Account: <span class="slds-text-body_regular">{accountName}</span>
+                    </div>
+
+                    <template if:false={hasContacts}>
+                        <div class="slds-text-body_regular slds-p-vertical_small">
+                            No contacts found on this Account.
+                        </div>
+                    </template>
+
+                    <template if:true={hasContacts}>
+                        <div class="board">
+                            <template for:each={columns} for:item="col">
+                                <div
+                                    key={col.key}
+                                    class={col.cssClass}
+                                    data-bucket-key={col.key}
+                                    ondragover={handleDragOver}
+                                    ondragleave={handleDragLeave}
+                                    ondrop={handleDrop}>
+                                    <div class="bucket__header">
+                                        <span class="bucket__title">{col.label}</span>
+                                        <span class="bucket__count">{col.count}</span>
+                                    </div>
+                                    <div class="bucket__body">
+                                        <template for:each={col.contacts} for:item="c">
+                                            <div
+                                                key={c.id}
+                                                class={c.cssClass}
+                                                draggable="true"
+                                                data-contact-id={c.id}
+                                                ondragstart={handleDragStart}>
+                                                <div class="contact-tile__name">{c.name}</div>
+                                                <template if:true={c.title}>
+                                                    <div class="contact-tile__meta">{c.title}</div>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template if:true={col.isUnassigned}>
+                                            <template if:false={col.count}>
+                                                <div class="bucket__empty">All contacts are assigned.</div>
+                                            </template>
+                                        </template>
+                                        <template if:false={col.isUnassigned}>
+                                            <template if:false={col.count}>
+                                                <div class="bucket__empty">Drag a contact here</div>
+                                            </template>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </template>
+            </template>
+        </div>
+    </lightning-card>
+</template>

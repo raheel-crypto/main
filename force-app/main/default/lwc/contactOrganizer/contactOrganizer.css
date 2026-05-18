@@ -1,0 +1,105 @@
+.board {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(180px, 1fr));
+    gap: 0.75rem;
+    align-items: start;
+    padding-bottom: 0.75rem;
+    overflow-x: auto;
+}
+
+@media (max-width: 1100px) {
+    .board {
+        grid-template-columns: repeat(2, minmax(220px, 1fr));
+    }
+}
+
+.bucket {
+    background-color: #f4f6f9;
+    border: 1px solid #dddbda;
+    border-radius: 6px;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.bucket--unassigned {
+    background-color: #eef4ff;
+    border-color: #c9d8f1;
+}
+
+.bucket--drop-target {
+    background-color: #e3f3ff;
+    border-color: #1589ee;
+    box-shadow: inset 0 0 0 2px #1589ee;
+}
+
+.bucket__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #dddbda;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #16325c;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.bucket__count {
+    background-color: #ffffff;
+    border: 1px solid #dddbda;
+    border-radius: 999px;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    color: #54698d;
+}
+
+.bucket__body {
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    flex: 1;
+}
+
+.bucket__empty {
+    color: #a8b7c7;
+    font-size: 0.8rem;
+    font-style: italic;
+    text-align: center;
+    padding: 1.25rem 0.5rem;
+    border: 1px dashed #c9d2db;
+    border-radius: 4px;
+}
+
+.contact-tile {
+    background-color: #ffffff;
+    border: 1px solid #d8dde6;
+    border-radius: 4px;
+    padding: 0.5rem 0.6rem;
+    cursor: grab;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
+    user-select: none;
+}
+
+.contact-tile:active {
+    cursor: grabbing;
+}
+
+.contact-tile:hover {
+    border-color: #1589ee;
+}
+
+.contact-tile__name {
+    font-weight: 600;
+    color: #16325c;
+    font-size: 0.9rem;
+}
+
+.contact-tile__meta {
+    color: #54698d;
+    font-size: 0.78rem;
+    margin-top: 0.15rem;
+}
