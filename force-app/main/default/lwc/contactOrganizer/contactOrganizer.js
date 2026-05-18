@@ -409,7 +409,7 @@ export default class ContactOrganizer extends LightningElement {
         try {
             const result = await saveAssignments({
                 opportunityId: this.recordId,
-                assignments: inputs
+                assignmentsJson: JSON.stringify(inputs)
             });
             this.isDirty = false;
             const r = result || {};
@@ -417,9 +417,9 @@ export default class ContactOrganizer extends LightningElement {
             const variant =
                 inputs.length > 0 && changed === 0 ? 'warning' : 'success';
             const message =
-                inputs.length > 0 && changed === 0
-                    ? `Sent ${inputs.length} but server saved 0 — check field permissions or validation rules.`
-                    : `Inserted ${r.inserted || 0} · Updated ${r.updated || 0} · Removed ${r.deleted || 0}`;
+                `Sent ${inputs.length} · Received ${r.received || 0} · ` +
+                `Inserted ${r.inserted || 0} · Updated ${r.updated || 0} · ` +
+                `Removed ${r.deleted || 0} · Skipped ${r.skipped || 0}`;
             this.dispatchEvent(new ShowToastEvent({
                 title: variant === 'success' ? 'Saved' : 'No changes persisted',
                 message,

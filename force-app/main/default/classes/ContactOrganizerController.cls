@@ -202,10 +202,23 @@ public with sharing class ContactOrganizerController {
     }
 
     @AuraEnabled
-    public static SaveResult saveAssignments(Id opportunityId, List<RelationshipMapInput> assignments) {
+    public static SaveResult saveAssignments(Id opportunityId, String assignmentsJson) {
         SaveResult outcome = new SaveResult();
         if (opportunityId == null) {
             throw new AuraHandledException('Opportunity Id is required.');
+        }
+
+        List<RelationshipMapInput> assignments;
+        try {
+            if (String.isBlank(assignmentsJson)) {
+                assignments = new List<RelationshipMapInput>();
+            } else {
+                assignments = (List<RelationshipMapInput>) JSON.deserialize(
+                    assignmentsJson, List<RelationshipMapInput>.class
+                );
+            }
+        } catch (Exception e) {
+            throw new AuraHandledException('Failed to parse assignments: ' + e.getMessage());
         }
         if (assignments == null) {
             assignments = new List<RelationshipMapInput>();

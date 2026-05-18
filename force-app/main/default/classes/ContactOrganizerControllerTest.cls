@@ -130,7 +130,7 @@ private class ContactOrganizerControllerTest {
 
         Test.startTest();
         ContactOrganizerController.SaveResult result =
-            ContactOrganizerController.saveAssignments(opp.Id, inputs);
+            ContactOrganizerController.saveAssignments(opp.Id, JSON.serialize(inputs));
         Test.stopTest();
 
         System.assertEquals(2, result.received);
@@ -183,7 +183,7 @@ private class ContactOrganizerControllerTest {
         inputs.add(a);
 
         Test.startTest();
-        ContactOrganizerController.saveAssignments(opp.Id, inputs);
+        ContactOrganizerController.saveAssignments(opp.Id, JSON.serialize(inputs));
         Test.stopTest();
 
         List<Relationship_Map__c> remaining = [
@@ -212,7 +212,7 @@ private class ContactOrganizerControllerTest {
         Boolean threw = false;
         Test.startTest();
         try {
-            ContactOrganizerController.saveAssignments(opp.Id, inputs);
+            ContactOrganizerController.saveAssignments(opp.Id, JSON.serialize(inputs));
         } catch (AuraHandledException e) {
             threw = true;
         }
@@ -386,7 +386,7 @@ private class ContactOrganizerControllerTest {
         Boolean threw = false;
         try {
             ContactOrganizerController.saveAssignments(
-                null, new List<ContactOrganizerController.RelationshipMapInput>()
+                null, '[]'
             );
         } catch (AuraHandledException e) {
             threw = true;
@@ -406,7 +406,7 @@ private class ContactOrganizerControllerTest {
         Boolean threw = false;
         try {
             ContactOrganizerController.saveAssignments(
-                missingId, new List<ContactOrganizerController.RelationshipMapInput>()
+                missingId, '[]'
             );
         } catch (AuraHandledException e) {
             threw = true;
@@ -424,12 +424,24 @@ private class ContactOrganizerControllerTest {
         Boolean threw = false;
         try {
             ContactOrganizerController.saveAssignments(
-                o.Id, new List<ContactOrganizerController.RelationshipMapInput>()
+                o.Id, '[]'
             );
         } catch (AuraHandledException e) {
             threw = true;
         }
         System.assert(threw, 'Expected exception when Opp has no Account');
+    }
+
+    @isTest
+    static void saveAssignmentsThrowsOnMalformedJson() {
+        Opportunity opp = setupOppWithContacts(1);
+        Boolean threw = false;
+        try {
+            ContactOrganizerController.saveAssignments(opp.Id, '{not valid json');
+        } catch (AuraHandledException e) {
+            threw = true;
+        }
+        System.assert(threw, 'Expected exception for malformed JSON');
     }
 
     @isTest
@@ -466,7 +478,7 @@ private class ContactOrganizerControllerTest {
         inputs.add(b);
 
         Test.startTest();
-        ContactOrganizerController.saveAssignments(opp.Id, inputs);
+        ContactOrganizerController.saveAssignments(opp.Id, JSON.serialize(inputs));
         Test.stopTest();
 
         System.assertEquals(
