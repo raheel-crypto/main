@@ -18,6 +18,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS gong_firehose_enabled BOOLEAN NOT NUL
 ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_realtime_enabled BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_firehose_enabled BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS idx_users_email_lower ON users(LOWER(email));
+DROP INDEX IF EXISTS idx_users_email_lower;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_email_lower ON users(LOWER(email));
 CREATE INDEX IF NOT EXISTS idx_users_gong_firehose ON users(gong_firehose_enabled) WHERE gong_firehose_enabled = true;
 CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose ON users(nooks_firehose_enabled) WHERE nooks_firehose_enabled = true;
 
