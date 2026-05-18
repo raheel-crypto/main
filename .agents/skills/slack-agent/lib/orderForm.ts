@@ -5,12 +5,6 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import type { ApprovalRequest } from "./types.js";
 
-const TEMPLATES_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "templates",
-);
-
 const TEMPLATE_FILES = {
   enterprise: "order-form-enterprise.docx",
   standard: "order-form.docx",
@@ -18,11 +12,35 @@ const TEMPLATE_FILES = {
 
 const templateCache: Partial<Record<keyof typeof TEMPLATE_FILES, Buffer>> = {};
 
+/**
+ * Resolve a template file by trying both `process.cwd()` and the path next to
+ * this module. On Vercel, esbuild bundles `lib/orderForm.ts` into the calling
+ * function's output, so `import.meta.url`-relative paths can drift from where
+ * the included template files actually land. `process.cwd()` is the function's
+ * project root at runtime and is the more reliable anchor — but we keep both
+ * as fallbacks for local dev where the bundled path works.
+ */
 async function loadTemplate(kind: keyof typeof TEMPLATE_FILES): Promise<Buffer> {
-  if (!templateCache[kind]) {
-    templateCache[kind] = await readFile(join(TEMPLATES_DIR, TEMPLATE_FILES[kind]));
+  if (templateCache[kind]) return templateCache[kind]!;
+
+  const filename = TEMPLATE_FILES[kind];
+  const candidates = [
+    join(process.cwd(), "templates", filename),
+    join(dirname(fileURLToPath(import.meta.url)), "..", "templates", filename),
+  ];
+
+  const errors: string[] = [];
+  for (const path of candidates) {
+    try {
+      const buf = await readFile(path);
+      console.log(`[orderForm] loaded ${kind} from ${path} (${buf.length} bytes)`);
+      templateCache[kind] = buf;
+      return buf;
+    } catch (e) {
+      errors.push(`${path}: ${(e as Error).message}`);
+    }
   }
-  return templateCache[kind]!;
+  throw new Error(`Could not load template ${filename}. Tried:\n${errors.join("\n")}`);
 }
 
 function pickTemplate(segment: string | null): keyof typeof TEMPLATE_FILES {
