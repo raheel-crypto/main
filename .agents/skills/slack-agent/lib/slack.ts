@@ -90,3 +90,19 @@ export async function dmUser(userId: string, text: string, blocks?: unknown[]) {
   if (!im.channel?.id) throw new Error("Could not open IM with " + userId);
   return postMessage({ channel: im.channel.id, text, blocks });
 }
+
+export async function dmFileToUser(args: {
+  userId: string;
+  file: Buffer;
+  filename: string;
+  initialComment?: string;
+}): Promise<void> {
+  const im = await slack.conversations.open({ users: args.userId });
+  if (!im.channel?.id) throw new Error("Could not open IM with " + args.userId);
+  await slack.files.uploadV2({
+    channel_id: im.channel.id,
+    file: args.file,
+    filename: args.filename,
+    initial_comment: args.initialComment,
+  });
+}

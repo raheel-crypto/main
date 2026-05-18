@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { runQuoteAgent } from "../../lib/agent.js";
 import { routeApproval } from "../../lib/approval.js";
+import { fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
 import { calculatePricing } from "../../lib/pricing.js";
 import { postApprovalRequest, postAuditLog } from "../../lib/revops.js";
-import { dmUser } from "../../lib/slack.js";
+import { dmFileToUser, dmUser } from "../../lib/slack.js";
 import { stashAt } from "../../lib/state.js";
 import type { AgentOutput, ApprovalRequest, ProcessQuoteJob } from "../../lib/types.js";
 
@@ -110,6 +111,23 @@ async function processJob(job: ProcessQuoteJob): Promise<void> {
       );
     } catch (e) {
       console.error("requester DM failed:", e);
+    }
+
+    if (isAuto) {
+      try {
+        const file = await fillOrderForm(request);
+        await dmFileToUser({
+          userId: requester.slack_user_id,
+          file,
+          filename: orderFormFilename(request),
+          initialComment:
+            `Your order form for *${context.account.name}* ` +
+            `(${context.opportunity.name}) is approved and ready for signature. ` +
+            `Request ID: \`${request_id}\``,
+        });
+      } catch (e) {
+        console.error("order form delivery failed:", e);
+      }
     }
   }
 }

@@ -1,8 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { isAuthorizedApprover } from "../../lib/approval.js";
+import { fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
 import { postDecisionUpdate } from "../../lib/revops.js";
 import { drop, retrieve, stashAt } from "../../lib/state.js";
-import { updateViaResponseUrl, verifySlackSignature } from "../../lib/slack.js";
+import { dmFileToUser, updateViaResponseUrl, verifySlackSignature } from "../../lib/slack.js";
 import { resolveOpportunity, toDealContext } from "../../lib/sfdc-client.js";
 import type { ApprovalRequest, Package, ProcessQuoteJob, QuoteForm, Requester } from "../../lib/types.js";
 
@@ -189,7 +190,30 @@ async function handleApproveReject(
   await stashAt(`approval:${requestId}`, request, 60 * 60 * 24 * 30);
   await postDecisionUpdate(request);
 
+  if (request.state === "approved") {
+    await deliverOrderForm(request);
+  }
+
   return res.status(200).send("");
+}
+
+async function deliverOrderForm(request: ApprovalRequest): Promise<void> {
+  const repId = request.requester.slack_user_id;
+  if (!repId) return;
+  try {
+    const file = await fillOrderForm(request);
+    await dmFileToUser({
+      userId: repId,
+      file,
+      filename: orderFormFilename(request),
+      initialComment:
+        `Your order form for *${request.context.account.name}* ` +
+        `(${request.context.opportunity.name}) is approved and ready for signature. ` +
+        `Request ID: \`${request.request_id}\``,
+    });
+  } catch (e) {
+    console.error("order form delivery failed:", e);
+  }
 }
 
 async function fireProcessor(job: ProcessQuoteJob): Promise<void> {
