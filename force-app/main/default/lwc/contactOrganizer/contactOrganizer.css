@@ -319,6 +319,43 @@
     font-weight: 500;
 }
 
+.contact-tile__pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+}
+
+.detail-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.1rem 0.55rem 0.1rem 0.4rem;
+    border-radius: 999px;
+    border: 1px solid #c9d8f1;
+    background-color: #eef4ff;
+    color: #1f4988;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.detail-pill:hover,
+.detail-pill:focus {
+    background-color: #d8e8ff;
+    border-color: #1589ee;
+    color: #0b5cb5;
+    outline: none;
+}
+
+.detail-pill lightning-icon {
+    --sds-c-icon-color-foreground-default: currentColor;
+}
+
 .detail-modal {
     position: fixed;
     inset: 0;

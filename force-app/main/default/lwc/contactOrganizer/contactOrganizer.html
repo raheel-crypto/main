@@ -84,27 +84,29 @@
                                             <template lwc:if={c.title}>
                                                 <div class="contact-tile__meta">{c.title}</div>
                                             </template>
-                                            <template lwc:if={c.hasActivity}>
-                                                <span class={c.activityBadge.cssClass} title={c.activityBadge.tooltip}>
-                                                    <lightning-icon icon-name="utility:activity" size="xx-small"></lightning-icon>
-                                                    <span class="activity-pill__count">{c.activityBadge.countLabel}</span>
-                                                    <template lwc:if={c.activityBadge.relativeLabel}>
-                                                        <span class="activity-pill__sep">·</span>
-                                                        <span class="activity-pill__rel">{c.activityBadge.relativeLabel}</span>
-                                                    </template>
-                                                </span>
-                                            </template>
+                                            <div class="contact-tile__pill-row">
+                                                <template lwc:if={c.hasActivity}>
+                                                    <span class={c.activityBadge.cssClass} title={c.activityBadge.tooltip}>
+                                                        <lightning-icon icon-name="utility:activity" size="xx-small"></lightning-icon>
+                                                        <span class="activity-pill__count">{c.activityBadge.countLabel}</span>
+                                                        <template lwc:if={c.activityBadge.relativeLabel}>
+                                                            <span class="activity-pill__sep">·</span>
+                                                            <span class="activity-pill__rel">{c.activityBadge.relativeLabel}</span>
+                                                        </template>
+                                                    </span>
+                                                </template>
+                                                <button
+                                                    type="button"
+                                                    class="detail-pill"
+                                                    data-contact-id={c.id}
+                                                    onclick={handleOpenDetail}
+                                                    draggable="false">
+                                                    <lightning-icon icon-name="utility:preview" size="xx-small"></lightning-icon>
+                                                    <span>Details</span>
+                                                </button>
+                                            </div>
                                         </div>
                                         <div class="contact-tile__actions">
-                                            <lightning-button-icon
-                                                icon-name="utility:info"
-                                                variant="bare"
-                                                size="small"
-                                                alternative-text="View details"
-                                                title="View details"
-                                                data-contact-id={c.id}
-                                                onclick={handleOpenDetail}>
-                                            </lightning-button-icon>
                                             <lightning-button-menu
                                                 alternative-text="Add to bucket"
                                                 icon-name="utility:add"
@@ -172,27 +174,29 @@
                                                 <template lwc:if={t.title}>
                                                     <div class="contact-tile__meta">{t.title}</div>
                                                 </template>
-                                                <template lwc:if={t.hasActivity}>
-                                                    <span class={t.activityBadge.cssClass} title={t.activityBadge.tooltip}>
-                                                        <lightning-icon icon-name="utility:activity" size="xx-small"></lightning-icon>
-                                                        <span class="activity-pill__count">{t.activityBadge.countLabel}</span>
-                                                        <template lwc:if={t.activityBadge.relativeLabel}>
-                                                            <span class="activity-pill__sep">·</span>
-                                                            <span class="activity-pill__rel">{t.activityBadge.relativeLabel}</span>
-                                                        </template>
-                                                    </span>
-                                                </template>
+                                                <div class="contact-tile__pill-row">
+                                                    <template lwc:if={t.hasActivity}>
+                                                        <span class={t.activityBadge.cssClass} title={t.activityBadge.tooltip}>
+                                                            <lightning-icon icon-name="utility:activity" size="xx-small"></lightning-icon>
+                                                            <span class="activity-pill__count">{t.activityBadge.countLabel}</span>
+                                                            <template lwc:if={t.activityBadge.relativeLabel}>
+                                                                <span class="activity-pill__sep">·</span>
+                                                                <span class="activity-pill__rel">{t.activityBadge.relativeLabel}</span>
+                                                            </template>
+                                                        </span>
+                                                    </template>
+                                                    <button
+                                                        type="button"
+                                                        class="detail-pill"
+                                                        data-contact-id={t.contactId}
+                                                        onclick={handleOpenDetail}
+                                                        draggable="false">
+                                                        <lightning-icon icon-name="utility:preview" size="xx-small"></lightning-icon>
+                                                        <span>Details</span>
+                                                    </button>
+                                                </div>
                                             </div>
                                             <div class="contact-tile__actions">
-                                                <lightning-button-icon
-                                                    icon-name="utility:info"
-                                                    variant="bare"
-                                                    size="small"
-                                                    alternative-text="View details"
-                                                    title="View details"
-                                                    data-contact-id={t.contactId}
-                                                    onclick={handleOpenDetail}>
-                                                </lightning-button-icon>
                                                 <lightning-button-icon
                                                     icon-name={t.championIcon}
                                                     variant={t.championVariant}
@@ -244,11 +248,13 @@
                 <header class="detail-modal__header">
                     <div class="detail-modal__title-wrap">
                         <h2 id="detail-modal-title" class="detail-modal__title">{detailHeaderLabel}</h2>
-                        <template lwc:if={contactDetail.title}>
-                            <div class="detail-modal__subtitle">{contactDetail.title}</div>
-                        </template>
-                        <template lwc:if={contactDetail.email}>
-                            <div class="detail-modal__email">{contactDetail.email}</div>
+                        <template lwc:if={contactDetail}>
+                            <template lwc:if={contactDetail.title}>
+                                <div class="detail-modal__subtitle">{contactDetail.title}</div>
+                            </template>
+                            <template lwc:if={contactDetail.email}>
+                                <div class="detail-modal__email">{contactDetail.email}</div>
+                            </template>
                         </template>
                     </div>
                     <lightning-button-icon
