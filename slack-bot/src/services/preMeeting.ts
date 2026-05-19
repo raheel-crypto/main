@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import { runAgent } from "../agent/runner.js";
 import { extractJsonObject } from "../agent/jsonParse.js";
 import { BRIEF_SYSTEM } from "../agent/prompts.js";
+import { buildSlackProgressUpdater } from "../agent/progress.js";
 import {
   appendAudit,
   getUser,
@@ -147,9 +148,16 @@ export async function runPreMeeting(args: {
   const accountName = resolved.accountName ?? "this account";
   const placeholder = await slack.chat.postMessage({
     channel: channelId,
-    text: `Pre-meeting brief for *${accountName}* — researching…`,
+    text: `:mag: Pre-meeting brief for *${accountName}* — looking things up…`,
   });
   const placeholderTs = placeholder.ts!;
+
+  const updateProgress = buildSlackProgressUpdater({
+    slack,
+    channel: channelId,
+    ts: placeholderTs,
+    logTag: "[pre-meeting]",
+  });
 
   const today = DateTime.now().setZone(user.timezone).toISODate();
   const externalListLine = externals
@@ -164,6 +172,7 @@ export async function runPreMeeting(args: {
       `Focus the talking points on what's changed since the last touch and what the rep should confirm or push for on this call.`,
     maxTokens: 8192,
     maxIterations: 20,
+    onToolUse: ({ toolNames }) => updateProgress(toolNames),
     ctx: {
       conn,
       slackUserId,
@@ -172,6 +181,8 @@ export async function runPreMeeting(args: {
       instanceUrl: conn.instanceUrl!,
     },
   });
+
+  await updateProgress(["__finalizing"]);
 
   const raw = extractJsonObject(result.finalText);
   if (!raw) {

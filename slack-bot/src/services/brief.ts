@@ -3,6 +3,7 @@ import { DateTime } from "luxon";
 import { runAgent } from "../agent/runner.js";
 import { extractJsonObject } from "../agent/jsonParse.js";
 import { BRIEF_SYSTEM } from "../agent/prompts.js";
+import { buildSlackProgressUpdater } from "../agent/progress.js";
 import { appendAudit, getUser, insertPendingCard, setCardMessageTs } from "../db/queries.js";
 import {
   briefCard,
@@ -65,9 +66,16 @@ export async function runBriefForUser(args: {
 
   const placeholderRes = await slack.chat.postMessage({
     channel: channelId,
-    text: `Researching ${query}…`,
+    text: `:mag: Looking up *${query}*…`,
   });
   const placeholderTs = placeholderRes.ts!;
+
+  const updateProgress = buildSlackProgressUpdater({
+    slack,
+    channel: channelId,
+    ts: placeholderTs,
+    logTag: "[brief]",
+  });
 
   const today = DateTime.now().setZone(user.timezone).toISODate();
   const result = await runAgent({
@@ -75,6 +83,7 @@ export async function runBriefForUser(args: {
     userMessage: `Generate a pre-meeting brief for the Salesforce account whose name matches: "${query}". Today is ${today} (${user.timezone}).`,
     maxTokens: 8192,
     maxIterations: 20,
+    onToolUse: ({ toolNames }) => updateProgress(toolNames),
     ctx: {
       conn,
       slackUserId,
@@ -83,6 +92,9 @@ export async function runBriefForUser(args: {
       instanceUrl: conn.instanceUrl!,
     },
   });
+
+  // Final phase: agent finished, we're rendering the card.
+  await updateProgress(["__finalizing"]);
 
   const raw = extractJsonObject(result.finalText);
   if (!raw) {

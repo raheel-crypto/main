@@ -33,6 +33,15 @@ export interface RunAgentInput {
   maxTokens?: number;
   toolNames?: string[];
   maxIterations?: number;
+  /**
+   * Called after each turn that produces tool_use blocks, before the tools
+   * are dispatched. Caller can use it to update a Slack placeholder message
+   * with friendly progress text. Fire-and-forget; errors are swallowed so a
+   * failed progress update never derails the agent run.
+   */
+  onToolUse?: (
+    args: { toolNames: string[]; iter: number }
+  ) => Promise<void> | void;
 }
 
 export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
@@ -43,6 +52,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     maxTokens = 4096,
     toolNames,
     maxIterations = MAX_TOOL_ITERATIONS,
+    onToolUse,
   } = input;
 
   const tools = toolNames
@@ -70,6 +80,17 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     const toolUseBlocks = assistantContent.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
+
+    if (onToolUse && toolUseBlocks.length > 0) {
+      Promise.resolve(
+        onToolUse({
+          toolNames: toolUseBlocks.map((b) => b.name),
+          iter,
+        })
+      ).catch((err) =>
+        console.warn("[agent] onToolUse callback failed:", err?.message ?? err)
+      );
+    }
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
     for (const tu of toolUseBlocks) {
