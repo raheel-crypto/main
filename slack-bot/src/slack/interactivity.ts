@@ -87,7 +87,7 @@ export function registerInteractivity(app: App): void {
     const parsed = parseActionId((action as any).action_id);
     if (!parsed || !parsed.field) return;
     const card = await getPendingCard(parsed.cardId);
-    if (!card || card.kind !== "standup") return;
+    if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
     const fieldRec = card.recommendation.fields.find(
       (f) => f.field === parsed.field
     );
@@ -637,7 +637,7 @@ async function handleAccept(
   field: string
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || card.kind !== "standup") return;
+  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   if (!fieldRec) return;
@@ -661,7 +661,7 @@ async function handleSkip(
   field: string
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || card.kind !== "standup") return;
+  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   await appendAudit({
@@ -684,7 +684,7 @@ async function handleSkip(
 
 async function handleApplyAll(app: App, body: any, cardId: string): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || card.kind !== "standup") return;
+  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
   const slackUserId = body.user.id as string;
   const fields = card.recommendation.fields;
   if (fields.length === 0) return;
@@ -709,7 +709,7 @@ async function handleEditSubmit(
   newValue: unknown
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || card.kind !== "standup") return;
+  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   if (!fieldRec) return;

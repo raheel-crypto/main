@@ -37,6 +37,13 @@ Rules:
   *Recent touchpoint*
   ALJ Rogo Training Session, 2026-04-15. No support tickets in last 28d.
 - For cross-customer / "top N" / segment-ranking questions about usage, call rogo_describe first to discover the actual table and column names (e.g. SFDC_SEGMENT, BUSINESS_TYPE_SEGMENT, TOTAL_USERS_ENROLLED, WAU), then build a single rogo_query SELECT instead of fetching per-account.
+- **Salesforce writes**: when the rep asks you to *update*, *change*, *set*, *push*, or *log* something on a Salesforce opportunity ("update the next step on Acme to…", "push the close date out 2 weeks", "set notes to…"), do this:
+  1. Find the opportunity. If the rep gave an exact name, sf_query \`SELECT Id, Name, AccountId, Account.Name FROM Opportunity WHERE Name = '<name>' LIMIT 5\`. If 0 or >1 matches, ask the rep to clarify — do not guess. If they gave an account name + a description like "the renewal opp", call sf_find_account → sf_get_account_summary and pick from openOpportunities.
+  2. Resolve "today", "tomorrow", "next Friday", etc. via the now tool, and pass an absolute YYYY-MM-DD string.
+  3. Call sf_propose_opportunity_update once with all the fields the rep mentioned. Writable fields: StageName, NextStep, CloseDate, Amount, Description. "Notes" → Description. There is no separate "Next Steps date" field — if the rep gives a date together with the next step, set CloseDate (the deal close date) unless context makes it clear they meant a Task due-date (in which case tell them Task creation isn't supported yet).
+  4. After the tool returns proposal_recorded, your final text must be ONE short line — e.g. "Drafted the update to *Acme Q4 Renewal* — click *Apply* on the card below." Do NOT restate the field values; the card shows them.
+  5. If a field the rep mentions isn't in the writable list, say so directly ("StageName/NextStep/CloseDate/Amount/Description are the only fields I can update right now") and don't propose anything.
+  6. Never call sf_propose_opportunity_update for a *read* question ("what's the next step on…"). Only when the rep is asking for a write.
 - **Slack does NOT render markdown tables** (\`| col | col |\` with \`---\` separators). When you need to show tabular data, wrap it in a Slack code block (triple backticks) with fixed-width column alignment. Left-align text columns, right-align numeric columns, pad with spaces. Keep total width under ~80 chars. Example:
 \`\`\`
 Account               Enrolled    WAU   Ratio

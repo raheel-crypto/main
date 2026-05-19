@@ -119,6 +119,7 @@ const SF_WRITABLE_FIELDS = [
   "NextStep",
   "Amount",
   "CloseDate",
+  "Description",
 ] as const;
 
 export const RecommendedFieldSchema = z.object({
@@ -142,7 +143,8 @@ export type PendingCardKind =
   | "brief"
   | "buy_signal"
   | "post_meeting"
-  | "meeting_picker";
+  | "meeting_picker"
+  | "qa_proposal";
 
 export interface PendingCardBase {
   id: string;
@@ -233,12 +235,19 @@ export interface MeetingPickerPendingCard extends PendingCardBase {
   recommendation: MeetingPickerPayload;
 }
 
+export interface QaProposalPendingCard extends PendingCardBase {
+  kind: "qa_proposal";
+  opportunityId: string;
+  recommendation: Recommendation;
+}
+
 export type PendingCard =
   | StandupPendingCard
   | BriefPendingCard
   | BuySignalPendingCard
   | PostMeetingPendingCard
-  | MeetingPickerPendingCard;
+  | MeetingPickerPendingCard
+  | QaProposalPendingCard;
 
 export type AuditAction =
   | "recommended"
@@ -267,7 +276,9 @@ export type AuditAction =
   | "meeting_briefed"
   | "meeting_brief_failed"
   | "meeting_post_surfaced"
-  | "meeting_picker_surfaced";
+  | "meeting_picker_surfaced"
+  | "qa_proposed_update"
+  | "qa_propose_failed";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",

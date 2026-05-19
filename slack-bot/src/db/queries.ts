@@ -451,7 +451,9 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
           ? "post_meeting"
           : r.kind === "meeting_picker"
             ? "meeting_picker"
-            : "standup";
+            : r.kind === "qa_proposal"
+              ? "qa_proposal"
+              : "standup";
   if (kind === "brief") {
     return {
       ...base,
@@ -482,6 +484,14 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
       kind: "meeting_picker",
       opportunityId: null,
       recommendation: recommendation as MeetingPickerPayload,
+    };
+  }
+  if (kind === "qa_proposal") {
+    return {
+      ...base,
+      kind: "qa_proposal",
+      opportunityId: r.opportunity_id,
+      recommendation: recommendation as Recommendation,
     };
   }
   return {

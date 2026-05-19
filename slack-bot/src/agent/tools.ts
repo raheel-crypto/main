@@ -18,12 +18,27 @@ import {
 } from "../services/rogoClient.js";
 import { BUY_SIGNAL_SUBJECT_PATTERN } from "../constants.js";
 
+export interface PendingWriteProposal {
+  opportunityId: string;
+  opportunityName: string;
+  accountId: string | null;
+  accountName: string;
+  fields: {
+    field: "StageName" | "NextStep" | "Amount" | "CloseDate" | "Description";
+    currentValue: string | number | null;
+    recommendedValue: string | number | null;
+    rationale: string;
+  }[];
+  recap: string;
+}
+
 export interface AgentToolCtx {
   conn: Connection;
   slackUserId: string;
   userEmail: string;
   userTimezone: string;
   instanceUrl: string;
+  pendingWriteProposal?: PendingWriteProposal;
 }
 
 export interface AgentTool {
@@ -469,6 +484,205 @@ const rogoQuery: AgentTool = {
   },
 };
 
+const WRITABLE_OPP_FIELDS = [
+  "StageName",
+  "NextStep",
+  "Amount",
+  "CloseDate",
+  "Description",
+] as const;
+type WritableOppField = (typeof WRITABLE_OPP_FIELDS)[number];
+
+const sfProposeOpportunityUpdate: AgentTool = {
+  name: "sf_propose_opportunity_update",
+  definition: {
+    name: "sf_propose_opportunity_update",
+    description:
+      "Draft an update to a Salesforce Opportunity. Does NOT write to Salesforce — it stages a confirmation card with Accept/Edit/Skip buttons that the rep clicks to apply. Use this whenever the rep asks you to update, change, set, or push an opportunity field. Writable fields: StageName, NextStep, CloseDate, Amount, Description (Description = 'Notes'). Pass YYYY-MM-DD for CloseDate, a number for Amount, an exact picklist value for StageName. Call this tool at most once per turn; calling it ends the agent loop.",
+    input_schema: {
+      type: "object",
+      properties: {
+        opportunityId: {
+          type: "string",
+          description:
+            "The 15- or 18-character Salesforce Opportunity Id. Look it up first via sf_query or sf_get_account_summary if you don't have it.",
+        },
+        fields: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            properties: {
+              field: {
+                type: "string",
+                enum: [...WRITABLE_OPP_FIELDS],
+                description: "One of the writable fields.",
+              },
+              newValue: {
+                description:
+                  "The new value. Strings for NextStep/StageName/Description, number for Amount, YYYY-MM-DD string for CloseDate.",
+              },
+              rationale: {
+                type: "string",
+                description:
+                  "One sentence explaining why this change is being proposed (quote the rep's words if useful).",
+              },
+            },
+            required: ["field", "newValue", "rationale"],
+          },
+        },
+        recap: {
+          type: "string",
+          description:
+            "One-line summary of what the rep asked for. Shown at the top of the confirmation card.",
+        },
+      },
+      required: ["opportunityId", "fields", "recap"],
+    },
+  },
+  async execute(input, ctx) {
+    const opportunityId = String((input as any).opportunityId ?? "").trim();
+    const recap = String((input as any).recap ?? "").trim();
+    const rawFields = ((input as any).fields ?? []) as {
+      field: string;
+      newValue: unknown;
+      rationale: string;
+    }[];
+
+    if (!opportunityId) {
+      return { status: "error", error: "opportunityId required" };
+    }
+    if (!recap) {
+      return { status: "error", error: "recap required" };
+    }
+    if (!Array.isArray(rawFields) || rawFields.length === 0) {
+      return { status: "error", error: "fields must be a non-empty array" };
+    }
+
+    const invalid = rawFields.find(
+      (f) => !WRITABLE_OPP_FIELDS.includes(f.field as WritableOppField)
+    );
+    if (invalid) {
+      return {
+        status: "error",
+        error: `Field "${invalid.field}" is not writable. Allowed: ${WRITABLE_OPP_FIELDS.join(", ")}`,
+      };
+    }
+
+    let oppRow: any;
+    try {
+      const res = await ctx.conn.query(
+        `SELECT Id, Name, StageName, NextStep, Amount, CloseDate, Description, AccountId, Account.Name
+           FROM Opportunity WHERE Id = '${escapeSoql(opportunityId)}' LIMIT 1`
+      );
+      oppRow = (res.records as any[])[0];
+    } catch (err: any) {
+      return {
+        status: "error",
+        error: `Salesforce lookup failed: ${err?.message ?? String(err)}`,
+      };
+    }
+    if (!oppRow) {
+      return {
+        status: "error",
+        error: `Opportunity ${opportunityId} not found. Look it up with sf_query first.`,
+      };
+    }
+
+    let stagePicklist: string[] = [];
+    if (rawFields.some((f) => f.field === "StageName")) {
+      try {
+        const desc = await ctx.conn.describe("Opportunity");
+        const f = desc.fields.find((x) => x.name === "StageName");
+        stagePicklist = (f?.picklistValues ?? [])
+          .filter((p) => p.active)
+          .map((p) => p.value);
+      } catch {
+        stagePicklist = [];
+      }
+    }
+
+    const normalized: PendingWriteProposal["fields"] = [];
+    for (const f of rawFields) {
+      const field = f.field as WritableOppField;
+      const rationale = String(f.rationale ?? "").trim() || "Requested by rep.";
+      const currentRaw = oppRow[field] ?? null;
+
+      let recommendedValue: string | number | null;
+      if (f.newValue === null || f.newValue === undefined) {
+        recommendedValue = null;
+      } else if (field === "Amount") {
+        const n =
+          typeof f.newValue === "number"
+            ? f.newValue
+            : Number(String(f.newValue).replace(/[^0-9.\-]/g, ""));
+        if (!Number.isFinite(n)) {
+          return {
+            status: "error",
+            error: `Amount must be a number; got ${JSON.stringify(f.newValue)}`,
+          };
+        }
+        recommendedValue = n;
+      } else if (field === "CloseDate") {
+        const s = String(f.newValue).slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+          return {
+            status: "error",
+            error: `CloseDate must be YYYY-MM-DD; got ${JSON.stringify(f.newValue)}`,
+          };
+        }
+        recommendedValue = s;
+      } else if (field === "StageName") {
+        const s = String(f.newValue);
+        if (stagePicklist.length > 0 && !stagePicklist.includes(s)) {
+          return {
+            status: "error",
+            error: `StageName "${s}" is not in the picklist. Valid: ${stagePicklist.join(", ")}`,
+          };
+        }
+        recommendedValue = s;
+      } else {
+        recommendedValue = String(f.newValue);
+      }
+
+      const currentNormalized: string | number | null =
+        currentRaw === null || currentRaw === undefined
+          ? null
+          : typeof currentRaw === "number"
+            ? currentRaw
+            : String(currentRaw);
+
+      normalized.push({
+        field,
+        currentValue: currentNormalized,
+        recommendedValue,
+        rationale,
+      });
+    }
+
+    ctx.pendingWriteProposal = {
+      opportunityId: oppRow.Id,
+      opportunityName: oppRow.Name ?? "(unnamed opportunity)",
+      accountId: oppRow.AccountId ?? null,
+      accountName: oppRow.Account?.Name ?? "(no account)",
+      fields: normalized,
+      recap,
+    };
+
+    return {
+      status: "proposal_recorded",
+      opportunityName: oppRow.Name,
+      accountName: oppRow.Account?.Name ?? null,
+      fields: normalized.map((f) => ({
+        field: f.field,
+        from: f.currentValue,
+        to: f.recommendedValue,
+      })),
+      next: "A confirmation card will be posted in the DM with Apply/Skip buttons. Reply with one short sentence acknowledging the draft — do not restate the field values.",
+    };
+  },
+};
+
 export const ALL_TOOLS: AgentTool[] = [
   now,
   sfFindAccount,
@@ -481,6 +695,7 @@ export const ALL_TOOLS: AgentTool[] = [
   sfGetRecentPositiveCalls,
   rogoDescribe,
   rogoQuery,
+  sfProposeOpportunityUpdate,
 ];
 
 export const TOOL_DEFINITIONS = ALL_TOOLS.map((t) => t.definition);

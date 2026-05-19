@@ -3,8 +3,15 @@ import { DateTime } from "luxon";
 import { runAgent } from "../agent/runner.js";
 import { QA_SYSTEM } from "../agent/prompts.js";
 import { buildSlackProgressUpdater } from "../agent/progress.js";
-import { appendAudit, getUser } from "../db/queries.js";
-import { connectPrompt } from "../slack/blocks.js";
+import type { AgentToolCtx } from "../agent/tools.js";
+import {
+  appendAudit,
+  getUser,
+  insertPendingCard,
+  setCardMessageTs,
+} from "../db/queries.js";
+import { connectPrompt, oppCard } from "../slack/blocks.js";
+import type { Recommendation } from "../types.js";
 import {
   getConnectionForUser,
   SfNotConnectedError,
@@ -62,18 +69,19 @@ export async function runQaForUser(args: {
   });
 
   const today = DateTime.now().setZone(user.timezone).toISODate();
+  const agentCtx: AgentToolCtx = {
+    conn,
+    slackUserId,
+    userEmail: user.email,
+    userTimezone: user.timezone,
+    instanceUrl: conn.instanceUrl!,
+  };
   try {
     const result = await runAgent({
       system: QA_SYSTEM,
       userMessage: `Today is ${today} (${user.timezone}).\n\n${trimmed}`,
       onToolUse: ({ toolNames }) => updateProgress(toolNames),
-      ctx: {
-        conn,
-        slackUserId,
-        userEmail: user.email,
-        userTimezone: user.timezone,
-        instanceUrl: conn.instanceUrl!,
-      },
+      ctx: agentCtx,
     });
     const answer = result.finalText || "_(no response)_";
     await slack.chat.update({
@@ -91,6 +99,18 @@ export async function runQaForUser(args: {
         stopReason: result.stopReason,
       },
     });
+
+    if (agentCtx.pendingWriteProposal) {
+      await postWriteProposalCard({
+        slack,
+        channelId,
+        slackUserId,
+        placeholderTs: ts,
+        proposal: agentCtx.pendingWriteProposal,
+        instanceUrl: conn.instanceUrl!,
+      });
+    }
+
     return { ran: true };
   } catch (err: any) {
     await slack.chat.update({
@@ -104,5 +124,54 @@ export async function runQaForUser(args: {
       metadata: { question: trimmed, error: err.message ?? String(err) },
     });
     return { ran: false, reason: "error" };
+  }
+}
+
+async function postWriteProposalCard(args: {
+  slack: WebClient;
+  channelId: string;
+  slackUserId: string;
+  placeholderTs: string;
+  proposal: NonNullable<AgentToolCtx["pendingWriteProposal"]>;
+  instanceUrl: string;
+}): Promise<void> {
+  const { slack, channelId, slackUserId, placeholderTs, proposal, instanceUrl } =
+    args;
+  const recommendation: Recommendation = {
+    opportunityId: proposal.opportunityId,
+    recap: proposal.recap,
+    fields: proposal.fields,
+  };
+  const cardId = await insertPendingCard({
+    slackUserId,
+    slackChannel: channelId,
+    slackThreadTs: placeholderTs,
+    opportunityId: proposal.opportunityId,
+    recommendation,
+    kind: "qa_proposal",
+  });
+  const blocks = oppCard(cardId, recommendation, {
+    name: proposal.opportunityName,
+    accountName: proposal.accountName,
+    instanceUrl,
+  });
+  const cardRes = await slack.chat.postMessage({
+    channel: channelId,
+    unfurl_links: false,
+    unfurl_media: false,
+    ...blocks,
+  });
+  if (cardRes.ts) await setCardMessageTs(cardId, cardRes.ts);
+
+  for (const f of proposal.fields) {
+    await appendAudit({
+      slackUserId,
+      opportunityId: proposal.opportunityId,
+      fieldName: f.field,
+      action: "qa_proposed_update",
+      oldValue: String(f.currentValue ?? ""),
+      newValue: String(f.recommendedValue ?? ""),
+      metadata: { cardId, rationale: f.rationale },
+    });
   }
 }
