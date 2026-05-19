@@ -372,6 +372,86 @@ function suggestionLabel(s: BriefSuggestion): string {
   }
 }
 
+function formatPctMetric(v: string | number): string {
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    if (trimmed.endsWith("%")) return trimmed;
+    const n = Number(trimmed);
+    if (Number.isFinite(n)) return formatPctMetric(n);
+    return trimmed;
+  }
+  if (!Number.isFinite(v)) return "—";
+  if (Math.abs(v) <= 1) return `${(v * 100).toFixed(1)}%`;
+  return `${v.toFixed(1)}%`;
+}
+
+function formatNumMetric(v: string | number): string {
+  if (typeof v === "string") {
+    const n = Number(v.replace(/[, ]/g, ""));
+    if (Number.isFinite(n)) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+    return v;
+  }
+  if (!Number.isFinite(v)) return "—";
+  return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function renderBriefUsage(brief: BriefPayload): KnownBlock[] {
+  const usage = brief.usage;
+  const out: KnownBlock[] = [];
+
+  if (!usage && brief.usageTrend) {
+    out.push({ type: "divider" });
+    out.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Usage*\n${brief.usageTrend}` },
+    });
+    return out;
+  }
+  if (!usage) return out;
+
+  if (usage.status === "customer" && usage.metrics) {
+    const m = usage.metrics;
+    const rows: Array<[string, string]> = [];
+    if (m.dauWauL28d != null) rows.push(["DAU/WAU (L28D)", formatPctMetric(m.dauWauL28d)]);
+    if (m.wauEnrolled != null) rows.push(["WAU / Enrolled", formatPctMetric(m.wauEnrolled)]);
+    if (m.queriesPerUser != null) rows.push(["Queries / User", formatNumMetric(m.queriesPerUser)]);
+    if (rows.length > 0) {
+      const labelWidth = Math.max(...rows.map((r) => r[0].length));
+      const valueWidth = Math.max(...rows.map((r) => r[1].length));
+      const table = rows
+        .map(
+          ([label, value]) =>
+            `${label.padEnd(labelWidth)}   ${value.padStart(valueWidth)}`
+        )
+        .join("\n");
+      out.push({ type: "divider" });
+      out.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Customer health · last 28 days*\n\`\`\`\n${table}\n\`\`\``,
+        },
+      });
+    }
+    if (usage.commentary) {
+      out.push({
+        type: "section",
+        text: { type: "mrkdwn", text: usage.commentary },
+      });
+    }
+    return out;
+  }
+
+  if (usage.commentary) {
+    out.push({ type: "divider" });
+    out.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Usage*\n${usage.commentary}` },
+    });
+  }
+  return out;
+}
+
 export function briefCard(
   cardId: string,
   brief: BriefPayload,
@@ -463,13 +543,8 @@ export function briefCard(
     });
   }
 
-  if (brief.usageTrend) {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "section",
-      text: { type: "mrkdwn", text: `*Usage*\n${brief.usageTrend}` },
-    });
-  }
+  const usageBlocks = renderBriefUsage(brief);
+  for (const b of usageBlocks) blocks.push(b);
 
   if (brief.talkingPoints.length > 0) {
     blocks.push({ type: "divider" });

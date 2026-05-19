@@ -307,6 +307,21 @@ export const BriefOpportunitySchema = z.object({
   lastStageChangeDate: z.string().nullable().optional(),
 });
 
+export const BriefUsageMetricsSchema = z.object({
+  dauWauL28d: z.union([z.string(), z.number()]).nullable().optional(),
+  wauEnrolled: z.union([z.string(), z.number()]).nullable().optional(),
+  queriesPerUser: z.union([z.string(), z.number()]).nullable().optional(),
+});
+
+export const BriefUsageSchema = z.object({
+  status: z
+    .enum(["customer", "prospect", "no_data", "unknown"])
+    .nullable()
+    .optional(),
+  metrics: BriefUsageMetricsSchema.nullable().optional(),
+  commentary: z.string().nullable().optional(),
+});
+
 export const BriefPayloadSchema = z.object({
   accountId: z.string(),
   accountName: z.string(),
@@ -315,6 +330,7 @@ export const BriefPayloadSchema = z.object({
   recentActivities: z.array(BriefActivitySchema).default([]),
   openOpportunities: z.array(BriefOpportunitySchema).default([]),
   usageTrend: z.string().nullable().optional(),
+  usage: BriefUsageSchema.nullable().optional(),
   talkingPoints: z.array(z.string()).default([]),
   suggestedActions: z.array(BriefSuggestionSchema).default([]),
 });
@@ -332,6 +348,8 @@ export const BriefDisambiguateSchema = z.object({
 });
 
 export type BriefPayload = z.infer<typeof BriefPayloadSchema>;
+export type BriefUsage = z.infer<typeof BriefUsageSchema>;
+export type BriefUsageMetrics = z.infer<typeof BriefUsageMetricsSchema>;
 export type BriefSuggestion = z.infer<typeof BriefSuggestionSchema>;
 export type BriefSuggestionKind = (typeof BRIEF_SUGGESTION_KINDS)[number];
 export type BriefDisambiguate = z.infer<typeof BriefDisambiguateSchema>;
