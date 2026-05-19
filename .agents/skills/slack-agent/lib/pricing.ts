@@ -3,8 +3,7 @@ import type { Package, PricingBreakdown, QuoteForm } from "./types.js";
 const CREDIT_COMMIT_RATE = 0.02;
 
 export const PACKAGE_LIST_PRICE: Record<Package, number | null> = {
-  Standard: 6000,
-  Plus: 8000,
+  Standard: 7500,
   Premium: 10000,
   Enterprise: null,
 };

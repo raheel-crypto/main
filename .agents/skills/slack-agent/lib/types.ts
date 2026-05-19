@@ -1,4 +1,4 @@
-export type Package = "Standard" | "Plus" | "Premium" | "Enterprise";
+export type Package = "Standard" | "Premium" | "Enterprise";
 export type RequestSource = "slack" | "salesforce";
 export type ApprovalTier = "auto" | "deal_desk" | "pod_leader" | "james";
 export type ApprovalState = "pending" | "approved" | "rejected";

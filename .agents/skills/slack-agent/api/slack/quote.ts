@@ -83,8 +83,7 @@ function buildQuoteModalView(intakeId: string, prefill: string) {
           type: "static_select",
           action_id: "value",
           options: [
-            { text: { type: "plain_text", text: "Rogo Standard ($6,000 list/user)" }, value: "Standard" },
-            { text: { type: "plain_text", text: "Rogo Plus ($8,000 list/user)" }, value: "Plus" },
+            { text: { type: "plain_text", text: "Rogo Standard ($7,500 list/user)" }, value: "Standard" },
             { text: { type: "plain_text", text: "Rogo Premium ($10,000 list/user)" }, value: "Premium" },
             { text: { type: "plain_text", text: "Enterprise (custom pricing)" }, value: "Enterprise" },
           ],
