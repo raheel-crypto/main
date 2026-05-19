@@ -73,6 +73,7 @@ export async function runBriefForUser(args: {
   const result = await runAgent({
     system: BRIEF_SYSTEM,
     userMessage: `Generate a pre-meeting brief for the Salesforce account whose name matches: "${query}". Today is ${today} (${user.timezone}).`,
+    maxTokens: 8192,
     ctx: {
       conn,
       slackUserId,

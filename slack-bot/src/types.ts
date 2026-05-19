@@ -315,11 +315,24 @@ export const BriefRecentWinSchema = z.object({
   type: z.string().nullable().optional(),
 });
 
-export const BriefUsageMetricsSchema = z.object({
-  dauWauL28d: z.union([z.string(), z.number()]).nullable().optional(),
-  wauEnrolled: z.union([z.string(), z.number()]).nullable().optional(),
-  queriesPerUser: z.union([z.string(), z.number()]).nullable().optional(),
+const FlatMetricValue = z.union([z.string(), z.number()]);
+const TrajectoryMetricValue = z.object({
+  mean: FlatMetricValue.nullable().optional(),
+  min: FlatMetricValue.nullable().optional(),
+  max: FlatMetricValue.nullable().optional(),
+  trajectory: z.string().nullable().optional(),
 });
+const MetricValue = z.union([FlatMetricValue, TrajectoryMetricValue]);
+
+export const BriefUsageMetricsSchema = z
+  .object({
+    wauMau: MetricValue.nullable().optional(),
+    wauEnrolled: MetricValue.nullable().optional(),
+    queriesPerUser: MetricValue.nullable().optional(),
+    enrolledUsers: FlatMetricValue.nullable().optional(),
+    dauWauL28d: MetricValue.nullable().optional(),
+  })
+  .passthrough();
 
 export const BriefUsageSchema = z.object({
   status: z

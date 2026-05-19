@@ -395,6 +395,41 @@ function formatNumMetric(v: string | number): string {
   return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
+type RawMetric =
+  | string
+  | number
+  | null
+  | undefined
+  | {
+      mean?: string | number | null;
+      min?: string | number | null;
+      max?: string | number | null;
+      trajectory?: string | null;
+    };
+
+function metricSummary(
+  v: RawMetric,
+  kind: "pct" | "num"
+): { display: string; trajectory: string | null } | null {
+  if (v == null) return null;
+  const fmt = kind === "pct" ? formatPctMetric : formatNumMetric;
+  if (typeof v === "string" || typeof v === "number") {
+    return { display: fmt(v), trajectory: null };
+  }
+  const meanRaw = v.mean ?? null;
+  const minRaw = v.min ?? null;
+  const maxRaw = v.max ?? null;
+  if (meanRaw == null && minRaw == null && maxRaw == null) {
+    return v.trajectory ? { display: "—", trajectory: v.trajectory } : null;
+  }
+  const mean = meanRaw != null ? fmt(meanRaw) : "—";
+  const min = minRaw != null ? fmt(minRaw) : null;
+  const max = maxRaw != null ? fmt(maxRaw) : null;
+  const display =
+    min && max ? `${mean}  (${min}–${max})` : mean;
+  return { display, trajectory: v.trajectory ?? null };
+}
+
 function renderBriefUsage(brief: BriefPayload): KnownBlock[] {
   const usage = brief.usage;
   const out: KnownBlock[] = [];
@@ -410,11 +445,28 @@ function renderBriefUsage(brief: BriefPayload): KnownBlock[] {
   if (!usage) return out;
 
   if (usage.status === "customer" && usage.metrics) {
-    const m = usage.metrics;
+    const m = usage.metrics as Record<string, RawMetric> & {
+      enrolledUsers?: string | number | null;
+    };
     const rows: Array<[string, string]> = [];
-    if (m.dauWauL28d != null) rows.push(["DAU/WAU (L28D)", formatPctMetric(m.dauWauL28d)]);
-    if (m.wauEnrolled != null) rows.push(["WAU / Enrolled", formatPctMetric(m.wauEnrolled)]);
-    if (m.queriesPerUser != null) rows.push(["Queries / User", formatNumMetric(m.queriesPerUser)]);
+    const trajectories: Array<[string, string]> = [];
+
+    const wauMauRaw = (m.wauMau ?? m.dauWauL28d) as RawMetric;
+    const summaries: Array<[string, RawMetric, "pct" | "num"]> = [
+      ["WAU / MAU", wauMauRaw, "pct"],
+      ["WAU / Enrolled", m.wauEnrolled, "pct"],
+      ["Queries / User", m.queriesPerUser, "num"],
+    ];
+    for (const [label, raw, kind] of summaries) {
+      const s = metricSummary(raw, kind);
+      if (!s) continue;
+      rows.push([label, s.display]);
+      if (s.trajectory) trajectories.push([label, s.trajectory]);
+    }
+
+    const enrolled =
+      m.enrolledUsers != null ? formatNumMetric(m.enrolledUsers) : null;
+
     if (rows.length > 0) {
       const labelWidth = Math.max(...rows.map((r) => r[0].length));
       const valueWidth = Math.max(...rows.map((r) => r[1].length));
@@ -424,12 +476,26 @@ function renderBriefUsage(brief: BriefPayload): KnownBlock[] {
             `${label.padEnd(labelWidth)}   ${value.padStart(valueWidth)}`
         )
         .join("\n");
+      const heading = enrolled
+        ? `*Customer health · last 28 days · ${enrolled} enrolled*`
+        : `*Customer health · last 28 days*`;
       out.push({ type: "divider" });
       out.push({
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*Customer health · last 28 days*\n\`\`\`\n${table}\n\`\`\``,
+          text: `${heading}\n\`\`\`\n${table}\n\`\`\``,
+        },
+      });
+    }
+    if (trajectories.length > 0) {
+      out.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: trajectories
+            .map(([label, traj]) => `*${label}*: ${traj}`)
+            .join("\n"),
         },
       });
     }

@@ -162,6 +162,7 @@ export async function runPreMeeting(args: {
       `Today is ${today} (${user.timezone}). ` +
       `The meeting is "${eventTitle}" at ${startLabel}. External attendees: ${externalListLine}. ` +
       `Focus the talking points on what's changed since the last touch and what the rep should confirm or push for on this call.`,
+    maxTokens: 8192,
     ctx: {
       conn,
       slackUserId,
