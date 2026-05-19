@@ -444,16 +444,28 @@ const rogoQuery: AgentTool = {
     if (REJECT_DML.test(sql)) {
       throw new Error("DML keywords are not allowed");
     }
-    const result = await rogoQueryRaw(sql);
-    return {
-      status: result.status,
-      columns: result.columns,
-      column_types: result.column_types,
-      rows: result.rows,
-      row_count: result.row_count,
-      truncated: result.truncated,
-      warnings: result.warnings,
-    };
+    try {
+      const result = await rogoQueryRaw(sql);
+      return {
+        status: result.status,
+        columns: result.columns,
+        column_types: result.column_types,
+        rows: result.rows,
+        row_count: result.row_count,
+        truncated: result.truncated,
+        warnings: result.warnings,
+      };
+    } catch (err: any) {
+      // Surface the SQL alongside the error so the agent's next iteration
+      // can see what it tried and self-correct (rename a column, drop a
+      // table reference, etc.).
+      const code = err?.code ?? "rogo_query_failed";
+      const message = err?.message ?? String(err);
+      return {
+        status: "error",
+        error: { code, message, attempted_sql: sql },
+      };
+    }
   },
 };
 

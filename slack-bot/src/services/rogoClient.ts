@@ -57,6 +57,26 @@ async function rogoFetch(pathname: string, init: RequestInit = {}): Promise<any>
       message: `HTTP ${res.status}`,
       retryable: res.status >= 500,
     };
+    const reqBody =
+      typeof init.body === "string"
+        ? init.body.length > 2000
+          ? init.body.slice(0, 2000) + "…(truncated)"
+          : init.body
+        : null;
+    console.error(
+      "[rogo] API error",
+      JSON.stringify({
+        method: init.method ?? "GET",
+        path: pathname,
+        status: res.status,
+        code: err.code,
+        message: err.message,
+        details: err.details ?? null,
+        request_body: reqBody,
+        response_body:
+          text.length > 1500 ? text.slice(0, 1500) + "…(truncated)" : text,
+      })
+    );
     throw new RogoApiError(
       err.code ?? "internal_error",
       err.message ?? "Rogo API error",
