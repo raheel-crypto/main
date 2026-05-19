@@ -97,6 +97,43 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     });
   }
 
+  if (response.stop_reason === "tool_use" && iter >= maxIterations) {
+    console.warn(
+      `[agent] hit maxIterations=${maxIterations}; forcing final JSON emission without tools`
+    );
+    const lastToolUses = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    );
+    messages.push({ role: "assistant", content: response.content });
+    messages.push({
+      role: "user",
+      content: [
+        ...lastToolUses.map((tu) => ({
+          type: "tool_result" as const,
+          tool_use_id: tu.id,
+          content: JSON.stringify({
+            error: "max_iterations_reached",
+            message:
+              "You hit the tool-call limit. Do not request more tools. Emit your final JSON answer now using only the data already gathered.",
+          }),
+        })),
+        {
+          type: "text" as const,
+          text:
+            "You've reached the maximum tool-call limit. Stop calling tools. " +
+            "Emit your final JSON answer right now using only the data you've already gathered. " +
+            "If a field has no data, set it to null. Output JSON only — no prose, no markdown fences, no commentary.",
+        },
+      ],
+    });
+    response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: maxTokens,
+      system,
+      messages,
+    });
+  }
+
   const finalParts: string[] = [];
   for (const b of response.content) {
     if (b.type === "text") finalParts.push(b.text);
