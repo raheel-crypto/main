@@ -451,9 +451,9 @@ function renderBriefUsage(brief: BriefPayload): KnownBlock[] {
     const rows: Array<[string, string]> = [];
     const trajectories: Array<[string, string]> = [];
 
-    const wauMauRaw = (m.wauMau ?? m.dauWauL28d) as RawMetric;
+    const dauWauRaw = (m.dauWau ?? m.wauMau ?? m.dauWauL28d) as RawMetric;
     const summaries: Array<[string, RawMetric, "pct" | "num"]> = [
-      ["WAU / MAU", wauMauRaw, "pct"],
+      ["DAU / WAU", dauWauRaw, "pct"],
       ["WAU / Enrolled", m.wauEnrolled, "pct"],
       ["Queries / User", m.queriesPerUser, "num"],
     ];

@@ -326,10 +326,12 @@ const MetricValue = z.union([FlatMetricValue, TrajectoryMetricValue]);
 
 export const BriefUsageMetricsSchema = z
   .object({
-    wauMau: MetricValue.nullable().optional(),
+    dauWau: MetricValue.nullable().optional(),
     wauEnrolled: MetricValue.nullable().optional(),
     queriesPerUser: MetricValue.nullable().optional(),
     enrolledUsers: FlatMetricValue.nullable().optional(),
+    // Aliases kept so older pending_cards rows still parse.
+    wauMau: MetricValue.nullable().optional(),
     dauWauL28d: MetricValue.nullable().optional(),
   })
   .passthrough();
