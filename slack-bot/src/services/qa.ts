@@ -2,6 +2,7 @@ import type { WebClient } from "@slack/web-api";
 import { DateTime } from "luxon";
 import { runAgent } from "../agent/runner.js";
 import { QA_SYSTEM } from "../agent/prompts.js";
+import { buildSlackProgressUpdater } from "../agent/progress.js";
 import { appendAudit, getUser } from "../db/queries.js";
 import { connectPrompt } from "../slack/blocks.js";
 import {
@@ -49,15 +50,23 @@ export async function runQaForUser(args: {
 
   const placeholder = await slack.chat.postMessage({
     channel: channelId,
-    text: "_Thinking…_",
+    text: ":hourglass_flowing_sand: Thinking…",
   });
   const ts = placeholder.ts!;
+
+  const updateProgress = buildSlackProgressUpdater({
+    slack,
+    channel: channelId,
+    ts,
+    logTag: "[qa]",
+  });
 
   const today = DateTime.now().setZone(user.timezone).toISODate();
   try {
     const result = await runAgent({
       system: QA_SYSTEM,
       userMessage: `Today is ${today} (${user.timezone}).\n\n${trimmed}`,
+      onToolUse: ({ toolNames }) => updateProgress(toolNames),
       ctx: {
         conn,
         slackUserId,
