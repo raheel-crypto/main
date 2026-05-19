@@ -30,6 +30,7 @@ export interface SFDCOpportunity {
   Amount?: number;
   CloseDate: string;
   AccountId: string;
+  Type?: string;
   Segment__c?: string;
   Account?: {
     Id: string;
@@ -100,6 +101,7 @@ export function toDealContext(opp: SFDCOpportunity): DealContext {
       stage: opp.StageName,
       amount: opp.Amount ?? null,
       close_date: opp.CloseDate,
+      type: opp.Type ?? null,
       owner_id: opp.Owner?.Id ?? "",
       owner_name: opp.Owner?.Name ?? "(unknown)",
       owner_slack_user_id: opp.Owner?.Slack_User_Id__c ?? null,
@@ -111,7 +113,7 @@ export function toDealContext(opp: SFDCOpportunity): DealContext {
 
 function selectOpportunityFields(): string {
   return (
-    `SELECT Id, Name, StageName, Amount, CloseDate, AccountId, Segment__c, ` +
+    `SELECT Id, Name, StageName, Amount, CloseDate, AccountId, Type, Segment__c, ` +
     `Account.Id, Account.Name, Account.Segment__c, Account.Type, Account.Industry, ` +
     `Owner.Id, Owner.Name, Owner.Email, Owner.Slack_User_Id__c, ` +
     `Owner.Manager.Id, Owner.Manager.Name, Owner.Manager.Slack_User_Id__c`

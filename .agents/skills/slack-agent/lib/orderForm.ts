@@ -5,9 +5,16 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import type { ApprovalRequest } from "./types.js";
 
+/**
+ * Four templates: cross of {standard, enterprise} × {new business, existing
+ * customer}. Legal requires different language for new-business vs
+ * renewal/expansion deals, so the order form picks one per quote.
+ */
 const TEMPLATE_FILES = {
-  enterprise: "order-form-enterprise.docx",
-  standard: "order-form.docx",
+  standardNew: "order-form-standard-new.docx",
+  standardExisting: "order-form-standard-existing.docx",
+  enterpriseNew: "order-form-enterprise-new.docx",
+  enterpriseExisting: "order-form-enterprise-existing.docx",
 } as const;
 
 const templateCache: Partial<Record<keyof typeof TEMPLATE_FILES, Buffer>> = {};
@@ -43,8 +50,14 @@ async function loadTemplate(kind: keyof typeof TEMPLATE_FILES): Promise<Buffer> 
   throw new Error(`Could not load template ${filename}. Tried:\n${errors.join("\n")}`);
 }
 
-function pickTemplate(segment: string | null): keyof typeof TEMPLATE_FILES {
-  return segment?.trim().toLowerCase() === "enterprise" ? "enterprise" : "standard";
+function pickTemplate(
+  segment: string | null,
+  type: string | null,
+): keyof typeof TEMPLATE_FILES {
+  const isEnterprise = segment?.trim().toLowerCase() === "enterprise";
+  const isNewBusiness = type?.trim().toLowerCase() === "new business";
+  if (isEnterprise) return isNewBusiness ? "enterpriseNew" : "enterpriseExisting";
+  return isNewBusiness ? "standardNew" : "standardExisting";
 }
 
 export function orderFormFilename(request: ApprovalRequest): string {
@@ -61,7 +74,10 @@ export function orderFormFilename(request: ApprovalRequest): string {
  * the template map 1:1 to the keys below without needing nested objects.
  */
 export async function fillOrderForm(request: ApprovalRequest): Promise<Buffer> {
-  const kind = pickTemplate(request.context.account.segment);
+  const kind = pickTemplate(
+    request.context.account.segment,
+    request.context.opportunity.type,
+  );
   const buf = await loadTemplate(kind);
   const zip = new PizZip(buf);
 

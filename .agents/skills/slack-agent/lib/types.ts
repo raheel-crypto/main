@@ -59,6 +59,9 @@ export interface DealContext {
     stage: string;
     amount: number | null;
     close_date: string;
+    /** Opportunity.Type picklist value (e.g. "New Business"). Used to pick
+     *  the right order form template. */
+    type: string | null;
     owner_id: string;
     owner_name: string;
     owner_slack_user_id: string | null;
