@@ -247,12 +247,12 @@ export function editFieldModal(args: {
       is_decimal_allowed: true,
       initial_value: initial,
     };
-  } else if (field === "Description") {
+  } else if (field === "Notes__c" || field === "Deal_Description__c") {
     input = {
       type: "plain_text_input",
       action_id: "value",
       multiline: true,
-      initial_value: initial,
+      initial_value: initial.slice(0, 3000),
     };
   } else {
     input = {

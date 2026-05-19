@@ -24,7 +24,13 @@ export interface PendingWriteProposal {
   accountId: string | null;
   accountName: string;
   fields: {
-    field: "StageName" | "NextStep" | "Amount" | "CloseDate" | "Description";
+    field:
+      | "StageName"
+      | "NextStep"
+      | "Amount"
+      | "CloseDate"
+      | "Notes__c"
+      | "Deal_Description__c";
     currentValue: string | number | null;
     recommendedValue: string | number | null;
     rationale: string;
@@ -489,7 +495,8 @@ const WRITABLE_OPP_FIELDS = [
   "NextStep",
   "Amount",
   "CloseDate",
-  "Description",
+  "Notes__c",
+  "Deal_Description__c",
 ] as const;
 type WritableOppField = (typeof WRITABLE_OPP_FIELDS)[number];
 
@@ -498,7 +505,7 @@ const sfProposeOpportunityUpdate: AgentTool = {
   definition: {
     name: "sf_propose_opportunity_update",
     description:
-      "Draft an update to a Salesforce Opportunity. Does NOT write to Salesforce — it stages a confirmation card with Accept/Edit/Skip buttons that the rep clicks to apply. Use this whenever the rep asks you to update, change, set, or push an opportunity field. Writable fields: StageName, NextStep, CloseDate, Amount, Description (Description = 'Notes'). Pass YYYY-MM-DD for CloseDate, a number for Amount, an exact picklist value for StageName. Call this tool at most once per turn; calling it ends the agent loop.",
+      "Draft an update to a Salesforce Opportunity. Does NOT write to Salesforce — it stages a confirmation card with Accept/Edit/Skip buttons that the rep clicks to apply. Use this whenever the rep asks you to update, change, set, or push an opportunity field. Writable fields: StageName, NextStep, CloseDate, Amount, Notes__c, Deal_Description__c. Notes__c and Deal_Description__c are long-text custom fields (32K chars) — Notes__c for free-form notes (\"notes\", \"call notes\"), Deal_Description__c for the deal description / write-up (\"description\", \"deal description\", \"overview\"). The standard Salesforce Description field is intentionally NOT writable here — use the custom fields. Pass YYYY-MM-DD for CloseDate, a number for Amount, an exact picklist value for StageName. Call this tool at most once per turn; calling it ends the agent loop.",
     input_schema: {
       type: "object",
       properties: {
@@ -520,7 +527,7 @@ const sfProposeOpportunityUpdate: AgentTool = {
               },
               newValue: {
                 description:
-                  "The new value. Strings for NextStep/StageName/Description, number for Amount, YYYY-MM-DD string for CloseDate.",
+                  "The new value. Strings for NextStep/StageName/Notes__c/Deal_Description__c, number for Amount, YYYY-MM-DD string for CloseDate.",
               },
               rationale: {
                 type: "string",
@@ -572,7 +579,7 @@ const sfProposeOpportunityUpdate: AgentTool = {
     let oppRow: any;
     try {
       const res = await ctx.conn.query(
-        `SELECT Id, Name, StageName, NextStep, Amount, CloseDate, Description, AccountId, Account.Name
+        `SELECT Id, Name, StageName, NextStep, Amount, CloseDate, Notes__c, Deal_Description__c, AccountId, Account.Name
            FROM Opportunity WHERE Id = '${escapeSoql(opportunityId)}' LIMIT 1`
       );
       oppRow = (res.records as any[])[0];
