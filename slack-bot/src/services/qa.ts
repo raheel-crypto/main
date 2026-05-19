@@ -23,6 +23,9 @@ export interface QaRunResult {
   reason?: string;
 }
 
+const CARD_ACKNOWLEDGMENT_PATTERN =
+  /click\s+\*?Apply\*?|card below|drafted the update/i;
+
 export async function runQaForUser(args: {
   slackUserId: string;
   channelId: string;
@@ -83,7 +86,30 @@ export async function runQaForUser(args: {
       onToolUse: ({ toolNames }) => updateProgress(toolNames),
       ctx: agentCtx,
     });
-    const answer = result.finalText || "_(no response)_";
+    const rawAnswer = result.finalText || "_(no response)_";
+    const calledProposeTool = result.toolCalls.some(
+      (c) => c.name === "sf_propose_opportunity_update"
+    );
+    const claimsDraft = CARD_ACKNOWLEDGMENT_PATTERN.test(rawAnswer);
+    const proposalMissing =
+      !agentCtx.pendingWriteProposal && (claimsDraft || calledProposeTool);
+
+    let answer = rawAnswer;
+    if (proposalMissing) {
+      console.warn(
+        "[qa] agent claimed to draft an update but no proposal was staged",
+        {
+          slackUserId,
+          calledProposeTool,
+          claimsDraft,
+          toolCalls: result.toolCalls.map((c) => c.name),
+          finalText: rawAnswer.slice(0, 500),
+        }
+      );
+      answer =
+        ":warning: I started to draft that update but couldn't finish — most likely I couldn't pin down the opportunity in Salesforce. Try again with the exact opportunity name, or send the SF link / 18-char Id.";
+    }
+
     await slack.chat.update({
       channel: channelId,
       ts,
@@ -91,12 +117,15 @@ export async function runQaForUser(args: {
     });
     await appendAudit({
       slackUserId,
-      action: "qa_answered",
+      action: proposalMissing ? "qa_propose_failed" : "qa_answered",
       metadata: {
         question: trimmed,
-        finalText: answer.slice(0, 2000),
+        finalText: rawAnswer.slice(0, 2000),
         toolCalls: result.toolCalls.map((c) => c.name),
         stopReason: result.stopReason,
+        ...(proposalMissing
+          ? { reason: "agent_claimed_card_without_staged_proposal" }
+          : {}),
       },
     });
 
