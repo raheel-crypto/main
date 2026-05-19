@@ -24,19 +24,20 @@ Workflow:
    - If 0 matches: emit {"kind":"brief","accountId":"","accountName":"","accountOwner":null,"accountWebsite":null,"snapshot":"No account found matching '<name>'.","recentCalls":[],"recentActivities":[],"openOpportunities":[],"recentWins":[],"usageTrend":null,"usage":null,"talkingPoints":[],"suggestedActions":[]}.
    - If >1 match: emit {"kind":"disambiguate","candidates":[{"id","name","industry","ownerName"}, ...]} and STOP.
    - If exactly 1: continue.
-2. Pull context with sf_get_account_summary (capture Account.Owner.Name, Account.Website, AND the last 5 closed opportunities — these become recentWins). Then optionally sf_get_activities and gong_get_calls (last 30 days).
-3. **Customer status is determined by the Rogo customer directory — NOT by guessing Salesforce field names.** Call rogo_check_customer with the Salesforce Account.Id. The tool returns {is_customer: true/false}.
-   - If is_customer is true, the account is a paying Rogo customer. Set usage.status = "customer" and proceed to step 4.
-   - If is_customer is false, the account isn't billed by Rogo. Set usage = {"status": "prospect", "metrics": null, "commentary": null} and SKIP step 4.
-4. (Customers only) Fetch L28D product usage from Rogo:
+2. Pull context with sf_get_account_summary (capture Account.Owner.Name, Account.Website, Account.Account_Status__c, AND the last 5 closed opportunities — these become recentWins). Then optionally sf_get_activities and gong_get_calls (last 30 days).
+3. **Customer status is determined by the Salesforce field Account_Status__c.** sf_get_account_summary returns account.accountStatus and account.isCustomer.
+   - If account.isCustomer is true (Account_Status__c === 'Customer'), set usage.status = "customer" and proceed to step 4.
+   - Otherwise set usage = {"status": "prospect", "metrics": null, "commentary": null} and SKIP step 4.
+4. (Customers only) Fetch L28D product usage from Rogo. **This step is mandatory whenever account.isCustomer is true — do not skip it.**
    a. Call rogo_describe once to discover the customer table column names (e.g. DAU_L28D, WAU_L28D, TOTAL_USERS_ENROLLED, TOTAL_QUERIES_L28D — names vary).
-   b. Call rogo_query with a SELECT that, for this single customer (use the customer key from rogo_check_customer's customer_row), computes:
+   b. Look up the Rogo customer key for this Salesforce account from the customer_directory rows in the rogo_describe response.
+   c. Call rogo_query with a SELECT that, for this single customer, computes:
       - dauWauL28d: average daily active users over last 28d divided by WAU L28D
       - wauEnrolled: WAU L28D divided by total enrolled users
       - queriesPerUser (QPU): total queries over last 28d divided by WAU L28D
-   c. Populate usage.metrics with the three numbers as pre-formatted strings ("47.3%" for percentages, "12.4" for QPU). Decimals like 0.473 are also accepted by the renderer.
-   d. Write a 2-3 sentence usage.commentary interpreting the numbers in plain English: what's strong, what's worrying. Quote the raw enrolled / WAU / QPU counts in the commentary so the rep can sanity-check.
-   - If rogo_query fails or returns no row, set usage = {"status": "customer", "metrics": null, "commentary": "Rogo had no usage row for this customer."} and continue.
+   d. Populate usage.metrics with the three numbers as pre-formatted strings ("47.3%" for percentages, "12.4" for QPU). Decimals like 0.473 are also accepted by the renderer.
+   e. Write a 2-3 sentence usage.commentary interpreting the numbers in plain English: what's strong, what's worrying. Quote the raw enrolled / WAU / QPU counts in the commentary so the rep can sanity-check.
+   - If rogo_query genuinely fails or returns no row, set usage = {"status": "customer", "metrics": null, "commentary": "Rogo had no usage row for this customer."} and continue. DO NOT silently set usage to null — always emit the structured shape so the rep can see the lookup was attempted.
 5. Emit the brief JSON. Suggested actions must each carry a valid opportunityId from the account.
 
 Output JSON shape (when exactly 1 account):

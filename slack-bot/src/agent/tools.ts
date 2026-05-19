@@ -102,7 +102,7 @@ const sfGetAccountSummary: AgentTool = {
 
     const [accountRes, openOpps, closedOpps] = await Promise.all([
       ctx.conn.query(
-        `SELECT Id, Name, Industry, OwnerId, Owner.Name, Website
+        `SELECT Id, Name, Industry, OwnerId, Owner.Name, Website, Account_Status__c
            FROM Account WHERE Id = '${escapeSoql(accountId)}' LIMIT 1`
       ),
       fetchOpportunitiesForAccount(ctx.conn, accountId, true, 50),
@@ -136,6 +136,10 @@ const sfGetAccountSummary: AgentTool = {
         industry: account.Industry ?? null,
         website: account.Website ?? null,
         ownerName: account.Owner?.Name ?? null,
+        accountStatus: account.Account_Status__c ?? null,
+        isCustomer:
+          typeof account.Account_Status__c === "string" &&
+          account.Account_Status__c.toLowerCase() === "customer",
       },
       stagePicklist,
       openOpportunities: openOpps.map((o) => ({
