@@ -13,6 +13,7 @@ import {
 import { getUsageProvider } from "../services/usageDb.js";
 import {
   bootstrap as rogoBootstrap,
+  lookupRogoCustomer,
   query as rogoQueryRaw,
 } from "../services/rogoClient.js";
 import { BUY_SIGNAL_SUBJECT_PATTERN } from "../constants.js";
@@ -246,6 +247,44 @@ const gongGetCalls: AgentTool = {
   },
 };
 
+const rogoCheckCustomer: AgentTool = {
+  name: "rogo_check_customer",
+  definition: {
+    name: "rogo_check_customer",
+    description:
+      "Deterministic check: is this Salesforce Account a paying Rogo customer? Looks up the account in the Rogo customer_directory (the source of truth, not a heuristic on Salesforce fields). Returns {is_customer, customer_row}. If is_customer is true, `customer_row` contains all the directory columns for that customer — inspect it to find the Rogo customer key column to use in subsequent rogo_query calls. If is_customer is false, the account isn't billed by Rogo (yet); treat as prospect.",
+    input_schema: {
+      type: "object",
+      properties: {
+        salesforceAccountId: {
+          type: "string",
+          description: "The 18- or 15-character Salesforce Account.Id.",
+        },
+      },
+      required: ["salesforceAccountId"],
+    },
+  },
+  async execute(input, _ctx) {
+    const accountId = (input as any).salesforceAccountId as string;
+    if (!accountId) {
+      return { is_customer: false, reason: "missing_accountId" };
+    }
+    try {
+      const row = await lookupRogoCustomer(accountId);
+      if (!row) {
+        return { is_customer: false, accountId };
+      }
+      return { is_customer: true, accountId, customer_row: row };
+    } catch (err: any) {
+      return {
+        is_customer: false,
+        accountId,
+        error: err?.message ?? String(err),
+      };
+    }
+  },
+};
+
 const rogoGetUsage: AgentTool = {
   name: "rogo_get_usage",
   definition: {
@@ -422,6 +461,7 @@ export const ALL_TOOLS: AgentTool[] = [
   sfQuery,
   gongGetCalls,
   rogoGetUsage,
+  rogoCheckCustomer,
   sfGetRecentPositiveCalls,
   rogoDescribe,
   rogoQuery,

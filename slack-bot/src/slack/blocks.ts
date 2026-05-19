@@ -463,22 +463,37 @@ export function briefCard(
       type: "header",
       text: { type: "plain_text", text: brief.accountName.slice(0, 150) },
     },
-    {
-      type: "section",
-      text: { type: "mrkdwn", text: brief.snapshot },
-    },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          action_id: `linkout:open_account_brief:${cardId}`,
-          text: { type: "plain_text", text: "Open Account" },
-          url: accountUrl,
-        },
-      ],
-    },
   ];
+
+  const ctxParts: string[] = [];
+  if (brief.accountOwner) ctxParts.push(`Owner: *${brief.accountOwner}*`);
+  if (brief.accountWebsite) {
+    const w = brief.accountWebsite.trim();
+    const url = /^https?:\/\//i.test(w) ? w : `https://${w}`;
+    ctxParts.push(`Website: <${url}|${w}>`);
+  }
+  if (ctxParts.length > 0) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: ctxParts.join(" · ") }],
+    });
+  }
+
+  blocks.push({
+    type: "section",
+    text: { type: "mrkdwn", text: brief.snapshot },
+  });
+  blocks.push({
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        action_id: `linkout:open_account_brief:${cardId}`,
+        text: { type: "plain_text", text: "Open Account" },
+        url: accountUrl,
+      },
+    ],
+  });
 
   if (brief.openOpportunities.length > 0) {
     blocks.push({ type: "divider" });
@@ -496,6 +511,29 @@ export function briefCard(
                   o.amount != null ? ` · ${formatValue(o.amount)}` : ""
                 }${o.closeDate ? ` · close ${o.closeDate}` : ""}`
             )
+            .join("\n"),
+      },
+    });
+  }
+
+  if (brief.recentWins.length > 0) {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          "*Recent wins*\n" +
+          brief.recentWins
+            .slice(0, 4)
+            .map((w) => {
+              const amt = w.amount != null ? formatValue(w.amount) : null;
+              const parts = [`<${instanceUrl}/${w.id}|${w.name}>`];
+              if (amt) parts.push(amt);
+              if (w.closedDate) parts.push(`closed ${w.closedDate}`);
+              if (w.type) parts.push(w.type);
+              return `• ${parts.join(" · ")}`;
+            })
             .join("\n"),
       },
     });

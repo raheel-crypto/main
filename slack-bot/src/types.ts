@@ -307,6 +307,14 @@ export const BriefOpportunitySchema = z.object({
   lastStageChangeDate: z.string().nullable().optional(),
 });
 
+export const BriefRecentWinSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  amount: z.number().nullable().optional(),
+  closedDate: z.string().nullable().optional(),
+  type: z.string().nullable().optional(),
+});
+
 export const BriefUsageMetricsSchema = z.object({
   dauWauL28d: z.union([z.string(), z.number()]).nullable().optional(),
   wauEnrolled: z.union([z.string(), z.number()]).nullable().optional(),
@@ -325,10 +333,13 @@ export const BriefUsageSchema = z.object({
 export const BriefPayloadSchema = z.object({
   accountId: z.string(),
   accountName: z.string(),
+  accountOwner: z.string().nullable().optional(),
+  accountWebsite: z.string().nullable().optional(),
   snapshot: z.string(),
   recentCalls: z.array(BriefCallSchema).default([]),
   recentActivities: z.array(BriefActivitySchema).default([]),
   openOpportunities: z.array(BriefOpportunitySchema).default([]),
+  recentWins: z.array(BriefRecentWinSchema).default([]),
   usageTrend: z.string().nullable().optional(),
   usage: BriefUsageSchema.nullable().optional(),
   talkingPoints: z.array(z.string()).default([]),
