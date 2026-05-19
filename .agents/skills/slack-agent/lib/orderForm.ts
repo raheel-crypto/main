@@ -85,6 +85,10 @@ function buildData(request: ApprovalRequest): Record<string, string | number> {
     "Account.Name": context.account.name,
     "Contract Length": formatContractLength(pricing.contract_months),
     "Contract Start Date": formatDateLong(form.contract_start_date),
+    // Standard template uses {{ARR}} (no hosting fee in non-Enterprise deals,
+    // so the order form just shows the ARR). Enterprise template uses
+    // {{Platform Fee}} broken out separately from the hosting fee line.
+    "ARR": formatCurrency(pricing.arr ?? pricing.total_amount),
     "Platform Fee": formatCurrency(pricing.platform_fee_total),
     // Standard template uses "Price per user"; enterprise template uses
     // lowercase "price per user". Provide both so either template renders.
