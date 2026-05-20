@@ -10,3 +10,12 @@
 label {
     cursor: pointer;
 }
+
+.candidates-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.candidates-scroll table {
+    min-width: 60rem;
+}

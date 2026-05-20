@@ -78,13 +78,13 @@ public with sharing class AccountDedupeService {
                 'Same LinkedIn_URL__c value (normalized).',
                 matchesExactLinkedIn(source, candidates.values())),
             buildScenario('nameNormalizedDomain', 'Name + Normalized Domain',
-                'Same normalized name AND same Normalized_Domain__c.',
+                'Exact normalized name match (suffixes like Inc/LLC/Corp stripped) AND same Normalized_Domain__c. High precision.',
                 matchesNameAndField(source, candidates.values(), 'Normalized_Domain__c')),
             buildScenario('nameDomainRoot', 'Name + Domain Root',
-                'Same normalized name AND same Domain_Root__c.',
+                'Exact normalized name match AND same Domain_Root__c. High precision.',
                 matchesNameAndField(source, candidates.values(), 'Domain_Root__c')),
             buildScenario('fuzzyNameDomainRoot', 'Similar Name + Domain Root',
-                'Same Domain_Root__c with a fuzzy name match (Levenshtein).',
+                'Same Domain_Root__c with a fuzzy name match: shared significant token OR Levenshtein typo distance. Catches regional offices like "Oaklins Denmark" vs "Oaklins Italy".',
                 matchesFuzzyNameDomainRoot(source, candidates.values()))
         };
 
@@ -235,6 +235,7 @@ public with sharing class AccountDedupeService {
         List<Id> hits = new List<Id>();
         if (String.isBlank(source.Domain_Root__c) || String.isBlank(source.Name)) return hits;
         String srcName = normalizeName(source.Name);
+        Set<String> srcTokens = significantTokens(srcName);
         for (Account a : candidates) {
             if (a.Domain_Root__c != source.Domain_Root__c) continue;
             String cmp = normalizeName(a.Name);
@@ -243,12 +244,37 @@ public with sharing class AccountDedupeService {
                 hits.add(a.Id);
                 continue;
             }
+            // Token overlap: share at least one significant token (length >= 3).
+            // Catches "Oaklins Denmark" vs "Oaklins Italy" where Levenshtein
+            // distance between the suffix words is too large to help.
+            Set<String> cmpTokens = significantTokens(cmp);
+            if (!cmpTokens.isEmpty() && !srcTokens.isEmpty()) {
+                Set<String> shared = new Set<String>(srcTokens);
+                shared.retainAll(cmpTokens);
+                if (!shared.isEmpty()) {
+                    hits.add(a.Id);
+                    continue;
+                }
+            }
+            // Typo-style fuzzy fallback.
             Integer dist = levenshtein(srcName, cmp);
             Integer maxLen = Math.max(srcName.length(), cmp.length());
             Integer threshold = Math.max(FUZZY_ABSOLUTE_THRESHOLD, (Integer)Math.floor(maxLen * FUZZY_RATIO_THRESHOLD));
             if (dist <= threshold) hits.add(a.Id);
         }
         return hits;
+    }
+
+    @TestVisible
+    private static Set<String> significantTokens(String normalizedName) {
+        Set<String> out = new Set<String>();
+        if (String.isBlank(normalizedName)) return out;
+        for (String t : normalizedName.split(' ')) {
+            if (String.isBlank(t)) continue;
+            if (t.length() < 3) continue;
+            out.add(t);
+        }
+        return out;
     }
 
     // ---------- normalization ----------

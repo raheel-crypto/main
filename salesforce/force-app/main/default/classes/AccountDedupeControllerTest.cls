@@ -120,4 +120,32 @@ private class AccountDedupeControllerTest {
         for (AccountDedupeService.ScenarioResult s : res.scenarios) total += s.matchIds.size();
         System.assertEquals(0, total, 'Globex should have no duplicates');
     }
+
+    @IsTest
+    static void fuzzyScenario_catchesSharedTokenAcrossRegionalNames() {
+        // The Oaklins case: regional offices share a brand token but differ
+        // entirely in suffix. Levenshtein alone misses these; token overlap
+        // should catch them.
+        List<Account> accs = new List<Account>{
+            new Account(Name = 'Oaklins Denmark',     Website = 'https://oaklins.com',  Domain_Root__c = 'oaklins'),
+            new Account(Name = 'Oaklins Italy',       Website = 'https://oaklins.com',  Domain_Root__c = 'oaklins'),
+            new Account(Name = 'Oaklins Switzerland', Website = 'https://oaklins.com',  Domain_Root__c = 'oaklins')
+        };
+        insert accs;
+
+        Test.startTest();
+        AccountDedupeService.DedupeResult res = AccountDedupeController.findDuplicates(accs[0].Id);
+        Test.stopTest();
+
+        AccountDedupeService.ScenarioResult fuzzy;
+        AccountDedupeService.ScenarioResult nameDomainRoot;
+        for (AccountDedupeService.ScenarioResult s : res.scenarios) {
+            if (s.key == 'fuzzyNameDomainRoot') fuzzy = s;
+            if (s.key == 'nameDomainRoot') nameDomainRoot = s;
+        }
+        System.assertEquals(2, fuzzy.matchIds.size(),
+            'Both other Oaklins regional offices should match via shared token "oaklins"');
+        System.assertEquals(0, nameDomainRoot.matchIds.size(),
+            '"Name + Domain Root" stays exact-after-normalization and should not fire here');
+    }
 }
