@@ -80,22 +80,22 @@ public with sharing class AccountDedupeScanService {
 
         // Two-level bucket: fieldValue -> normalizedName -> ids.
         // Using two levels avoids splitting on spaces in normalized names.
-        Map<String, Map<String, List<Id>>> outer = new Map<String, Map<String, List<Id>>>();
+        Map<String, Map<String, List<Id>>> byField = new Map<String, Map<String, List<Id>>>();
         for (Account a : accts) {
             String fieldVal = (String) a.get(fieldName);
             if (String.isBlank(fieldVal)) continue;
             String normName = normalizeName(a.Name);
             if (String.isBlank(normName)) continue;
-            if (!outer.containsKey(fieldVal)) outer.put(fieldVal, new Map<String, List<Id>>());
-            Map<String, List<Id>> inner = outer.get(fieldVal);
-            if (!inner.containsKey(normName)) inner.put(normName, new List<Id>());
-            inner.get(normName).add(a.Id);
+            if (!byField.containsKey(fieldVal)) byField.put(fieldVal, new Map<String, List<Id>>());
+            Map<String, List<Id>> byName = byField.get(fieldVal);
+            if (!byName.containsKey(normName)) byName.put(normName, new List<Id>());
+            byName.get(normName).add(a.Id);
         }
 
         List<GroupDraft> out = new List<GroupDraft>();
-        for (String fieldVal : outer.keySet()) {
-            for (String normName : outer.get(fieldVal).keySet()) {
-                List<Id> ids = outer.get(fieldVal).get(normName);
+        for (String fieldVal : byField.keySet()) {
+            for (String normName : byField.get(fieldVal).keySet()) {
+                List<Id> ids = byField.get(fieldVal).get(normName);
                 if (ids.size() < 2) continue;
                 GroupDraft g = new GroupDraft();
                 g.scenarioKey   = scenarioKey;
