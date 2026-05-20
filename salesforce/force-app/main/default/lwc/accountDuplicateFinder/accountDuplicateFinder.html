@@ -1,0 +1,169 @@
+<template>
+    <lightning-card title="Potential Duplicate Accounts" icon-name="standard:merge">
+        <lightning-button-icon slot="actions" icon-name="utility:refresh" alternative-text="Refresh"
+            title="Refresh" onclick={refresh} disabled={loading}></lightning-button-icon>
+
+        <div class="slds-p-horizontal_medium">
+            <template lwc:if={loading}>
+                <div class="slds-align_absolute-center slds-p-vertical_medium">
+                    <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                </div>
+            </template>
+
+            <template lwc:if={error}>
+                <div class="slds-text-color_error slds-p-vertical_small">{error}</div>
+            </template>
+
+            <template lwc:if={data}>
+                <template lwc:if={compareMode}>
+                    <!-- Compare & Merge view -->
+                    <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
+                        <h2 class="slds-text-heading_small slds-grow">Compare &amp; Merge</h2>
+                        <lightning-button label="Back to candidates" onclick={handleCancelCompare}
+                            variant="neutral" class="slds-m-right_x-small"></lightning-button>
+                        <lightning-button label="Confirm Merge" variant="destructive"
+                            onclick={handleConfirmMerge} disabled={merging}></lightning-button>
+                    </div>
+
+                    <p class="slds-text-body_small slds-m-bottom_x-small">
+                        Choose the master record (column header). For each field, pick the value that should
+                        end up on the master. Greyed cells are read-only.
+                    </p>
+
+                    <template lwc:if={merging}>
+                        <lightning-spinner alternative-text="Merging" size="small"></lightning-spinner>
+                    </template>
+
+                    <div class="slds-scrollable_x">
+                        <table class="slds-table slds-table_bordered slds-table_fixed-layout slds-table_cell-buffer">
+                            <thead>
+                                <tr class="slds-line-height_reset">
+                                    <th class="slds-text-title_caps" style="width: 14rem;">Field</th>
+                                    <template for:each={compareColumns} for:item="col">
+                                        <th key={col.id} class="slds-text-title_caps">
+                                            <div class="slds-text-heading_small">{col.name}</div>
+                                            <lightning-button data-id={col.id} label={col.masterLabel}
+                                                variant={col.masterVariant} onclick={handlePickMaster}
+                                                class="slds-m-top_xx-small"></lightning-button>
+                                        </th>
+                                    </template>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={compareRows} for:item="row">
+                                    <tr key={row.key}>
+                                        <td>
+                                            <div class="slds-text-title">{row.label}</div>
+                                            <div class="slds-text-body_small slds-text-color_weak">{row.apiName}</div>
+                                        </td>
+                                        <template for:each={row.cells} for:item="cell">
+                                            <td key={cell.id} class={cell.cellClass}>
+                                                <div class="slds-grid slds-grid_vertical-align-start">
+                                                    <template lwc:if={row.updateable}>
+                                                        <input type="radio" name={cell.radioGroup}
+                                                            id={cell.radioId}
+                                                            data-field={cell.fieldName} data-id={cell.id}
+                                                            checked={cell.checked}
+                                                            onchange={handleFieldChoice}
+                                                            class="slds-m-right_x-small slds-m-top_xx-small" />
+                                                    </template>
+                                                    <label for={cell.radioId} class="slds-truncate" title={cell.value}>
+                                                        {cell.value}
+                                                    </label>
+                                                </div>
+                                            </td>
+                                        </template>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </template>
+
+                <template lwc:else>
+                    <!-- Scenario picker + candidate list -->
+                    <div class="slds-grid slds-wrap slds-gutters_xx-small slds-m-bottom_small">
+                        <template for:each={scenarioTabs} for:item="tab">
+                            <div key={tab.key} class="slds-col">
+                                <lightning-button data-key={tab.key} label={tab.label}
+                                    variant={tab.buttonVariant}
+                                    onclick={handleScenarioClick}
+                                    title={tab.description}
+                                    class="slds-m-right_xx-small slds-m-bottom_xx-small"></lightning-button>
+                                <lightning-badge label={tab.count} variant={tab.badgeVariant}></lightning-badge>
+                            </div>
+                        </template>
+                    </div>
+
+                    <template lwc:if={activeScenario}>
+                        <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                            {activeScenario.description}
+                        </p>
+                    </template>
+
+                    <template lwc:if={hasActiveMatches}>
+                        <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_x-small">
+                            <span class="slds-text-body_small slds-grow">
+                                {selectedCount} selected
+                            </span>
+                            <lightning-button label={mergeButtonLabel} variant="brand"
+                                disabled={compareDisabled}
+                                onclick={handleCompare}></lightning-button>
+                        </div>
+
+                        <table class="slds-table slds-table_bordered slds-table_cell-buffer">
+                            <thead>
+                                <tr class="slds-line-height_reset">
+                                    <th style="width: 2.5rem;"></th>
+                                    <th>Name</th>
+                                    <th>Website</th>
+                                    <th>LinkedIn</th>
+                                    <th>Domain</th>
+                                    <th>Domain Root</th>
+                                    <th>Owner</th>
+                                    <th>Last Modified</th>
+                                    <th style="width: 4rem;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template for:each={activeMatchRows} for:item="row">
+                                    <tr key={row.id}>
+                                        <td>
+                                            <input type="checkbox" data-id={row.id}
+                                                checked={row.selected} onchange={handleSelectToggle}
+                                                aria-label={row.checkboxLabel} />
+                                        </td>
+                                        <td>{row.name}</td>
+                                        <td class="slds-truncate" title={row.website}>{row.website}</td>
+                                        <td class="slds-truncate" title={row.linkedin}>{row.linkedin}</td>
+                                        <td>{row.domain}</td>
+                                        <td>{row.domainRoot}</td>
+                                        <td>{row.ownerName}</td>
+                                        <td>
+                                            <lightning-formatted-date-time value={row.lastModified}
+                                                year="numeric" month="short" day="2-digit">
+                                            </lightning-formatted-date-time>
+                                        </td>
+                                        <td>
+                                            <lightning-button-icon data-id={row.id} icon-name="utility:new_window"
+                                                alternative-text="Open" title="Open record"
+                                                onclick={handleOpenRecord}></lightning-button-icon>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </template>
+
+                    <template lwc:else>
+                        <div class="slds-illustration slds-illustration_small slds-p-vertical_medium slds-align_absolute-center">
+                            <p class="slds-text-body_regular slds-text-color_weak">
+                                No candidates for this scenario.
+                            </p>
+                        </div>
+                    </template>
+                </template>
+            </template>
+        </div>
+    </lightning-card>
+</template>

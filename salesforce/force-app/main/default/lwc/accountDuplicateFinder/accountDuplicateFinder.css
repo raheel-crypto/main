@@ -1,0 +1,12 @@
+:host {
+    display: block;
+}
+
+.slds-table th,
+.slds-table td {
+    vertical-align: middle;
+}
+
+label {
+    cursor: pointer;
+}
