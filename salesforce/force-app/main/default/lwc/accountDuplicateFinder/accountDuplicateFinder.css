@@ -27,6 +27,7 @@ label {
 
 .compare-table {
     width: auto;
+    table-layout: fixed;
 }
 
 .compare-table .field-col {
@@ -43,11 +44,15 @@ label {
     min-width: 14rem;
 }
 
+.compare-table td,
+.compare-table th {
+    vertical-align: top;
+}
+
 .compare-table .cell-value {
     display: inline-block;
     max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    word-break: break-all;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
 }
