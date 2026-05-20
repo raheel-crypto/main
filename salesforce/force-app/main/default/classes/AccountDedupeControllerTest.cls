@@ -58,29 +58,35 @@ private class AccountDedupeControllerTest {
 
     @IsTest
     static void mergeAccounts_cherryPicksFieldsAndMerges() {
-        List<Account> all = [SELECT Id, Name, Phone, Industry FROM Account WHERE Domain_Root__c = 'acme' ORDER BY Name];
-        Account master = null;
-        List<Id> dupes = new List<Id>();
-        for (Account a : all) {
-            if (a.Name == 'Acme, Inc.') master = a;
-            else if (dupes.size() < 2) dupes.add(a.Id);
+        Map<String, Account> byName = new Map<String, Account>();
+        for (Account a : [SELECT Id, Name, Industry, Website FROM Account WHERE Domain_Root__c = 'acme']) {
+            byName.put(a.Name, a);
         }
-        System.assertNotEquals(null, master);
-        System.assertEquals(2, dupes.size());
+        Account master = byName.get('Acme, Inc.');
+        Account dupe1 = byName.get('Acme Corporation');
+        Account dupe2 = byName.get('Acme Holdings LLC');
+        System.assertNotEquals(null, master, 'setup created master');
+        System.assertNotEquals(null, dupe1, 'setup created dupe1');
+        System.assertNotEquals(null, dupe2, 'setup created dupe2');
 
-        update new Account(Id = master.Id, Industry = null);
-        update new Account(Id = dupes[0], Industry = 'Technology');
+        master.Industry = null;
+        update master;
+        dupe1.Industry = 'Technology';
+        update dupe1;
 
-        Map<String, Id> fieldSource = new Map<String, Id>{ 'Industry' => dupes[0] };
+        Map<String, Id> fieldSource = new Map<String, Id>{ 'Industry' => dupe1.Id };
+        List<Id> dupeIds = new List<Id>{ dupe1.Id, dupe2.Id };
 
+        // Call the service directly so any real exception surfaces in the test
+        // output (AuraHandledException masks the message on the controller path).
         Test.startTest();
-        AccountDedupeController.mergeAccounts(master.Id, dupes, fieldSource);
+        AccountDedupeService.mergeAccounts(master.Id, dupeIds, fieldSource);
         Test.stopTest();
 
-        Account after = [SELECT Id, Industry FROM Account WHERE Id = :master.Id];
-        System.assertEquals('Technology', after.Industry, 'cherry-picked Industry should be on master');
+        Account afterMaster = [SELECT Id, Industry FROM Account WHERE Id = :master.Id];
+        System.assertEquals('Technology', afterMaster.Industry, 'cherry-picked Industry should be on master');
 
-        List<Account> remaining = [SELECT Id FROM Account WHERE Id IN :dupes];
+        List<Account> remaining = [SELECT Id FROM Account WHERE Id IN :dupeIds];
         System.assertEquals(0, remaining.size(), 'duplicates should have been merged away');
     }
 

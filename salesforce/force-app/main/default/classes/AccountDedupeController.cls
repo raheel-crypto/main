@@ -5,7 +5,9 @@ public with sharing class AccountDedupeController {
         try {
             return AccountDedupeService.findDuplicates(recordId);
         } catch (Exception e) {
-            throw new AuraHandledException(e.getMessage());
+            System.debug(LoggingLevel.ERROR, 'AccountDedupeController.findDuplicates: '
+                + e.getTypeName() + ': ' + e.getMessage() + '\n' + e.getStackTraceString());
+            throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
         }
     }
 
@@ -14,7 +16,9 @@ public with sharing class AccountDedupeController {
         try {
             AccountDedupeService.mergeAccounts(masterId, duplicateIds, fieldSourceMap);
         } catch (Exception e) {
-            throw new AuraHandledException(e.getMessage());
+            System.debug(LoggingLevel.ERROR, 'AccountDedupeController.mergeAccounts: '
+                + e.getTypeName() + ': ' + e.getMessage() + '\n' + e.getStackTraceString());
+            throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
         }
     }
 }
