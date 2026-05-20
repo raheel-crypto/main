@@ -3,6 +3,10 @@ public with sharing class AccountDedupeScanService {
     public static final Integer MAX_BUCKET_SIZE = 1000;
     public static final Integer MAX_GROUPS_PER_SCENARIO = 5000;
 
+    // Apex heap limit for async: 12 MB. Fetching ~18K accounts with a few fields
+    // (~200 bytes each) uses ~3.6 MB — well within limit.
+    private static final Integer FETCH_LIMIT = 50000;
+
     public static final Map<String, String> SCENARIO_LABELS = new Map<String, String>{
         'exactWebsite'         => 'Exact Website',
         'exactLinkedIn'        => 'Exact LinkedIn URL',
@@ -27,104 +31,77 @@ public with sharing class AccountDedupeScanService {
         return new List<GroupDraft>();
     }
 
+    // ── exactWebsite ────────────────────────────────────────────────────────
+
     private static List<GroupDraft> scanExactWebsite() {
-        // Use Normalized_Domain__c — the AccountDomainTrigger already normalizes Website into it.
-        return groupByExactField('Normalized_Domain__c', 'exactWebsite');
+        // Prefer Normalized_Domain__c when populated; fall back to normalizing Website in-memory.
+        Map<String, List<Id>> buckets = new Map<String, List<Id>>();
+        for (Account a : [
+            SELECT Id, Website, Normalized_Domain__c
+            FROM Account
+            WHERE Website != NULL
+            LIMIT :FETCH_LIMIT
+        ]) {
+            String key = String.isNotBlank(a.Normalized_Domain__c)
+                ? a.Normalized_Domain__c
+                : normalizeUrl(a.Website);
+            if (String.isBlank(key)) continue;
+            if (!buckets.containsKey(key)) buckets.put(key, new List<Id>());
+            buckets.get(key).add(a.Id);
+        }
+        return draftsFromBuckets(buckets, 'exactWebsite');
     }
+
+    // ── exactLinkedIn ────────────────────────────────────────────────────────
 
     private static List<GroupDraft> scanExactLinkedIn() {
-        // No normalized variant stored — normalize in-memory after collecting buckets.
-        List<GroupDraft> out = new List<GroupDraft>();
-        for (AggregateResult ar : [
-            SELECT LinkedIn_URL__c key, COUNT(Id) cnt
+        Map<String, List<Id>> buckets = new Map<String, List<Id>>();
+        for (Account a : [
+            SELECT Id, LinkedIn_URL__c
             FROM Account
             WHERE LinkedIn_URL__c != NULL
-            GROUP BY LinkedIn_URL__c
-            HAVING COUNT(Id) > 1
-            LIMIT :MAX_GROUPS_PER_SCENARIO
+            LIMIT :FETCH_LIMIT
         ]) {
-            String raw = (String) ar.get('key');
-            Integer cnt = ((Decimal) ar.get('cnt')).intValue();
-            if (cnt > MAX_BUCKET_SIZE) continue;
-            String normalized = normalizeUrl(raw);
-            if (String.isBlank(normalized)) continue;
-
-            List<Id> ids = new List<Id>();
-            for (Account a : [SELECT Id FROM Account WHERE LinkedIn_URL__c = :raw LIMIT :MAX_BUCKET_SIZE]) {
-                ids.add(a.Id);
-            }
-            if (ids.size() < 2) continue;
-
-            GroupDraft g = new GroupDraft();
-            g.scenarioKey = 'exactLinkedIn';
-            g.scenarioLabel = SCENARIO_LABELS.get('exactLinkedIn');
-            g.matchKey = normalized;
-            g.accountIds = ids;
-            out.add(g);
+            String key = normalizeUrl(a.LinkedIn_URL__c);
+            if (String.isBlank(key)) continue;
+            if (!buckets.containsKey(key)) buckets.put(key, new List<Id>());
+            buckets.get(key).add(a.Id);
         }
-        return out;
+        return draftsFromBuckets(buckets, 'exactLinkedIn');
     }
 
-    private static List<GroupDraft> groupByExactField(String fieldName, String scenarioKey) {
-        List<GroupDraft> out = new List<GroupDraft>();
-        String soql =
-            'SELECT ' + fieldName + ' key, COUNT(Id) cnt FROM Account ' +
-            'WHERE ' + fieldName + ' != NULL ' +
-            'GROUP BY ' + fieldName + ' ' +
-            'HAVING COUNT(Id) > 1 ' +
-            'LIMIT ' + MAX_GROUPS_PER_SCENARIO;
-        for (AggregateResult ar : (List<AggregateResult>) Database.query(soql)) {
-            String key = (String) ar.get('key');
-            Integer cnt = ((Decimal) ar.get('cnt')).intValue();
-            if (cnt > MAX_BUCKET_SIZE) continue;
-
-            String idQuery = 'SELECT Id FROM Account WHERE ' + fieldName + ' = :key LIMIT ' + MAX_BUCKET_SIZE;
-            List<Id> ids = new List<Id>();
-            for (Account a : (List<Account>) Database.query(idQuery)) {
-                ids.add(a.Id);
-            }
-            if (ids.size() < 2) continue;
-
-            GroupDraft g = new GroupDraft();
-            g.scenarioKey = scenarioKey;
-            g.scenarioLabel = SCENARIO_LABELS.get(scenarioKey);
-            g.matchKey = key;
-            g.accountIds = ids;
-            out.add(g);
-        }
-        return out;
-    }
+    // ── nameNormalizedDomain / nameDomainRoot ────────────────────────────────
 
     private static List<GroupDraft> scanNameAndField(String fieldName, String scenarioKey) {
-        // For each bucket of accounts sharing fieldName, sub-group by normalized name.
-        List<GroupDraft> out = new List<GroupDraft>();
-        String soql =
-            'SELECT ' + fieldName + ' key, COUNT(Id) cnt FROM Account ' +
-            'WHERE ' + fieldName + ' != NULL ' +
-            'GROUP BY ' + fieldName + ' ' +
-            'HAVING COUNT(Id) > 1 ' +
-            'LIMIT ' + MAX_GROUPS_PER_SCENARIO;
-        for (AggregateResult ar : (List<AggregateResult>) Database.query(soql)) {
-            String key = (String) ar.get('key');
-            Integer cnt = ((Decimal) ar.get('cnt')).intValue();
-            if (cnt > MAX_BUCKET_SIZE) continue;
+        String soql = 'SELECT Id, Name, ' + fieldName + ' FROM Account '
+                    + 'WHERE ' + fieldName + ' != NULL AND Name != NULL '
+                    + 'LIMIT ' + FETCH_LIMIT;
+        List<Account> accts = Database.query(soql);
 
-            String idQuery = 'SELECT Id, Name FROM Account WHERE ' + fieldName + ' = :key LIMIT ' + MAX_BUCKET_SIZE;
-            Map<String, List<Id>> byNormalizedName = new Map<String, List<Id>>();
-            for (Account a : (List<Account>) Database.query(idQuery)) {
-                String norm = normalizeName(a.Name);
-                if (String.isBlank(norm)) continue;
-                if (!byNormalizedName.containsKey(norm)) byNormalizedName.put(norm, new List<Id>());
-                byNormalizedName.get(norm).add(a.Id);
-            }
-            for (String norm : byNormalizedName.keySet()) {
-                List<Id> ids = byNormalizedName.get(norm);
+        // Two-level bucket: fieldValue -> normalizedName -> ids.
+        // Using two levels avoids splitting on spaces in normalized names.
+        Map<String, Map<String, List<Id>>> outer = new Map<String, Map<String, List<Id>>>();
+        for (Account a : accts) {
+            String fieldVal = (String) a.get(fieldName);
+            if (String.isBlank(fieldVal)) continue;
+            String normName = normalizeName(a.Name);
+            if (String.isBlank(normName)) continue;
+            if (!outer.containsKey(fieldVal)) outer.put(fieldVal, new Map<String, List<Id>>());
+            Map<String, List<Id>> inner = outer.get(fieldVal);
+            if (!inner.containsKey(normName)) inner.put(normName, new List<Id>());
+            inner.get(normName).add(a.Id);
+        }
+
+        List<GroupDraft> out = new List<GroupDraft>();
+        for (String fieldVal : outer.keySet()) {
+            for (String normName : outer.get(fieldVal).keySet()) {
+                List<Id> ids = outer.get(fieldVal).get(normName);
                 if (ids.size() < 2) continue;
                 GroupDraft g = new GroupDraft();
-                g.scenarioKey = scenarioKey;
+                g.scenarioKey   = scenarioKey;
                 g.scenarioLabel = SCENARIO_LABELS.get(scenarioKey);
-                g.matchKey = norm + ' @ ' + key;
-                g.accountIds = ids;
+                g.matchKey      = (normName + ' @ ' + fieldVal).left(255);
+                g.accountIds    = ids;
                 out.add(g);
                 if (out.size() >= MAX_GROUPS_PER_SCENARIO) return out;
             }
@@ -132,36 +109,35 @@ public with sharing class AccountDedupeScanService {
         return out;
     }
 
-    private static List<GroupDraft> scanFuzzyNameDomainRoot() {
-        // Bucket by Domain_Root__c, then within each bucket cluster accounts whose
-        // normalized names share at least one significant token (length >= 3),
-        // OR are within Levenshtein-typo distance.
-        List<GroupDraft> out = new List<GroupDraft>();
-        for (AggregateResult ar : [
-            SELECT Domain_Root__c key, COUNT(Id) cnt
-            FROM Account
-            WHERE Domain_Root__c != NULL
-            GROUP BY Domain_Root__c
-            HAVING COUNT(Id) > 1
-            LIMIT :MAX_GROUPS_PER_SCENARIO
-        ]) {
-            String dr = (String) ar.get('key');
-            Integer cnt = ((Decimal) ar.get('cnt')).intValue();
-            if (cnt > MAX_BUCKET_SIZE) continue;
+    // ── fuzzyNameDomainRoot ──────────────────────────────────────────────────
 
-            List<Account> accts = [
-                SELECT Id, Name FROM Account
-                WHERE Domain_Root__c = :dr
-                LIMIT :MAX_BUCKET_SIZE
-            ];
+    private static List<GroupDraft> scanFuzzyNameDomainRoot() {
+        Map<String, List<Account>> byDomain = new Map<String, List<Account>>();
+        for (Account a : [
+            SELECT Id, Name, Domain_Root__c
+            FROM Account
+            WHERE Domain_Root__c != NULL AND Name != NULL
+            LIMIT :FETCH_LIMIT
+        ]) {
+            String dr = a.Domain_Root__c;
+            if (!byDomain.containsKey(dr)) byDomain.put(dr, new List<Account>());
+            byDomain.get(dr).add(a);
+        }
+
+        List<GroupDraft> out = new List<GroupDraft>();
+        for (String dr : byDomain.keySet()) {
+            List<Account> accts = byDomain.get(dr);
+            if (accts.size() < 2) continue;
+            if (accts.size() > MAX_BUCKET_SIZE) continue;
+
             List<List<Id>> clusters = clusterByName(accts);
             for (List<Id> ids : clusters) {
                 if (ids.size() < 2) continue;
                 GroupDraft g = new GroupDraft();
-                g.scenarioKey = 'fuzzyNameDomainRoot';
+                g.scenarioKey   = 'fuzzyNameDomainRoot';
                 g.scenarioLabel = SCENARIO_LABELS.get('fuzzyNameDomainRoot');
-                g.matchKey = dr;
-                g.accountIds = ids;
+                g.matchKey      = dr;
+                g.accountIds    = ids;
                 out.add(g);
                 if (out.size() >= MAX_GROUPS_PER_SCENARIO) return out;
             }
@@ -169,8 +145,28 @@ public with sharing class AccountDedupeScanService {
         return out;
     }
 
+    // ── shared helpers ───────────────────────────────────────────────────────
+
+    private static List<GroupDraft> draftsFromBuckets(Map<String, List<Id>> buckets, String scenarioKey) {
+        List<GroupDraft> out = new List<GroupDraft>();
+        for (String key : buckets.keySet()) {
+            List<Id> ids = buckets.get(key);
+            if (ids.size() < 2) continue;
+            if (ids.size() > MAX_BUCKET_SIZE) continue;
+            GroupDraft g = new GroupDraft();
+            g.scenarioKey   = scenarioKey;
+            g.scenarioLabel = SCENARIO_LABELS.get(scenarioKey);
+            g.matchKey      = key.left(255);
+            g.accountIds    = ids;
+            out.add(g);
+            if (out.size() >= MAX_GROUPS_PER_SCENARIO) break;
+        }
+        return out;
+    }
+
+    // ── union-find clustering ────────────────────────────────────────────────
+
     private static List<List<Id>> clusterByName(List<Account> accts) {
-        // Union-find: each account is its own cluster until linked by a similarity edge.
         Map<Id, Id> parent = new Map<Id, Id>();
         Map<Id, Set<String>> tokensByAccount = new Map<Id, Set<String>>();
         Map<Id, String> normByAccount = new Map<Id, String>();
@@ -245,6 +241,8 @@ public with sharing class AccountDedupeScanService {
         }
         return out;
     }
+
+    // ── persist / resolve ────────────────────────────────────────────────────
 
     public static void persistGroups(Id scanId, List<GroupDraft> drafts) {
         if (drafts == null || drafts.isEmpty()) return;
