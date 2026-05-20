@@ -272,18 +272,21 @@ public with sharing class AccountDedupeScanService {
         if (!members.isEmpty()) insert members;
     }
 
-    public static void markGroupsResolvedForAccounts(Set<Id> deletedAccountIds) {
-        if (deletedAccountIds == null || deletedAccountIds.isEmpty()) return;
+    public static Set<Id> findOpenGroupsForAccounts(Set<Id> accountIds) {
         Set<Id> groupIds = new Set<Id>();
+        if (accountIds == null || accountIds.isEmpty()) return groupIds;
         for (Dedupe_Group_Member__c m : [
             SELECT Group__c FROM Dedupe_Group_Member__c
-            WHERE Account__c IN :deletedAccountIds AND Group__r.Status__c = 'Open'
+            WHERE Account__c IN :accountIds AND Group__r.Status__c = 'Open'
             LIMIT 10000
         ]) {
             groupIds.add(m.Group__c);
         }
-        if (groupIds.isEmpty()) return;
+        return groupIds;
+    }
 
+    public static void resolveGroups(Set<Id> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) return;
         List<Dedupe_Group__c> toUpdate = new List<Dedupe_Group__c>();
         for (Id gid : groupIds) {
             toUpdate.add(new Dedupe_Group__c(

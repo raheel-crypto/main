@@ -123,6 +123,14 @@ public with sharing class AccountDedupeService {
         Account master = new Account(Id = masterId);
         applyCherryPickValues(master, masterId, fieldSourceMap);
 
+        // Capture group IDs to resolve BEFORE the merge — Cascade delete on the
+        // Account__c lookup removes the membership rows once the merge runs.
+        Set<Id> mergedAway = new Set<Id>();
+        for (Id dupId : duplicateIds) {
+            if (dupId != null && dupId != masterId) mergedAway.add(dupId);
+        }
+        Set<Id> groupsToResolve = AccountDedupeScanService.findOpenGroupsForAccounts(mergedAway);
+
         // Apex merge accepts List<ID> for the duplicates argument, capped at 2 per call.
         List<Id> chunk = new List<Id>();
         for (Id dupId : duplicateIds) {
@@ -137,12 +145,7 @@ public with sharing class AccountDedupeService {
             merge master chunk;
         }
 
-        // Mark any open Dedupe_Group__c that contained the merged-away records as Resolved.
-        Set<Id> mergedAway = new Set<Id>();
-        for (Id dupId : duplicateIds) {
-            if (dupId != null && dupId != masterId) mergedAway.add(dupId);
-        }
-        AccountDedupeScanService.markGroupsResolvedForAccounts(mergedAway);
+        AccountDedupeScanService.resolveGroups(groupsToResolve);
     }
 
     private static void applyCherryPickValues(Account master, Id masterId, Map<String, Id> fieldSourceMap) {

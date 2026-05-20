@@ -7,5 +7,5 @@
     <relationshipName>Dedupe_Group_Memberships</relationshipName>
     <required>true</required>
     <type>Lookup</type>
-    <deleteConstraint>SetNull</deleteConstraint>
+    <deleteConstraint>Cascade</deleteConstraint>
 </CustomField>
