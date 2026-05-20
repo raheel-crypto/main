@@ -358,6 +358,9 @@ private class AccountHierarchyControllerTest {
         Dedupe_Scan__c older = new Dedupe_Scan__c(Status__c = 'Completed');
         Dedupe_Scan__c newer = new Dedupe_Scan__c(Status__c = 'Completed');
         insert new List<Dedupe_Scan__c>{ older, newer };
+        // Inserts in the same transaction share a CreatedDate, so explicitly
+        // backdate one to make 'latest' deterministic.
+        Test.setCreatedDate(older.Id, Datetime.now().addDays(-1));
 
         Dedupe_Group__c grp = new Dedupe_Group__c(
             Scan__c = newer.Id, Scenario_Key__c = 'EXACT_WEBSITE', Status__c = 'Open'
