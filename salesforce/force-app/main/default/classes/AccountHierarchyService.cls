@@ -22,8 +22,34 @@ public with sharing class AccountHierarchyService {
         'com.tr','com.sa','com.ua'
     };
 
+    // 2-letter ccTLDs frequently combine with these as "registered" SLDs.
+    // Used as a fallback when MULTI_PART_TLDS doesn't list a specific country
+    // (e.g. arabbank.com.lb -> brand "arabbank", not "com").
+    private static final Set<String> CCTLD_SLD_PREFIXES = new Set<String>{
+        'co','com','net','org','gov','edu','mil','ac','ltd','plc',
+        'or','ne','go','id','govt'
+    };
+
     private static final Set<String> STRIP_SUBDOMAINS = new Set<String>{
         'www','m','en','us','uk','de','fr','es','it','nl','au','ca'
+    };
+
+    // Brands that almost never indicate a real account family — these are
+    // social/listing domains people stick in the Website field.
+    private static final Set<String> BLOCKED_BRANDS = new Set<String>{
+        'linkedin','facebook','instagram','twitter','x','youtube','google',
+        'wordpress','github','medium','tumblr','pinterest','reddit','tiktok',
+        'amazon','apple','microsoft','wikipedia','crunchbase','bloomberg',
+        'glassdoor','indeed','wix','squarespace','weebly','shopify',
+        'mailto','tel','localhost','example'
+    };
+
+    // Stop-words to skip when deriving a brand label from an Account.Name.
+    private static final Set<String> NAME_STOPWORDS = new Set<String>{
+        'the','a','an','and','of','for','with','to','at','by','from','in','on',
+        'inc','llc','ltd','limited','llp','plc','gmbh','sa','sas','sarl',
+        'corp','corporation','co','company','holdings','holding','group',
+        'international','global','worldwide'
     };
 
     // ---------- DTOs ---------- //
@@ -150,7 +176,13 @@ public with sharing class AccountHierarchyService {
         Integer sz = parts.size();
         List<String> registeredParts;
         String lastTwo = parts[sz-2] + '.' + parts[sz-1];
-        if (sz >= 3 && MULTI_PART_TLDS.contains(lastTwo)) {
+        String last = parts[sz-1];
+        String secondLast = parts[sz-2];
+        // Either listed in our explicit multi-part set, or a 2-letter ccTLD
+        // with a known SLD prefix (handles arbitrary com.<cc>, co.<cc>, etc.).
+        Boolean isMultiPart = MULTI_PART_TLDS.contains(lastTwo)
+            || (last.length() == 2 && CCTLD_SLD_PREFIXES.contains(secondLast));
+        if (sz >= 3 && isMultiPart) {
             registeredParts = new List<String>{ parts[sz-3], parts[sz-2], parts[sz-1] };
         } else {
             registeredParts = new List<String>{ parts[sz-2], parts[sz-1] };
@@ -161,6 +193,60 @@ public with sharing class AccountHierarchyService {
         if (String.isBlank(n.brand) || n.brand.length() < 2) return null;
         n.domain = String.join(registeredParts, '.');
         return n;
+    }
+
+    // Extract a brand label from a LinkedIn company/school/in URL.
+    // e.g. "https://linkedin.com/company/oaklins-uk" -> "oaklins"
+    @TestVisible
+    private static String brandFromLinkedIn(String url) {
+        if (String.isBlank(url)) return null;
+        String u = url.trim().toLowerCase();
+        if (u.startsWith('http://')) u = u.substring(7);
+        else if (u.startsWith('https://')) u = u.substring(8);
+        if (u.startsWith('//')) u = u.substring(2);
+        if (!u.contains('linkedin.')) return null;
+
+        Integer idx = -1;
+        String prefix = null;
+        for (String p : new List<String>{ '/company/', '/school/', '/in/' }) {
+            Integer i = u.indexOf(p);
+            if (i >= 0) { idx = i; prefix = p; break; }
+        }
+        if (idx < 0) return null;
+
+        String slug = u.substring(idx + prefix.length());
+        Integer slash = slug.indexOf('/'); if (slash >= 0) slug = slug.substring(0, slash);
+        Integer qIdx  = slug.indexOf('?'); if (qIdx  >= 0) slug = slug.substring(0, qIdx);
+        // Country offices often suffix with -uk, -de, -fr, etc. Strip everything
+        // from the first hyphen onward so country variants collapse to one brand.
+        Integer hyphen = slug.indexOf('-');
+        if (hyphen > 0) slug = slug.substring(0, hyphen);
+        if (slug.length() < 2) return null;
+        return slug;
+    }
+
+    // Extract a name-derived brand label — first significant token in the name.
+    // e.g. "Oaklins International" -> "oaklins", "The Coca-Cola Company" -> "coca",
+    // "Müller GmbH" -> "müller" (unicode-aware).
+    @TestVisible
+    private static String brandFromName(String accountName) {
+        if (String.isBlank(accountName)) return null;
+        String[] tokens = accountName.toLowerCase().split('[^\\p{L}0-9]+');
+        for (String t : tokens) {
+            if (String.isBlank(t)) continue;
+            if (t.length() < 3) continue;
+            if (NAME_STOPWORDS.contains(t)) continue;
+            return t;
+        }
+        return null;
+    }
+
+    // Pick a primary brand for an account, in order of decreasing signal strength.
+    private static String pickPrimaryBrand(String websiteBrand, String linkedInBrand, String nameBrand) {
+        if (websiteBrand != null && !BLOCKED_BRANDS.contains(websiteBrand)) return websiteBrand;
+        if (linkedInBrand != null && !BLOCKED_BRANDS.contains(linkedInBrand)) return linkedInBrand;
+        if (nameBrand != null && !BLOCKED_BRANDS.contains(nameBrand)) return nameBrand;
+        return null;
     }
 
     @TestVisible
@@ -190,9 +276,11 @@ public with sharing class AccountHierarchyService {
         };
         if (out.linkedInField != null) fields.add(out.linkedInField);
 
+        // No Website filter — we cluster on Website, LinkedIn URL OR Name, so accounts
+        // missing a website still get a shot via the name-based fallback.
         String soql =
             'SELECT ' + String.join(fields, ', ') +
-            ' FROM Account WHERE Website != null' +
+            ' FROM Account' +
             ' WITH USER_MODE' +
             ' LIMIT 5000';
 
@@ -209,12 +297,28 @@ public with sharing class AccountHierarchyService {
         for (SObject sob : records) {
             Account a = (Account) sob;
             Normalized n = normalizeWebsite(a.Website);
+            String webBrand = n == null ? null : n.brand;
+            // Don't let social/listing domains masquerade as a brand identity.
+            if (webBrand != null && BLOCKED_BRANDS.contains(webBrand)) webBrand = null;
+
+            String linkedInValue = null;
+            if (out.linkedInField != null) {
+                Object v = a.get(out.linkedInField);
+                linkedInValue = v == null ? null : String.valueOf(v);
+            }
+            String liBrand = brandFromLinkedIn(linkedInValue);
+            // Also try Website if it happens to be a LinkedIn URL.
+            if (liBrand == null) liBrand = brandFromLinkedIn(a.Website);
+
+            String nameBrand = brandFromName(a.Name);
+            String primaryBrand = pickPrimaryBrand(webBrand, liBrand, nameBrand);
+
             AccountInFamily af = new AccountInFamily();
             af.id = a.Id;
             af.name = a.Name;
             af.website = a.Website;
             af.normalizedDomain = n == null ? null : n.domain;
-            af.brandLabel = n == null ? null : n.brand;
+            af.brandLabel = primaryBrand;
             af.billingCountry = a.BillingCountry;
             af.billingState = a.BillingState;
             af.billingCity = a.BillingCity;
@@ -222,10 +326,7 @@ public with sharing class AccountHierarchyService {
             af.accountType = a.Type;
             af.parentId = a.ParentId;
             af.parentName = a.Parent == null ? null : a.Parent.Name;
-            if (out.linkedInField != null) {
-                Object v = a.get(out.linkedInField);
-                af.linkedInUrl = v == null ? null : String.valueOf(v);
-            }
+            af.linkedInUrl = linkedInValue;
             enriched.add(af);
         }
         out.totalAccountsScanned = enriched.size();

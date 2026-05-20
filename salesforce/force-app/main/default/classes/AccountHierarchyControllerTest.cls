@@ -27,6 +27,75 @@ private class AccountHierarchyControllerTest {
     }
 
     @isTest
+    static void scan_clustersOaklinsWhenWebsiteIsMissing() {
+        // Reproduces the reported case: Oaklins country offices with no Website
+        // set, just names. Should still cluster via the name-based fallback.
+        insert new List<Account>{
+            new Account(Name = 'Oaklins International'),
+            new Account(Name = 'Oaklins UK'),
+            new Account(Name = 'Oaklins Germany'),
+            new Account(Name = 'Oaklins France'),
+            new Account(Name = 'Oaklins Australia')
+        };
+
+        Test.startTest();
+        AccountHierarchyService.ScanResult result = AccountHierarchyController.scanFamilies();
+        Test.stopTest();
+
+        Boolean found = false;
+        for (AccountHierarchyService.AccountFamily f : result.families) {
+            if (f.brandLabel == 'oaklins') {
+                found = true;
+                System.assertEquals(5, f.accountCount);
+            }
+        }
+        System.assert(found, 'Oaklins family should be detected from names alone');
+    }
+
+    @isTest
+    static void scan_handlesArbitraryCountryCodeTlds() {
+        // Reproduces the bogus "Com" family from the screenshot: hardcoded
+        // multi-part TLDs missed com.lb / com.eg / com.tr, putting brand="com".
+        insert new List<Account>{
+            new Account(Name = 'Arab Bank LB', Website = 'https://arabbank.com.lb'),
+            new Account(Name = 'Arab Bank EG', Website = 'https://arabbank.com.eg'),
+            new Account(Name = 'Arab Bank TR', Website = 'https://arabbank.com.tr')
+        };
+
+        Test.startTest();
+        AccountHierarchyService.ScanResult result = AccountHierarchyController.scanFamilies();
+        Test.stopTest();
+
+        for (AccountHierarchyService.AccountFamily f : result.families) {
+            System.assertNotEquals('com', f.brandLabel, 'Should never cluster under bare TLD');
+        }
+        Boolean found = false;
+        for (AccountHierarchyService.AccountFamily f : result.families) {
+            if (f.brandLabel == 'arabbank') { found = true; break; }
+        }
+        System.assert(found, 'Should cluster as arabbank');
+    }
+
+    @isTest
+    static void scan_skipsSocialDomainBrands() {
+        // Accounts whose Website happens to be a LinkedIn URL should never be
+        // clustered under "linkedin" as a brand.
+        insert new List<Account>{
+            new Account(Name = 'Northwind Holdings', Website = 'https://linkedin.com/company/northwind-holdings'),
+            new Account(Name = 'Globex Corp', Website = 'https://linkedin.com/company/globex')
+        };
+
+        Test.startTest();
+        AccountHierarchyService.ScanResult result = AccountHierarchyController.scanFamilies();
+        Test.stopTest();
+
+        for (AccountHierarchyService.AccountFamily f : result.families) {
+            System.assertNotEquals('linkedin', f.brandLabel);
+            System.assertNotEquals('facebook', f.brandLabel);
+        }
+    }
+
+    @isTest
     static void scan_groupsCountryOfficesByBrand() {
         seedOaklinsFamily();
         // Second smaller family — forces the size comparator to actually run.
