@@ -12,6 +12,7 @@ import userRoutes from "./routes/users.js";
 import cleanupRoutes from "./routes/cleanup.js";
 import sfMcpRoutes from "./routes/sfmcp.js";
 import bulkRoutes from "./routes/bulk.js";
+import accountHierarchyRoutes from "./routes/accountHierarchy.js";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/users", requireAuth, userRoutes);
 app.use("/api/cleanup", requireAuth, cleanupRoutes);
 app.use("/api/sf-mcp", requireAuth, sfMcpRoutes);
 app.use("/api/bulk", requireAuth, bulkRoutes);
+app.use("/api/account-hierarchy", requireAuth, accountHierarchyRoutes);
 
 // Health check
 app.get("/api/health", (_req, res) => {

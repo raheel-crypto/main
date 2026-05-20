@@ -16,6 +16,7 @@ import { CleanupPage } from "./pages/CleanupPage";
 import { ArchitectPage } from "./pages/ArchitectPage";
 import { SFMcpPage } from "./pages/SFMcpPage";
 import { BulkMatchPage } from "./pages/BulkMatchPage";
+import { AccountHierarchyPage } from "./pages/AccountHierarchyPage";
 import { useSalesforceAuth } from "./hooks/useSalesforceAuth";
 import { LoginButton } from "./components/auth/LoginButton";
 
@@ -52,6 +53,7 @@ export default function App() {
         <Route path="/cleanup" element={<CleanupPage />} />
         <Route path="/architect" element={<ArchitectPage />} />
         <Route path="/bulk-match" element={<BulkMatchPage />} />
+        <Route path="/account-hierarchy" element={<AccountHierarchyPage />} />
         <Route path="/sf-mcp" element={<SFMcpPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

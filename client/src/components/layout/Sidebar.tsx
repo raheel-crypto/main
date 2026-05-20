@@ -11,6 +11,7 @@ const navItems = [
   { path: "/cleanup", label: "Cleanup Scanner", icon: "scan" },
   { path: "/architect", label: "Architect", icon: "brain" },
   { path: "/bulk-match", label: "Bulk Match", icon: "upload" },
+  { path: "/account-hierarchy", label: "Account Hierarchy", icon: "hierarchy" },
   { path: "/sf-mcp", label: "Salesforce MCP", icon: "plug" },
 ];
 
@@ -75,6 +76,15 @@ const icons: Record<string, JSX.Element> = {
   plug: (
     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path d="M18 16l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
+    </svg>
+  ),
+  hierarchy: (
+    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <rect x="9" y="2" width="6" height="5" rx="1" />
+      <rect x="2" y="17" width="6" height="5" rx="1" />
+      <rect x="9" y="17" width="6" height="5" rx="1" />
+      <rect x="16" y="17" width="6" height="5" rx="1" />
+      <path d="M12 7v4M5 17v-2a1 1 0 011-1h12a1 1 0 011 1v2M12 14v3" />
     </svg>
   ),
 };

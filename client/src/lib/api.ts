@@ -98,6 +98,29 @@ export const api = {
       body: JSON.stringify({ jobId, objectName, fieldMapping }),
     }),
 
+  // Account Hierarchy
+  scanAccountFamilies: () => request<AccountFamilyScan>("/api/account-hierarchy/scan"),
+  proposeAccountHierarchy: (brandLabel: string, family?: AccountFamily) =>
+    request<HierarchyProposal>("/api/account-hierarchy/propose", {
+      method: "POST",
+      body: JSON.stringify(family ? { brandLabel, family } : { brandLabel }),
+    }),
+  applyAccountHierarchy: (changes: { accountId: string; newParentId: string }[]) =>
+    request<HierarchyApplyResult>("/api/account-hierarchy/apply", {
+      method: "POST",
+      body: JSON.stringify({ changes }),
+    }),
+  createGapAccount: (input: {
+    name: string;
+    website?: string | null;
+    billingCountry?: string | null;
+    description?: string | null;
+  }) =>
+    request<{ id: string }>("/api/account-hierarchy/create-gap", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
   // MCP auth status
   getMcpAuthStatus: () => request<{ configured: boolean; connected: boolean }>("/auth/mcp-status"),
 
@@ -395,6 +418,76 @@ export interface BulkJobResults {
   unmatched: Record<string, string>[];
   duplicates: { csvRow: Record<string, string>; sfIds: string[]; sfNames: string[] }[];
   updateFailures: { id: string; error: string }[];
+}
+
+export interface AccountInFamily {
+  id: string;
+  name: string;
+  website: string | null;
+  normalizedDomain: string | null;
+  brandLabel: string | null;
+  billingCountry: string | null;
+  billingState: string | null;
+  billingCity: string | null;
+  linkedInUrl: string | null;
+  industry: string | null;
+  type: string | null;
+  parentId: string | null;
+  parentName: string | null;
+  recordTypeId: string | null;
+}
+
+export interface AccountFamily {
+  brandLabel: string;
+  representativeName: string;
+  normalizedDomains: string[];
+  billingCountries: string[];
+  accountCount: number;
+  withParentCount: number;
+  accounts: AccountInFamily[];
+}
+
+export interface AccountFamilyScan {
+  families: AccountFamily[];
+  linkedInField: string | null;
+  totalAccountsScanned: number;
+}
+
+export interface HierarchyNode {
+  id: string;
+  name: string;
+  kind: "ultimate-parent" | "regional-parent" | "child" | "gap";
+  accountId: string | null;
+  parentNodeId: string | null;
+  currentParentId: string | null;
+  proposedParentId: string | null;
+  billingCountry: string | null;
+  website: string | null;
+  rationale: string;
+  isChange: boolean;
+}
+
+export interface HierarchyGap {
+  gapId: string;
+  proposedName: string;
+  reason: string;
+  suggestedWebsite: string | null;
+  suggestedBillingCountry: string | null;
+}
+
+export interface HierarchyProposal {
+  family: AccountFamily;
+  summary: string;
+  hasUltimateParent: boolean;
+  ultimateParentNodeId: string | null;
+  nodes: HierarchyNode[];
+  gaps: HierarchyGap[];
+  warnings: string[];
+}
+
+export interface HierarchyApplyResult {
+  applied: { accountId: string; newParentId: string }[];
+  failed: { accountId: string; error: string }[];
 }
 
 export interface SFMcpTool {
