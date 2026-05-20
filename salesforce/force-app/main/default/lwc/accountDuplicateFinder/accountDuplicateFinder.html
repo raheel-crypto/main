@@ -34,14 +34,14 @@
                         <lightning-spinner alternative-text="Merging" size="small"></lightning-spinner>
                     </template>
 
-                    <div class="slds-scrollable_x">
-                        <table class="slds-table slds-table_bordered slds-table_fixed-layout slds-table_cell-buffer">
+                    <div class="slds-scrollable_x compare-scroll">
+                        <table class="slds-table slds-table_bordered slds-table_cell-buffer compare-table">
                             <thead>
                                 <tr class="slds-line-height_reset">
-                                    <th class="slds-text-title_caps" style="width: 14rem;">Field</th>
+                                    <th class="slds-text-title_caps field-col">Field</th>
                                     <template for:each={compareColumns} for:item="col">
-                                        <th key={col.id} class="slds-text-title_caps">
-                                            <div class="slds-text-heading_small">{col.name}</div>
+                                        <th key={col.id} class="slds-text-title_caps candidate-col">
+                                            <div class="slds-text-heading_small slds-truncate" title={col.name}>{col.name}</div>
                                             <lightning-button data-id={col.id} label={col.masterLabel}
                                                 variant={col.masterVariant} onclick={handlePickMaster}
                                                 class="slds-m-top_xx-small"></lightning-button>
@@ -52,7 +52,7 @@
                             <tbody>
                                 <template for:each={compareRows} for:item="row">
                                     <tr key={row.key}>
-                                        <td>
+                                        <td class="field-col">
                                             <div class="slds-text-title">{row.label}</div>
                                             <div class="slds-text-body_small slds-text-color_weak">{row.apiName}</div>
                                         </td>
@@ -67,7 +67,7 @@
                                                             onchange={handleFieldChoice}
                                                             class="slds-m-right_x-small slds-m-top_xx-small" />
                                                     </template>
-                                                    <label for={cell.radioId} class="slds-truncate" title={cell.value}>
+                                                    <label for={cell.radioId} class="cell-value" title={cell.value}>
                                                         {cell.value}
                                                     </label>
                                                 </div>
