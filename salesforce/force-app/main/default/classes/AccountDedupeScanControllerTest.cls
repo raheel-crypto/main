@@ -5,7 +5,7 @@ private class AccountDedupeScanControllerTest {
     static void setup() {
         List<Account> accs = new List<Account>{
             new Account(Name = 'Acme, Inc.',         Website = 'https://www.acme.com',  LinkedIn_URL__c = 'https://linkedin.com/company/acme'),
-            new Account(Name = 'Acme Corporation',   Website = 'http://acme.com/',      LinkedIn_URL__c = 'linkedin.com/company/acme'),
+            new Account(Name = 'Acme Corporation',   Website = 'http://acme.com/',      LinkedIn_URL__c = 'https://linkedin.com/company/acme'),
             new Account(Name = 'Acme Holdings LLC',  Website = 'https://acme.com',      LinkedIn_URL__c = null),
             new Account(Name = 'Oaklins Denmark',    Website = 'https://oaklins.com',   LinkedIn_URL__c = 'https://linkedin.com/company/oaklins-dk'),
             new Account(Name = 'Oaklins Italy',      Website = 'https://oaklins.com',   LinkedIn_URL__c = 'https://linkedin.com/company/oaklins-it'),
@@ -21,10 +21,10 @@ private class AccountDedupeScanControllerTest {
     }
 
     @IsTest
-    static void startScan_runsBatchAndPersistsGroups() {
+    static void startScan_runsAllScenariosAndPersistsGroups() {
         Test.startTest();
         Id scanId = AccountDedupeScanController.startScan(new List<String>{
-            'exactWebsite', 'fuzzyNameDomainRoot'
+            'exactWebsite', 'exactLinkedIn', 'nameNormalizedDomain', 'nameDomainRoot', 'fuzzyNameDomainRoot'
         });
         Test.stopTest();
 
@@ -33,19 +33,43 @@ private class AccountDedupeScanControllerTest {
             FROM Dedupe_Scan__c WHERE Id = :scanId
         ];
         System.assertEquals('Completed', scan.Status__c, 'Scan should complete: ' + scan);
-        System.assert(scan.Group_Count__c > 0, 'Expected at least one group across two scenarios');
+        System.assert(scan.Group_Count__c > 0, 'Expected at least one group');
 
-        List<Dedupe_Group__c> groups = [
+        Set<String> scenariosSeen = new Set<String>();
+        for (Dedupe_Group__c g : [
             SELECT Id, Scenario_Key__c, Member_Count__c, Status__c,
                    (SELECT Id FROM Members__r)
             FROM Dedupe_Group__c WHERE Scan__c = :scanId
-        ];
-        System.assert(!groups.isEmpty());
-        for (Dedupe_Group__c g : groups) {
+        ]) {
+            scenariosSeen.add(g.Scenario_Key__c);
             System.assertEquals('Open', g.Status__c);
             System.assert(g.Members__r.size() >= 2, 'Each group needs >= 2 members');
             System.assertEquals(g.Members__r.size(), g.Member_Count__c.intValue());
         }
+        // All five scenarios should have found at least one group given the seed data.
+        for (String key : new List<String>{ 'exactWebsite', 'exactLinkedIn', 'nameNormalizedDomain', 'nameDomainRoot', 'fuzzyNameDomainRoot' }) {
+            System.assert(scenariosSeen.contains(key), 'Expected at least one group for scenario: ' + key);
+        }
+    }
+
+    @IsTest
+    static void unknownScenarioKey_isRejected() {
+        try {
+            AccountDedupeScanController.startScan(new List<String>{ 'notARealScenario' });
+            System.assert(false, 'should throw');
+        } catch (AuraHandledException e) {
+            System.assert(true);
+        }
+    }
+
+    @IsTest
+    static void resolveGroups_noOpOnEmptyInput() {
+        AccountDedupeScanService.resolveGroups(null);
+        AccountDedupeScanService.resolveGroups(new Set<Id>());
+        Set<Id> empty = AccountDedupeScanService.findOpenGroupsForAccounts(null);
+        System.assertEquals(0, empty.size());
+        empty = AccountDedupeScanService.findOpenGroupsForAccounts(new Set<Id>());
+        System.assertEquals(0, empty.size());
     }
 
     @IsTest
