@@ -92,24 +92,19 @@
                                     class={f.tileClass}
                                     data-key={f.tileKey}
                                     onclick={handleSelectFamily}>
-                                    <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                                    <div class="family-tile__header">
                                         <span class="brand-label">{f.brandLabel}</span>
-                                        <span class="slds-badge">{f.accountCount} accounts</span>
+                                        <span class="account-count-badge">{f.accountCount}</span>
                                     </div>
-                                    <div class="slds-text-body_small slds-truncate slds-m-top_xx-small">
-                                        {f.representativeName}
-                                    </div>
+                                    <div class="representative-name">{f.representativeName}</div>
                                     <template lwc:if={f.hasMatchSignals}>
-                                        <div class="slds-text-body_small slds-m-top_xx-small match-signals">
-                                            <lightning-icon icon-name="utility:link" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
-                                            {f.matchSignals}
-                                        </div>
+                                        <span class="match-signals">{f.matchSignals}</span>
                                     </template>
-                                    <div class="slds-text-body_small slds-m-top_xx-small meta-line">
+                                    <div class="meta-line">
                                         <span>{f.normalizedDomains.length} {f.domainNoun}</span>
-                                        <span>·</span>
+                                        <span class="dot">·</span>
                                         <span>{f.billingCountries.length} {f.countryNoun}</span>
-                                        <span>·</span>
+                                        <span class="dot">·</span>
                                         <span class={f.orphanClass}>{f.orphanCount} unparented</span>
                                     </div>
                                 </button>
@@ -222,7 +217,7 @@
                             </template>
 
                             <!-- Pending changes + apply -->
-                            <div class="slds-box slds-m-top_small">
+                            <div class="slds-box slds-m-top_small changes-section">
                                 <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
                                     <div class="slds-text-title">Proposed changes ({pendingChangeCount})</div>
                                     <lightning-button
@@ -234,18 +229,18 @@
                                 </div>
 
                                 <template lwc:if={pendingChangeCount}>
-                                    <ul class="slds-m-top_x-small change-list">
+                                    <ul class="change-list">
                                         <template for:each={pendingChangesPreview} for:item="c">
-                                            <li key={c.accountId} class="slds-grid slds-grid_align-spread change-row">
-                                                <span>{c.childName}</span>
-                                                <span class="slds-text-color_weak">→</span>
-                                                <span>{c.parentName}</span>
+                                            <li key={c.accountId} class="change-row">
+                                                <span class="change-row__child" title={c.childName}>{c.childName}</span>
+                                                <span class="change-row__arrow">→</span>
+                                                <span class="change-row__parent" title={c.parentName}>{c.parentName}</span>
                                             </li>
                                         </template>
                                     </ul>
                                     <template lwc:if={hasOverflow}>
-                                        <div class="slds-text-body_small slds-text-color_weak slds-m-top_xx-small">
-                                            ...and {pendingChangesOverflow} more
+                                        <div class="changes-overflow">
+                                            …and {pendingChangesOverflow} more
                                         </div>
                                     </template>
                                 </template>
