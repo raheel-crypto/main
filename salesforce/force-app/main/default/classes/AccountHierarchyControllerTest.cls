@@ -70,7 +70,7 @@ private class AccountHierarchyControllerTest {
 
         Test.startTest();
         AccountHierarchyService.HierarchyProposal proposal =
-            AccountHierarchyController.proposeHierarchy(fam);
+            AccountHierarchyController.proposeHierarchy(JSON.serialize(fam));
         Test.stopTest();
 
         System.assert(proposal.hasUltimateParent, 'Ultimate parent should be detected');
@@ -102,7 +102,7 @@ private class AccountHierarchyControllerTest {
 
         Test.startTest();
         AccountHierarchyService.HierarchyProposal proposal =
-            AccountHierarchyController.proposeHierarchy(fam);
+            AccountHierarchyController.proposeHierarchy(JSON.serialize(fam));
         Test.stopTest();
 
         System.assertEquals(false, proposal.hasUltimateParent);
@@ -132,7 +132,7 @@ private class AccountHierarchyControllerTest {
         changes.add(selfRef);
 
         Test.startTest();
-        AccountHierarchyService.ApplyResult result = AccountHierarchyController.applyChanges(changes);
+        AccountHierarchyService.ApplyResult result = AccountHierarchyController.applyChanges(JSON.serialize(changes));
         Test.stopTest();
 
         System.assertEquals(1, result.applied.size());
@@ -149,7 +149,7 @@ private class AccountHierarchyControllerTest {
         input.description = 'created by test';
 
         Test.startTest();
-        String id = AccountHierarchyController.createGapAccount(input);
+        String id = AccountHierarchyController.createGapAccount(JSON.serialize(input));
         Test.stopTest();
 
         Account created = [SELECT Name, Website FROM Account WHERE Id = :id];
@@ -253,7 +253,15 @@ private class AccountHierarchyControllerTest {
         Test.startTest();
         try {
             AccountHierarchyController.proposeHierarchy(null);
-            System.assert(false, 'Expected exception');
+            System.assert(false, 'Expected exception for null json');
+        } catch (AuraHandledException e) {
+            System.assertNotEquals(null, e.getMessage());
+        }
+
+        try {
+            // Valid JSON but no accounts -> service throws "family is required".
+            AccountHierarchyController.proposeHierarchy('{"brandLabel":"foo"}');
+            System.assert(false, 'Expected exception for empty family');
         } catch (AuraHandledException e) {
             System.assertNotEquals(null, e.getMessage());
         }
@@ -265,14 +273,13 @@ private class AccountHierarchyControllerTest {
         Test.startTest();
         try {
             AccountHierarchyController.createGapAccount(null);
-            System.assert(false, 'Expected exception for null input');
+            System.assert(false, 'Expected exception for null json');
         } catch (AuraHandledException e) {
             System.assertNotEquals(null, e.getMessage());
         }
 
-        AccountHierarchyService.GapInput blank = new AccountHierarchyService.GapInput();
         try {
-            AccountHierarchyController.createGapAccount(blank);
+            AccountHierarchyController.createGapAccount('{}');
             System.assert(false, 'Expected exception for blank name');
         } catch (AuraHandledException e) {
             System.assertNotEquals(null, e.getMessage());
@@ -282,13 +289,19 @@ private class AccountHierarchyControllerTest {
 
     @isTest
     static void controller_applyChanges_wrapsServiceErrors() {
-        AccountHierarchyService.HierarchyChange bad = new AccountHierarchyService.HierarchyChange();
-        bad.accountId = 'not-a-real-id';
-        bad.newParentId = '001000000000000AAA';
-
         Test.startTest();
         try {
-            AccountHierarchyController.applyChanges(new List<AccountHierarchyService.HierarchyChange>{ bad });
+            AccountHierarchyController.applyChanges(null);
+            System.assert(false, 'Expected exception for null json');
+        } catch (AuraHandledException e) {
+            System.assertNotEquals(null, e.getMessage());
+        }
+
+        try {
+            // Malformed Id triggers System.StringException inside Account(Id=...).
+            AccountHierarchyController.applyChanges(
+                '[{"accountId":"not-a-real-id","newParentId":"001000000000000AAA"}]'
+            );
             System.assert(false, 'Expected exception for malformed accountId');
         } catch (AuraHandledException e) {
             System.assertNotEquals(null, e.getMessage());

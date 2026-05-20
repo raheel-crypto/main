@@ -401,7 +401,9 @@ export default class AccountHierarchy extends LightningElement {
         this.isProposing = true;
         this.errorMessage = null;
         try {
-            this.proposal = await proposeHierarchy({ family });
+            // JSON-stringify to bypass LWC's reactive-proxy marshalling, which can
+            // drop nested list fields when Apex deserializes them automatically.
+            this.proposal = await proposeHierarchy({ familyJson: JSON.stringify(family) });
         } catch (e) {
             this.handleError(e);
         } finally {
@@ -423,7 +425,7 @@ export default class AccountHierarchy extends LightningElement {
                 billingCountry: gap.suggestedBillingCountry,
                 description: `Created via Account Hierarchy LWC for brand "${this.proposal.family.brandLabel}".`
             };
-            const newId = await createGapAccount({ input });
+            const newId = await createGapAccount({ inputJson: JSON.stringify(input) });
             this.resolvedGapIds = { ...this.resolvedGapIds, [gapId]: newId };
             this.toast('Account created', `${gap.proposedName} was created.`, 'success');
         } catch (e) {
@@ -443,7 +445,7 @@ export default class AccountHierarchy extends LightningElement {
         this.isApplying = true;
         this.errorMessage = null;
         try {
-            this.applyResult = await applyChanges({ changes });
+            this.applyResult = await applyChanges({ changesJson: JSON.stringify(changes) });
             const appliedCount = this.applyResult.applied.length;
             const failedCount = this.applyResult.failed.length;
             if (failedCount === 0) {
