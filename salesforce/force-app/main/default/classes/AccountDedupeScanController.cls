@@ -73,7 +73,7 @@ public with sharing class AccountDedupeScanController {
             );
             insert scan;
 
-            Database.executeBatch(new AccountDedupeScanBatch(scan.Id, cleaned), 1);
+            Database.executeBatch(new AccountDedupeScanBatch(scan.Id, cleaned), Math.max(cleaned.size(), 1));
             return scan.Id;
         } catch (Exception e) {
             throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
