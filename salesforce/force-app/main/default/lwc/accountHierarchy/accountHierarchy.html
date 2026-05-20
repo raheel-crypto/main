@@ -202,16 +202,18 @@
                                             </template>
                                             <template for:each={svgTree.nodes} for:item="n">
                                                 <g key={n.key}>
-                                                    <rect x={n.x} y={n.y} width={n.width} height={n.height} rx="6" ry="6" fill="white" stroke={n.color} stroke-width="1.5" stroke-dasharray={n.strokeDash}></rect>
-                                                    <rect x={n.x} y={n.y} width={n.width} height="28" rx="6" ry="6" fill={n.fill}></rect>
-                                                    <text x={n.cx} y={n.headerY} text-anchor="middle" font-size="11" font-weight="600" fill={n.color}>{n.kindLabel}</text>
+                                                    <title>{n.tooltip}</title>
+                                                    <rect x={n.x} y={n.y} width={n.width} height={n.height} rx="8" ry="8" fill="white" stroke={n.stroke} stroke-width={n.strokeWidth} stroke-dasharray={n.strokeDash}></rect>
+                                                    <path d={n.headerPath} fill={n.headerFill}></path>
+                                                    <rect x={n.accentX} y={n.accentY} width={n.accentW} height={n.accentH} fill={n.accentFill}></rect>
+                                                    <text x={n.cx} y={n.headerTextY} text-anchor="middle" font-size="11" font-weight="700" fill={n.kindColor} letter-spacing="0.5">{n.kindLabel}</text>
                                                     <template lwc:if={n.showChange}>
                                                         <rect x={n.changeX} y={n.changeY} width="48" height="16" rx="3" ry="3" fill="#04844b22"></rect>
                                                         <text x={n.changeX} y={n.changeY} dx="24" dy="12" text-anchor="middle" font-size="9" font-weight="700" fill="#04844b">CHANGE</text>
                                                     </template>
-                                                    <text x={n.cx} y={n.nameY} text-anchor="middle" font-size="13" font-weight="600" fill="#181818">{n.name}</text>
+                                                    <text x={n.cx} y={n.nameY} text-anchor="middle" font-size="14" font-weight={n.nameWeight} fill="#181818">{n.name}</text>
                                                     <text x={n.cx} y={n.metaY} text-anchor="middle" font-size="11" fill="#706e6b">{n.metaLine}</text>
-                                                    <text x={n.cx} y={n.webY} text-anchor="middle" font-size="10" fill="#999">{n.website}</text>
+                                                    <text x={n.cx} y={n.webY} text-anchor="middle" font-size="10" fill="#a8a5a3">{n.website}</text>
                                                 </g>
                                             </template>
                                         </svg>

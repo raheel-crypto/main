@@ -7,13 +7,6 @@ import proposeHierarchy from '@salesforce/apex/AccountHierarchyController.propos
 import applyChanges from '@salesforce/apex/AccountHierarchyController.applyChanges';
 import createGapAccount from '@salesforce/apex/AccountHierarchyController.createGapAccount';
 
-const KIND_COLORS = {
-    'ultimate-parent': '#04844b',
-    'regional-parent': '#0070d2',
-    'child': '#706e6b',
-    'gap': '#ea7600'
-};
-
 const KIND_LABELS = {
     'ultimate-parent': 'Ultimate Parent',
     'regional-parent': 'Regional Parent',
@@ -21,10 +14,36 @@ const KIND_LABELS = {
     'gap': 'Gap — Needs Creating'
 };
 
-const NODE_W = 220;
-const NODE_H = 88;
-const H_GAP = 32;
-const V_GAP = 60;
+// Per-depth color palette — each level of the hierarchy gets its own hue so
+// the tree is readable at a glance even at 5+ levels.
+const DEPTH_PALETTE = [
+    { stroke: '#0176d3', headBg: '#0176d318', accent: '#0176d3' }, // L0 blue
+    { stroke: '#04844b', headBg: '#04844b18', accent: '#04844b' }, // L1 green
+    { stroke: '#7f4dab', headBg: '#7f4dab18', accent: '#7f4dab' }, // L2 purple
+    { stroke: '#fe9339', headBg: '#fe933918', accent: '#fe9339' }, // L3 orange
+    { stroke: '#c93396', headBg: '#c9339618', accent: '#c93396' }, // L4 magenta
+    { stroke: '#0d9488', headBg: '#0d948818', accent: '#0d9488' }  // L5 teal
+];
+const GAP_STYLE = { stroke: '#ea7600', headBg: '#ea760018', accent: '#ea7600' };
+
+const NODE_W = 240;
+const NODE_H = 96;
+const H_GAP = 36;
+const V_GAP = 64;
+const MAX_NAME_CHARS = 28;
+const MAX_META_CHARS = 30;
+
+// Path for a rect with only the top corners rounded — used for the colored
+// header band so it sits flush against the body of the node.
+function topRoundedRectPath(x, y, w, h, r) {
+    return `M ${x + r} ${y} `
+        + `H ${x + w - r} `
+        + `A ${r} ${r} 0 0 1 ${x + w} ${y + r} `
+        + `V ${y + h} `
+        + `H ${x} `
+        + `V ${y + r} `
+        + `A ${r} ${r} 0 0 1 ${x + r} ${y} Z`;
+}
 
 export default class AccountHierarchy extends LightningElement {
     @track scanResult;
@@ -288,6 +307,7 @@ export default class AccountHierarchy extends LightningElement {
         const place = (node, depth, slotStart, seen) => {
             if (seen.has(node.id)) return;
             seen.add(node.id);
+            node.depth = depth;
             const slotEnd = slotStart + node.width;
             const slotCenter = (slotStart + slotEnd) / 2;
             node.x = slotCenter * (NODE_W + H_GAP);
@@ -323,31 +343,54 @@ export default class AccountHierarchy extends LightningElement {
 
         // Build SVG render data.
         const svgNodes = positioned.map((n) => {
-            const color = KIND_COLORS[n.kind] || '#706e6b';
+            const palette = n.kind === 'gap'
+                ? GAP_STYLE
+                : DEPTH_PALETTE[Math.min(n.depth || 0, DEPTH_PALETTE.length - 1)];
+            const isUltimate = n.kind === 'ultimate-parent';
             const cx = n.x + offsetX;
             const cy = n.y + offsetY;
+            const HEADER_H = 28;
+            const tooltipParts = [n.name];
+            if (n.billingCountry) tooltipParts.push(n.billingCountry);
+            if (n.website) tooltipParts.push(n.website);
+
             return {
                 key: n.id,
+                // outer rect
                 x: cx - NODE_W / 2,
                 y: cy,
-                cx,
-                cy,
-                headerY: cy + 22,
-                nameY: cy + 44,
-                metaY: cy + 60,
-                webY: cy + 76,
                 width: NODE_W,
                 height: NODE_H,
-                color,
-                fill: color + '15',
-                kindLabel: KIND_LABELS[n.kind] || '',
+                stroke: palette.stroke,
+                strokeWidth: isUltimate ? 2.5 : 1.5,
+                strokeDash: (n.kind === 'gap' && !this.resolvedGapIds[n.id]) ? '6 4' : '',
+                // header band — only the top corners rounded so it sits flush.
+                headerPath: topRoundedRectPath(cx - NODE_W / 2, cy, NODE_W, HEADER_H, 8),
+                headerFill: palette.headBg,
+                // left accent stripe — short of the bottom to clear the rounded corner.
+                accentX: cx - NODE_W / 2,
+                accentY: cy + HEADER_H,
+                accentW: 4,
+                accentH: NODE_H - HEADER_H - 8,
+                accentFill: palette.accent,
+                // text positions (centered)
+                cx,
+                headerTextY: cy + 18,
+                nameY: cy + 50,
+                metaY: cy + 68,
+                webY: cy + 84,
+                kindLabel: KIND_LABELS[n.kind] || `Level ${n.depth || 0}`,
+                kindColor: palette.accent,
+                nameWeight: isUltimate ? 700 : 600,
+                name: this.truncate(n.name, MAX_NAME_CHARS),
+                metaLine: this.truncate(n.billingCountry || '', MAX_META_CHARS),
+                website: this.truncate(n.website, MAX_META_CHARS),
+                // change badge — anchored to top-right of header
                 showChange: n.isChange,
                 changeX: cx + NODE_W / 2 - 56,
-                changeY: cy + 14,
-                name: n.name,
-                metaLine: n.billingCountry || '',
-                website: this.truncate(n.website, 32),
-                strokeDash: (n.kind === 'gap' && !this.resolvedGapIds[n.id]) ? '6 4' : ''
+                changeY: cy + 6,
+                // full text for browser tooltip on hover
+                tooltip: tooltipParts.join(' — ')
             };
         });
 
@@ -362,15 +405,18 @@ export default class AccountHierarchy extends LightningElement {
             const y2 = n.y + offsetY;
             const midY = (y1 + y2) / 2;
             const path = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
-            const color = n.isChange ? '#04844b' : '#706e6b';
-            // Inline arrowhead triangle — avoids SVG <marker> camelCase attrs that LWC rejects.
+            // Edge color follows the child's level color, so the eye traces the hierarchy by hue.
+            const childPalette = n.kind === 'gap'
+                ? GAP_STYLE
+                : DEPTH_PALETTE[Math.min(n.depth || 0, DEPTH_PALETTE.length - 1)];
+            const color = childPalette.accent;
             const arrowPoints = `${x2 - 5},${y2 - 8} ${x2 + 5},${y2 - 8} ${x2},${y2}`;
             svgEdges.push({
                 key: `${parent.id}-${n.id}`,
                 d: path,
                 stroke: color,
                 dasharray: n.isChange ? '6 4' : '',
-                width: n.isChange ? 2 : 1.5,
+                width: n.isChange ? 2.5 : 1.5,
                 arrowPoints,
                 arrowFill: color
             });
