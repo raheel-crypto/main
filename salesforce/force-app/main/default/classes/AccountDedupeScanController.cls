@@ -73,7 +73,13 @@ public with sharing class AccountDedupeScanController {
             );
             insert scan;
 
-            Database.executeBatch(new AccountDedupeScanBatch(scan.Id, cleaned), Math.max(cleaned.size(), 1));
+            // Scope = 1 in production so each scenario gets its own 50K-SOQL-row
+            // budget — each fetches ~18K accounts, so packing multiple into a
+            // single execute() blows the limit and rolls back the transaction.
+            // Tests must run all scenarios in one execute() since Test.stopTest()
+            // only invokes one execute() callback.
+            Integer scope = Test.isRunningTest() ? Math.max(cleaned.size(), 1) : 1;
+            Database.executeBatch(new AccountDedupeScanBatch(scan.Id, cleaned), scope);
             return scan.Id;
         } catch (Exception e) {
             throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());

@@ -4,7 +4,7 @@ public with sharing class AccountDedupeScanBatch implements Database.Batchable<S
     private final List<String> scenarioKeys;
     private Integer totalGroups = 0;
     private Set<Id> uniqueAccounts = new Set<Id>();
-    private String firstError;
+    private List<String> errors = new List<String>();
 
     public AccountDedupeScanBatch(Id scanId, List<String> scenarioKeys) {
         this.scanId = scanId;
@@ -25,21 +25,20 @@ public with sharing class AccountDedupeScanBatch implements Database.Batchable<S
                     uniqueAccounts.addAll(d.accountIds);
                 }
             } catch (Exception e) {
-                if (firstError == null) {
-                    firstError = '[' + scenarioKey + '] ' + e.getTypeName() + ': ' + e.getMessage();
-                }
+                errors.add('[' + scenarioKey + '] ' + e.getTypeName() + ': ' + e.getMessage());
             }
         }
     }
 
     public void finish(Database.BatchableContext bc) {
+        String errorBlob = errors.isEmpty() ? null : String.join(errors, ' | ').left(32000);
         Dedupe_Scan__c scan = new Dedupe_Scan__c(
             Id = scanId,
             Completed_At__c = System.now(),
             Group_Count__c = totalGroups,
             Account_Count__c = uniqueAccounts.size(),
-            Status__c = firstError == null ? 'Completed' : 'Failed',
-            Error_Message__c = firstError
+            Status__c = errors.isEmpty() ? 'Completed' : 'Failed',
+            Error_Message__c = errorBlob
         );
         update scan;
     }
