@@ -153,16 +153,18 @@ private class AccountHierarchyControllerTest {
         System.assertEquals('oaklins.com', created.Website);
     }
 
+    private class AnthropicErrorMock implements HttpCalloutMock {
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse r = new HttpResponse();
+            r.setStatusCode(401);
+            r.setBody('{"error":"invalid api key"}');
+            return r;
+        }
+    }
+
     @isTest
     static void anthropicClient_throwsOnNonSuccess() {
-        Test.setMock(HttpCalloutMock.class, new HttpCalloutMock() {
-            public HttpResponse respond(HttpRequest req) {
-                HttpResponse r = new HttpResponse();
-                r.setStatusCode(401);
-                r.setBody('{"error":"invalid api key"}');
-                return r;
-            }
-        });
+        Test.setMock(HttpCalloutMock.class, new AnthropicErrorMock());
 
         Test.startTest();
         try {
