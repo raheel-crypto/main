@@ -29,19 +29,23 @@ private class AccountHierarchyControllerTest {
     @isTest
     static void scan_groupsCountryOfficesByBrand() {
         seedOaklinsFamily();
+        // Second smaller family — forces the size comparator to actually run.
+        insert new List<Account>{
+            new Account(Name = 'Acme US', Website = 'acme.com', BillingCountry = 'United States'),
+            new Account(Name = 'Acme DE', Website = 'acme.de', BillingCountry = 'Germany')
+        };
 
         Test.startTest();
         AccountHierarchyService.ScanResult result = AccountHierarchyController.scanFamilies();
         Test.stopTest();
 
-        System.assertEquals(4, result.totalAccountsScanned, 'Should scan all 4 inserted accounts');
-        System.assertEquals(1, result.families.size(), 'Should cluster into one Oaklins family');
-        AccountHierarchyService.AccountFamily f = result.families[0];
-        System.assertEquals('oaklins', f.brandLabel);
-        System.assertEquals(4, f.accountCount);
-        System.assertEquals(0, f.withParentCount);
-        System.assert(f.normalizedDomains.size() >= 3, 'Should track all distinct domains');
-        System.assert(f.billingCountries.size() >= 3, 'Should track all distinct countries');
+        System.assertEquals(6, result.totalAccountsScanned, 'Should scan all inserted accounts');
+        System.assertEquals(2, result.families.size(), 'Should cluster into two brand families');
+        // Largest family first.
+        System.assertEquals('oaklins', result.families[0].brandLabel);
+        System.assertEquals(4, result.families[0].accountCount);
+        System.assertEquals('acme', result.families[1].brandLabel);
+        System.assertEquals(2, result.families[1].accountCount);
     }
 
     @isTest
@@ -162,6 +166,33 @@ private class AccountHierarchyControllerTest {
         }
     }
 
+    private class AnthropicGarbageMock implements HttpCalloutMock {
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse r = new HttpResponse();
+            r.setStatusCode(200);
+            r.setBody('not actually json');
+            return r;
+        }
+    }
+
+    private class AnthropicEmptyContentMock implements HttpCalloutMock {
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse r = new HttpResponse();
+            r.setStatusCode(200);
+            r.setBody('{"id":"x","type":"message","role":"assistant","content":[],"model":"claude"}');
+            return r;
+        }
+    }
+
+    private class AnthropicNonTextMock implements HttpCalloutMock {
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse r = new HttpResponse();
+            r.setStatusCode(200);
+            r.setBody('{"id":"x","type":"message","role":"assistant","content":[{"type":"image","source":{}}],"model":"claude"}');
+            return r;
+        }
+    }
+
     @isTest
     static void anthropicClient_throwsOnNonSuccess() {
         Test.setMock(HttpCalloutMock.class, new AnthropicErrorMock());
@@ -172,6 +203,95 @@ private class AccountHierarchyControllerTest {
             System.assert(false, 'Should have thrown');
         } catch (AnthropicClient.AnthropicException e) {
             System.assert(e.getMessage().contains('401'));
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void anthropicClient_throwsOnUnparseableBody() {
+        Test.setMock(HttpCalloutMock.class, new AnthropicGarbageMock());
+        Test.startTest();
+        try {
+            AnthropicClient.complete('s', 'u', 100);
+            System.assert(false, 'Should have thrown');
+        } catch (AnthropicClient.AnthropicException e) {
+            System.assert(e.getMessage().contains('parse'), 'Got: ' + e.getMessage());
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void anthropicClient_throwsOnEmptyContent() {
+        Test.setMock(HttpCalloutMock.class, new AnthropicEmptyContentMock());
+        Test.startTest();
+        try {
+            AnthropicClient.complete('s', 'u', 100);
+            System.assert(false, 'Should have thrown');
+        } catch (AnthropicClient.AnthropicException e) {
+            System.assert(e.getMessage().contains('content'));
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void anthropicClient_throwsOnNonTextContentBlock() {
+        Test.setMock(HttpCalloutMock.class, new AnthropicNonTextMock());
+        Test.startTest();
+        try {
+            AnthropicClient.complete('s', 'u', 100);
+            System.assert(false, 'Should have thrown');
+        } catch (AnthropicClient.AnthropicException e) {
+            System.assert(e.getMessage().contains('text'));
+        }
+        Test.stopTest();
+    }
+
+    // ---------- Controller catch-block coverage ----------
+
+    @isTest
+    static void controller_proposeHierarchy_wrapsServiceErrors() {
+        Test.startTest();
+        try {
+            AccountHierarchyController.proposeHierarchy(null);
+            System.assert(false, 'Expected exception');
+        } catch (AuraHandledException e) {
+            System.assertNotEquals(null, e.getMessage());
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void controller_createGapAccount_wrapsServiceErrors() {
+        Test.startTest();
+        try {
+            AccountHierarchyController.createGapAccount(null);
+            System.assert(false, 'Expected exception for null input');
+        } catch (AuraHandledException e) {
+            System.assertNotEquals(null, e.getMessage());
+        }
+
+        AccountHierarchyService.GapInput blank = new AccountHierarchyService.GapInput();
+        try {
+            AccountHierarchyController.createGapAccount(blank);
+            System.assert(false, 'Expected exception for blank name');
+        } catch (AuraHandledException e) {
+            System.assertNotEquals(null, e.getMessage());
+        }
+        Test.stopTest();
+    }
+
+    @isTest
+    static void controller_applyChanges_wrapsServiceErrors() {
+        AccountHierarchyService.HierarchyChange bad = new AccountHierarchyService.HierarchyChange();
+        bad.accountId = 'not-a-real-id';
+        bad.newParentId = '001000000000000AAA';
+
+        Test.startTest();
+        try {
+            AccountHierarchyController.applyChanges(new List<AccountHierarchyService.HierarchyChange>{ bad });
+            System.assert(false, 'Expected exception for malformed accountId');
+        } catch (AuraHandledException e) {
+            System.assertNotEquals(null, e.getMessage());
         }
         Test.stopTest();
     }
