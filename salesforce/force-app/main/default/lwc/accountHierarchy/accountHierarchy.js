@@ -327,13 +327,16 @@ export default class AccountHierarchy extends LightningElement {
             const midY = (y1 + y2) / 2;
             const path = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
             const color = n.isChange ? '#04844b' : '#706e6b';
+            // Inline arrowhead triangle — avoids SVG <marker> camelCase attrs that LWC rejects.
+            const arrowPoints = `${x2 - 5},${y2 - 8} ${x2 + 5},${y2 - 8} ${x2},${y2}`;
             svgEdges.push({
                 key: `${parent.id}-${n.id}`,
                 d: path,
                 stroke: color,
                 dasharray: n.isChange ? '6 4' : '',
                 width: n.isChange ? 2 : 1.5,
-                markerEnd: n.isChange ? 'url(#arrow-change)' : 'url(#arrow-default)'
+                arrowPoints,
+                arrowFill: color
             });
         });
 

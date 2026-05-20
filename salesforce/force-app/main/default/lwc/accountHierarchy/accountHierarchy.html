@@ -168,16 +168,11 @@
                                 <div class="slds-box slds-p-around_xx-small svg-frame">
                                     <div class="svg-scroll">
                                         <svg xmlns="http://www.w3.org/2000/svg" width={svgTree.width} height={svgTree.height} viewBox={svgTree.viewBox}>
-                                            <defs>
-                                                <marker id="arrow-default" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#706e6b"></path>
-                                                </marker>
-                                                <marker id="arrow-change" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#04844b"></path>
-                                                </marker>
-                                            </defs>
                                             <template for:each={svgTree.edges} for:item="e">
-                                                <path key={e.key} d={e.d} stroke={e.stroke} stroke-width={e.width} stroke-dasharray={e.dasharray} fill="none" marker-end={e.markerEnd}></path>
+                                                <g key={e.key}>
+                                                    <path d={e.d} stroke={e.stroke} stroke-width={e.width} stroke-dasharray={e.dasharray} fill="none"></path>
+                                                    <polygon points={e.arrowPoints} fill={e.arrowFill}></polygon>
+                                                </g>
                                             </template>
                                             <template for:each={svgTree.nodes} for:item="n">
                                                 <g key={n.key}>
