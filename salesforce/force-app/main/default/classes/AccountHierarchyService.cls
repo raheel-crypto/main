@@ -78,6 +78,18 @@ public with sharing class AccountHierarchyService {
         @AuraEnabled public Integer accountCount;
         @AuraEnabled public Integer withParentCount;
         @AuraEnabled public List<AccountInFamily> accounts;
+        // Populated only when the family comes from a Dedupe_Group__c.
+        @AuraEnabled public String dedupeGroupId;
+        @AuraEnabled public String dedupeGroupName;
+        @AuraEnabled public String matchSignals;
+    }
+
+    public class DedupeScanOption {
+        @AuraEnabled public String id;
+        @AuraEnabled public String name;
+        @AuraEnabled public String status;
+        @AuraEnabled public Datetime createdDate;
+        @AuraEnabled public Integer openGroupCount;
     }
 
     public class ScanResult {
@@ -388,6 +400,172 @@ public with sharing class AccountHierarchyService {
         public Integer compare(AccountFamily a, AccountFamily b) {
             return b.accountCount - a.accountCount;
         }
+    }
+
+    // ---------- Dedupe-source scan ---------- //
+
+    /**
+     * Returns the available Dedupe_Scan__c runs with their open-group counts,
+     * newest first. Used by the LWC to let the user pick which scan to consume.
+     */
+    public static List<DedupeScanOption> listDedupeScans() {
+        List<DedupeScanOption> out = new List<DedupeScanOption>();
+        for (Dedupe_Scan__c s : [
+            SELECT Id, Name, Status__c, CreatedDate,
+                   (SELECT Id FROM Groups__r WHERE Status__c = 'Open')
+            FROM Dedupe_Scan__c
+            WITH USER_MODE
+            ORDER BY CreatedDate DESC
+            LIMIT 20
+        ]) {
+            DedupeScanOption opt = new DedupeScanOption();
+            opt.id = s.Id;
+            opt.name = s.Name;
+            opt.status = s.Status__c;
+            opt.createdDate = s.CreatedDate;
+            opt.openGroupCount = s.Groups__r == null ? 0 : s.Groups__r.size();
+            out.add(opt);
+        }
+        return out;
+    }
+
+    /**
+     * Builds AccountFamily candidates from existing Dedupe_Group__c records.
+     * If scanId is null, uses the latest completed scan. Only Open groups with
+     * 2+ members are surfaced.
+     */
+    public static ScanResult scanFromDedupeGroups(Id scanId) {
+        ScanResult out = new ScanResult();
+        out.linkedInField = detectLinkedInField();
+        out.families = new List<AccountFamily>();
+        out.totalAccountsScanned = 0;
+
+        Id targetScanId = scanId;
+        if (targetScanId == null) {
+            List<Dedupe_Scan__c> latest = [
+                SELECT Id FROM Dedupe_Scan__c
+                WHERE Status__c = 'Completed'
+                WITH USER_MODE
+                ORDER BY CreatedDate DESC LIMIT 1
+            ];
+            if (latest.isEmpty()) return out;
+            targetScanId = latest[0].Id;
+        }
+
+        // Pull all open groups for the chosen scan, plus their members + Account fields in one go.
+        List<String> accountFields = new List<String>{
+            'Id','Name','Website','BillingCountry','BillingState','BillingCity',
+            'ParentId','Parent.Name','Type','Industry'
+        };
+        if (out.linkedInField != null) accountFields.add(out.linkedInField);
+        List<String> qualified = new List<String>();
+        for (String f : accountFields) qualified.add('Account__r.' + f);
+
+        String memberSoql =
+            'SELECT Id, Group__c, Group__r.Name, Group__r.Scenario_Key__c, Group__r.Status__c, ' +
+            'Account__c, ' + String.join(qualified, ', ') +
+            ' FROM Dedupe_Group_Member__c' +
+            ' WHERE Group__r.Scan__c = :targetScanId AND Group__r.Status__c = \'Open\'' +
+            ' WITH USER_MODE' +
+            ' LIMIT 10000';
+
+        List<Dedupe_Group_Member__c> members;
+        try {
+            members = Database.query(memberSoql);
+        } catch (Exception e) {
+            memberSoql = memberSoql.replace(' WITH USER_MODE', '');
+            members = Database.query(memberSoql);
+        }
+
+        // Bucket members by Group, building AccountInFamily on the way.
+        Map<Id, AccountFamily> byGroup = new Map<Id, AccountFamily>();
+        for (Dedupe_Group_Member__c m : members) {
+            if (m.Account__r == null) continue;
+            Account a = m.Account__r;
+
+            AccountFamily fam = byGroup.get(m.Group__c);
+            if (fam == null) {
+                fam = new AccountFamily();
+                fam.dedupeGroupId = m.Group__c;
+                fam.dedupeGroupName = m.Group__r == null ? null : m.Group__r.Name;
+                fam.matchSignals = m.Group__r == null ? null : m.Group__r.Scenario_Key__c;
+                fam.normalizedDomains = new List<String>();
+                fam.billingCountries = new List<String>();
+                fam.accounts = new List<AccountInFamily>();
+                fam.accountCount = 0;
+                fam.withParentCount = 0;
+                byGroup.put(m.Group__c, fam);
+            }
+
+            Normalized n = normalizeWebsite(a.Website);
+            String webBrand = n == null ? null : n.brand;
+            if (webBrand != null && BLOCKED_BRANDS.contains(webBrand)) webBrand = null;
+
+            String linkedInValue = null;
+            if (out.linkedInField != null) {
+                Object v = a.get(out.linkedInField);
+                linkedInValue = v == null ? null : String.valueOf(v);
+            }
+            String liBrand = brandFromLinkedIn(linkedInValue);
+            if (liBrand == null) liBrand = brandFromLinkedIn(a.Website);
+            String nameBrand = brandFromName(a.Name);
+
+            AccountInFamily af = new AccountInFamily();
+            af.id = a.Id;
+            af.name = a.Name;
+            af.website = a.Website;
+            af.normalizedDomain = n == null ? null : n.domain;
+            af.brandLabel = pickPrimaryBrand(webBrand, liBrand, nameBrand);
+            af.billingCountry = a.BillingCountry;
+            af.billingState = a.BillingState;
+            af.billingCity = a.BillingCity;
+            af.industry = a.Industry;
+            af.accountType = a.Type;
+            af.parentId = a.ParentId;
+            af.parentName = a.Parent == null ? null : a.Parent.Name;
+            af.linkedInUrl = linkedInValue;
+            fam.accounts.add(af);
+            fam.accountCount++;
+            if (af.parentId != null) fam.withParentCount++;
+            out.totalAccountsScanned++;
+        }
+
+        // Compute brand label + uniqueness summaries per family.
+        for (AccountFamily fam : byGroup.values()) {
+            if (fam.accounts.size() < 2) continue;
+            Set<String> domains = new Set<String>();
+            Set<String> countries = new Set<String>();
+            Map<String, Integer> brandCounts = new Map<String, Integer>();
+            String firstOrphan = null;
+            for (AccountInFamily af : fam.accounts) {
+                if (af.normalizedDomain != null) domains.add(af.normalizedDomain);
+                if (String.isNotBlank(af.billingCountry)) countries.add(af.billingCountry);
+                if (af.brandLabel != null) {
+                    Integer c = brandCounts.containsKey(af.brandLabel) ? brandCounts.get(af.brandLabel) : 0;
+                    brandCounts.put(af.brandLabel, c + 1);
+                }
+                if (af.parentId == null && firstOrphan == null) firstOrphan = af.name;
+            }
+            fam.normalizedDomains = new List<String>(domains);
+            fam.billingCountries = new List<String>(countries);
+            fam.representativeName = firstOrphan != null ? firstOrphan : fam.accounts[0].name;
+
+            // Family brand label = most common brand among members, ties broken by shortest.
+            String topBrand = null;
+            Integer topCount = 0;
+            for (String b : brandCounts.keySet()) {
+                Integer c = brandCounts.get(b);
+                if (c > topCount || (c == topCount && topBrand != null && b.length() < topBrand.length())) {
+                    topBrand = b; topCount = c;
+                }
+            }
+            fam.brandLabel = topBrand != null ? topBrand : fam.dedupeGroupName;
+
+            out.families.add(fam);
+        }
+
+        out.families.sort(new FamilySizeComparator());
+        return out;
     }
 
     // ---------- Propose ---------- //

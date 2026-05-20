@@ -24,16 +24,36 @@
                 </div>
             </template>
 
-            <!-- Initial: prompt to run a scan -->
+            <!-- Initial: source picker + run button -->
             <template lwc:if={showRunPrompt}>
-                <div class="slds-box slds-text-align_center slds-p-around_large">
-                    <lightning-icon icon-name="standard:hierarchy" size="large"></lightning-icon>
-                    <h2 class="slds-text-heading_small slds-m-top_small">Scan for account families</h2>
-                    <p class="slds-text-body_regular slds-text-color_weak slds-m-top_x-small">
-                        We&apos;ll group accounts that share a brand domain and highlight candidates for parenting.
-                    </p>
+                <div class="slds-box slds-p-around_medium">
+                    <h2 class="slds-text-heading_small slds-m-bottom_small">Scan for account families</h2>
+                    <div class="slds-grid slds-gutters slds-m-bottom_small">
+                        <div class="slds-col slds-size_5-of-12">
+                            <lightning-combobox
+                                label="Source"
+                                value={sourceMode}
+                                options={sourceOptions}
+                                onchange={handleSourceChange}>
+                            </lightning-combobox>
+                        </div>
+                        <template lwc:if={showDedupeScanPicker}>
+                            <div class="slds-col slds-size_7-of-12">
+                                <lightning-combobox
+                                    label="Dedupe scan"
+                                    value={selectedDedupeScanId}
+                                    options={dedupeScanOptions}
+                                    onchange={handleDedupeScanChange}>
+                                </lightning-combobox>
+                            </div>
+                        </template>
+                    </div>
+                    <template lwc:if={showNoDedupeScansMessage}>
+                        <div class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">
+                            No Dedupe scans found in this org yet. Run one with the Dedupe tool, or switch to live brand-clustering scan.
+                        </div>
+                    </template>
                     <lightning-button
-                        class="slds-m-top_medium"
                         variant="brand"
                         label="Run Scan"
                         onclick={handleRunScan}>
@@ -68,9 +88,9 @@
                         <div class="slds-scrollable_y family-list">
                             <template for:each={familyTiles} for:item="f">
                                 <button
-                                    key={f.brandLabel}
+                                    key={f.tileKey}
                                     class={f.tileClass}
-                                    data-brand={f.brandLabel}
+                                    data-key={f.tileKey}
                                     onclick={handleSelectFamily}>
                                     <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
                                         <span class="brand-label">{f.brandLabel}</span>
@@ -79,6 +99,12 @@
                                     <div class="slds-text-body_small slds-truncate slds-m-top_xx-small">
                                         {f.representativeName}
                                     </div>
+                                    <template lwc:if={f.hasMatchSignals}>
+                                        <div class="slds-text-body_small slds-m-top_xx-small match-signals">
+                                            <lightning-icon icon-name="utility:link" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
+                                            {f.matchSignals}
+                                        </div>
+                                    </template>
                                     <div class="slds-text-body_small slds-m-top_xx-small meta-line">
                                         <span>{f.normalizedDomains.length} {f.domainNoun}</span>
                                         <span>·</span>

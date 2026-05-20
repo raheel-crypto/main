@@ -19,6 +19,24 @@ public with sharing class AccountHierarchyController {
     }
 
     @AuraEnabled
+    public static List<AccountHierarchyService.DedupeScanOption> listDedupeScans() {
+        try {
+            return AccountHierarchyService.listDedupeScans();
+        } catch (Exception e) {
+            throw uiError(e);
+        }
+    }
+
+    @AuraEnabled
+    public static AccountHierarchyService.ScanResult scanFromDedupeGroups(Id scanId) {
+        try {
+            return AccountHierarchyService.scanFromDedupeGroups(scanId);
+        } catch (Exception e) {
+            throw uiError(e);
+        }
+    }
+
+    @AuraEnabled
     public static AccountHierarchyService.HierarchyProposal proposeHierarchy(String familyJson) {
         try {
             if (String.isBlank(familyJson)) {

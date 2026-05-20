@@ -315,6 +315,140 @@ private class AccountHierarchyControllerTest {
         Test.stopTest();
     }
 
+    // ---------- Dedupe-source scan ----------
+
+    @isTest
+    static void scanFromDedupeGroups_buildsFamiliesFromGroupMembers() {
+        Dedupe_Scan__c scan = new Dedupe_Scan__c(Status__c = 'Completed');
+        insert scan;
+
+        Dedupe_Group__c grp = new Dedupe_Group__c(
+            Scan__c = scan.Id,
+            Scenario_Key__c = 'EXACT_WEBSITE+SAME_LINKEDIN',
+            Status__c = 'Open'
+        );
+        insert grp;
+
+        List<Account> accs = new List<Account>{
+            new Account(Name = 'Oaklins International', Website = 'oaklins.com'),
+            new Account(Name = 'Oaklins UK',            Website = 'oaklins.co.uk'),
+            new Account(Name = 'Oaklins Germany',       Website = 'oaklins.de')
+        };
+        insert accs;
+
+        List<Dedupe_Group_Member__c> members = new List<Dedupe_Group_Member__c>();
+        for (Account a : accs) members.add(new Dedupe_Group_Member__c(Group__c = grp.Id, Account__c = a.Id));
+        insert members;
+
+        Test.startTest();
+        AccountHierarchyService.ScanResult result =
+            AccountHierarchyController.scanFromDedupeGroups(scan.Id);
+        Test.stopTest();
+
+        System.assertEquals(1, result.families.size());
+        AccountHierarchyService.AccountFamily fam = result.families[0];
+        System.assertEquals(3, fam.accountCount);
+        System.assertEquals(grp.Id, fam.dedupeGroupId);
+        System.assertEquals('EXACT_WEBSITE+SAME_LINKEDIN', fam.matchSignals);
+        System.assertEquals('oaklins', fam.brandLabel);
+    }
+
+    @isTest
+    static void scanFromDedupeGroups_picksLatestCompletedWhenScanIdIsNull() {
+        Dedupe_Scan__c older = new Dedupe_Scan__c(Status__c = 'Completed');
+        Dedupe_Scan__c newer = new Dedupe_Scan__c(Status__c = 'Completed');
+        insert new List<Dedupe_Scan__c>{ older, newer };
+
+        Dedupe_Group__c grp = new Dedupe_Group__c(
+            Scan__c = newer.Id, Scenario_Key__c = 'EXACT_WEBSITE', Status__c = 'Open'
+        );
+        insert grp;
+
+        Account a = new Account(Name = 'Acme A', Website = 'acme.com');
+        Account b = new Account(Name = 'Acme B', Website = 'acme.com');
+        insert new List<Account>{ a, b };
+        insert new List<Dedupe_Group_Member__c>{
+            new Dedupe_Group_Member__c(Group__c = grp.Id, Account__c = a.Id),
+            new Dedupe_Group_Member__c(Group__c = grp.Id, Account__c = b.Id)
+        };
+
+        Test.startTest();
+        AccountHierarchyService.ScanResult result =
+            AccountHierarchyController.scanFromDedupeGroups(null);
+        Test.stopTest();
+
+        System.assertEquals(1, result.families.size());
+        System.assertEquals(2, result.families[0].accountCount);
+    }
+
+    @isTest
+    static void scanFromDedupeGroups_returnsEmptyWhenNoScans() {
+        Test.startTest();
+        AccountHierarchyService.ScanResult result =
+            AccountHierarchyController.scanFromDedupeGroups(null);
+        Test.stopTest();
+
+        System.assertEquals(0, result.families.size());
+        System.assertEquals(0, result.totalAccountsScanned);
+    }
+
+    @isTest
+    static void scanFromDedupeGroups_ignoresResolvedGroups() {
+        Dedupe_Scan__c scan = new Dedupe_Scan__c(Status__c = 'Completed');
+        insert scan;
+        Dedupe_Group__c open = new Dedupe_Group__c(
+            Scan__c = scan.Id, Scenario_Key__c = 'EXACT_WEBSITE', Status__c = 'Open'
+        );
+        Dedupe_Group__c resolved = new Dedupe_Group__c(
+            Scan__c = scan.Id, Scenario_Key__c = 'EXACT_WEBSITE', Status__c = 'Resolved'
+        );
+        insert new List<Dedupe_Group__c>{ open, resolved };
+
+        Account a1 = new Account(Name = 'Open A', Website = 'open.com');
+        Account a2 = new Account(Name = 'Open B', Website = 'open.com');
+        Account r1 = new Account(Name = 'Resolved A', Website = 'resolved.com');
+        Account r2 = new Account(Name = 'Resolved B', Website = 'resolved.com');
+        insert new List<Account>{ a1, a2, r1, r2 };
+        insert new List<Dedupe_Group_Member__c>{
+            new Dedupe_Group_Member__c(Group__c = open.Id, Account__c = a1.Id),
+            new Dedupe_Group_Member__c(Group__c = open.Id, Account__c = a2.Id),
+            new Dedupe_Group_Member__c(Group__c = resolved.Id, Account__c = r1.Id),
+            new Dedupe_Group_Member__c(Group__c = resolved.Id, Account__c = r2.Id)
+        };
+
+        Test.startTest();
+        AccountHierarchyService.ScanResult result =
+            AccountHierarchyController.scanFromDedupeGroups(scan.Id);
+        Test.stopTest();
+
+        System.assertEquals(1, result.families.size(), 'Only the Open group should surface');
+    }
+
+    @isTest
+    static void listDedupeScans_returnsScansWithGroupCount() {
+        Dedupe_Scan__c scan = new Dedupe_Scan__c(Status__c = 'Completed');
+        insert scan;
+        insert new Dedupe_Group__c(
+            Scan__c = scan.Id, Scenario_Key__c = 'EXACT_WEBSITE', Status__c = 'Open'
+        );
+
+        Test.startTest();
+        List<AccountHierarchyService.DedupeScanOption> opts =
+            AccountHierarchyController.listDedupeScans();
+        Test.stopTest();
+
+        System.assert(opts.size() >= 1);
+        Boolean found = false;
+        for (AccountHierarchyService.DedupeScanOption o : opts) {
+            if (o.id == scan.Id) {
+                System.assertEquals('Completed', o.status);
+                System.assertEquals(1, o.openGroupCount);
+                found = true;
+            }
+        }
+        System.assert(found, 'Inserted scan should appear in list');
+    }
+
     // ---------- Controller catch-block coverage ----------
 
     @isTest

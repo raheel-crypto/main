@@ -1,6 +1,8 @@
 import { LightningElement, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import scanFamilies from '@salesforce/apex/AccountHierarchyController.scanFamilies';
+import listDedupeScans from '@salesforce/apex/AccountHierarchyController.listDedupeScans';
+import scanFromDedupeGroups from '@salesforce/apex/AccountHierarchyController.scanFromDedupeGroups';
 import proposeHierarchy from '@salesforce/apex/AccountHierarchyController.proposeHierarchy';
 import applyChanges from '@salesforce/apex/AccountHierarchyController.applyChanges';
 import createGapAccount from '@salesforce/apex/AccountHierarchyController.createGapAccount';
@@ -38,6 +40,31 @@ export default class AccountHierarchy extends LightningElement {
     @track applyResult;
     @track errorMessage = null;
 
+    // Source selection: 'dedupe' (use Dedupe_Group__c records) or 'heuristic' (live brand-clustering).
+    @track sourceMode = 'dedupe';
+    @track dedupeScans = [];
+    @track selectedDedupeScanId = null;
+    @track loadingDedupeScans = false;
+
+    connectedCallback() {
+        this.loadDedupeScans();
+    }
+
+    async loadDedupeScans() {
+        this.loadingDedupeScans = true;
+        try {
+            this.dedupeScans = await listDedupeScans();
+            // Auto-select the most recent completed scan that has open groups.
+            const recent = this.dedupeScans.find((s) => s.status === 'Completed' && s.openGroupCount > 0);
+            if (recent) this.selectedDedupeScanId = recent.id;
+        } catch (e) {
+            // Schema may not be present — silently fall through to heuristic-only mode.
+            this.dedupeScans = [];
+        } finally {
+            this.loadingDedupeScans = false;
+        }
+    }
+
     // ---------- Computed ----------
 
     get hasScanned() {
@@ -62,18 +89,27 @@ export default class AccountHierarchy extends LightningElement {
         if (!this.scanResult) return [];
         return this.scanResult.families.map((f) => {
             const orphans = f.accountCount - f.withParentCount;
+            const tileKey = f.dedupeGroupId || f.brandLabel;
+            const selectedKey = this.selectedFamilyKey;
             return {
                 ...f,
-                tileClass: f.brandLabel === this.selectedBrand
+                tileKey,
+                tileClass: tileKey === selectedKey
                     ? 'family-tile family-tile--selected'
                     : 'family-tile',
                 orphanCount: orphans,
                 orphanClass: orphans > 0 ? 'orphan-count orphan-count--warn' : 'orphan-count orphan-count--ok',
                 domainNoun: f.normalizedDomains.length === 1 ? 'domain' : 'domains',
-                countryNoun: f.billingCountries.length === 1 ? 'country' : 'countries'
+                countryNoun: f.billingCountries.length === 1 ? 'country' : 'countries',
+                hasMatchSignals: !!f.matchSignals,
+                matchSignals: f.matchSignals || ''
             };
         });
     }
+
+    // We key tiles by Dedupe Group ID when available (multiple groups can share
+    // the same derived brandLabel, e.g. "ey"), and fall back to brandLabel.
+    @track selectedFamilyKey = null;
 
     // The list of changes the user is about to apply, resolving GAP refs to real Ids.
     get pendingChanges() {
@@ -364,7 +400,7 @@ export default class AccountHierarchy extends LightningElement {
     }
 
     get showPickFamily() {
-        return this.hasFamilies && !this.selectedBrand && !this.isProposing;
+        return this.hasFamilies && !this.selectedFamilyKey && !this.isProposing;
     }
 
     truncate(s, n) {
@@ -379,9 +415,14 @@ export default class AccountHierarchy extends LightningElement {
         this.errorMessage = null;
         this.proposal = null;
         this.selectedBrand = null;
+        this.selectedFamilyKey = null;
         this.applyResult = null;
         try {
-            this.scanResult = await scanFamilies();
+            if (this.sourceMode === 'dedupe') {
+                this.scanResult = await scanFromDedupeGroups({ scanId: this.selectedDedupeScanId });
+            } else {
+                this.scanResult = await scanFamilies();
+            }
         } catch (e) {
             this.handleError(e);
         } finally {
@@ -389,12 +430,57 @@ export default class AccountHierarchy extends LightningElement {
         }
     }
 
+    handleSourceChange(event) {
+        this.sourceMode = event.detail.value;
+        this.scanResult = null;
+        this.proposal = null;
+        this.selectedBrand = null;
+        this.selectedFamilyKey = null;
+        this.applyResult = null;
+    }
+
+    handleDedupeScanChange(event) {
+        this.selectedDedupeScanId = event.detail.value;
+        this.scanResult = null;
+        this.proposal = null;
+        this.selectedBrand = null;
+        this.selectedFamilyKey = null;
+    }
+
+    get sourceOptions() {
+        return [
+            { label: 'Dedupe Groups (recommended)', value: 'dedupe' },
+            { label: 'Live brand-clustering scan', value: 'heuristic' }
+        ];
+    }
+
+    get dedupeScanOptions() {
+        return this.dedupeScans.map((s) => {
+            const date = s.createdDate ? new Date(s.createdDate).toLocaleString() : '';
+            return {
+                label: `${s.name} — ${s.status}, ${s.openGroupCount} open groups (${date})`,
+                value: s.id
+            };
+        });
+    }
+
+    get showDedupeScanPicker() {
+        return this.sourceMode === 'dedupe' && this.dedupeScans.length > 0;
+    }
+
+    get showNoDedupeScansMessage() {
+        return this.sourceMode === 'dedupe' && !this.loadingDedupeScans && this.dedupeScans.length === 0;
+    }
+
     async handleSelectFamily(event) {
-        const brand = event.currentTarget.dataset.brand;
-        const family = this.scanResult.families.find((f) => f.brandLabel === brand);
+        const key = event.currentTarget.dataset.key;
+        const family = this.scanResult.families.find(
+            (f) => (f.dedupeGroupId || f.brandLabel) === key
+        );
         if (!family) return;
 
-        this.selectedBrand = brand;
+        this.selectedFamilyKey = key;
+        this.selectedBrand = family.brandLabel;
         this.proposal = null;
         this.applyResult = null;
         this.resolvedGapIds = {};
