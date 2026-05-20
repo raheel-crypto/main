@@ -136,6 +136,13 @@ public with sharing class AccountDedupeService {
         if (!chunk.isEmpty()) {
             merge master chunk;
         }
+
+        // Mark any open Dedupe_Group__c that contained the merged-away records as Resolved.
+        Set<Id> mergedAway = new Set<Id>();
+        for (Id dupId : duplicateIds) {
+            if (dupId != null && dupId != masterId) mergedAway.add(dupId);
+        }
+        AccountDedupeScanService.markGroupsResolvedForAccounts(mergedAway);
     }
 
     private static void applyCherryPickValues(Account master, Id masterId, Map<String, Id> fieldSourceMap) {
@@ -279,8 +286,7 @@ public with sharing class AccountDedupeService {
 
     // ---------- normalization ----------
 
-    @TestVisible
-    private static String normalizeUrl(String url) {
+    public static String normalizeUrl(String url) {
         if (String.isBlank(url)) return null;
         String s = url.trim().toLowerCase();
         s = s.replaceFirst('^https?://', '');
@@ -289,8 +295,7 @@ public with sharing class AccountDedupeService {
         return s;
     }
 
-    @TestVisible
-    private static String normalizeName(String name) {
+    public static String normalizeName(String name) {
         if (String.isBlank(name)) return null;
         String s = name.toLowerCase();
         s = s.replaceAll('[\\.,&\\-_/]', ' ');
@@ -300,8 +305,7 @@ public with sharing class AccountDedupeService {
         return s;
     }
 
-    @TestVisible
-    private static Integer levenshtein(String a, String b) {
+    public static Integer levenshtein(String a, String b) {
         if (a == null) a = '';
         if (b == null) b = '';
         Integer m = a.length();

@@ -1,0 +1,12 @@
+:host {
+    display: block;
+}
+
+.slds-item {
+    list-style: none;
+}
+
+ul.slds-has-dividers_bottom-space {
+    padding-left: 0;
+    margin: 0;
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>One row per discovered duplicate group within a Dedupe Scan.</description>
+    <enableActivities>false</enableActivities>
+    <enableHistory>false</enableHistory>
+    <enableReports>true</enableReports>
+    <enableSearch>true</enableSearch>
+    <label>Dedupe Group</label>
+    <nameField>
+        <displayFormat>GRP-{000000}</displayFormat>
+        <label>Group #</label>
+        <type>AutoNumber</type>
+    </nameField>
+    <pluralLabel>Dedupe Groups</pluralLabel>
+    <sharingModel>ReadWrite</sharingModel>
+</CustomObject>

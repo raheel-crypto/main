@@ -1,0 +1,173 @@
+<template>
+    <div class="slds-grid slds-gutters slds-wrap">
+
+        <!-- Left column: run scan + scan history -->
+        <div class="slds-col slds-size_1-of-1 slds-large-size_1-of-3">
+            <lightning-card title="Run a new scan" icon-name="standard:merge">
+                <div class="slds-p-horizontal_medium">
+                    <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                        Pick the scenarios to run across all Accounts.
+                    </p>
+                    <template for:each={scenarioOptions} for:item="opt">
+                        <div key={opt.key} class="slds-m-bottom_xx-small">
+                            <label class="slds-checkbox_toggle slds-grid">
+                                <input type="checkbox" data-key={opt.key}
+                                    checked={opt.checked} onchange={handleScenarioToggle} />
+                                <span class="slds-m-left_x-small">{opt.label}</span>
+                            </label>
+                        </div>
+                    </template>
+                    <div class="slds-m-top_small">
+                        <lightning-button label="Run scan" variant="brand"
+                            onclick={handleRunScan} disabled={runDisabled}></lightning-button>
+                        <template lwc:if={starting}>
+                            <lightning-spinner alternative-text="Starting" size="small"></lightning-spinner>
+                        </template>
+                    </div>
+                </div>
+            </lightning-card>
+
+            <lightning-card title="Recent scans" icon-name="standard:report" class="slds-m-top_small">
+                <template lwc:if={hasScans}>
+                    <ul class="slds-has-dividers_bottom-space">
+                        <template for:each={scanRows} for:item="s">
+                            <li key={s.id} class={s.rowClass}
+                                data-id={s.id} onclick={handleScanClick}>
+                                <div class="slds-grid slds-grid_vertical-align-center">
+                                    <div class="slds-grow">
+                                        <div class="slds-text-title slds-text-color_default">{s.name}</div>
+                                        <div class="slds-text-body_small slds-text-color_weak">
+                                            <lightning-formatted-date-time value={s.startedAt}
+                                                year="numeric" month="short" day="2-digit"
+                                                hour="2-digit" minute="2-digit">
+                                            </lightning-formatted-date-time>
+                                        </div>
+                                    </div>
+                                    <lightning-badge label={s.status} variant={s.statusVariant}></lightning-badge>
+                                </div>
+                                <div class="slds-text-body_small slds-m-top_xx-small">
+                                    {s.groupCount} groups · {s.accountCount} accounts
+                                </div>
+                                <template lwc:if={s.errorMessage}>
+                                    <div class="slds-text-color_error slds-text-body_small slds-m-top_xx-small">
+                                        {s.errorMessage}
+                                    </div>
+                                </template>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+                <template lwc:else>
+                    <p class="slds-text-body_small slds-text-color_weak slds-p-horizontal_medium slds-p-vertical_small">
+                        No scans yet. Run one above.
+                    </p>
+                </template>
+            </lightning-card>
+        </div>
+
+        <!-- Right column: groups for active scan -->
+        <div class="slds-col slds-size_1-of-1 slds-large-size_2-of-3">
+            <lightning-card title="Duplicate groups" icon-name="standard:related_list">
+                <lightning-button-icon slot="actions" icon-name="utility:refresh"
+                    alternative-text="Refresh" title="Refresh" onclick={refreshGroups}
+                    disabled={loadingGroups}></lightning-button-icon>
+
+                <div class="slds-p-horizontal_medium">
+                    <template lwc:if={error}>
+                        <div class="slds-text-color_error slds-p-vertical_small">{error}</div>
+                    </template>
+
+                    <div class="slds-grid slds-gutters slds-m-bottom_small">
+                        <div class="slds-col slds-size_1-of-2">
+                            <lightning-combobox label="Status" value={statusFilter}
+                                options={statusFilterOptions}
+                                onchange={handleStatusFilterChange}>
+                            </lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-2">
+                            <lightning-combobox label="Scenario" value={scenarioFilter}
+                                options={scenarioFilterOptions}
+                                onchange={handleScenarioFilterChange}>
+                            </lightning-combobox>
+                        </div>
+                    </div>
+
+                    <template lwc:if={loadingGroups}>
+                        <div class="slds-align_absolute-center slds-p-vertical_small">
+                            <lightning-spinner alternative-text="Loading" size="small"></lightning-spinner>
+                        </div>
+                    </template>
+
+                    <template lwc:if={hasGroups}>
+                        <ul class="slds-has-dividers_bottom-space">
+                            <template for:each={groupRows} for:item="g">
+                                <li key={g.id} class="slds-item slds-p-around_small slds-border_bottom">
+                                    <div class="slds-grid slds-grid_vertical-align-center"
+                                        data-id={g.id} onclick={handleGroupClick}
+                                        style="cursor: pointer;">
+                                        <lightning-icon icon-name={g.chevron} size="x-small"
+                                            class="slds-m-right_x-small"></lightning-icon>
+                                        <div class="slds-grow">
+                                            <div class="slds-text-title slds-text-color_default">
+                                                {g.scenarioLabel}
+                                                <span class="slds-text-color_weak slds-text-body_small slds-m-left_x-small">
+                                                    {g.matchKey}
+                                                </span>
+                                            </div>
+                                            <div class="slds-text-body_small slds-text-color_weak">
+                                                {g.memberCount} accounts · {g.name}
+                                            </div>
+                                        </div>
+                                        <lightning-badge label={g.status} variant={g.statusVariant}></lightning-badge>
+                                    </div>
+
+                                    <template lwc:if={g.expanded}>
+                                        <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-m-top_x-small">
+                                            <thead>
+                                                <tr class="slds-line-height_reset">
+                                                    <th>Account</th>
+                                                    <th>Website</th>
+                                                    <th>LinkedIn</th>
+                                                    <th>Owner</th>
+                                                    <th style="width: 4rem;"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <template for:each={g.members} for:item="m">
+                                                    <tr key={m.accountId}>
+                                                        <td>{m.accountName}</td>
+                                                        <td class="slds-truncate" title={m.website}>{m.website}</td>
+                                                        <td class="slds-truncate" title={m.linkedIn}>{m.linkedIn}</td>
+                                                        <td>{m.ownerName}</td>
+                                                        <td>
+                                                            <lightning-button-icon data-id={m.accountId}
+                                                                icon-name="utility:new_window"
+                                                                alternative-text="Open"
+                                                                title="Open record to merge"
+                                                                onclick={handleOpenAccount}></lightning-button-icon>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                        <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
+                                            Open any record above to use the per-record Duplicate Finder widget for the merge.
+                                        </p>
+                                    </template>
+                                </li>
+                            </template>
+                        </ul>
+                    </template>
+
+                    <template lwc:if={loadingGroups}></template>
+                    <template lwc:elseif={hasGroups}></template>
+                    <template lwc:else>
+                        <p class="slds-text-body_small slds-text-color_weak slds-p-vertical_small">
+                            No groups for the selected scan/filters.
+                        </p>
+                    </template>
+                </div>
+            </lightning-card>
+        </div>
+    </div>
+</template>
