@@ -115,47 +115,51 @@ public with sharing class AccountDedupeService {
             throw new AuraHandledException('Master cannot also be in the duplicates list.');
         }
 
-        Set<Id> allIds = new Set<Id>(duplicateIds);
-        allIds.add(masterId);
-        Map<Id, Account> recs = new Map<Id, Account>(queryAccounts(allIds));
+        // Build a minimal master sObject (Id + any cherry-picked field values).
+        // We deliberately do NOT carry audit fields (CreatedDate, LastModifiedDate,
+        // OwnerId) onto the record we hand to merge — those would be rejected
+        // with INVALID_FIELD_FOR_INSERT_UPDATE since merge applies the master
+        // sObject's field values as an update.
+        Account master = new Account(Id = masterId);
+        applyCherryPickValues(master, masterId, fieldSourceMap);
 
-        if (!recs.containsKey(masterId)) {
-            throw new AuraHandledException('Master account not found or not accessible.');
-        }
-        Account master = recs.get(masterId);
-
-        if (fieldSourceMap != null && !fieldSourceMap.isEmpty()) {
-            Boolean changed = false;
-            Set<String> updateableFields = updateableFieldNames();
-            for (String fieldName : fieldSourceMap.keySet()) {
-                if (!updateableFields.contains(fieldName)) {
-                    continue;
-                }
-                Id sourceId = fieldSourceMap.get(fieldName);
-                if (sourceId == null || sourceId == masterId || !recs.containsKey(sourceId)) {
-                    continue;
-                }
-                Object newValue = recs.get(sourceId).get(fieldName);
-                master.put(fieldName, newValue);
-                changed = true;
-            }
-            if (changed) {
-                update master;
-            }
-        }
-
-        // Standard merge DML supports up to 3 records (master + 2 dupes) per call.
-        List<Account> chunk = new List<Account>();
+        // Apex merge accepts List<ID> for the duplicates argument, capped at 2 per call.
+        List<Id> chunk = new List<Id>();
         for (Id dupId : duplicateIds) {
-            if (!recs.containsKey(dupId)) continue;
-            chunk.add(recs.get(dupId));
+            if (dupId == null || dupId == masterId) continue;
+            chunk.add(dupId);
             if (chunk.size() == 2) {
                 merge master chunk;
-                chunk = new List<Account>();
+                chunk = new List<Id>();
             }
         }
         if (!chunk.isEmpty()) {
             merge master chunk;
+        }
+    }
+
+    private static void applyCherryPickValues(Account master, Id masterId, Map<String, Id> fieldSourceMap) {
+        if (fieldSourceMap == null || fieldSourceMap.isEmpty()) return;
+
+        Set<String> updateableFields = updateableFieldNames();
+        Set<Id> sourceIds = new Set<Id>();
+        List<String> fields = new List<String>();
+        for (String f : fieldSourceMap.keySet()) {
+            if (!updateableFields.contains(f)) continue;
+            Id sid = fieldSourceMap.get(f);
+            if (sid == null || sid == masterId) continue;
+            sourceIds.add(sid);
+            fields.add(f);
+        }
+        if (sourceIds.isEmpty() || fields.isEmpty()) return;
+
+        String soql = 'SELECT Id, ' + String.join(fields, ', ') + ' FROM Account WHERE Id IN :sourceIds';
+        Map<Id, Account> sources = new Map<Id, Account>((List<Account>) Database.query(soql));
+
+        for (String f : fields) {
+            Id sid = fieldSourceMap.get(f);
+            if (sid == null || !sources.containsKey(sid)) continue;
+            master.put(f, sources.get(sid).get(f));
         }
     }
 
