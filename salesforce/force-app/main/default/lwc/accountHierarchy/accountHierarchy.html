@@ -1,0 +1,257 @@
+<template>
+    <lightning-card title="Account Hierarchy" icon-name="standard:hierarchy">
+        <div slot="actions">
+            <template lwc:if={hasScanned}>
+                <lightning-button
+                    label="Re-scan"
+                    icon-name="utility:refresh"
+                    onclick={handleRunScan}
+                    disabled={isScanning}>
+                </lightning-button>
+            </template>
+        </div>
+
+        <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+            <p class="slds-text-color_weak slds-m-bottom_small">
+                Find accounts that look like duplicates but are actually a family (e.g. country offices),
+                then propose and apply a parent-child hierarchy with help from Claude.
+            </p>
+
+            <template lwc:if={errorMessage}>
+                <div class="slds-notify slds-notify_alert slds-alert_error slds-m-bottom_medium" role="alert">
+                    <span class="slds-assistive-text">error</span>
+                    <h2>{errorMessage}</h2>
+                </div>
+            </template>
+
+            <!-- Initial: prompt to run a scan -->
+            <template lwc:if={showRunPrompt}>
+                <div class="slds-box slds-text-align_center slds-p-around_large">
+                    <lightning-icon icon-name="standard:hierarchy" size="large"></lightning-icon>
+                    <h2 class="slds-text-heading_small slds-m-top_small">Scan for account families</h2>
+                    <p class="slds-text-body_regular slds-text-color_weak slds-m-top_x-small">
+                        We&apos;ll group accounts that share a brand domain and highlight candidates for parenting.
+                    </p>
+                    <lightning-button
+                        class="slds-m-top_medium"
+                        variant="brand"
+                        label="Run Scan"
+                        onclick={handleRunScan}>
+                    </lightning-button>
+                </div>
+            </template>
+
+            <!-- While scanning -->
+            <template lwc:if={isScanning}>
+                <div class="slds-box slds-text-align_center slds-p-around_large">
+                    <lightning-spinner alternative-text="Scanning" size="medium"></lightning-spinner>
+                    <p class="slds-m-top_medium">Scanning accounts and clustering by brand domain...</p>
+                </div>
+            </template>
+
+            <!-- Scan complete but nothing found -->
+            <template lwc:if={showNoFamiliesMessage}>
+                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">{scanSummary}</p>
+                <div class="slds-box slds-text-align_center slds-p-around_large">
+                    No account families found. Either everything is already parented, or no accounts share a domain.
+                </div>
+            </template>
+
+            <!-- Scan complete with families -->
+            <template lwc:if={hasFamilies}>
+                <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_small">{scanSummary}</p>
+
+                <div class="slds-grid slds-gutters">
+                    <!-- Families list -->
+                    <div class="slds-col slds-size_4-of-12">
+                        <div class="slds-text-title slds-m-bottom_x-small">Candidate families</div>
+                        <div class="slds-scrollable_y family-list">
+                            <template for:each={familyTiles} for:item="f">
+                                <button
+                                    key={f.brandLabel}
+                                    class={f.tileClass}
+                                    data-brand={f.brandLabel}
+                                    onclick={handleSelectFamily}>
+                                    <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                                        <span class="brand-label">{f.brandLabel}</span>
+                                        <span class="slds-badge">{f.accountCount} accounts</span>
+                                    </div>
+                                    <div class="slds-text-body_small slds-truncate slds-m-top_xx-small">
+                                        {f.representativeName}
+                                    </div>
+                                    <div class="slds-text-body_small slds-m-top_xx-small meta-line">
+                                        <span>{f.normalizedDomains.length} {f.domainNoun}</span>
+                                        <span>·</span>
+                                        <span>{f.billingCountries.length} {f.countryNoun}</span>
+                                        <span>·</span>
+                                        <span class={f.orphanClass}>{f.orphanCount} unparented</span>
+                                    </div>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Right pane -->
+                    <div class="slds-col slds-size_8-of-12">
+
+                        <template lwc:if={showPickFamily}>
+                            <div class="slds-box slds-text-align_center slds-text-color_weak slds-p-around_large">
+                                Pick a family on the left to see the proposed hierarchy.
+                            </div>
+                        </template>
+
+                        <template lwc:if={isProposing}>
+                            <div class="slds-box slds-text-align_center slds-p-around_large">
+                                <lightning-spinner alternative-text="Proposing" size="medium"></lightning-spinner>
+                                <p class="slds-m-top_medium">Asking Claude to propose the hierarchy for {selectedBrand}...</p>
+                            </div>
+                        </template>
+
+                        <template lwc:if={proposal}>
+                            <template lwc:if={hasSummary}>
+                                <div class="slds-box slds-theme_shade slds-m-bottom_small">
+                                    <strong>Proposal: </strong>{proposal.summary}
+                                </div>
+                            </template>
+
+                            <template lwc:if={hasWarnings}>
+                                <div class="slds-notify slds-notify_alert slds-alert_warning slds-m-bottom_small" role="alert">
+                                    <div class="slds-grid">
+                                        <lightning-icon icon-name="utility:warning" size="x-small" variant="inverse" class="slds-m-right_x-small"></lightning-icon>
+                                        <div>
+                                            <strong>Warnings</strong>
+                                            <ul class="slds-list_dotted slds-m-top_xx-small">
+                                                <template for:each={warningRows} for:item="w">
+                                                    <li key={w.key}>{w.text}</li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template lwc:if={hasGaps}>
+                                <div class="slds-box slds-m-bottom_small gap-box">
+                                    <div class="slds-text-title">Gaps ({proposal.gaps.length})</div>
+                                    <template for:each={gapCards} for:item="g">
+                                        <div key={g.gapId} class="slds-grid slds-grid_align-spread slds-grid_vertical-align-start gap-row slds-m-top_x-small">
+                                            <div class="slds-col slds-size_8-of-12">
+                                                <div class="slds-text-body_regular slds-text-color_default">
+                                                    <strong>{g.proposedName}</strong>
+                                                </div>
+                                                <div class="slds-text-body_small slds-text-color_weak">{g.reason}</div>
+                                                <template lwc:if={g.hasDetail}>
+                                                    <div class="slds-text-body_small slds-text-color_weak">{g.detailLine}</div>
+                                                </template>
+                                            </div>
+                                            <div class="slds-col">
+                                                <template lwc:if={g.created}>
+                                                    <span class="slds-badge slds-theme_success">Created</span>
+                                                </template>
+                                                <template lwc:else>
+                                                    <lightning-button
+                                                        label={g.buttonLabel}
+                                                        variant="brand-outline"
+                                                        data-gapid={g.gapId}
+                                                        disabled={g.buttonDisabled}
+                                                        onclick={handleCreateGap}>
+                                                    </lightning-button>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <!-- SVG tree -->
+                            <template lwc:if={hasTree}>
+                                <div class="slds-box slds-p-around_xx-small svg-frame">
+                                    <div class="svg-scroll">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width={svgTree.width} height={svgTree.height} viewBox={svgTree.viewBox}>
+                                            <defs>
+                                                <marker id="arrow-default" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#706e6b"></path>
+                                                </marker>
+                                                <marker id="arrow-change" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#04844b"></path>
+                                                </marker>
+                                            </defs>
+                                            <template for:each={svgTree.edges} for:item="e">
+                                                <path key={e.key} d={e.d} stroke={e.stroke} stroke-width={e.width} stroke-dasharray={e.dasharray} fill="none" marker-end={e.markerEnd}></path>
+                                            </template>
+                                            <template for:each={svgTree.nodes} for:item="n">
+                                                <g key={n.key}>
+                                                    <rect x={n.x} y={n.y} width={n.width} height={n.height} rx="6" ry="6" fill="white" stroke={n.color} stroke-width="1.5" stroke-dasharray={n.strokeDash}></rect>
+                                                    <rect x={n.x} y={n.y} width={n.width} height="28" rx="6" ry="6" fill={n.fill}></rect>
+                                                    <text x={n.cx} y={n.headerY} text-anchor="middle" font-size="11" font-weight="600" fill={n.color}>{n.kindLabel}</text>
+                                                    <template lwc:if={n.showChange}>
+                                                        <rect x={n.changeX} y={n.changeY} width="48" height="16" rx="3" ry="3" fill="#04844b22"></rect>
+                                                        <text x={n.changeX} y={n.changeY} dx="24" dy="12" text-anchor="middle" font-size="9" font-weight="700" fill="#04844b">CHANGE</text>
+                                                    </template>
+                                                    <text x={n.cx} y={n.nameY} text-anchor="middle" font-size="13" font-weight="600" fill="#181818">{n.name}</text>
+                                                    <text x={n.cx} y={n.metaY} text-anchor="middle" font-size="11" fill="#706e6b">{n.metaLine}</text>
+                                                    <text x={n.cx} y={n.webY} text-anchor="middle" font-size="10" fill="#999">{n.website}</text>
+                                                </g>
+                                            </template>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Pending changes + apply -->
+                            <div class="slds-box slds-m-top_small">
+                                <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                                    <div class="slds-text-title">Proposed changes ({pendingChangeCount})</div>
+                                    <lightning-button
+                                        variant="brand"
+                                        label={applyButtonLabel}
+                                        disabled={applyDisabled}
+                                        onclick={handleApply}>
+                                    </lightning-button>
+                                </div>
+
+                                <template lwc:if={pendingChangeCount}>
+                                    <ul class="slds-m-top_x-small change-list">
+                                        <template for:each={pendingChangesPreview} for:item="c">
+                                            <li key={c.accountId} class="slds-grid slds-grid_align-spread change-row">
+                                                <span>{c.childName}</span>
+                                                <span class="slds-text-color_weak">→</span>
+                                                <span>{c.parentName}</span>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                    <template lwc:if={hasOverflow}>
+                                        <div class="slds-text-body_small slds-text-color_weak slds-m-top_xx-small">
+                                            ...and {pendingChangesOverflow} more
+                                        </div>
+                                    </template>
+                                </template>
+                                <template lwc:else>
+                                    <div class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
+                                        No parent-id changes needed — the hierarchy is already in place.
+                                    </div>
+                                </template>
+                            </div>
+
+                            <template lwc:if={hasAppliedSomething}>
+                                <div class="slds-notify slds-notify_alert slds-alert_success slds-m-top_small" role="alert">
+                                    {appliedCountText}
+                                </div>
+                            </template>
+                            <template lwc:if={hasApplyFailures}>
+                                <div class="slds-notify slds-notify_alert slds-alert_error slds-m-top_small" role="alert">
+                                    <strong>{applyResult.failed.length} update(s) failed</strong>
+                                    <ul class="slds-list_dotted slds-m-top_xx-small">
+                                        <template for:each={applyFailureRows} for:item="f">
+                                            <li key={f.key}>{f.accountId}: {f.errorMessage}</li>
+                                        </template>
+                                    </ul>
+                                </div>
+                            </template>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </lightning-card>
+</template>

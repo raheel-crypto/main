@@ -1,0 +1,96 @@
+.family-list {
+    max-height: 640px;
+    padding-right: 4px;
+}
+
+.family-tile {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: white;
+    border: 1px solid #dddbda;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.family-tile:hover {
+    border-color: #1589ee;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.family-tile--selected {
+    border-color: #1589ee;
+    box-shadow: 0 0 0 1px #1589ee;
+}
+
+.brand-label {
+    font-weight: 700;
+    text-transform: capitalize;
+    color: #181818;
+}
+
+.meta-line {
+    color: #706e6b;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.orphan-count--warn {
+    color: #fe9339;
+    font-weight: 600;
+}
+
+.orphan-count--ok {
+    color: #2e844a;
+    font-weight: 600;
+}
+
+.svg-frame {
+    background-color: #fafaf9;
+    border: 1px solid #dddbda;
+    border-radius: 6px;
+}
+
+.svg-scroll {
+    overflow: auto;
+    max-height: 620px;
+}
+
+.svg-scroll svg {
+    display: block;
+}
+
+.gap-box {
+    border-left: 4px solid #ea7600;
+}
+
+.gap-row {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-top: 1px solid #f3f3f3;
+}
+
+.gap-row:first-of-type {
+    border-top: 0;
+}
+
+.change-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+.change-row {
+    padding: 4px 8px;
+    border-bottom: 1px solid #f3f3f3;
+    font-size: 13px;
+}
+
+.change-row:last-child {
+    border-bottom: 0;
+}
