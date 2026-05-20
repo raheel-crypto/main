@@ -11,6 +11,7 @@
     },
     "api/slack/quote-status.ts": { "maxDuration": 10 },
     "api/slack/quote-override.ts": { "maxDuration": 10 },
-    "api/sfdc/intake.ts": { "maxDuration": 30 }
+    "api/sfdc/intake.ts": { "maxDuration": 30 },
+    "api/sfdc/signed.ts": { "maxDuration": 15 }
   }
 }

@@ -10,6 +10,84 @@ import type {
 
 const APPROVE_ACTION_ID = "quote_approve";
 const REJECT_ACTION_ID = "quote_reject";
+export const MARK_CLOSED_WON_ACTION_ID = "mark_closed_won";
+
+export function buildMarkClosedWonPromptBlocks(args: {
+  accountName: string;
+  opportunityId: string;
+}): unknown[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:inbox_tray: *Signed order form received* for *${args.accountName}*.\n` +
+          `Ready to mark this Opportunity as *Closed Won*?`,
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: MARK_CLOSED_WON_ACTION_ID,
+          style: "primary",
+          text: { type: "plain_text", text: "Mark Closed Won" },
+          value: args.opportunityId,
+        },
+      ],
+    },
+  ];
+}
+
+export function buildMarkClosedWonResultBlocks(args: {
+  accountName: string;
+  byUserId: string;
+  atIso: string;
+}): unknown[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:white_check_mark: *${args.accountName}* marked *Closed Won* by ` +
+          `<@${args.byUserId}> at <!date^${Math.floor(new Date(args.atIso).getTime() / 1000)}^{date_short_pretty} {time}|${args.atIso}>.`,
+      },
+    },
+  ];
+}
+
+export function buildMarkClosedWonErrorBlocks(args: {
+  accountName: string;
+  opportunityId: string;
+  error: string;
+}): unknown[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:warning: Could not mark *${args.accountName}* as Closed Won.\n` +
+          `Reason: \`${args.error}\`\n` +
+          `Fix in Salesforce and click again — or close the Opp manually.`,
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: MARK_CLOSED_WON_ACTION_ID,
+          text: { type: "plain_text", text: "Retry Mark Closed Won" },
+          value: args.opportunityId,
+        },
+      ],
+    },
+  ];
+}
 
 interface BuildArgs {
   request_id: string;

@@ -143,6 +143,58 @@ export async function upsertByExternalId(
   );
 }
 
+/**
+ * Update any Opportunity field. Used by the "Mark Closed Won" path to set
+ * StageName. Throws on SFDC errors so the caller can surface validation
+ * rule failures, FLS issues, etc. in the Slack thread.
+ */
+export async function updateOpportunity(
+  id: string,
+  fields: Record<string, unknown>,
+): Promise<void> {
+  await sfdcFetch(`/sobjects/Opportunity/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(fields),
+  });
+}
+
+/**
+ * Fetch the most recent *approved* Quote_Approval__c for an Opportunity. Used
+ * by the signed-order-form trigger so we can find the original Slack thread
+ * to reply in.
+ */
+export async function getLatestApprovedQuoteApproval(
+  opportunityId: string,
+): Promise<{ requestId: string; slackMessageUrl: string | null } | null> {
+  const soql = encodeURIComponent(
+    `SELECT Request_Id__c, Slack_Message_Url__c FROM Quote_Approval__c ` +
+      `WHERE Opportunity__c = '${escapeSoql(opportunityId)}' AND State__c = 'Approved' ` +
+      `ORDER BY Decision_Made_At__c DESC LIMIT 1`,
+  );
+  const result = (await sfdcFetch(`/query?q=${soql}`)) as {
+    records: Array<{ Request_Id__c: string; Slack_Message_Url__c: string | null }>;
+  };
+  const r = result.records[0];
+  if (!r) return null;
+  return { requestId: r.Request_Id__c, slackMessageUrl: r.Slack_Message_Url__c };
+}
+
+/**
+ * Slack archive URLs collapse the message ts dot: `1234567890.123456` becomes
+ * `p1234567890123456` in the URL. Reconstruct the {channel, ts} we need to
+ * post a threaded reply.
+ */
+export function parseSlackArchiveUrl(
+  url: string | null | undefined,
+): { channel: string; ts: string } | null {
+  if (!url) return null;
+  const m = /\/archives\/([^/]+)\/p(\d{7,})/.exec(url);
+  if (!m) return null;
+  const channel = m[1]!;
+  const tsNoDot = m[2]!;
+  return { channel, ts: `${tsNoDot.slice(0, -6)}.${tsNoDot.slice(-6)}` };
+}
+
 function escapeSoql(s: string): string {
   return s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }

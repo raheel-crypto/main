@@ -1,10 +1,25 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { isAuthorizedApprover } from "../../lib/approval.js";
+import {
+  MARK_CLOSED_WON_ACTION_ID,
+  buildMarkClosedWonErrorBlocks,
+  buildMarkClosedWonResultBlocks,
+} from "../../lib/blocks.js";
 import { fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
 import { postDecisionUpdate } from "../../lib/revops.js";
 import { drop, retrieve, stashAt } from "../../lib/state.js";
-import { dmFileToUser, updateViaResponseUrl, verifySlackSignature } from "../../lib/slack.js";
-import { resolveOpportunity, toDealContext } from "../../lib/sfdc-client.js";
+import {
+  dmFileToUser,
+  updateMessage,
+  updateViaResponseUrl,
+  verifySlackSignature,
+} from "../../lib/slack.js";
+import {
+  getOpportunityById,
+  resolveOpportunity,
+  toDealContext,
+  updateOpportunity,
+} from "../../lib/sfdc-client.js";
 import type { ApprovalRequest, Package, ProcessQuoteJob, QuoteForm, Requester } from "../../lib/types.js";
 
 export const config = { api: { bodyParser: false } };
@@ -47,9 +62,100 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (action.action_id === APPROVE_ACTION_ID || action.action_id === REJECT_ACTION_ID) {
       return handleApproveReject(payload, action, res);
     }
+    if (action.action_id === MARK_CLOSED_WON_ACTION_ID) {
+      return handleMarkClosedWon(payload, action, res);
+    }
   }
 
   return res.status(200).send("");
+}
+
+async function handleMarkClosedWon(
+  payload: SlackInteractivityPayload,
+  action: { action_id: string; value?: string },
+  res: VercelResponse,
+) {
+  const opportunityId = action.value;
+  const userId = payload.user?.id ?? "";
+  const channel = payload.channel?.id ?? payload.container?.channel_id ?? "";
+  const messageTs = payload.message?.ts ?? payload.container?.message_ts ?? "";
+
+  if (!opportunityId || !channel || !messageTs) return res.status(200).send("");
+
+  const allowed = parseCsvEnv(process.env.DEAL_DESK_APPROVER_IDS);
+  if (!allowed.includes(userId)) {
+    if (payload.response_url) {
+      const names = allowed.map((id) => `<@${id}>`).join(" or ");
+      await updateViaResponseUrl(payload.response_url, {
+        response_type: "ephemeral",
+        text: `Only Deal Desk (${names || "RevOps"}) can mark deals Closed Won.`,
+        replace_original: false,
+      });
+    }
+    return res.status(200).send("");
+  }
+
+  const opp = await getOpportunityById(opportunityId);
+  const accountName = opp?.Account?.Name ?? "this account";
+
+  // If someone already flipped the Opp in SFDC between the post and this click,
+  // just update the message and move on — no duplicate write.
+  if (opp?.StageName === "Closed Won") {
+    await updateMessage({
+      channel,
+      ts: messageTs,
+      text: `${accountName} — already Closed Won`,
+      blocks: buildMarkClosedWonResultBlocks({
+        accountName,
+        byUserId: userId,
+        atIso: new Date().toISOString(),
+      }),
+    });
+    return res.status(200).send("");
+  }
+
+  try {
+    await updateOpportunity(opportunityId, { StageName: "Closed Won" });
+  } catch (e) {
+    await updateMessage({
+      channel,
+      ts: messageTs,
+      text: `Failed to mark ${accountName} Closed Won`,
+      blocks: buildMarkClosedWonErrorBlocks({
+        accountName,
+        opportunityId,
+        error: extractSfdcErrorMessage(e),
+      }),
+    });
+    return res.status(200).send("");
+  }
+
+  await updateMessage({
+    channel,
+    ts: messageTs,
+    text: `${accountName} — marked Closed Won`,
+    blocks: buildMarkClosedWonResultBlocks({
+      accountName,
+      byUserId: userId,
+      atIso: new Date().toISOString(),
+    }),
+  });
+  return res.status(200).send("");
+}
+
+/** Pull a usable one-line error out of whatever SFDC threw. */
+function extractSfdcErrorMessage(e: unknown): string {
+  if (!(e instanceof Error)) return "Unknown error";
+  // sfdcFetch throws with the response body inlined — try to surface the
+  // first SFDC API error message rather than the raw fetch chatter.
+  const m = /\[\{"message":"([^"]+)"/.exec(e.message);
+  if (m && m[1]) return m[1];
+  return e.message.slice(0, 200);
+}
+
+function parseCsvEnv(v: string | undefined): string[] {
+  if (!v) return [];
+  return v.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: VercelResponse) {
@@ -262,6 +368,9 @@ interface SlackInteractivityPayload {
   response_url?: string;
   trigger_id?: string;
   actions?: Array<{ action_id: string; value?: string; block_id?: string }>;
+  channel?: { id: string };
+  message?: { ts: string };
+  container?: { channel_id?: string; message_ts?: string };
   view?: {
     id: string;
     callback_id?: string;
