@@ -15,14 +15,19 @@ export const MARK_CLOSED_WON_ACTION_ID = "mark_closed_won";
 export function buildMarkClosedWonPromptBlocks(args: {
   accountName: string;
   opportunityId: string;
+  /** True for pre-launch deals with no approval thread on file. */
+  isLegacy?: boolean;
 }): unknown[] {
+  const legacyNote = args.isLegacy
+    ? `\n_(Pre-launch deal — no approval thread on file.)_`
+    : "";
   return [
     {
       type: "section",
       text: {
         type: "mrkdwn",
         text:
-          `:inbox_tray: *Signed order form received* for *${args.accountName}*.\n` +
+          `:inbox_tray: *Signed order form received* for *${args.accountName}*.${legacyNote}\n` +
           `Ready to mark this Opportunity as *Closed Won*?`,
       },
     },

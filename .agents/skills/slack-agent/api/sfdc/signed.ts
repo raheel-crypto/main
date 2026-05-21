@@ -72,11 +72,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const audit = await getLatestApprovedQuoteApproval(opportunityId);
+  const accountName = opp.Account?.Name ?? "this account";
+
+  // Legacy path: no approved Quote_Approval__c exists for this Opp (deal was
+  // sent for signature before we launched the approval bot). Post a fresh,
+  // non-threaded message in the deal-desk channel so RevOps can still click
+  // Mark Closed Won. Same button, same handler -- they just lose the in-thread
+  // context that newer deals get.
   if (!audit) {
-    return res.status(404).json({
-      error:
-        "No approved Quote_Approval__c with a Slack message URL found for this Opportunity",
+    const revopsChannel = process.env.REVOPS_CHANNEL;
+    if (!revopsChannel) {
+      return res.status(500).json({ error: "REVOPS_CHANNEL is not configured" });
+    }
+    const blocks = buildMarkClosedWonPromptBlocks({
+      accountName,
+      opportunityId,
+      isLegacy: true,
     });
+    await postMessage({
+      channel: revopsChannel,
+      text: `Signed order form received for ${accountName} — pre-launch deal, ready for Closed Won?`,
+      blocks,
+    });
+    console.log("[signed] posted legacy (no audit row)", { opportunityId, accountName });
+    return res.status(200).json({ ok: true, legacy: true });
   }
 
   const ref = parseSlackArchiveUrl(audit.slackMessageUrl);
@@ -99,15 +118,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const blocks = buildMarkClosedWonPromptBlocks({
-    accountName: opp.Account?.Name ?? "this account",
-    opportunityId,
-  });
+  const blocks = buildMarkClosedWonPromptBlocks({ accountName, opportunityId });
 
   await postMessage({
     channel: ref.channel,
     thread_ts: ref.ts,
-    text: `Signed order form received for ${opp.Account?.Name ?? "this account"} — ready to mark Closed Won?`,
+    text: `Signed order form received for ${accountName} — ready to mark Closed Won?`,
     blocks,
   });
 
