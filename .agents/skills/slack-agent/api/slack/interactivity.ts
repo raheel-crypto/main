@@ -12,6 +12,7 @@ import {
   dmFileToUser,
   updateMessage,
   updateViaResponseUrl,
+  uploadFileToThread,
   verifySlackSignature,
 } from "../../lib/slack.js";
 import {
@@ -308,15 +309,32 @@ async function deliverOrderForm(request: ApprovalRequest): Promise<void> {
   if (!repId) return;
   try {
     const file = await fillOrderForm(request);
+    const filename = orderFormFilename(request);
     await dmFileToUser({
       userId: repId,
       file,
-      filename: orderFormFilename(request),
+      filename,
       initialComment:
         `Your order form for *${request.context.account.name}* ` +
         `(${request.context.opportunity.name}) is approved and ready for signature. ` +
         `Request ID: \`${request.request_id}\``,
     });
+
+    // Also drop the generated doc into the approval thread so RevOps can see
+    // exactly what went out. Best-effort -- the rep DM is the primary path.
+    if (request.slack_message) {
+      try {
+        await uploadFileToThread({
+          channel: request.slack_message.channel,
+          thread_ts: request.slack_message.ts,
+          file,
+          filename,
+          initialComment: "Order form generated and sent to the rep.",
+        });
+      } catch (e) {
+        console.error("order form thread mirror failed:", e);
+      }
+    }
   } catch (e) {
     console.error("order form delivery failed:", e);
   }

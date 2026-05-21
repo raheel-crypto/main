@@ -106,3 +106,19 @@ export async function dmFileToUser(args: {
     initial_comment: args.initialComment,
   });
 }
+
+export async function uploadFileToThread(args: {
+  channel: string;
+  thread_ts: string;
+  file: Buffer;
+  filename: string;
+  initialComment?: string;
+}): Promise<void> {
+  await slack.files.uploadV2({
+    channel_id: args.channel,
+    thread_ts: args.thread_ts,
+    file: args.file,
+    filename: args.filename,
+    initial_comment: args.initialComment,
+  });
+}
