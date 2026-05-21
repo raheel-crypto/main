@@ -1,0 +1,879 @@
+/* ── Weekly Activity Target Header ───────────────────────────────────────── */
+
+.target-header {
+    background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+    border-radius: 0.5rem;
+    border: none;
+}
+
+.target-title {
+    color: #e0e7ff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+.weekly-count {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.weekly-pct {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+/* ── Refresh Button ──────────────────────────────────────────────────────── */
+
+.refresh-btn {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 0.375rem;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 1rem;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+}
+
+.refresh-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+}
+
+/* ── Custom Gradient Progress Bar ────────────────────────────────────────── */
+
+.pg-bar-track {
+    width: 100%;
+    height: 14px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.pg-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.6s ease, background-color 0.6s ease;
+    min-width: 4px;
+}
+
+/* ── Chips ───────────────────────────────────────────────────────────────── */
+
+.chip {
+    display: inline-block;
+    padding: 0.375rem 0.875rem;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: 600;
+}
+
+/* ── Section Dividers ────────────────────────────────────────────────────── */
+
+.section-divider {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding-bottom: 0.375rem;
+    border-bottom: 2px solid;
+    display: flex;
+    align-items: center;
+}
+
+.activity-divider { color: #7c3aed; border-color: #7c3aed; }
+.pipeline-divider { color: #059669; border-color: #059669; }
+
+/* ── Status Colors ───────────────────────────────────────────────────────── */
+
+.stale-text   { color: #dc2626; font-weight: 600; }
+.healthy-text { color: #059669; font-weight: 600; }
+.metric-green { color: #059669; font-weight: 600; }
+.metric-red   { color: #dc2626; font-weight: 600; }
+
+/* ── Commit Status ───────────────────────────────────────────────────────── */
+
+.status-dot {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.status-dot--complete { background: #10b981; }
+.status-dot--partial  { background: #f59e0b; }
+.status-dot--pending  { background: #d1d5db; border: 1px solid #9ca3af; }
+
+/* ── Commit Form ─────────────────────────────────────────────────────────── */
+
+.commit-form {
+    border-left: 4px solid #7c3aed;
+    background: #f0f6ff;
+    border-radius: 0 0.375rem 0.375rem 0;
+}
+
+/* ── Account Search Dropdown ─────────────────────────────────────────────── */
+
+.search-wrap { position: relative; }
+
+.search-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 9000;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 0.25rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    max-height: 220px;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.search-result {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.search-result:last-child { border-bottom: none; }
+.search-result:hover { background: #eff6ff; color: #1d4ed8; }
+
+/* ── Scorecard ───────────────────────────────────────────────────────────── */
+
+.scorecard-dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.25rem 0.75rem;
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+.scorecard-dl dt {
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.scorecard-dl dd {
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+/* ── Empty States ────────────────────────────────────────────────────────── */
+
+.empty-msg {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    padding: 0.5rem 0;
+}
+
+/* ── Metric (dark, for use on white backgrounds) ─────────────────────────── */
+
+.metric-dark {
+    font-weight: 700;
+    color: #111827;
+}
+
+/* ── Target Accounts Tab — Toolbar ───────────────────────────────────────── */
+
+.card-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0 0.5rem;
+    flex-wrap: wrap;
+}
+
+.card-search {
+    flex: 1;
+    min-width: 200px;
+    max-width: 360px;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    color: #111827;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.card-search:focus {
+    border-color: #0070d2;
+    box-shadow: 0 0 0 3px rgba(0, 112, 210, 0.15);
+}
+
+/* ── Account Segment Sections ────────────────────────────────────────────── */
+
+.segment-section {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 1rem;
+}
+
+.segment-header {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #4b5563;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.segment-count {
+    font-weight: 500;
+    color: #9ca3af;
+}
+
+/* ── Account Cards Background ────────────────────────────────────────────── */
+
+.acct-cards-bg {
+    background: linear-gradient(160deg, #080d1a 0%, #0c1426 50%, #0f1a36 100%);
+    border-radius: 0.75rem;
+    padding: 0.25rem 0 1rem;
+    margin-top: 0.5rem;
+}
+
+.acct-cards-bg .segment-section {
+    border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+.acct-cards-bg .segment-header {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.acct-cards-bg .segment-count {
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.acct-cards-bg .empty-msg {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Account Card Grid ───────────────────────────────────────────────────── */
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.875rem;
+    padding-bottom: 0.5rem;
+}
+
+/* ── Base card — glassmorphism ───────────────────────────────────────────── */
+
+.acct-card {
+    position: relative;
+    border: 2px solid transparent;
+    border-radius: 0.75rem;
+    padding: 0.875rem 1rem 0.75rem;
+    cursor: pointer;
+    user-select: none;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: box-shadow 0.2s, transform 0.14s;
+}
+
+.acct-card:active { transform: translateY(0) !important; }
+
+/* Customer — green → cyan */
+.acct-card--customer {
+    background:
+        linear-gradient(135deg, #0a1e16 0%, #0c1e25 100%) padding-box,
+        linear-gradient(135deg, #10b981 0%, #06b6d4 100%) border-box;
+    box-shadow: 0 0 8px rgba(16, 185, 129, 0.28), 0 0 22px rgba(6, 182, 212, 0.12);
+}
+
+.acct-card--customer:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 16px rgba(16, 185, 129, 0.5), 0 0 38px rgba(6, 182, 212, 0.22);
+}
+
+/* Prospect with opps — amber → orange */
+.acct-card--prospect-opps {
+    background:
+        linear-gradient(135deg, #1a1308 0%, #1c1510 100%) padding-box,
+        linear-gradient(135deg, #f59e0b 0%, #f97316 100%) border-box;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.28), 0 0 22px rgba(249, 115, 22, 0.12);
+}
+
+.acct-card--prospect-opps:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.5), 0 0 38px rgba(249, 115, 22, 0.22);
+}
+
+/* Prospect no opps — indigo → violet */
+.acct-card--prospect-no-opps {
+    background:
+        linear-gradient(135deg, #0d0f20 0%, #110f26 100%) padding-box,
+        linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) border-box;
+    box-shadow: 0 0 6px rgba(99, 102, 241, 0.2), 0 0 16px rgba(139, 92, 246, 0.08);
+}
+
+.acct-card--prospect-no-opps:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 14px rgba(99, 102, 241, 0.42), 0 0 32px rgba(139, 92, 246, 0.2);
+}
+
+/* Targeted — brighter glow */
+.acct-card--targeted.acct-card--customer {
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.55), 0 0 34px rgba(6, 182, 212, 0.28);
+}
+
+.acct-card--targeted.acct-card--prospect-opps {
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.55), 0 0 34px rgba(249, 115, 22, 0.28);
+}
+
+.acct-card--targeted.acct-card--prospect-no-opps {
+    box-shadow: 0 0 14px rgba(99, 102, 241, 0.5), 0 0 34px rgba(139, 92, 246, 0.28);
+}
+
+/* Pending add — green pulse */
+.acct-card--pending-add {
+    background:
+        linear-gradient(135deg, #0a1e16, #0c1e25) padding-box,
+        linear-gradient(135deg, #10b981 0%, #06b6d4 100%) border-box !important;
+    animation: pulse-add 1.5s ease-in-out infinite;
+}
+
+/* Pending remove — red pulse */
+.acct-card--pending-remove {
+    background:
+        linear-gradient(135deg, #1f0c0c, #200f0f) padding-box,
+        linear-gradient(135deg, #ef4444 0%, #f97316 100%) border-box !important;
+    animation: pulse-remove 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-add {
+    0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.3), 0 0 20px rgba(6, 182, 212, 0.1); }
+    50%       { box-shadow: 0 0 20px rgba(16, 185, 129, 0.65), 0 0 44px rgba(6, 182, 212, 0.35); }
+}
+
+@keyframes pulse-remove {
+    0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.3), 0 0 20px rgba(249, 115, 22, 0.1); }
+    50%       { box-shadow: 0 0 20px rgba(239, 68, 68, 0.65), 0 0 44px rgba(249, 115, 22, 0.35); }
+}
+
+/* ── Card Logo Row ───────────────────────────────────────────────────────── */
+
+.acct-logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.acct-favicon {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.acct-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+/* ── Card Check ──────────────────────────────────────────────────────────── */
+
+.card-check {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.acct-card--targeted .card-check,
+.acct-card--pending-add .card-check {
+    background: #10b981;
+    border-color: #10b981;
+}
+
+.acct-card--pending-remove .card-check {
+    background: #ef4444;
+    border-color: #ef4444;
+}
+
+/* ── Card Name & Meta ────────────────────────────────────────────────────── */
+
+.card-name {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    line-height: 1.25;
+    margin-bottom: 0.375rem;
+}
+
+.card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.4rem;
+    min-height: 1.125rem;
+}
+
+.pill {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
+.pill--status {
+    background: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.pill--tier {
+    background: rgba(139, 92, 246, 0.18);
+    color: #c4b5fd;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+/* ── Card Financials ─────────────────────────────────────────────────────── */
+
+.card-financials {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.68rem;
+    color: #64748b;
+    margin-bottom: 0.4rem;
+    min-height: 0.875rem;
+}
+
+.fin-item { font-weight: 500; }
+
+.fin-arr {
+    color: #34d399;
+    font-weight: 700;
+}
+
+/* ── Card Stats & Activity ───────────────────────────────────────────────── */
+
+.card-stats {
+    display: flex;
+    gap: 0.625rem;
+    font-size: 0.7rem;
+    color: #64748b;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    padding-top: 0.375rem;
+    margin-top: 0.25rem;
+}
+
+.card-stats span {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.card-activity {
+    display: flex;
+    align-items: center;
+    font-size: 0.68rem;
+    color: #64748b;
+    margin-top: 0.3rem;
+}
+
+.acct-card .stale-text { color: #f87171; font-weight: 600; }
+
+.card-pending-label {
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.35rem;
+}
+
+.acct-card--pending-add    .card-pending-label { color: #34d399; }
+.acct-card--pending-remove .card-pending-label { color: #f87171; }
+
+/* ── SF link icon in account cards ──────────────────────────────────────── */
+
+.card-sf-link {
+    color: rgba(255, 255, 255, 0.3);
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+}
+
+.card-sf-link:hover {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Sort select ─────────────────────────────────────────────────────────── */
+
+.sort-select {
+    min-width: 130px;
+}
+
+/* ── Save Bar (sticky bottom) ────────────────────────────────────────────── */
+
+.save-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background: #1e3a5f;
+    border-radius: 0.5rem;
+    margin-top: 1rem;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.18);
+    flex-wrap: wrap;
+}
+
+.save-bar-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #e0e7ff;
+}
+
+/* ── Commit Grid ─────────────────────────────────────────────────────────── */
+
+.commit-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    gap: 0.75rem;
+}
+
+/* ── Commit Cards — GTMA activity style (violet → blue) ─────────────────── */
+
+.commit-card {
+    position: relative;
+    border: 3px solid transparent;
+    border-radius: 0.625rem;
+    padding: 0.875rem 1rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    transition: box-shadow 0.22s, transform 0.14s;
+}
+
+.commit-card--gtma {
+    background:
+        linear-gradient(#0e1628, #0e1628) padding-box,
+        linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%) border-box;
+    box-shadow: 0 0 8px rgba(124, 58, 237, 0.35),
+                0 0 22px rgba(59, 130, 246, 0.18);
+}
+
+.commit-card--gtma:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 16px rgba(124, 58, 237, 0.6),
+                0 0 38px rgba(59, 130, 246, 0.3);
+}
+
+/* Completed: brighter base glow */
+.commit-card--gtma.commit-card--complete {
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.5),
+                0 0 30px rgba(59, 130, 246, 0.25);
+}
+
+/* Pending: dimmed */
+.commit-card--pending { opacity: 0.82; }
+
+/* ── Commit Tile Interior ────────────────────────────────────────────────── */
+
+.ctile-logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+}
+
+.ctile-acct-name {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ctile-type {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #94a3b8;
+    line-height: 1.25;
+}
+
+.ctile-desc {
+    font-size: 0.775rem;
+    color: #cbd5e1;
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    flex: 1;
+}
+
+.ctile-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid rgba(255, 255, 255, 0.09);
+    padding-top: 0.375rem;
+    margin-top: 0.1rem;
+}
+
+.cc-progress {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, 0.09);
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+
+/* ── Targeted Accounts Strip ─────────────────────────────────────────────── */
+
+.targeted-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.25rem;
+}
+
+.targeted-strip-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #059669;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.targeted-strip-scroll {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    flex: 1;
+}
+
+.targeted-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.5rem 0.2rem 0.3rem;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 999px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #065f46;
+    transition: background 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+}
+
+.targeted-chip:hover {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+}
+
+.tchip-favicon,
+.tchip-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.tchip-favicon { object-fit: contain; }
+
+.tchip-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: white;
+}
+
+.tchip-name {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tchip-x {
+    font-size: 0.9rem;
+    color: #34d399;
+    line-height: 1;
+}
+
+/* ── Lightning-tabset background override ────────────────────────────────── */
+
+.slds-tabs_scoped__content,
+.slds-tabs--scoped__content,
+.slds-tabs_default__content,
+.slds-tabs--default__content {
+    background: #080d1a !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.slds-tabs_scoped__nav,
+.slds-tabs--scoped__nav,
+.slds-tabs_default__nav,
+.slds-tabs--default__nav {
+    background: #0c1426 !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* ── Tab Dark Background ─────────────────────────────────────────────────── */
+
+.tab-dark-bg {
+    background: linear-gradient(160deg, #080d1a 0%, #0c1426 50%, #0f1a36 100%);
+    border-radius: 0 0 0.75rem 0.75rem;
+    padding: 1rem;
+    min-height: 400px;
+}
+
+/* ── Dash Section (dark card container) ──────────────────────────────────── */
+
+.dash-section {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 0.625rem;
+    overflow: hidden;
+}
+
+.dash-section-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem 0.625rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(255, 255, 255, 0.03);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.dash-section-title {
+    display: flex;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.dash-section-bd {
+    padding: 0.875rem 1rem;
+}
+
+/* ── Scorecard dark overrides ────────────────────────────────────────────── */
+
+.dash-section .scorecard-dl dt {
+    color: rgba(255, 255, 255, 0.48);
+}
+
+.dash-section .scorecard-dl dd {
+    color: #f1f5f9;
+}
+
+/* ── Commit form dark override ───────────────────────────────────────────── */
+
+.tab-dark-bg .commit-form {
+    background: rgba(255, 255, 255, 0.94);
+    border-left-color: #7c3aed;
+    border-radius: 0 0.375rem 0.375rem 0;
+}
+
+.tab-dark-bg .empty-msg {
+    color: rgba(255, 255, 255, 0.38);
+}
+
+/* ── Tab 2 toolbar & chip dark overrides ─────────────────────────────────── */
+
+.tab-dark-bg .card-toolbar {
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.tab-dark-bg .metric-dark {
+    color: rgba(255, 255, 255, 0.65);
+    font-weight: 600;
+}
+
+.tab-dark-bg .targeted-strip-label {
+    color: #34d399;
+}
+
+.tab-dark-bg .targeted-chip {
+    background: rgba(16, 185, 129, 0.13);
+    border-color: rgba(16, 185, 129, 0.32);
+    color: #6ee7b7;
+}
+
+.tab-dark-bg .targeted-chip:hover {
+    background: rgba(16, 185, 129, 0.24);
+    border-color: rgba(16, 185, 129, 0.52);
+}
+
+.tab-dark-bg .tchip-x {
+    color: #6ee7b7;
+}
+
+/* ── Dark segment overrides for tab-dark-bg context ─────────────────────── */
+
+.tab-dark-bg .segment-section {
+    border-top-color: rgba(255, 255, 255, 0.07);
+}
+
+.tab-dark-bg .segment-header {
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.tab-dark-bg .segment-count {
+    color: rgba(255, 255, 255, 0.25);
+    font-weight: 500;
+}
