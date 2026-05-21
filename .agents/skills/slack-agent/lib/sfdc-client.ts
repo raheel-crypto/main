@@ -165,7 +165,11 @@ export async function updateOpportunity(
  */
 export async function getLatestApprovedQuoteApproval(
   opportunityId: string,
-): Promise<{ requestId: string; slackMessageUrl: string | null } | null> {
+): Promise<{
+  requestId: string;
+  slackMessageUrl: string | null;
+  raw: Record<string, unknown>;
+} | null> {
   // Only consider approvals whose Slack post is still trackable -- the caller
   // wants to reply in that thread. Older / overridden rows with null URLs
   // would just give us a 422 anyway.
@@ -177,11 +181,30 @@ export async function getLatestApprovedQuoteApproval(
       `ORDER BY Decision_Made_At__c DESC LIMIT 1`,
   );
   const result = (await sfdcFetch(`/query?q=${soql}`)) as {
-    records: Array<{ Request_Id__c: string; Slack_Message_Url__c: string | null }>;
+    records: Array<Record<string, unknown>>;
   };
   const r = result.records[0];
   if (!r) return null;
-  return { requestId: r.Request_Id__c, slackMessageUrl: r.Slack_Message_Url__c };
+  return {
+    requestId: getFieldCI(r, "Request_Id__c") ?? "",
+    slackMessageUrl: getFieldCI(r, "Slack_Message_Url__c"),
+    raw: r,
+  };
+}
+
+/**
+ * Case-insensitive field lookup. SFDC returns response keys in the canonical
+ * casing the field was created with, which may differ from how we wrote the
+ * SOQL (case is preserved on read even though SOQL itself is case-insensitive).
+ * e.g. a field created as `Slack_Message_URL__c` reads at `r["Slack_Message_URL__c"]`,
+ * not `r["Slack_Message_Url__c"]`.
+ */
+function getFieldCI(record: Record<string, unknown>, name: string): string | null {
+  const target = name.toLowerCase();
+  for (const [k, v] of Object.entries(record)) {
+    if (k.toLowerCase() === target) return typeof v === "string" ? v : v == null ? null : String(v);
+  }
+  return null;
 }
 
 /**

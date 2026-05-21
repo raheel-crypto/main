@@ -93,6 +93,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       slackMessageUrlType: typeof audit.slackMessageUrl,
       slackMessageUrlLength:
         typeof audit.slackMessageUrl === "string" ? audit.slackMessageUrl.length : null,
+      // Echo the raw SFDC record so we can see exact field names if the
+      // lookup is missing keys due to canonical case differences.
+      rawRecordKeys: Object.keys(audit.raw),
     });
   }
 
