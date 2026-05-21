@@ -10,8 +10,8 @@ import {
   insertPendingCard,
   setCardMessageTs,
 } from "../db/queries.js";
-import { connectPrompt, oppCard } from "../slack/blocks.js";
-import type { Recommendation } from "../types.js";
+import { connectPrompt, recordCard } from "../slack/blocks.js";
+import type { RecordUpdateProposal } from "../types.js";
 import {
   getConnectionForUser,
   SfNotConnectedError,
@@ -24,7 +24,7 @@ export interface QaRunResult {
 }
 
 const CARD_ACKNOWLEDGMENT_PATTERN =
-  /click\s+\*?Apply\*?|card below|drafted the update/i;
+  /click\s+\*?(Apply|Accept)\*?|card below|drafted the update/i;
 
 export async function runQaForUser(args: {
   slackUserId: string;
@@ -88,11 +88,11 @@ export async function runQaForUser(args: {
     });
     const rawAnswer = result.finalText || "_(no response)_";
     const calledProposeTool = result.toolCalls.some(
-      (c) => c.name === "sf_propose_opportunity_update"
+      (c) => c.name === "sf_propose_record_update"
     );
     const claimsDraft = CARD_ACKNOWLEDGMENT_PATTERN.test(rawAnswer);
     const proposalMissing =
-      !agentCtx.pendingWriteProposal && (claimsDraft || calledProposeTool);
+      !agentCtx.pendingRecordProposal && (claimsDraft || calledProposeTool);
 
     let answer = rawAnswer;
     if (proposalMissing) {
@@ -107,7 +107,7 @@ export async function runQaForUser(args: {
         }
       );
       answer =
-        ":warning: I started to draft that update but couldn't finish — most likely I couldn't pin down the opportunity in Salesforce. Try again with the exact opportunity name, or send the SF link / 18-char Id.";
+        ":warning: I started to draft that update but couldn't finish — most likely I couldn't pin down the record in Salesforce or the field name was off. Try again with an exact record name / SF link / 18-char Id, and the field's API name (custom fields end in `__c`).";
     }
 
     await slack.chat.update({
@@ -129,13 +129,13 @@ export async function runQaForUser(args: {
       },
     });
 
-    if (agentCtx.pendingWriteProposal) {
-      await postWriteProposalCard({
+    if (agentCtx.pendingRecordProposal) {
+      await postRecordProposalCard({
         slack,
         channelId,
         slackUserId,
         placeholderTs: ts,
-        proposal: agentCtx.pendingWriteProposal,
+        proposal: agentCtx.pendingRecordProposal,
         instanceUrl: conn.instanceUrl!,
       });
     }
@@ -156,34 +156,32 @@ export async function runQaForUser(args: {
   }
 }
 
-async function postWriteProposalCard(args: {
+async function postRecordProposalCard(args: {
   slack: WebClient;
   channelId: string;
   slackUserId: string;
   placeholderTs: string;
-  proposal: NonNullable<AgentToolCtx["pendingWriteProposal"]>;
+  proposal: RecordUpdateProposal;
   instanceUrl: string;
 }): Promise<void> {
-  const { slack, channelId, slackUserId, placeholderTs, proposal, instanceUrl } =
-    args;
-  const recommendation: Recommendation = {
-    opportunityId: proposal.opportunityId,
-    recap: proposal.recap,
-    fields: proposal.fields,
-  };
+  const {
+    slack,
+    channelId,
+    slackUserId,
+    placeholderTs,
+    proposal,
+    instanceUrl,
+  } = args;
   const cardId = await insertPendingCard({
     slackUserId,
     slackChannel: channelId,
     slackThreadTs: placeholderTs,
-    opportunityId: proposal.opportunityId,
-    recommendation,
-    kind: "qa_proposal",
+    opportunityId:
+      proposal.sobjectType === "Opportunity" ? proposal.recordId : null,
+    recommendation: proposal,
+    kind: "record_proposal",
   });
-  const blocks = oppCard(cardId, recommendation, {
-    name: proposal.opportunityName,
-    accountName: proposal.accountName,
-    instanceUrl,
-  });
+  const blocks = recordCard(cardId, proposal, instanceUrl);
   const cardRes = await slack.chat.postMessage({
     channel: channelId,
     unfurl_links: false,
@@ -195,12 +193,22 @@ async function postWriteProposalCard(args: {
   for (const f of proposal.fields) {
     await appendAudit({
       slackUserId,
-      opportunityId: proposal.opportunityId,
+      opportunityId:
+        proposal.sobjectType === "Opportunity" ? proposal.recordId : null,
       fieldName: f.field,
-      action: "qa_proposed_update",
-      oldValue: String(f.currentValue ?? ""),
-      newValue: String(f.recommendedValue ?? ""),
-      metadata: { cardId, rationale: f.rationale },
+      action: "record_proposed_update",
+      oldValue:
+        f.currentDisplay ??
+        (f.currentValue == null ? "" : String(f.currentValue)),
+      newValue:
+        f.recommendedDisplay ??
+        (f.recommendedValue == null ? "" : String(f.recommendedValue)),
+      metadata: {
+        cardId,
+        sobjectType: proposal.sobjectType,
+        recordId: proposal.recordId,
+        rationale: f.rationale,
+      },
     });
   }
 }

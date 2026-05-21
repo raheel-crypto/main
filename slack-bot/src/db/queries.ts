@@ -10,6 +10,7 @@ import type {
   PendingCardKind,
   PostMeetingPayload,
   Recommendation,
+  RecordUpdateProposal,
   SfTokens,
   UserPrefs,
 } from "../types.js";
@@ -389,7 +390,8 @@ export async function insertPendingCard(c: {
     | BriefPayload
     | BuySignalPayload
     | PostMeetingPayload
-    | MeetingPickerPayload;
+    | MeetingPickerPayload
+    | RecordUpdateProposal;
   kind?: PendingCardKind;
 }): Promise<string> {
   const pool = getPool();
@@ -453,7 +455,9 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
             ? "meeting_picker"
             : r.kind === "qa_proposal"
               ? "qa_proposal"
-              : "standup";
+              : r.kind === "record_proposal"
+                ? "record_proposal"
+                : "standup";
   if (kind === "brief") {
     return {
       ...base,
@@ -492,6 +496,14 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
       kind: "qa_proposal",
       opportunityId: r.opportunity_id,
       recommendation: recommendation as Recommendation,
+    };
+  }
+  if (kind === "record_proposal") {
+    return {
+      ...base,
+      kind: "record_proposal",
+      opportunityId: r.opportunity_id ?? null,
+      recommendation: recommendation as RecordUpdateProposal,
     };
   }
   return {

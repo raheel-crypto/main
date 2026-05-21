@@ -92,6 +92,101 @@ export function fieldsFromRecommendation(
   }));
 }
 
+function coerceForSobject(
+  sobjectType: string,
+  field: string,
+  value: unknown
+): unknown {
+  // Generic best-effort coercion; the propose tool already normalized values,
+  // so this is mainly for late-stage edits via the modal.
+  if (value === null || value === undefined || value === "") return null;
+  if (
+    typeof value === "string" &&
+    /^-?\d+(\.\d+)?$/.test(value) &&
+    /amount|arr|mrr|revenue|quantity|count|percent/i.test(field)
+  ) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : value;
+  }
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return value;
+}
+
+export interface ApplyRecordResult {
+  field: string;
+  ok: boolean;
+  error?: string;
+}
+
+export async function applyRecordFields(args: {
+  conn: Connection;
+  slackUserId: string;
+  sobjectType: string;
+  recordId: string;
+  fields: { field: string; newValue: unknown; oldValue: unknown }[];
+}): Promise<ApplyRecordResult[]> {
+  const { conn, slackUserId, sobjectType, recordId, fields } = args;
+  if (fields.length === 0) return [];
+
+  const payload: Record<string, unknown> = { Id: recordId };
+  for (const f of fields) {
+    payload[f.field] = coerceForSobject(sobjectType, f.field, f.newValue);
+  }
+
+  const results: ApplyRecordResult[] = [];
+  const auditOppId = sobjectType === "Opportunity" ? recordId : null;
+
+  if (config.dryRun) {
+    for (const f of fields) {
+      await appendAudit({
+        slackUserId,
+        opportunityId: auditOppId,
+        fieldName: f.field,
+        action: "record_applied",
+        oldValue: String(f.oldValue ?? ""),
+        newValue: String(f.newValue ?? ""),
+        metadata: { dryRun: true, sobjectType, recordId },
+      });
+      results.push({ field: f.field, ok: true });
+    }
+    return results;
+  }
+
+  try {
+    await conn.sobject(sobjectType).update(payload as any);
+    for (const f of fields) {
+      await appendAudit({
+        slackUserId,
+        opportunityId: auditOppId,
+        fieldName: f.field,
+        action: "record_applied",
+        oldValue: String(f.oldValue ?? ""),
+        newValue: String(f.newValue ?? ""),
+        metadata: { sobjectType, recordId },
+      });
+      results.push({ field: f.field, ok: true });
+    }
+  } catch (err: any) {
+    for (const f of fields) {
+      await appendAudit({
+        slackUserId,
+        opportunityId: auditOppId,
+        fieldName: f.field,
+        action: "record_apply_failed",
+        oldValue: String(f.oldValue ?? ""),
+        newValue: String(f.newValue ?? ""),
+        metadata: { sobjectType, recordId, error: err.message },
+      });
+      results.push({ field: f.field, ok: false, error: err.message });
+    }
+  }
+  return results;
+}
+
 export interface CreateOpportunityInput {
   conn: Connection;
   slackUserId: string;

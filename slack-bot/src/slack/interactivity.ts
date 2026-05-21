@@ -28,6 +28,7 @@ import {
 } from "../services/salesforceClient.js";
 import {
   applyFields,
+  applyRecordFields,
   createContact,
   createOpportunity,
   createTask,
@@ -43,6 +44,7 @@ import {
   buySignalLogTaskModal,
   cardWithFieldResolved,
   editFieldModal,
+  editProposedFieldModal,
   parseActionId,
   postMeetingAddContactModal,
   postMeetingLogTaskModal,
@@ -55,7 +57,9 @@ import type {
   PendingCard,
   PostMeetingPendingCard,
   MeetingPickerPendingCard,
+  ProposedField,
   RecommendedField,
+  RecordProposalPendingCard,
 } from "../types.js";
 
 export function registerInteractivity(app: App): void {
@@ -87,7 +91,22 @@ export function registerInteractivity(app: App): void {
     const parsed = parseActionId((action as any).action_id);
     if (!parsed || !parsed.field) return;
     const card = await getPendingCard(parsed.cardId);
-    if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
+    if (!card) return;
+    if (card.kind === "record_proposal") {
+      const field = card.recommendation.fields.find(
+        (f) => f.field === parsed.field
+      );
+      if (!field) return;
+      await client.views.open({
+        trigger_id: (body as any).trigger_id,
+        view: editProposedFieldModal({
+          cardId: parsed.cardId,
+          field,
+        }),
+      });
+      return;
+    }
+    if (card.kind !== "standup" && card.kind !== "qa_proposal") return;
     const fieldRec = card.recommendation.fields.find(
       (f) => f.field === parsed.field
     );
@@ -145,6 +164,23 @@ export function registerInteractivity(app: App): void {
   });
 
   app.view(/^edit_field:.+/, async ({ ack, body, view, client }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata || "{}") as {
+      cardId: string;
+      field: string;
+    };
+    const valueState =
+      view.state.values["value_block"]?.["value"] ?? ({} as any);
+    const newValue =
+      valueState.value ??
+      valueState.selected_option?.value ??
+      valueState.selected_date ??
+      valueState.selected_time ??
+      "";
+    await handleEditSubmit(app, body, meta.cardId, meta.field, newValue);
+  });
+
+  app.view(/^edit_record_field:.+/, async ({ ack, body, view, client }) => {
     await ack();
     const meta = JSON.parse(view.private_metadata || "{}") as {
       cardId: string;
@@ -637,7 +673,12 @@ async function handleAccept(
   field: string
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
+  if (!card) return;
+  if (card.kind === "record_proposal") {
+    await handleAcceptRecord(app, body, card, field);
+    return;
+  }
+  if (card.kind !== "standup" && card.kind !== "qa_proposal") return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   if (!fieldRec) return;
@@ -661,7 +702,12 @@ async function handleSkip(
   field: string
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
+  if (!card) return;
+  if (card.kind === "record_proposal") {
+    await handleSkipRecord(app, body, card, field);
+    return;
+  }
+  if (card.kind !== "standup" && card.kind !== "qa_proposal") return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   await appendAudit({
@@ -684,7 +730,12 @@ async function handleSkip(
 
 async function handleApplyAll(app: App, body: any, cardId: string): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
+  if (!card) return;
+  if (card.kind === "record_proposal") {
+    await handleApplyAllRecord(app, body, card);
+    return;
+  }
+  if (card.kind !== "standup" && card.kind !== "qa_proposal") return;
   const slackUserId = body.user.id as string;
   const fields = card.recommendation.fields;
   if (fields.length === 0) return;
@@ -709,7 +760,12 @@ async function handleEditSubmit(
   newValue: unknown
 ): Promise<void> {
   const card = await getPendingCard(cardId);
-  if (!card || (card.kind !== "standup" && card.kind !== "qa_proposal")) return;
+  if (!card) return;
+  if (card.kind === "record_proposal") {
+    await handleEditRecordSubmit(app, body, card, field, newValue);
+    return;
+  }
+  if (card.kind !== "standup" && card.kind !== "qa_proposal") return;
   const slackUserId = body.user.id as string;
   const fieldRec = card.recommendation.fields.find((f) => f.field === field);
   if (!fieldRec) return;
@@ -739,6 +795,201 @@ async function handleEditSubmit(
     [overridden],
     "edited"
   );
+}
+
+async function handleAcceptRecord(
+  app: App,
+  body: any,
+  card: RecordProposalPendingCard,
+  field: string
+): Promise<void> {
+  const slackUserId = body.user.id as string;
+  const fieldRec = card.recommendation.fields.find((f) => f.field === field);
+  if (!fieldRec) return;
+
+  await appendAudit({
+    slackUserId,
+    opportunityId: card.opportunityId,
+    fieldName: field,
+    action: "accepted",
+    oldValue: String(fieldRec.currentValue ?? ""),
+    newValue: String(fieldRec.recommendedValue ?? ""),
+    metadata: {
+      cardKind: "record_proposal",
+      sobjectType: card.recommendation.sobjectType,
+      recordId: card.recommendation.recordId,
+    },
+  });
+  await writeAndReplyRecord(app, body, card, [fieldRec], "accepted");
+}
+
+async function handleSkipRecord(
+  app: App,
+  body: any,
+  card: RecordProposalPendingCard,
+  field: string
+): Promise<void> {
+  const slackUserId = body.user.id as string;
+  const fieldRec = card.recommendation.fields.find((f) => f.field === field);
+  await appendAudit({
+    slackUserId,
+    opportunityId: card.opportunityId,
+    fieldName: field,
+    action: "skipped",
+    oldValue: String(fieldRec?.currentValue ?? ""),
+    newValue: String(fieldRec?.recommendedValue ?? ""),
+    metadata: {
+      cardKind: "record_proposal",
+      sobjectType: card.recommendation.sobjectType,
+      recordId: card.recommendation.recordId,
+    },
+  });
+  const newBlocks = cardWithFieldResolved(body.message.blocks, field, "skipped");
+  await app.client.chat.update({
+    channel: body.channel.id,
+    ts: body.message.ts,
+    blocks: newBlocks,
+    text: body.message.text || "Updated",
+  });
+}
+
+async function handleApplyAllRecord(
+  app: App,
+  body: any,
+  card: RecordProposalPendingCard
+): Promise<void> {
+  const slackUserId = body.user.id as string;
+  const fields = card.recommendation.fields;
+  if (fields.length === 0) return;
+  for (const f of fields) {
+    await appendAudit({
+      slackUserId,
+      opportunityId: card.opportunityId,
+      fieldName: f.field,
+      action: "accepted",
+      oldValue: String(f.currentValue ?? ""),
+      newValue: String(f.recommendedValue ?? ""),
+      metadata: {
+        cardKind: "record_proposal",
+        sobjectType: card.recommendation.sobjectType,
+        recordId: card.recommendation.recordId,
+      },
+    });
+  }
+  await writeAndReplyRecord(app, body, card, fields, "accepted");
+}
+
+async function handleEditRecordSubmit(
+  app: App,
+  body: any,
+  card: RecordProposalPendingCard,
+  field: string,
+  newValue: unknown
+): Promise<void> {
+  const slackUserId = body.user.id as string;
+  const fieldRec = card.recommendation.fields.find((f) => f.field === field);
+  if (!fieldRec) return;
+
+  const overridden: ProposedField = {
+    ...fieldRec,
+    recommendedValue: newValue as any,
+    recommendedDisplay: newValue == null ? null : String(newValue),
+  };
+
+  await appendAudit({
+    slackUserId,
+    opportunityId: card.opportunityId,
+    fieldName: field,
+    action: "edited",
+    oldValue: String(fieldRec.currentValue ?? ""),
+    newValue: String(newValue ?? ""),
+    metadata: {
+      cardKind: "record_proposal",
+      sobjectType: card.recommendation.sobjectType,
+      recordId: card.recommendation.recordId,
+    },
+  });
+  await writeAndReplyRecord(
+    app,
+    {
+      user: body.user,
+      channel: { id: card.slackChannel },
+      message: { ts: card.slackMessageTs, blocks: undefined, text: "Updated" },
+    },
+    card,
+    [overridden],
+    "edited"
+  );
+}
+
+async function writeAndReplyRecord(
+  app: App,
+  body: any,
+  card: RecordProposalPendingCard,
+  fields: ProposedField[],
+  uiStatus: "accepted" | "edited" | "skipped"
+): Promise<void> {
+  let conn;
+  try {
+    conn = await getConnectionForUser(card.slackUserId);
+  } catch (err) {
+    if (err instanceof SfNotConnectedError) {
+      await app.client.chat.postEphemeral({
+        channel: body.channel.id,
+        user: body.user.id,
+        text: "Salesforce isn't connected. Run `/standup connect`.",
+      });
+    }
+    return;
+  }
+  const results = await applyRecordFields({
+    conn,
+    slackUserId: card.slackUserId,
+    sobjectType: card.recommendation.sobjectType,
+    recordId: card.recommendation.recordId,
+    fields: fields.map((f) => ({
+      field: f.field,
+      newValue: f.recommendedValue,
+      oldValue: f.currentValue,
+    })),
+  });
+
+  let blocks = body.message.blocks;
+  if (!blocks) {
+    const fresh = await app.client.conversations.history({
+      channel: card.slackChannel,
+      latest: card.slackMessageTs,
+      inclusive: true,
+      limit: 1,
+    });
+    blocks = (fresh.messages as any[])?.[0]?.blocks ?? [];
+  }
+  for (const f of fields) {
+    const ok = results.find((r) => r.field === f.field)?.ok;
+    blocks = cardWithFieldResolved(
+      blocks,
+      f.field,
+      ok ? uiStatus : "skipped",
+      f.recommendedDisplay ?? f.recommendedValue
+    );
+  }
+  await app.client.chat.update({
+    channel: card.slackChannel,
+    ts: card.slackMessageTs,
+    blocks,
+    text: body.message.text || "Updated",
+  });
+
+  const failed = results.filter((r) => !r.ok);
+  if (failed.length > 0) {
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackMessageTs,
+      text: failed
+        .map((f) => `:warning: ${f.field}: ${f.error ?? "unknown error"}`)
+        .join("\n"),
+    });
+  }
 }
 
 async function writeAndReply(

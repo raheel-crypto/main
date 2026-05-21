@@ -9,8 +9,10 @@ import type {
   MeetingPickerCandidate,
   NooksWebhookPayload,
   PostMeetingPayload,
+  ProposedField,
   Recommendation,
   RecommendedField,
+  RecordUpdateProposal,
 } from "../types.js";
 
 export type ActionVerb =
@@ -182,6 +184,222 @@ export function oppCard(
   });
 
   return { blocks, text: `${opp.name} — ${rec.recap}` };
+}
+
+function formatProposedValue(f: ProposedField, side: "current" | "recommended"): string {
+  const display =
+    side === "current" ? f.currentDisplay : f.recommendedDisplay;
+  const value = side === "current" ? f.currentValue : f.recommendedValue;
+  if (display != null) return display.length > 80 ? display.slice(0, 77) + "…" : display;
+  if (value === null || value === undefined) return "(none)";
+  const s = typeof value === "boolean" ? (value ? "true" : "false") : String(value);
+  return s.length > 80 ? s.slice(0, 77) + "…" : s;
+}
+
+export function recordCard(
+  cardId: string,
+  proposal: RecordUpdateProposal,
+  instanceUrl: string
+): { blocks: KnownBlock[]; text: string } {
+  const recordUrl = `${instanceUrl}/${proposal.recordId}`;
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: proposal.recordName.slice(0, 150) },
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: proposal.contextLabel }],
+    },
+    { type: "section", text: { type: "mrkdwn", text: proposal.recap } },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: `linkout:open_in_sf:${proposal.recordId}`,
+          text: { type: "plain_text", text: "Open in Salesforce" },
+          url: recordUrl,
+        },
+      ],
+    },
+  ];
+
+  if (proposal.fields.length === 0) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: "_No field changes proposed._" }],
+    });
+    return {
+      blocks,
+      text: `${proposal.recordName} — ${proposal.recap}`,
+    };
+  }
+
+  for (const f of proposal.fields) {
+    blocks.push({ type: "divider" });
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `*${f.fieldLabel}* (\`${f.field}\`)\n` +
+          `Current: \`${formatProposedValue(f, "current")}\`\n` +
+          `Recommended: \`${formatProposedValue(f, "recommended")}\`\n` +
+          `_${f.rationale}_`,
+      },
+    });
+    blocks.push({
+      type: "actions",
+      block_id: `field:${f.field}`,
+      elements: [
+        {
+          type: "button",
+          style: "primary",
+          text: { type: "plain_text", text: "Accept" },
+          action_id: actionId("accept", cardId, f.field),
+          value: f.field,
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Edit" },
+          action_id: actionId("edit", cardId, f.field),
+          value: f.field,
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Skip" },
+          action_id: actionId("skip", cardId, f.field),
+          value: f.field,
+        },
+      ],
+    });
+  }
+
+  blocks.push({ type: "divider" });
+  blocks.push({
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        style: "primary",
+        text: { type: "plain_text", text: "Apply all recommended" },
+        action_id: actionId("apply_all", cardId),
+      },
+    ],
+  });
+
+  return {
+    blocks,
+    text: `${proposal.recordName} — ${proposal.recap}`,
+  };
+}
+
+export function editProposedFieldModal(args: {
+  cardId: string;
+  field: ProposedField;
+}): View {
+  const { cardId, field } = args;
+  const initial =
+    field.recommendedDisplay ??
+    (field.recommendedValue == null
+      ? ""
+      : typeof field.recommendedValue === "boolean"
+        ? field.recommendedValue
+          ? "true"
+          : "false"
+        : String(field.recommendedValue));
+
+  let input: any;
+  if (
+    field.fieldType === "picklist" &&
+    field.picklistValues &&
+    field.picklistValues.length > 0
+  ) {
+    input = {
+      type: "static_select",
+      action_id: "value",
+      initial_option: field.picklistValues.includes(initial)
+        ? { text: { type: "plain_text", text: initial.slice(0, 75) }, value: initial }
+        : undefined,
+      options: field.picklistValues.map((p) => ({
+        text: { type: "plain_text", text: p.slice(0, 75) },
+        value: p,
+      })),
+    };
+  } else if (field.fieldType === "date") {
+    input = {
+      type: "datepicker",
+      action_id: "value",
+      initial_date: /^\d{4}-\d{2}-\d{2}/.test(initial)
+        ? initial.slice(0, 10)
+        : undefined,
+    };
+  } else if (
+    field.fieldType === "currency" ||
+    field.fieldType === "double" ||
+    field.fieldType === "int" ||
+    field.fieldType === "percent"
+  ) {
+    input = {
+      type: "number_input",
+      action_id: "value",
+      is_decimal_allowed: field.fieldType !== "int",
+      initial_value: initial,
+    };
+  } else if (field.fieldType === "boolean") {
+    input = {
+      type: "static_select",
+      action_id: "value",
+      initial_option:
+        initial === "true" || initial === "false"
+          ? { text: { type: "plain_text", text: initial }, value: initial }
+          : undefined,
+      options: [
+        { text: { type: "plain_text", text: "true" }, value: "true" },
+        { text: { type: "plain_text", text: "false" }, value: "false" },
+      ],
+    };
+  } else if (
+    field.fieldType === "textarea" ||
+    (typeof initial === "string" && initial.length > 60)
+  ) {
+    input = {
+      type: "plain_text_input",
+      action_id: "value",
+      multiline: true,
+      initial_value: initial.slice(0, 3000),
+    };
+  } else {
+    input = {
+      type: "plain_text_input",
+      action_id: "value",
+      initial_value: initial.slice(0, 3000),
+    };
+  }
+
+  return {
+    type: "modal",
+    callback_id: `edit_record_field:${cardId}:${field.field}`,
+    private_metadata: JSON.stringify({ cardId, field: field.field }),
+    title: {
+      type: "plain_text",
+      text: `Edit ${field.fieldLabel}`.slice(0, 24),
+    },
+    submit: { type: "plain_text", text: "Apply" },
+    close: { type: "plain_text", text: "Cancel" },
+    blocks: [
+      {
+        type: "input",
+        block_id: "value_block",
+        label: {
+          type: "plain_text",
+          text: `${field.fieldLabel} (${field.field})`.slice(0, 75),
+        },
+        element: input,
+      },
+    ],
+  };
 }
 
 export function cardWithFieldResolved(

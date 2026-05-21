@@ -17,26 +17,25 @@ import {
   query as rogoQueryRaw,
 } from "../services/rogoClient.js";
 import { BUY_SIGNAL_SUBJECT_PATTERN } from "../constants.js";
-
-export interface PendingWriteProposal {
-  opportunityId: string;
-  opportunityName: string;
-  accountId: string | null;
-  accountName: string;
-  fields: {
-    field:
-      | "StageName"
-      | "NextStep"
-      | "Amount"
-      | "CloseDate"
-      | "Notes__c"
-      | "Deal_Description__c";
-    currentValue: string | number | null;
-    recommendedValue: string | number | null;
-    rationale: string;
-  }[];
-  recap: string;
-}
+import {
+  describeObject,
+  findField,
+  sobjectFromIdPrefix,
+  suggestFields,
+  type DescribedField,
+  type DescribedObject,
+} from "../services/sfDescribe.js";
+import {
+  fetchUserName,
+  isSelfReference,
+  resolveCurrentUserId,
+  resolveUserByName,
+} from "../services/userResolver.js";
+import type {
+  ProposedField,
+  ProposedFieldType,
+  RecordUpdateProposal,
+} from "../types.js";
 
 export interface AgentToolCtx {
   conn: Connection;
@@ -44,7 +43,7 @@ export interface AgentToolCtx {
   userEmail: string;
   userTimezone: string;
   instanceUrl: string;
-  pendingWriteProposal?: PendingWriteProposal;
+  pendingRecordProposal?: RecordUpdateProposal;
 }
 
 export interface AgentTool {
@@ -490,29 +489,262 @@ const rogoQuery: AgentTool = {
   },
 };
 
-const WRITABLE_OPP_FIELDS = [
-  "StageName",
-  "NextStep",
-  "Amount",
-  "CloseDate",
-  "Notes__c",
-  "Deal_Description__c",
-] as const;
-type WritableOppField = (typeof WRITABLE_OPP_FIELDS)[number];
+const COMMON_SOBJECTS = [
+  "Opportunity",
+  "Account",
+  "Contact",
+  "Lead",
+  "Task",
+  "Event",
+  "Case",
+];
 
-const sfProposeOpportunityUpdate: AgentTool = {
-  name: "sf_propose_opportunity_update",
+function fieldTypeForProposed(
+  f: DescribedField
+): ProposedFieldType {
+  switch (f.type) {
+    case "textarea":
+    case "string":
+    case "picklist":
+    case "multipicklist":
+    case "date":
+    case "datetime":
+    case "currency":
+    case "double":
+    case "int":
+    case "percent":
+    case "boolean":
+    case "reference":
+    case "id":
+    case "email":
+    case "phone":
+    case "url":
+      return f.type;
+    default:
+      // Map unknown types to a safe text-edit experience.
+      return "string";
+  }
+}
+
+async function normalizeProposedValue(
+  ctx: AgentToolCtx,
+  desc: DescribedField,
+  rawValue: unknown
+): Promise<
+  | { ok: true; value: string | number | boolean | null; display: string | null }
+  | { ok: false; error: string }
+> {
+  if (rawValue === null || rawValue === undefined || rawValue === "") {
+    return { ok: true, value: null, display: null };
+  }
+  switch (desc.type) {
+    case "boolean": {
+      if (typeof rawValue === "boolean")
+        return { ok: true, value: rawValue, display: rawValue ? "true" : "false" };
+      const s = String(rawValue).trim().toLowerCase();
+      if (["true", "yes", "1", "checked"].includes(s))
+        return { ok: true, value: true, display: "true" };
+      if (["false", "no", "0", "unchecked"].includes(s))
+        return { ok: true, value: false, display: "false" };
+      return {
+        ok: false,
+        error: `${desc.name} expects a boolean (true/false); got ${JSON.stringify(rawValue)}`,
+      };
+    }
+    case "currency":
+    case "double":
+    case "int":
+    case "percent": {
+      const n =
+        typeof rawValue === "number"
+          ? rawValue
+          : Number(String(rawValue).replace(/[^0-9.\-]/g, ""));
+      if (!Number.isFinite(n)) {
+        return {
+          ok: false,
+          error: `${desc.name} must be a number; got ${JSON.stringify(rawValue)}`,
+        };
+      }
+      return { ok: true, value: n, display: String(n) };
+    }
+    case "date": {
+      const s = String(rawValue).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        return {
+          ok: false,
+          error: `${desc.name} must be YYYY-MM-DD; got ${JSON.stringify(rawValue)}`,
+        };
+      }
+      return { ok: true, value: s, display: s };
+    }
+    case "datetime": {
+      const s = String(rawValue);
+      const d = new Date(s);
+      if (Number.isNaN(d.getTime())) {
+        return {
+          ok: false,
+          error: `${desc.name} must be a valid ISO datetime; got ${JSON.stringify(rawValue)}`,
+        };
+      }
+      const iso = d.toISOString();
+      return { ok: true, value: iso, display: iso };
+    }
+    case "picklist": {
+      const s = String(rawValue);
+      const allowed = desc.picklistValues.map((p) => p.value);
+      if (allowed.length > 0 && !allowed.includes(s)) {
+        return {
+          ok: false,
+          error: `${desc.name} value "${s}" is not in the picklist. Valid: ${allowed.join(" | ")}`,
+        };
+      }
+      return { ok: true, value: s, display: s };
+    }
+    case "multipicklist": {
+      const arr = Array.isArray(rawValue)
+        ? rawValue.map(String)
+        : String(rawValue)
+            .split(";")
+            .map((x) => x.trim())
+            .filter(Boolean);
+      const allowed = new Set(desc.picklistValues.map((p) => p.value));
+      if (allowed.size > 0) {
+        const bad = arr.filter((v) => !allowed.has(v));
+        if (bad.length > 0) {
+          return {
+            ok: false,
+            error: `${desc.name} contains invalid picklist values: ${bad.join(", ")}. Valid: ${[...allowed].join(" | ")}`,
+          };
+        }
+      }
+      const joined = arr.join(";");
+      return { ok: true, value: joined, display: arr.join(", ") };
+    }
+    case "reference": {
+      const refTo = desc.referenceTo[0];
+      if (refTo === "User") {
+        const raw = String(rawValue).trim();
+        if (isSelfReference(raw)) {
+          const uid = await resolveCurrentUserId(ctx.conn);
+          if (!uid) {
+            return {
+              ok: false,
+              error: `Couldn't resolve the current user for ${desc.name}.`,
+            };
+          }
+          const name = (await fetchUserName(ctx.conn, uid)) ?? raw;
+          return { ok: true, value: uid, display: name };
+        }
+        // Already an Id?
+        if (/^005[A-Za-z0-9]{12,15}$/.test(raw)) {
+          const name = (await fetchUserName(ctx.conn, raw)) ?? raw;
+          return { ok: true, value: raw, display: name };
+        }
+        const resolved = await resolveUserByName(ctx.conn, raw);
+        if (resolved.kind === "ok") {
+          return {
+            ok: true,
+            value: resolved.user.id,
+            display: resolved.user.name,
+          };
+        }
+        if (resolved.kind === "ambiguous") {
+          return {
+            ok: false,
+            error: `Multiple active users match "${raw}" for ${desc.name}: ${resolved.candidates.map((c) => `${c.name} (${c.id})`).join("; ")}. Ask the rep which one.`,
+          };
+        }
+        return {
+          ok: false,
+          error: `No active user matches "${raw}" for ${desc.name}.`,
+        };
+      }
+      const raw = String(rawValue).trim();
+      // For non-User lookups, require a real Id; agent should look it up first
+      // with sf_find_account / sf_query.
+      if (!/^[A-Za-z0-9]{15,18}$/.test(raw)) {
+        return {
+          ok: false,
+          error: `${desc.name} is a Lookup(${refTo}). Pass a Salesforce Id (15 or 18 chars). Use sf_find_account or sf_query to look it up.`,
+        };
+      }
+      return { ok: true, value: raw, display: raw };
+    }
+    default:
+      // string/textarea/email/phone/url/id — accept as string
+      return { ok: true, value: String(rawValue), display: String(rawValue) };
+  }
+}
+
+async function lookupRecord(
+  ctx: AgentToolCtx,
+  sobjectType: string,
+  recordId: string,
+  fieldNames: string[]
+): Promise<{ row: any; nameField: string } | null> {
+  const selectFields = ["Id", "Name", ...fieldNames]
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(", ");
+  try {
+    const res = await ctx.conn.query(
+      `SELECT ${selectFields} FROM ${sobjectType} WHERE Id = '${escapeSoql(recordId)}' LIMIT 1`
+    );
+    const row = (res.records as any[])[0];
+    if (!row) return null;
+    return { row, nameField: "Name" };
+  } catch {
+    // Some sobjects (e.g. Case, Task) don't have a Name field; retry without it.
+    try {
+      const fallbackFields = ["Id", ...fieldNames]
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .join(", ");
+      const res = await ctx.conn.query(
+        `SELECT ${fallbackFields} FROM ${sobjectType} WHERE Id = '${escapeSoql(recordId)}' LIMIT 1`
+      );
+      const row = (res.records as any[])[0];
+      if (!row) return null;
+      return { row, nameField: "Id" };
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildContextLabel(
+  sobjectType: string,
+  recordName: string,
+  row: any
+): string {
+  const accountName = row?.Account?.Name;
+  if (sobjectType === "Opportunity") {
+    return accountName
+      ? `Opportunity · ${accountName}`
+      : "Opportunity";
+  }
+  if (sobjectType === "Contact") {
+    return accountName ? `Contact · ${accountName}` : "Contact";
+  }
+  return sobjectType;
+}
+
+const sfProposeRecordUpdate: AgentTool = {
+  name: "sf_propose_record_update",
   definition: {
-    name: "sf_propose_opportunity_update",
+    name: "sf_propose_record_update",
     description:
-      "Draft an update to a Salesforce Opportunity. Does NOT write to Salesforce — it stages a confirmation card with Accept/Edit/Skip buttons that the rep clicks to apply. Use this whenever the rep asks you to update, change, set, or push an opportunity field. Writable fields: StageName, NextStep, CloseDate, Amount, Notes__c, Deal_Description__c. Notes__c and Deal_Description__c are long-text custom fields (32K chars) — Notes__c for free-form notes (\"notes\", \"call notes\"), Deal_Description__c for the deal description / write-up (\"description\", \"deal description\", \"overview\"). The standard Salesforce Description field is intentionally NOT writable here — use the custom fields. Pass YYYY-MM-DD for CloseDate, a number for Amount, an exact picklist value for StageName. Call this tool at most once per turn; calling it ends the agent loop.",
+      "Draft an update to ANY Salesforce record (Opportunity, Account, Contact, Lead, Task, custom objects, etc.). Does NOT write to Salesforce — it stages a confirmation card the rep clicks to apply. Use this whenever the rep asks to update / change / set / push a field on a record. The tool calls describe() to validate fields exist, are updateable, and match the expected type (picklist, date, currency, boolean, reference). For Lookup(User) fields, you may pass 'me' (resolves to the rep's own User Id) or a name (resolves via User WHERE Name LIKE). For other Lookup fields, pass a real 15/18-char Salesforce Id — use sf_find_account or sf_query first to look up the Id. Call at most once per turn; calling it ends the agent loop. If the tool returns an error (field not found, wrong type, invalid picklist value), read the error and either retry with corrected input or ask the rep to clarify.",
     input_schema: {
       type: "object",
       properties: {
-        opportunityId: {
+        sobjectType: {
           type: "string",
           description:
-            "The 15- or 18-character Salesforce Opportunity Id. Look it up first via sf_query or sf_get_account_summary if you don't have it.",
+            "The Salesforce object API name, e.g. 'Opportunity', 'Account', 'Contact', 'Lead', 'Task', or a custom object like 'Champion__c'. Case-sensitive.",
+        },
+        recordId: {
+          type: "string",
+          description:
+            "The 15- or 18-character Salesforce record Id. Look it up first via sf_find_account or sf_query if you don't have it.",
         },
         fields: {
           type: "array",
@@ -522,17 +754,17 @@ const sfProposeOpportunityUpdate: AgentTool = {
             properties: {
               field: {
                 type: "string",
-                enum: [...WRITABLE_OPP_FIELDS],
-                description: "One of the writable fields.",
+                description:
+                  "The API name of the field (e.g. 'StageName', 'Post_Sales_Owner__c'). Custom fields end in __c.",
               },
               newValue: {
                 description:
-                  "The new value. Strings for NextStep/StageName/Notes__c/Deal_Description__c, number for Amount, YYYY-MM-DD string for CloseDate.",
+                  "The new value. Strings for text/picklist/email/phone/url, numbers for currency/double/int/percent, YYYY-MM-DD for date, ISO 8601 for datetime, true/false for boolean, a User name or 'me' for Lookup(User), an Id for other references.",
               },
               rationale: {
                 type: "string",
                 description:
-                  "One sentence explaining why this change is being proposed (quote the rep's words if useful).",
+                  "One sentence explaining why this change is being proposed.",
               },
             },
             required: ["field", "newValue", "rationale"],
@@ -544,11 +776,12 @@ const sfProposeOpportunityUpdate: AgentTool = {
             "One-line summary of what the rep asked for. Shown at the top of the confirmation card.",
         },
       },
-      required: ["opportunityId", "fields", "recap"],
+      required: ["sobjectType", "recordId", "fields", "recap"],
     },
   },
   async execute(input, ctx) {
-    const opportunityId = String((input as any).opportunityId ?? "").trim();
+    const sobjectType = String((input as any).sobjectType ?? "").trim();
+    const recordId = String((input as any).recordId ?? "").trim();
     const recap = String((input as any).recap ?? "").trim();
     const rawFields = ((input as any).fields ?? []) as {
       field: string;
@@ -556,139 +789,144 @@ const sfProposeOpportunityUpdate: AgentTool = {
       rationale: string;
     }[];
 
-    if (!opportunityId) {
-      return { status: "error", error: "opportunityId required" };
-    }
-    if (!recap) {
-      return { status: "error", error: "recap required" };
-    }
+    if (!sobjectType) return { status: "error", error: "sobjectType required" };
+    if (!recordId) return { status: "error", error: "recordId required" };
+    if (!recap) return { status: "error", error: "recap required" };
     if (!Array.isArray(rawFields) || rawFields.length === 0) {
       return { status: "error", error: "fields must be a non-empty array" };
     }
 
-    const invalid = rawFields.find(
-      (f) => !WRITABLE_OPP_FIELDS.includes(f.field as WritableOppField)
-    );
-    if (invalid) {
+    const prefixSobject = sobjectFromIdPrefix(recordId);
+    if (prefixSobject && prefixSobject.toLowerCase() !== sobjectType.toLowerCase()) {
       return {
         status: "error",
-        error: `Field "${invalid.field}" is not writable. Allowed: ${WRITABLE_OPP_FIELDS.join(", ")}`,
+        error: `recordId prefix indicates ${prefixSobject}, but sobjectType is ${sobjectType}. They must match.`,
       };
     }
 
-    let oppRow: any;
+    let describe: DescribedObject;
     try {
-      const res = await ctx.conn.query(
-        `SELECT Id, Name, StageName, NextStep, Amount, CloseDate, Notes__c, Deal_Description__c, AccountId, Account.Name
-           FROM Opportunity WHERE Id = '${escapeSoql(opportunityId)}' LIMIT 1`
-      );
-      oppRow = (res.records as any[])[0];
+      describe = await describeObject(ctx.conn, sobjectType);
     } catch (err: any) {
       return {
         status: "error",
-        error: `Salesforce lookup failed: ${err?.message ?? String(err)}`,
+        error: `Unknown SObject "${sobjectType}": ${err?.message ?? String(err)}. Valid examples include: ${COMMON_SOBJECTS.join(", ")}.`,
       };
     }
-    if (!oppRow) {
+
+    // Resolve fields against describe.
+    const resolved: { request: typeof rawFields[number]; desc: DescribedField }[] = [];
+    for (const f of rawFields) {
+      const found = findField(describe, f.field);
+      if (!found) {
+        const hints = suggestFields(describe, f.field);
+        return {
+          status: "error",
+          error: `Field "${f.field}" not found on ${describe.name}.${hints.length ? ` Did you mean: ${hints.join(", ")}?` : ""}`,
+        };
+      }
+      if (!found.updateable) {
+        return {
+          status: "error",
+          error: `Field "${found.name}" on ${describe.name} is not updateable (calculated/system/read-only).`,
+        };
+      }
+      if (found.calculated || found.autoNumber) {
+        return {
+          status: "error",
+          error: `Field "${found.name}" on ${describe.name} is auto-computed and cannot be written directly.`,
+        };
+      }
+      resolved.push({ request: f, desc: found });
+    }
+
+    // Fetch current values + record name + Account context if applicable.
+    const fieldNames = resolved.map((r) => r.desc.name);
+    const hasAccountId = describe.fields.has("accountid");
+    const extraSelects = hasAccountId ? ["AccountId", "Account.Name"] : [];
+    const lookup = await lookupRecord(ctx, sobjectType, recordId, [
+      ...fieldNames,
+      ...extraSelects,
+    ]);
+    if (!lookup) {
       return {
         status: "error",
-        error: `Opportunity ${opportunityId} not found. Look it up with sf_query first.`,
+        error: `${describe.name} ${recordId} not found, or you don't have access. Look it up with sf_query first.`,
       };
     }
+    const row = lookup.row;
+    const recordName: string =
+      (row.Name as string | undefined) ?? (row.Id as string) ?? recordId;
 
-    let stagePicklist: string[] = [];
-    if (rawFields.some((f) => f.field === "StageName")) {
-      try {
-        const desc = await ctx.conn.describe("Opportunity");
-        const f = desc.fields.find((x) => x.name === "StageName");
-        stagePicklist = (f?.picklistValues ?? [])
-          .filter((p) => p.active)
-          .map((p) => p.value);
-      } catch {
-        stagePicklist = [];
-      }
-    }
+    // Normalize each proposed value.
+    const proposed: ProposedField[] = [];
+    for (const { request, desc } of resolved) {
+      const rationale =
+        String(request.rationale ?? "").trim() || "Requested by rep.";
+      const norm = await normalizeProposedValue(ctx, desc, request.newValue);
+      if (!norm.ok) return { status: "error", error: norm.error };
 
-    const normalized: PendingWriteProposal["fields"] = [];
-    for (const f of rawFields) {
-      const field = f.field as WritableOppField;
-      const rationale = String(f.rationale ?? "").trim() || "Requested by rep.";
-      const currentRaw = oppRow[field] ?? null;
-
-      let recommendedValue: string | number | null;
-      if (f.newValue === null || f.newValue === undefined) {
-        recommendedValue = null;
-      } else if (field === "Amount") {
-        const n =
-          typeof f.newValue === "number"
-            ? f.newValue
-            : Number(String(f.newValue).replace(/[^0-9.\-]/g, ""));
-        if (!Number.isFinite(n)) {
-          return {
-            status: "error",
-            error: `Amount must be a number; got ${JSON.stringify(f.newValue)}`,
-          };
-        }
-        recommendedValue = n;
-      } else if (field === "CloseDate") {
-        const s = String(f.newValue).slice(0, 10);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-          return {
-            status: "error",
-            error: `CloseDate must be YYYY-MM-DD; got ${JSON.stringify(f.newValue)}`,
-          };
-        }
-        recommendedValue = s;
-      } else if (field === "StageName") {
-        const s = String(f.newValue);
-        if (stagePicklist.length > 0 && !stagePicklist.includes(s)) {
-          return {
-            status: "error",
-            error: `StageName "${s}" is not in the picklist. Valid: ${stagePicklist.join(", ")}`,
-          };
-        }
-        recommendedValue = s;
+      const currentRaw = row[desc.name] ?? null;
+      let currentValue: string | number | boolean | null;
+      let currentDisplay: string | null = null;
+      if (currentRaw === null || currentRaw === undefined) {
+        currentValue = null;
+      } else if (typeof currentRaw === "boolean" || typeof currentRaw === "number") {
+        currentValue = currentRaw;
+        currentDisplay = String(currentRaw);
       } else {
-        recommendedValue = String(f.newValue);
+        currentValue = String(currentRaw);
+        currentDisplay = String(currentRaw);
       }
 
-      const currentNormalized: string | number | null =
-        currentRaw === null || currentRaw === undefined
-          ? null
-          : typeof currentRaw === "number"
-            ? currentRaw
-            : String(currentRaw);
+      // For Lookup(User), display the current user's name not the Id.
+      if (desc.type === "reference" && desc.referenceTo[0] === "User" && typeof currentValue === "string" && currentValue) {
+        const name = await fetchUserName(ctx.conn, currentValue);
+        currentDisplay = name ?? currentValue;
+      }
 
-      normalized.push({
-        field,
-        currentValue: currentNormalized,
-        recommendedValue,
+      proposed.push({
+        field: desc.name,
+        fieldLabel: desc.label,
+        fieldType: fieldTypeForProposed(desc),
+        currentValue,
+        recommendedValue: norm.value,
+        currentDisplay,
+        recommendedDisplay: norm.display,
+        referenceTo: desc.referenceTo[0],
+        picklistValues:
+          desc.picklistValues.length > 0
+            ? desc.picklistValues.map((p) => p.value)
+            : undefined,
         rationale,
       });
     }
 
-    ctx.pendingWriteProposal = {
-      opportunityId: oppRow.Id,
-      opportunityName: oppRow.Name ?? "(unnamed opportunity)",
-      accountId: oppRow.AccountId ?? null,
-      accountName: oppRow.Account?.Name ?? "(no account)",
-      fields: normalized,
+    const contextLabel = buildContextLabel(describe.name, recordName, row);
+
+    ctx.pendingRecordProposal = {
+      sobjectType: describe.name,
+      recordId: row.Id ?? recordId,
+      recordName,
+      contextLabel,
       recap,
+      fields: proposed,
     };
 
     return {
       status: "proposal_recorded",
-      opportunityName: oppRow.Name,
-      accountName: oppRow.Account?.Name ?? null,
-      fields: normalized.map((f) => ({
+      sobjectType: describe.name,
+      recordName,
+      fields: proposed.map((f) => ({
         field: f.field,
-        from: f.currentValue,
-        to: f.recommendedValue,
+        from: f.currentDisplay ?? f.currentValue,
+        to: f.recommendedDisplay ?? f.recommendedValue,
       })),
-      next: "A confirmation card will be posted in the DM with Apply/Skip buttons. Reply with one short sentence acknowledging the draft — do not restate the field values.",
+      next: "A confirmation card will be posted in the DM with Accept / Edit / Skip / Apply-all buttons. Reply with one short sentence acknowledging the draft — do not restate the field values.",
     };
   },
 };
+
 
 export const ALL_TOOLS: AgentTool[] = [
   now,
@@ -702,7 +940,7 @@ export const ALL_TOOLS: AgentTool[] = [
   sfGetRecentPositiveCalls,
   rogoDescribe,
   rogoQuery,
-  sfProposeOpportunityUpdate,
+  sfProposeRecordUpdate,
 ];
 
 export const TOOL_DEFINITIONS = ALL_TOOLS.map((t) => t.definition);

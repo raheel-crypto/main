@@ -145,7 +145,8 @@ export type PendingCardKind =
   | "buy_signal"
   | "post_meeting"
   | "meeting_picker"
-  | "qa_proposal";
+  | "qa_proposal"
+  | "record_proposal";
 
 export interface PendingCardBase {
   id: string;
@@ -242,13 +243,60 @@ export interface QaProposalPendingCard extends PendingCardBase {
   recommendation: Recommendation;
 }
 
+export type ProposedFieldType =
+  | "string"
+  | "textarea"
+  | "picklist"
+  | "multipicklist"
+  | "date"
+  | "datetime"
+  | "currency"
+  | "double"
+  | "int"
+  | "percent"
+  | "boolean"
+  | "reference"
+  | "id"
+  | "email"
+  | "phone"
+  | "url";
+
+export interface ProposedField {
+  field: string;
+  fieldLabel: string;
+  fieldType: ProposedFieldType;
+  currentValue: string | number | boolean | null;
+  recommendedValue: string | number | boolean | null;
+  currentDisplay?: string | null;
+  recommendedDisplay?: string | null;
+  referenceTo?: string;
+  picklistValues?: string[];
+  rationale: string;
+}
+
+export interface RecordUpdateProposal {
+  sobjectType: string;
+  recordId: string;
+  recordName: string;
+  contextLabel: string;
+  recap: string;
+  fields: ProposedField[];
+}
+
+export interface RecordProposalPendingCard extends PendingCardBase {
+  kind: "record_proposal";
+  opportunityId: string | null;
+  recommendation: RecordUpdateProposal;
+}
+
 export type PendingCard =
   | StandupPendingCard
   | BriefPendingCard
   | BuySignalPendingCard
   | PostMeetingPendingCard
   | MeetingPickerPendingCard
-  | QaProposalPendingCard;
+  | QaProposalPendingCard
+  | RecordProposalPendingCard;
 
 export type AuditAction =
   | "recommended"
@@ -281,7 +329,10 @@ export type AuditAction =
   | "qa_proposed_update"
   | "qa_propose_failed"
   | "gong_post_call_surfaced"
-  | "gong_post_call_dropped";
+  | "gong_post_call_dropped"
+  | "record_proposed_update"
+  | "record_apply_failed"
+  | "record_applied";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",
