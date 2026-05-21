@@ -89,7 +89,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(422).json({
       error: "Slack message URL on the approval does not match expected format",
       requestId: audit.requestId,
-      slackMessageUrl: audit.slackMessageUrl,
+      slackMessageUrl: audit.slackMessageUrl ?? null,
+      slackMessageUrlType: typeof audit.slackMessageUrl,
+      slackMessageUrlLength:
+        typeof audit.slackMessageUrl === "string" ? audit.slackMessageUrl.length : null,
     });
   }
 

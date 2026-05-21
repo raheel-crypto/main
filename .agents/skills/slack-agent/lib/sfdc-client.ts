@@ -172,7 +172,8 @@ export async function getLatestApprovedQuoteApproval(
   const soql = encodeURIComponent(
     `SELECT Request_Id__c, Slack_Message_Url__c FROM Quote_Approval__c ` +
       `WHERE Opportunity__c = '${escapeSoql(opportunityId)}' ` +
-      `AND State__c = 'Approved' AND Slack_Message_Url__c != null ` +
+      `AND State__c = 'Approved' ` +
+      `AND Slack_Message_Url__c != null AND Slack_Message_Url__c != '' ` +
       `ORDER BY Decision_Made_At__c DESC LIMIT 1`,
   );
   const result = (await sfdcFetch(`/query?q=${soql}`)) as {
