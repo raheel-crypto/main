@@ -106,6 +106,12 @@ function buildData(request: ApprovalRequest): Record<string, string | number> {
     // {{Platform Fee}} broken out separately from the hosting fee line.
     "ARR": formatCurrency(pricing.arr ?? pricing.total_amount),
     "Platform Fee": formatCurrency(pricing.platform_fee_total),
+    // Enterprise templates also break out hosting fee + credits commit.
+    // Provide both casings so the templates can edit the case without code.
+    "Hosting Fee": formatCurrency(form.hosting_fee),
+    "hosting fee": formatCurrency(form.hosting_fee),
+    "Credits Commit": formatCurrency(pricing.credits_commit_total),
+    "credits commit": formatCurrency(pricing.credits_commit_total),
     // Standard template uses "Price per user"; enterprise template uses
     // lowercase "price per user". Provide both so either template renders.
     "Price per user": formatCurrency(form.price_per_user),
