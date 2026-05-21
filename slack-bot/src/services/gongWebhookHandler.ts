@@ -149,7 +149,7 @@ export async function handleGongWebhook(
       });
       sent.push(slackUserId);
 
-      if (routing === "host" && posted.ts && posted.channel) {
+      if (posted.ts && posted.channel) {
         try {
           await runGongPostCallSfUpdate({
             slackUserId,
@@ -160,7 +160,7 @@ export async function handleGongWebhook(
           });
         } catch (err: any) {
           console.error(
-            `[gong] post-call SF-update for ${slackUserId} failed:`,
+            `[gong] post-call SF-update for ${slackUserId} (${routing}) failed:`,
             err?.message ?? err
           );
         }
