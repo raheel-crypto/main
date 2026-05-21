@@ -166,9 +166,13 @@ export async function updateOpportunity(
 export async function getLatestApprovedQuoteApproval(
   opportunityId: string,
 ): Promise<{ requestId: string; slackMessageUrl: string | null } | null> {
+  // Only consider approvals whose Slack post is still trackable -- the caller
+  // wants to reply in that thread. Older / overridden rows with null URLs
+  // would just give us a 422 anyway.
   const soql = encodeURIComponent(
     `SELECT Request_Id__c, Slack_Message_Url__c FROM Quote_Approval__c ` +
-      `WHERE Opportunity__c = '${escapeSoql(opportunityId)}' AND State__c = 'Approved' ` +
+      `WHERE Opportunity__c = '${escapeSoql(opportunityId)}' ` +
+      `AND State__c = 'Approved' AND Slack_Message_Url__c != null ` +
       `ORDER BY Decision_Made_At__c DESC LIMIT 1`,
   );
   const result = (await sfdcFetch(`/query?q=${soql}`)) as {

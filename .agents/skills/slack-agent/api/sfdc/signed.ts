@@ -73,16 +73,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const audit = await getLatestApprovedQuoteApproval(opportunityId);
   if (!audit) {
-    return res
-      .status(404)
-      .json({ error: "No approved Quote_Approval__c found for this Opportunity" });
+    return res.status(404).json({
+      error:
+        "No approved Quote_Approval__c with a Slack message URL found for this Opportunity",
+    });
   }
 
   const ref = parseSlackArchiveUrl(audit.slackMessageUrl);
+  console.log("[signed] resolved approval", {
+    requestId: audit.requestId,
+    slackMessageUrl: audit.slackMessageUrl,
+    parsed: ref,
+  });
   if (!ref) {
-    return res
-      .status(422)
-      .json({ error: "Approved quote has no parseable Slack message URL" });
+    return res.status(422).json({
+      error: "Slack message URL on the approval does not match expected format",
+      requestId: audit.requestId,
+      slackMessageUrl: audit.slackMessageUrl,
+    });
   }
 
   const blocks = buildMarkClosedWonPromptBlocks({
