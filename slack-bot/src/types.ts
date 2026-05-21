@@ -279,7 +279,9 @@ export type AuditAction =
   | "meeting_post_surfaced"
   | "meeting_picker_surfaced"
   | "qa_proposed_update"
-  | "qa_propose_failed";
+  | "qa_propose_failed"
+  | "gong_post_call_surfaced"
+  | "gong_post_call_dropped";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",

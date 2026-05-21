@@ -7,6 +7,7 @@ import {
 } from "../db/queries.js";
 import { gongCallDigestCard } from "../slack/blocks.js";
 import { summarizeGongCall } from "./gongCallInsights.js";
+import { runGongPostCallSfUpdate } from "./gongPostCallSfUpdate.js";
 import type { GongWebhookPayload, GongWebhookParty } from "../types.js";
 
 export interface GongHandleResult {
@@ -140,13 +141,30 @@ export async function handleGongWebhook(
   const sent: string[] = [];
   for (const [slackUserId, routing] of targets) {
     try {
-      await slack.chat.postMessage({
+      const posted = await slack.chat.postMessage({
         channel: slackUserId,
         unfurl_links: false,
         unfurl_media: false,
         ...card,
       });
       sent.push(slackUserId);
+
+      if (routing === "host" && posted.ts && posted.channel) {
+        try {
+          await runGongPostCallSfUpdate({
+            slackUserId,
+            payload,
+            slack,
+            digestChannelId: posted.channel,
+            digestTs: posted.ts,
+          });
+        } catch (err: any) {
+          console.error(
+            `[gong] post-call SF-update for ${slackUserId} failed:`,
+            err?.message ?? err
+          );
+        }
+      }
     } catch (err: any) {
       console.error(
         `[gong] DM to ${slackUserId} (${routing}) failed:`,
