@@ -28,12 +28,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     stripBearer(headerString(req.headers["authorization"]));
   const expected = process.env.SFDC_INTAKE_SECRET;
   if (!expected || !provided || provided !== expected) {
+    console.warn("[signed] auth failed", {
+      hasExpected: !!expected,
+      hasProvided: !!provided,
+      contentType: req.headers["content-type"],
+    });
     return res.status(401).send("Unauthorized");
   }
 
-  const payload = req.body as SignedPayload | undefined;
+  // Vercel's body parser only auto-parses JSON when Content-Type is
+  // application/json. Salesforce External Services callouts sometimes ship
+  // with text/plain or no content-type at all — fall back to parsing the
+  // raw string ourselves so the flow side doesn't have to fight headers.
+  const payload = coercePayload(req.body);
+  console.log("[signed] received", {
+    contentType: req.headers["content-type"],
+    rawBodyType: typeof req.body,
+    parsedOpportunityId: payload?.opportunity_id ?? null,
+  });
+
   if (!payload?.opportunity_id) {
-    return res.status(400).json({ error: "Missing opportunity_id" });
+    return res
+      .status(400)
+      .json({ error: "Missing opportunity_id in body", got: typeof req.body });
   }
 
   const opp = await getOpportunityById(payload.opportunity_id);
@@ -82,4 +99,18 @@ function headerString(v: string | string[] | undefined): string | undefined {
 function stripBearer(v: string | undefined): string | undefined {
   if (!v) return v;
   return v.replace(/^Bearer\s+/i, "");
+}
+
+/** Accept body as parsed object, JSON string, or Buffer. */
+function coercePayload(body: unknown): SignedPayload | undefined {
+  if (!body) return undefined;
+  if (typeof body === "object" && !Buffer.isBuffer(body)) {
+    return body as SignedPayload;
+  }
+  const text = Buffer.isBuffer(body) ? body.toString("utf-8") : String(body);
+  try {
+    return JSON.parse(text) as SignedPayload;
+  } catch {
+    return undefined;
+  }
 }
