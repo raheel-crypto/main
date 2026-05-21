@@ -1,12 +1,16 @@
 import { Connection } from "jsforce";
 import { WebClient } from "@slack/web-api";
+import pLimit from "../util/pLimit.js";
+import { DateTime } from "luxon";
+import { RECOMMENDER_CONCURRENCY } from "../constants.js";
 import {
   appendAudit,
   insertPendingCard,
   setCardMessageTs,
 } from "../db/queries.js";
-import { postMeetingCard } from "../slack/blocks.js";
+import { oppCard, postMeetingCard } from "../slack/blocks.js";
 import { resolveAccount } from "./accountResolver.js";
+import { recommendForPostMeeting } from "./postMeetingRecommender.js";
 import {
   getConnectionForUser,
   SfNotConnectedError,
@@ -14,13 +18,16 @@ import {
 import {
   fetchContactsByEmail,
   fetchOpportunitiesForAccount,
+  fetchOpportunityStagePicklist,
 } from "./sfReads.js";
 import type {
+  GongCallInsight,
   GongWebhookPayload,
   PostMeetingMatchedContact,
   PostMeetingOpportunity,
   PostMeetingPayload,
   PostMeetingUnmatchedAttendee,
+  Recommendation,
 } from "../types.js";
 
 export interface GongPostCallSfUpdateResult {
@@ -31,11 +38,13 @@ export interface GongPostCallSfUpdateResult {
 export async function runGongPostCallSfUpdate(args: {
   slackUserId: string;
   payload: GongWebhookPayload;
+  insights: GongCallInsight | null;
   slack: WebClient;
   digestChannelId: string;
   digestTs: string;
 }): Promise<GongPostCallSfUpdateResult> {
-  const { slackUserId, payload, slack, digestChannelId, digestTs } = args;
+  const { slackUserId, payload, insights, slack, digestChannelId, digestTs } =
+    args;
   const callData = payload.callData;
   const callId = callData?.metaData?.id ?? null;
 
@@ -104,7 +113,7 @@ export async function runGongPostCallSfUpdate(args: {
     }));
 
   const opps = await fetchOpportunitiesForAccount(conn, resolved.accountId, true);
-  const openOpportunities: PostMeetingOpportunity[] = opps.map((o) => ({
+  const allOpenOpps: PostMeetingOpportunity[] = opps.map((o) => ({
     id: o.id,
     name: o.name,
     stage: o.stage,
@@ -113,10 +122,6 @@ export async function runGongPostCallSfUpdate(args: {
     nextStep: o.nextStep,
   }));
 
-  if (matched.length === 0 && unmatched.length === 0 && openOpportunities.length === 0) {
-    return await dropAudit(slackUserId, callId, "nothing_actionable");
-  }
-
   const startedIso = callData?.metaData?.started ?? null;
   const durationSec = Number(callData?.metaData?.duration ?? 0);
   const endIso =
@@ -124,6 +129,66 @@ export async function runGongPostCallSfUpdate(args: {
       ? new Date(new Date(startedIso).getTime() + durationSec * 1000).toISOString()
       : null;
   const eventTitle = callData?.metaData?.title ?? "(Gong call)";
+
+  const recsByOppId = new Map<string, Recommendation>();
+  if (insights && allOpenOpps.length > 0) {
+    let picklistStages: string[] = [];
+    try {
+      picklistStages = await fetchOpportunityStagePicklist(conn);
+    } catch (err: any) {
+      console.error(
+        `[gong-post-call] stage picklist fetch failed: ${err?.message ?? err}`
+      );
+    }
+    const todayIso = DateTime.utc().toISODate()!;
+    const limit = pLimit(RECOMMENDER_CONCURRENCY);
+    const results = await Promise.all(
+      allOpenOpps.map((o) =>
+        limit(async () => {
+          try {
+            const rec = await recommendForPostMeeting({
+              opp: {
+                id: o.id,
+                name: o.name,
+                accountName: resolved.accountName ?? "(account)",
+                stage: o.stage,
+                nextStep: o.nextStep,
+                amount: o.amount,
+                closeDate: o.closeDate,
+              },
+              picklistStages,
+              insights,
+              callTitle: eventTitle,
+              todayIso,
+            });
+            return { oppId: o.id, rec };
+          } catch (err: any) {
+            console.error(
+              `[gong-post-call] recommend failed for ${o.id}:`,
+              err?.message ?? err
+            );
+            return { oppId: o.id, rec: null };
+          }
+        })
+      )
+    );
+    for (const r of results) {
+      if (r.rec && r.rec.fields.length > 0) {
+        recsByOppId.set(r.oppId, r.rec);
+      }
+    }
+  }
+
+  const oppsWithoutAi = allOpenOpps.filter((o) => !recsByOppId.has(o.id));
+
+  if (
+    matched.length === 0 &&
+    unmatched.length === 0 &&
+    oppsWithoutAi.length === 0 &&
+    recsByOppId.size === 0
+  ) {
+    return await dropAudit(slackUserId, callId, "nothing_actionable");
+  }
 
   const cardPayload: PostMeetingPayload = {
     gcalEventId: callId,
@@ -134,7 +199,7 @@ export async function runGongPostCallSfUpdate(args: {
     accountName: resolved.accountName ?? "(account)",
     matchedContacts: matched,
     unmatchedAttendees: unmatched,
-    openOpportunities,
+    openOpportunities: oppsWithoutAi,
   };
 
   const cardId = await insertPendingCard({
@@ -156,6 +221,47 @@ export async function runGongPostCallSfUpdate(args: {
   });
   if (posted.ts) await setCardMessageTs(cardId, posted.ts);
 
+  for (const [oppId, rec] of recsByOppId) {
+    const opp = allOpenOpps.find((o) => o.id === oppId);
+    if (!opp) continue;
+    const oppCardId = await insertPendingCard({
+      slackUserId,
+      slackChannel: digestChannelId,
+      slackThreadTs: digestTs,
+      opportunityId: oppId,
+      recommendation: rec,
+      kind: "standup",
+    });
+    const cardBlocks = oppCard(oppCardId, rec, {
+      name: opp.name,
+      accountName: resolved.accountName ?? "(account)",
+      instanceUrl: conn.instanceUrl!,
+    });
+    const oppPosted = await slack.chat.postMessage({
+      channel: digestChannelId,
+      thread_ts: digestTs,
+      unfurl_links: false,
+      unfurl_media: false,
+      ...cardBlocks,
+    });
+    if (oppPosted.ts) await setCardMessageTs(oppCardId, oppPosted.ts);
+    for (const f of rec.fields) {
+      await appendAudit({
+        slackUserId,
+        opportunityId: oppId,
+        fieldName: f.field,
+        action: "recommended",
+        oldValue: String(f.currentValue ?? ""),
+        newValue: String(f.recommendedValue ?? ""),
+        metadata: {
+          source: "gong_post_call",
+          callId,
+          rationale: f.rationale,
+        },
+      });
+    }
+  }
+
   await appendAudit({
     slackUserId,
     action: "gong_post_call_surfaced",
@@ -166,7 +272,9 @@ export async function runGongPostCallSfUpdate(args: {
       source: resolved.source,
       matchedCount: matched.length,
       unmatchedCount: unmatched.length,
-      openOppCount: openOpportunities.length,
+      openOppCount: allOpenOpps.length,
+      aiSuggestedOppCount: recsByOppId.size,
+      manualOppCount: oppsWithoutAi.length,
     },
   });
 

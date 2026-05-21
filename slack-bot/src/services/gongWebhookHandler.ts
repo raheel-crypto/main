@@ -154,6 +154,7 @@ export async function handleGongWebhook(
           await runGongPostCallSfUpdate({
             slackUserId,
             payload,
+            insights,
             slack,
             digestChannelId: posted.channel,
             digestTs: posted.ts,
