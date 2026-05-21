@@ -40,20 +40,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // application/json. Salesforce External Services callouts sometimes ship
   // with text/plain or no content-type at all — fall back to parsing the
   // raw string ourselves so the flow side doesn't have to fight headers.
-  const payload = coercePayload(req.body);
+  // Also accept the opportunity_id as a query parameter, since SFDC External
+  // Services surfaces query params as clean Flow inputs but treats JSON
+  // bodies as opaque Apex-defined objects.
+  const fromBody = coercePayload(req.body)?.opportunity_id;
+  const fromQuery =
+    typeof req.query.opportunity_id === "string" ? req.query.opportunity_id : undefined;
+  const opportunityId = fromQuery ?? fromBody;
+
   console.log("[signed] received", {
     contentType: req.headers["content-type"],
     rawBodyType: typeof req.body,
-    parsedOpportunityId: payload?.opportunity_id ?? null,
+    parsedOpportunityId: opportunityId ?? null,
+    source: fromQuery ? "query" : fromBody ? "body" : "none",
   });
 
-  if (!payload?.opportunity_id) {
-    return res
-      .status(400)
-      .json({ error: "Missing opportunity_id in body", got: typeof req.body });
+  if (!opportunityId) {
+    return res.status(400).json({
+      error: "Missing opportunity_id (accepted as query param or JSON body field)",
+      bodyType: typeof req.body,
+    });
   }
 
-  const opp = await getOpportunityById(payload.opportunity_id);
+  const opp = await getOpportunityById(opportunityId);
   if (!opp) return res.status(404).json({ error: "Opportunity not found" });
 
   // Idempotency: if the Opp is already Closed Won, the click side has nothing
@@ -62,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ ok: true, skipped: "already_closed_won" });
   }
 
-  const audit = await getLatestApprovedQuoteApproval(payload.opportunity_id);
+  const audit = await getLatestApprovedQuoteApproval(opportunityId);
   if (!audit) {
     return res
       .status(404)
@@ -78,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const blocks = buildMarkClosedWonPromptBlocks({
     accountName: opp.Account?.Name ?? "this account",
-    opportunityId: payload.opportunity_id,
+    opportunityId,
   });
 
   await postMessage({
