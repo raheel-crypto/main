@@ -119,11 +119,18 @@ function buildData(request: ApprovalRequest): Record<string, unknown> {
   const { context, form, pricing } = request;
   const isEnterprise = context.account.segment?.trim().toLowerCase() === "enterprise";
   const isNewBusiness = context.opportunity.type?.trim().toLowerCase() === "new business";
-  const selectedTerms = (form.selected_terms ?? []).map((t) => ({
+  // Sort here too -- fetchTermsByCodes already sorts at fetch time, but
+  // re-sorting makes render order resilient to snapshot reordering and to
+  // future callers that bypass the SOQL helper.
+  const terms = [...(form.selected_terms ?? [])].sort(
+    (a, b) => a.sort_order - b.sort_order,
+  );
+  const termScope = (t: (typeof terms)[number]) => ({
     title: t.title,
     body: t.body,
     category: t.category,
-  }));
+  });
+  const selectedTerms = terms.map(termScope);
 
   return {
     // Boolean flags drive the master template's conditional sections.
@@ -134,11 +141,21 @@ function buildData(request: ApprovalRequest): Record<string, unknown> {
     isNewBusiness,
     isExistingCustomer: !isNewBusiness,
 
-    // Loop over the rep's selected legal terms. Each iteration's scope is
-    // one SelectedTerm-lite (title/body/category). Empty array renders
-    // nothing — sections inside templates that don't reference this key
-    // are unaffected.
+    // Catch-all loop -- renders every attached term in Sort_Order__c order.
+    // Use this when the template has one "Special Terms" block at the bottom.
     selected_terms: selectedTerms,
+
+    // Per-category buckets -- let the template scatter terms across the
+    // doc by Category__c. Each bucket is a subset of selected_terms in the
+    // same Sort_Order__c order. Empty buckets render nothing. Categories
+    // match the Legal_Term__c.Category__c picklist values.
+    terms_payment: termsInCategory(terms, "Payment").map(termScope),
+    terms_renewal: termsInCategory(terms, "Renewal").map(termScope),
+    terms_liability: termsInCategory(terms, "Liability").map(termScope),
+    terms_ip: termsInCategory(terms, "IP").map(termScope),
+    terms_data: termsInCategory(terms, "Data").map(termScope),
+    terms_termination: termsInCategory(terms, "Termination").map(termScope),
+    terms_other: termsInCategory(terms, "Other").map(termScope),
 
     // Existing flat-key data — unchanged. Templates can reference these
     // unconditionally, or wrap them in {{#isEnterprise}} sections etc.
@@ -156,6 +173,14 @@ function buildData(request: ApprovalRequest): Record<string, unknown> {
     "Total Credits": formatCount(form.total_credits),
     "Users": form.users,
   };
+}
+
+function termsInCategory<T extends { category: string }>(
+  terms: ReadonlyArray<T>,
+  category: string,
+): T[] {
+  const target = category.trim().toLowerCase();
+  return terms.filter((t) => t.category.trim().toLowerCase() === target);
 }
 
 function formatCount(n: number): string {
