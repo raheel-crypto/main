@@ -10,6 +10,7 @@ import {
   fetchOpportunitiesForAccount,
   findAccountsByName,
 } from "../services/sfReads.js";
+import { getRecentBulkFailures } from "../db/queries.js";
 import { getUsageProvider } from "../services/usageDb.js";
 import {
   bootstrap as rogoBootstrap,
@@ -932,6 +933,62 @@ const sfProposeRecordUpdate: AgentTool = {
 
 const BULK_MAX_RECORDS = 50;
 
+const sfGetRecentFailedWrites: AgentTool = {
+  name: "sf_get_recent_failed_writes",
+  definition: {
+    name: "sf_get_recent_failed_writes",
+    description:
+      "Look up the rep's recent bulk-write failures from merlin's audit log. Use this when the rep's message looks like a follow-up after a failed bulk update (e.g. 'set X to Y on them', 'with X = Y', 'try again with Y for X', or a bare value after merlin flagged a missing field). Returns recent failed batches with the failed record Ids, the original proposed fields, and the per-record SF errors (statusCode, message, fields[]). The agent then drafts a new sf_propose_bulk_record_update on just the failed records with the original fields + the new field(s) the rep specified. Returns at most 3 most-recent batches.",
+    input_schema: {
+      type: "object",
+      properties: {
+        withinMinutes: {
+          type: "number",
+          description: "Look-back window. Defaults to 30 minutes.",
+        },
+      },
+    },
+  },
+  async execute(input, ctx) {
+    const minutes = Number((input as any)?.withinMinutes ?? 30);
+    const failures = await getRecentBulkFailures(
+      ctx.slackUserId,
+      Number.isFinite(minutes) && minutes > 0 ? minutes : 30
+    );
+    return {
+      failures: failures.slice(0, 3).map((b) => ({
+        cardId: b.cardId,
+        sobjectType: b.sobjectType,
+        recap: b.recap,
+        failedAtIso: b.failedAtIso,
+        originalFields: b.originalFields.map((f) => ({
+          field: f.field,
+          fieldLabel: f.fieldLabel,
+          recommendedValue: f.recommendedValue,
+        })),
+        failedRecords: b.failedRecords.map((r) => ({
+          recordId: r.recordId,
+          recordName: r.recordName,
+          errors: r.errors,
+        })),
+        missingFieldsSummary: summarizeMissingFields(b.failedRecords),
+      })),
+    };
+  },
+};
+
+function summarizeMissingFields(
+  failedRecords: { errors: { statusCode: string; fields: string[] }[] }[]
+): string[] {
+  const set = new Set<string>();
+  for (const r of failedRecords) {
+    for (const e of r.errors ?? []) {
+      for (const f of e.fields ?? []) set.add(f);
+    }
+  }
+  return [...set];
+}
+
 const sfProposeBulkRecordUpdate: AgentTool = {
   name: "sf_propose_bulk_record_update",
   definition: {
@@ -1180,6 +1237,7 @@ export const ALL_TOOLS: AgentTool[] = [
   rogoQuery,
   sfProposeRecordUpdate,
   sfProposeBulkRecordUpdate,
+  sfGetRecentFailedWrites,
 ];
 
 export const TOOL_DEFINITIONS = ALL_TOOLS.map((t) => t.definition);

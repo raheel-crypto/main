@@ -9,9 +9,11 @@ import type {
   PendingCard,
   PendingCardKind,
   PostMeetingPayload,
+  ProposedField,
   Recommendation,
   RecordUpdateProposal,
   BulkRecordUpdateProposal,
+  SfApplyError,
   SfTokens,
   UserPrefs,
 } from "../types.js";
@@ -591,4 +593,122 @@ export async function appendAudit(row: {
       row.metadata ? JSON.stringify(row.metadata) : null,
     ]
   );
+}
+
+export interface RecentBulkFailureRecord {
+  recordId: string;
+  recordName: string | null;
+  errors: SfApplyError[];
+}
+
+export interface RecentBulkFailure {
+  cardId: string;
+  sobjectType: string;
+  recap: string;
+  originalFields: ProposedField[];
+  failedRecords: RecentBulkFailureRecord[];
+  failedAtIso: string;
+}
+
+export async function getRecentBulkFailures(
+  slackUserId: string,
+  withinMinutes: number
+): Promise<RecentBulkFailure[]> {
+  const pool = getPool();
+  const { rows } = await pool.query<{
+    batch_id: string | null;
+    sobject_type: string | null;
+    record_id: string | null;
+    errors: unknown;
+    latest_at: Date;
+  }>(
+    `
+    SELECT DISTINCT ON (metadata->>'batchId', metadata->>'recordId')
+      metadata->>'batchId' AS batch_id,
+      metadata->>'sobjectType' AS sobject_type,
+      metadata->>'recordId' AS record_id,
+      metadata->'errors' AS errors,
+      created_at AS latest_at
+    FROM audit_log
+    WHERE slack_user_id = $1
+      AND action = 'bulk_record_apply_failed'
+      AND created_at > now() - ($2::int || ' minutes')::interval
+    ORDER BY metadata->>'batchId', metadata->>'recordId', created_at DESC
+    `,
+    [slackUserId, withinMinutes]
+  );
+
+  const batchMap = new Map<
+    string,
+    {
+      sobjectType: string;
+      records: Map<string, SfApplyError[]>;
+      latestAt: Date;
+    }
+  >();
+  for (const r of rows) {
+    const batchId = r.batch_id;
+    const recordId = r.record_id;
+    if (!batchId || !recordId) continue;
+    const errors = Array.isArray(r.errors)
+      ? (r.errors as SfApplyError[])
+      : typeof r.errors === "string"
+        ? (JSON.parse(r.errors) as SfApplyError[])
+        : [];
+    const bucket =
+      batchMap.get(batchId) ?? {
+        sobjectType: r.sobject_type ?? "Unknown",
+        records: new Map<string, SfApplyError[]>(),
+        latestAt: r.latest_at,
+      };
+    bucket.records.set(recordId, errors);
+    if (r.latest_at > bucket.latestAt) bucket.latestAt = r.latest_at;
+    batchMap.set(batchId, bucket);
+  }
+
+  if (batchMap.size === 0) return [];
+
+  const cardIds = [...batchMap.keys()];
+  const { rows: cardRows } = await pool.query<{
+    id: string;
+    recommendation: unknown;
+  }>(
+    `SELECT id, recommendation FROM pending_cards WHERE id = ANY($1::uuid[]) AND kind = 'bulk_record_proposal'`,
+    [cardIds]
+  );
+  const cardById = new Map<string, BulkRecordUpdateProposal>();
+  for (const c of cardRows) {
+    const payload =
+      typeof c.recommendation === "string"
+        ? (JSON.parse(c.recommendation) as BulkRecordUpdateProposal)
+        : (c.recommendation as BulkRecordUpdateProposal);
+    cardById.set(c.id, payload);
+  }
+
+  const out: RecentBulkFailure[] = [];
+  for (const [batchId, bucket] of batchMap) {
+    const proposal = cardById.get(batchId);
+    if (!proposal) continue;
+    const nameById = new Map(
+      proposal.recordSummaries.map((s) => [s.recordId, s.recordName])
+    );
+    const failedRecords: RecentBulkFailureRecord[] = [];
+    for (const [recordId, errors] of bucket.records) {
+      failedRecords.push({
+        recordId,
+        recordName: nameById.get(recordId) ?? null,
+        errors,
+      });
+    }
+    out.push({
+      cardId: batchId,
+      sobjectType: proposal.sobjectType,
+      recap: proposal.recap,
+      originalFields: proposal.fields,
+      failedRecords,
+      failedAtIso: bucket.latestAt.toISOString(),
+    });
+  }
+  out.sort((a, b) => b.failedAtIso.localeCompare(a.failedAtIso));
+  return out;
 }

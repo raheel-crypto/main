@@ -633,7 +633,8 @@ function buildFailureSummary(
   return interesting
     .map((b) => {
       const fieldList = b.fields.map((f) => `\`${f}\``).join(", ");
-      return `• *${b.count}* records failed with ${b.statusCode} — need ${fieldList}. Reply with values to set on those fields and I'll retry just the failures.`;
+      const exampleField = b.fields[0];
+      return `• *${b.count}* records failed with ${b.statusCode} — need ${fieldList}.\n  _Reply to me with a value (e.g._ \`set ${exampleField} = "..."\`_) and I'll retry just the failed records._`;
     })
     .join("\n");
 }
