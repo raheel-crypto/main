@@ -296,7 +296,6 @@ public with sharing class PipeGenGTMAController {
     public static Weekly_Commit__c saveCommit(Weekly_Commit__c commitRecord) {
         commitRecord.Rep__c             = UserInfo.getUserId();
         commitRecord.Week_Start_Date__c = getWeekStart(Date.today());
-        commitRecord.Motion_Type__c     = null; // GTMAs have no motion type
         upsert commitRecord;
         return [
             SELECT Id, Rep__c, Week_Start_Date__c, Motion_Type__c,
