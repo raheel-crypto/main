@@ -32,6 +32,8 @@ import {
   resolveUserByName,
 } from "../services/userResolver.js";
 import type {
+  BulkRecordSummary,
+  BulkRecordUpdateProposal,
   ProposedField,
   ProposedFieldType,
   RecordUpdateProposal,
@@ -44,6 +46,7 @@ export interface AgentToolCtx {
   userTimezone: string;
   instanceUrl: string;
   pendingRecordProposal?: RecordUpdateProposal;
+  pendingBulkRecordProposal?: BulkRecordUpdateProposal;
 }
 
 export interface AgentTool {
@@ -927,6 +930,241 @@ const sfProposeRecordUpdate: AgentTool = {
   },
 };
 
+const BULK_MAX_RECORDS = 50;
+
+const sfProposeBulkRecordUpdate: AgentTool = {
+  name: "sf_propose_bulk_record_update",
+  definition: {
+    name: "sf_propose_bulk_record_update",
+    description:
+      "Draft the SAME field updates across multiple Salesforce records of the same SObject in one card. Use when the rep names more than one record or describes a filter ('close lost all the opps from Q1 that never made it past Discovery'). Find the record Ids first with sf_query, then call this with the Id list. Same describe-driven field validation as sf_propose_record_update. Hard cap: 50 records per call. Common-fields-across-all-records model (every record gets the same change); if the rep wants different changes on different records, do them in separate turns. Call at most once per turn; calling it ends the agent loop.",
+    input_schema: {
+      type: "object",
+      properties: {
+        sobjectType: {
+          type: "string",
+          description:
+            "The Salesforce object API name, e.g. 'Opportunity', 'Account'. All recordIds must be of this type.",
+        },
+        recordIds: {
+          type: "array",
+          minItems: 2,
+          maxItems: 50,
+          items: { type: "string" },
+          description:
+            "Array of 15- or 18-character Salesforce record Ids, all of the same SObject. Look them up first via sf_query.",
+        },
+        fields: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            properties: {
+              field: { type: "string" },
+              newValue: {},
+              rationale: { type: "string" },
+            },
+            required: ["field", "newValue", "rationale"],
+          },
+        },
+        recap: {
+          type: "string",
+          description:
+            "One-line summary of what's being applied to all records, e.g. 'Close lost 5 stalled Q1 opportunities'.",
+        },
+      },
+      required: ["sobjectType", "recordIds", "fields", "recap"],
+    },
+  },
+  async execute(input, ctx) {
+    const sobjectType = String((input as any).sobjectType ?? "").trim();
+    const rawIds = ((input as any).recordIds ?? []) as string[];
+    const rawFields = ((input as any).fields ?? []) as {
+      field: string;
+      newValue: unknown;
+      rationale: string;
+    }[];
+    const recap = String((input as any).recap ?? "").trim();
+
+    if (!sobjectType) return { status: "error", error: "sobjectType required" };
+    if (!Array.isArray(rawIds) || rawIds.length === 0) {
+      return { status: "error", error: "recordIds must be a non-empty array" };
+    }
+    if (rawIds.length < 2) {
+      return {
+        status: "error",
+        error:
+          "Use sf_propose_record_update for single-record updates; sf_propose_bulk_record_update requires 2 or more records.",
+      };
+    }
+    if (rawIds.length > BULK_MAX_RECORDS) {
+      return {
+        status: "error",
+        error: `Bulk operations are capped at ${BULK_MAX_RECORDS} records per card. You sent ${rawIds.length}. Narrow the filter or split into multiple turns.`,
+      };
+    }
+    if (!Array.isArray(rawFields) || rawFields.length === 0) {
+      return { status: "error", error: "fields must be a non-empty array" };
+    }
+    if (!recap) return { status: "error", error: "recap required" };
+
+    const uniqueIds = Array.from(
+      new Set(rawIds.map((s) => String(s).trim()))
+    ).filter(Boolean);
+    const otherPrefixSummary: Record<string, number> = {};
+    for (const id of uniqueIds) {
+      const prefix = sobjectFromIdPrefix(id);
+      if (prefix && prefix.toLowerCase() !== sobjectType.toLowerCase()) {
+        otherPrefixSummary[prefix] = (otherPrefixSummary[prefix] ?? 0) + 1;
+      }
+    }
+    const otherEntries = Object.entries(otherPrefixSummary);
+    if (otherEntries.length > 0) {
+      return {
+        status: "error",
+        error: `Some recordIds don't match sobjectType "${sobjectType}": ${otherEntries
+          .map(([t, n]) => `${n} look like ${t}`)
+          .join(", ")}. All Ids in a bulk update must be the same SObject.`,
+      };
+    }
+
+    let describe: DescribedObject;
+    try {
+      describe = await describeObject(ctx.conn, sobjectType);
+    } catch (err: any) {
+      return {
+        status: "error",
+        error: `Unknown SObject "${sobjectType}": ${err?.message ?? String(err)}`,
+      };
+    }
+
+    const resolved: { request: typeof rawFields[number]; desc: DescribedField }[] = [];
+    for (const f of rawFields) {
+      const found = findField(describe, f.field);
+      if (!found) {
+        const hints = suggestFields(describe, f.field);
+        return {
+          status: "error",
+          error: `Field "${f.field}" not found on ${describe.name}.${hints.length ? ` Did you mean: ${hints.join(", ")}?` : ""}`,
+        };
+      }
+      if (!found.updateable || found.calculated || found.autoNumber) {
+        return {
+          status: "error",
+          error: `Field "${found.name}" on ${describe.name} is not writable.`,
+        };
+      }
+      resolved.push({ request: f, desc: found });
+    }
+
+    const proposedFields: ProposedField[] = [];
+    for (const { request, desc } of resolved) {
+      const norm = await normalizeProposedValue(ctx, desc, request.newValue);
+      if (!norm.ok) return { status: "error", error: norm.error };
+      proposedFields.push({
+        field: desc.name,
+        fieldLabel: desc.label,
+        fieldType: fieldTypeForProposed(desc),
+        currentValue: null,
+        recommendedValue: norm.value,
+        currentDisplay: null,
+        recommendedDisplay: norm.display,
+        referenceTo: desc.referenceTo[0],
+        picklistValues:
+          desc.picklistValues.length > 0
+            ? desc.picklistValues.map((p) => p.value)
+            : undefined,
+        rationale:
+          String(request.rationale ?? "").trim() || "Requested by rep.",
+      });
+    }
+
+    const fieldNames = resolved.map((r) => r.desc.name);
+    const hasAccountId = describe.fields.has("accountid");
+    const selectParts = ["Id", "Name", ...fieldNames];
+    if (hasAccountId) selectParts.push("Account.Name");
+    const selectClause = Array.from(new Set(selectParts)).join(", ");
+    const idList = uniqueIds.map((id) => `'${escapeSoql(id)}'`).join(", ");
+
+    let rows: any[] = [];
+    try {
+      const res = await ctx.conn.query(
+        `SELECT ${selectClause} FROM ${sobjectType} WHERE Id IN (${idList}) LIMIT ${uniqueIds.length}`
+      );
+      rows = res.records as any[];
+    } catch {
+      try {
+        const fallback = ["Id", ...fieldNames, ...(hasAccountId ? ["Account.Name"] : [])];
+        const res = await ctx.conn.query(
+          `SELECT ${Array.from(new Set(fallback)).join(", ")} FROM ${sobjectType} WHERE Id IN (${idList}) LIMIT ${uniqueIds.length}`
+        );
+        rows = res.records as any[];
+      } catch (err2: any) {
+        return {
+          status: "error",
+          error: `Salesforce lookup failed: ${err2?.message ?? String(err2)}`,
+        };
+      }
+    }
+    if (rows.length === 0) {
+      return {
+        status: "error",
+        error: `None of the ${uniqueIds.length} ${describe.labelPlural} were found or accessible.`,
+      };
+    }
+
+    const summaries: BulkRecordSummary[] = rows.map((row) => {
+      const currentValues: Record<string, string | number | boolean | null> = {};
+      for (const desc of resolved) {
+        const v = row[desc.desc.name] ?? null;
+        currentValues[desc.desc.name] =
+          v === null || v === undefined
+            ? null
+            : typeof v === "boolean" || typeof v === "number"
+              ? v
+              : String(v);
+      }
+      const accountName = row?.Account?.Name as string | undefined;
+      return {
+        recordId: row.Id,
+        recordName: (row.Name as string | undefined) ?? row.Id,
+        contextLabel: accountName
+          ? `${describe.label} · ${accountName}`
+          : describe.label,
+        currentValues,
+      };
+    });
+
+    const foundIds = new Set(summaries.map((s) => s.recordId));
+    const missing = uniqueIds.filter((id) => !foundIds.has(id));
+
+    ctx.pendingBulkRecordProposal = {
+      sobjectType: describe.name,
+      recordSummaries: summaries,
+      fields: proposedFields,
+      recap,
+      excludedRecordIds: [],
+      confirmed: false,
+      instanceUrl: ctx.instanceUrl,
+    };
+
+    return {
+      status: "proposal_recorded",
+      sobjectType: describe.name,
+      recordCount: summaries.length,
+      missingCount: missing.length,
+      fields: proposedFields.map((f) => ({
+        field: f.field,
+        to: f.recommendedDisplay ?? f.recommendedValue,
+      })),
+      next: `A bulk confirmation card will be posted in the DM listing all ${summaries.length} records. Reply with one short sentence acknowledging the draft including the count (e.g. "Drafted: close lost ${summaries.length} opportunities — review the list and click Apply").${
+        missing.length > 0
+          ? ` Note: ${missing.length} of the requested Id(s) were not found and are excluded from the card.`
+          : ""
+      } Do not list the record names; the card shows them.`,
+    };
+  },
+};
 
 export const ALL_TOOLS: AgentTool[] = [
   now,
@@ -941,6 +1179,7 @@ export const ALL_TOOLS: AgentTool[] = [
   rogoDescribe,
   rogoQuery,
   sfProposeRecordUpdate,
+  sfProposeBulkRecordUpdate,
 ];
 
 export const TOOL_DEFINITIONS = ALL_TOOLS.map((t) => t.definition);

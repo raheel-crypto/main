@@ -10,8 +10,11 @@ import {
   insertPendingCard,
   setCardMessageTs,
 } from "../db/queries.js";
-import { connectPrompt, recordCard } from "../slack/blocks.js";
-import type { RecordUpdateProposal } from "../types.js";
+import { bulkRecordCard, connectPrompt, recordCard } from "../slack/blocks.js";
+import type {
+  BulkRecordUpdateProposal,
+  RecordUpdateProposal,
+} from "../types.js";
 import {
   getConnectionForUser,
   SfNotConnectedError,
@@ -88,11 +91,15 @@ export async function runQaForUser(args: {
     });
     const rawAnswer = result.finalText || "_(no response)_";
     const calledProposeTool = result.toolCalls.some(
-      (c) => c.name === "sf_propose_record_update"
+      (c) =>
+        c.name === "sf_propose_record_update" ||
+        c.name === "sf_propose_bulk_record_update"
     );
     const claimsDraft = CARD_ACKNOWLEDGMENT_PATTERN.test(rawAnswer);
     const proposalMissing =
-      !agentCtx.pendingRecordProposal && (claimsDraft || calledProposeTool);
+      !agentCtx.pendingRecordProposal &&
+      !agentCtx.pendingBulkRecordProposal &&
+      (claimsDraft || calledProposeTool);
 
     let answer = rawAnswer;
     if (proposalMissing) {
@@ -136,6 +143,17 @@ export async function runQaForUser(args: {
         slackUserId,
         placeholderTs: ts,
         proposal: agentCtx.pendingRecordProposal,
+        instanceUrl: conn.instanceUrl!,
+      });
+    }
+
+    if (agentCtx.pendingBulkRecordProposal) {
+      await postBulkRecordProposalCard({
+        slack,
+        channelId,
+        slackUserId,
+        placeholderTs: ts,
+        proposal: agentCtx.pendingBulkRecordProposal,
         instanceUrl: conn.instanceUrl!,
       });
     }
@@ -210,5 +228,65 @@ async function postRecordProposalCard(args: {
         rationale: f.rationale,
       },
     });
+  }
+}
+
+async function postBulkRecordProposalCard(args: {
+  slack: WebClient;
+  channelId: string;
+  slackUserId: string;
+  placeholderTs: string;
+  proposal: BulkRecordUpdateProposal;
+  instanceUrl: string;
+}): Promise<void> {
+  const {
+    slack,
+    channelId,
+    slackUserId,
+    placeholderTs,
+    proposal,
+    instanceUrl,
+  } = args;
+  const cardId = await insertPendingCard({
+    slackUserId,
+    slackChannel: channelId,
+    slackThreadTs: placeholderTs,
+    opportunityId: null,
+    recommendation: proposal,
+    kind: "bulk_record_proposal",
+  });
+  const blocks = bulkRecordCard(cardId, proposal, instanceUrl);
+  const cardRes = await slack.chat.postMessage({
+    channel: channelId,
+    unfurl_links: false,
+    unfurl_media: false,
+    ...blocks,
+  });
+  if (cardRes.ts) await setCardMessageTs(cardId, cardRes.ts);
+
+  for (const summary of proposal.recordSummaries) {
+    for (const f of proposal.fields) {
+      await appendAudit({
+        slackUserId,
+        opportunityId:
+          proposal.sobjectType === "Opportunity" ? summary.recordId : null,
+        fieldName: f.field,
+        action: "bulk_record_proposed",
+        oldValue:
+          summary.currentValues[f.field] == null
+            ? ""
+            : String(summary.currentValues[f.field]),
+        newValue:
+          f.recommendedDisplay ??
+          (f.recommendedValue == null ? "" : String(f.recommendedValue)),
+        metadata: {
+          cardId,
+          sobjectType: proposal.sobjectType,
+          recordId: summary.recordId,
+          batchSize: proposal.recordSummaries.length,
+          rationale: f.rationale,
+        },
+      });
+    }
   }
 }

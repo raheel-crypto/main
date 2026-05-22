@@ -7,6 +7,7 @@ import {
   getPendingCard,
   getUser,
   setCardStatus,
+  updatePendingCardRecommendation,
   updateSubscriptionPrefs,
   upsertUser,
 } from "../db/queries.js";
@@ -27,6 +28,7 @@ import {
   SfNotConnectedError,
 } from "../services/salesforceClient.js";
 import {
+  applyBulkRecordFields,
   applyFields,
   applyRecordFields,
   createContact,
@@ -39,6 +41,8 @@ import { fetchOpportunityStagePicklist } from "../services/sfReads.js";
 import {
   briefSuggestionField,
   briefSuggestionResolved,
+  bulkRecordCard,
+  bulkRecordCardResolved,
   buySignalCardResolved,
   buySignalCreateOppModal,
   buySignalLogTaskModal,
@@ -53,6 +57,8 @@ import {
 import type {
   BriefPendingCard,
   BriefSuggestion,
+  BulkRecordProposalPendingCard,
+  BulkRecordUpdateProposal,
   BuySignalPendingCard,
   PendingCard,
   PostMeetingPendingCard,
@@ -427,6 +433,34 @@ export function registerInteractivity(app: App): void {
         text: `:warning: I couldn't generate the brief for *${candidate.name}*: ${err.message}`,
       });
     }
+  });
+
+  app.action(/^bulk_exclude:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed || !parsed.field) return;
+    await handleBulkExclude(app, body, parsed.cardId, parsed.field);
+  });
+
+  app.action(/^bulk_confirm:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed) return;
+    await handleBulkConfirm(app, body, parsed.cardId);
+  });
+
+  app.action(/^bulk_apply:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed) return;
+    await handleBulkApply(app, body, parsed.cardId);
+  });
+
+  app.action(/^bulk_cancel:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed) return;
+    await handleBulkCancel(app, body, parsed.cardId);
   });
 
   app.view(/^add_contact:.+/, async ({ ack, body, view }) => {
@@ -1499,3 +1533,189 @@ export function registerConfigSubmit(app: App): void {
     });
   });
 }
+
+async function handleBulkExclude(
+  app: App,
+  body: any,
+  cardId: string,
+  recordId: string
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "bulk_record_proposal") return;
+  if (card.status !== "open") return;
+  const slackUserId = body.user.id as string;
+
+  const proposal: BulkRecordUpdateProposal = {
+    ...card.recommendation,
+    excludedRecordIds: Array.from(
+      new Set([...card.recommendation.excludedRecordIds, recordId])
+    ),
+  };
+  await updatePendingCardRecommendation(card.id, proposal);
+  await appendAudit({
+    slackUserId,
+    action: "bulk_record_excluded",
+    metadata: {
+      cardId,
+      sobjectType: proposal.sobjectType,
+      recordId,
+    },
+  });
+
+  const remaining =
+    proposal.recordSummaries.length - proposal.excludedRecordIds.length;
+  const refreshed = bulkRecordCard(cardId, proposal, proposal.instanceUrl);
+  await app.client.chat.update({
+    channel: card.slackChannel,
+    ts: card.slackMessageTs,
+    text: refreshed.text,
+    blocks: refreshed.blocks,
+  });
+  // If they excluded everyone, advise via thread message.
+  if (remaining === 0) {
+    await app.client.chat.postMessage({
+      channel: card.slackChannel,
+      thread_ts: card.slackMessageTs,
+      text: ":no_entry_sign: All records excluded — click *Cancel* to dismiss the card.",
+    });
+  }
+}
+
+async function handleBulkConfirm(
+  app: App,
+  body: any,
+  cardId: string
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "bulk_record_proposal") return;
+  if (card.status !== "open") return;
+  const slackUserId = body.user.id as string;
+  const proposal: BulkRecordUpdateProposal = {
+    ...card.recommendation,
+    confirmed: true,
+  };
+  await updatePendingCardRecommendation(card.id, proposal);
+  await appendAudit({
+    slackUserId,
+    action: "bulk_record_apply_confirmed",
+    metadata: {
+      cardId,
+      sobjectType: proposal.sobjectType,
+      recordCount:
+        proposal.recordSummaries.length - proposal.excludedRecordIds.length,
+    },
+  });
+  const refreshed = bulkRecordCard(cardId, proposal, proposal.instanceUrl);
+  await app.client.chat.update({
+    channel: card.slackChannel,
+    ts: card.slackMessageTs,
+    text: refreshed.text,
+    blocks: refreshed.blocks,
+  });
+}
+
+async function handleBulkApply(
+  app: App,
+  body: any,
+  cardId: string
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "bulk_record_proposal") return;
+  if (card.status !== "open") return;
+  const proposal = card.recommendation;
+  const excluded = new Set(proposal.excludedRecordIds);
+  const targets = proposal.recordSummaries.filter(
+    (r) => !excluded.has(r.recordId)
+  );
+  if (targets.length === 0) return;
+  if (targets.length >= 10 && !proposal.confirmed) {
+    await app.client.chat.postEphemeral({
+      channel: card.slackChannel,
+      user: body.user.id,
+      text: `:warning: Click *Confirm ${targets.length} records* first to acknowledge the batch size.`,
+    });
+    return;
+  }
+
+  let conn;
+  try {
+    conn = await getConnectionForUser(card.slackUserId);
+  } catch (err) {
+    if (err instanceof SfNotConnectedError) {
+      await app.client.chat.postEphemeral({
+        channel: card.slackChannel,
+        user: body.user.id,
+        text: "Salesforce isn't connected. Run `/standup connect`.",
+      });
+      return;
+    }
+    throw err;
+  }
+
+  const results = await applyBulkRecordFields({
+    conn,
+    slackUserId: card.slackUserId,
+    sobjectType: proposal.sobjectType,
+    recordIds: targets.map((t) => t.recordId),
+    fields: proposal.fields.map((f) => ({
+      field: f.field,
+      newValue: f.recommendedValue,
+    })),
+    batchId: card.id,
+  });
+
+  const resolved = bulkRecordCardResolved(
+    proposal,
+    results,
+    conn.instanceUrl!
+  );
+  await app.client.chat.update({
+    channel: card.slackChannel,
+    ts: card.slackMessageTs,
+    text: resolved.text,
+    blocks: resolved.blocks,
+  });
+  const okCount = results.filter((r) => r.ok).length;
+  const failCount = results.filter((r) => !r.ok).length;
+  await setCardStatus(
+    card.id,
+    failCount === 0 ? "applied" : okCount === 0 ? "skipped" : "partial"
+  );
+}
+
+async function handleBulkCancel(
+  app: App,
+  body: any,
+  cardId: string
+): Promise<void> {
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "bulk_record_proposal") return;
+  if (card.status !== "open") return;
+  await setCardStatus(card.id, "skipped");
+  await appendAudit({
+    slackUserId: body.user.id,
+    action: "skipped",
+    metadata: {
+      cardId,
+      kind: "bulk_record_proposal",
+      sobjectType: card.recommendation.sobjectType,
+    },
+  });
+  await app.client.chat.update({
+    channel: card.slackChannel,
+    ts: card.slackMessageTs,
+    text: `Bulk update cancelled — ${card.recommendation.recap}`,
+    blocks: [
+      {
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `:wastebasket: Cancelled bulk update: _${card.recommendation.recap}_`,
+          },
+        ],
+      },
+    ],
+  });
+}
+

@@ -3,6 +3,7 @@ import { TZ_OPTIONS } from "../constants.js";
 import type {
   BriefPayload,
   BriefSuggestion,
+  BulkRecordUpdateProposal,
   BuySignalPayload,
   GongCallInsight,
   GongWebhookPayload,
@@ -31,7 +32,11 @@ export type ActionVerb =
   | "update_meeting_opp"
   | "log_meeting_task"
   | "post_meeting_skip"
-  | "meeting_pick_account";
+  | "meeting_pick_account"
+  | "bulk_exclude"
+  | "bulk_apply"
+  | "bulk_confirm"
+  | "bulk_cancel";
 
 const VALID_VERBS: ActionVerb[] = [
   "accept",
@@ -50,6 +55,10 @@ const VALID_VERBS: ActionVerb[] = [
   "log_meeting_task",
   "post_meeting_skip",
   "meeting_pick_account",
+  "bulk_exclude",
+  "bulk_apply",
+  "bulk_confirm",
+  "bulk_cancel",
 ];
 
 export function actionId(
@@ -400,6 +409,234 @@ export function editProposedFieldModal(args: {
       },
     ],
   };
+}
+
+function summarizeProposedFieldChange(f: ProposedField): string {
+  const to =
+    f.recommendedDisplay ??
+    (f.recommendedValue === null || f.recommendedValue === undefined
+      ? "(none)"
+      : String(f.recommendedValue));
+  return `*${f.fieldLabel}* (\`${f.field}\`) → \`${to.length > 60 ? to.slice(0, 57) + "…" : to}\``;
+}
+
+export function bulkRecordCard(
+  cardId: string,
+  proposal: BulkRecordUpdateProposal,
+  instanceUrl: string
+): { blocks: KnownBlock[]; text: string } {
+  const excluded = new Set(proposal.excludedRecordIds);
+  const included = proposal.recordSummaries.filter(
+    (r) => !excluded.has(r.recordId)
+  );
+  const total = proposal.recordSummaries.length;
+  const remaining = included.length;
+  const needsConfirm = remaining >= 10;
+
+  const header = `Bulk update · ${remaining} of ${total} ${proposal.sobjectType}${total === 1 ? "" : "s"}`;
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: header.slice(0, 150) },
+    },
+    { type: "section", text: { type: "mrkdwn", text: proposal.recap } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          "*Proposed changes (applied to every record below):*\n" +
+          proposal.fields
+            .map((f) => "• " + summarizeProposedFieldChange(f))
+            .join("\n"),
+      },
+    },
+    { type: "divider" },
+  ];
+
+  // Record rows. Show the first ~15 active ones; if more, render a summary
+  // line at the bottom.
+  const ROW_CAP = 15;
+  const renderedRows = proposal.recordSummaries.slice(0, ROW_CAP);
+  const overflow = proposal.recordSummaries.length - renderedRows.length;
+
+  for (const row of renderedRows) {
+    const isExcluded = excluded.has(row.recordId);
+    const oppUrl = `${instanceUrl}/${row.recordId}`;
+    const currentSnippets = proposal.fields
+      .map((f) => {
+        const cur = row.currentValues[f.field];
+        const curStr =
+          cur === null || cur === undefined
+            ? "(none)"
+            : String(cur).length > 30
+              ? String(cur).slice(0, 27) + "…"
+              : String(cur);
+        return `${f.fieldLabel}: \`${curStr}\``;
+      })
+      .join(" · ");
+    const namePart = `<${oppUrl}|*${row.recordName.length > 80 ? row.recordName.slice(0, 77) + "…" : row.recordName}*>`;
+    const label = isExcluded
+      ? `~${namePart}~ _(excluded)_`
+      : `${namePart}\n_${currentSnippets || row.contextLabel || ""}_`;
+
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: label },
+      accessory: {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: isExcluded ? "Already excluded" : "Exclude",
+        },
+        action_id: actionId("bulk_exclude", cardId, row.recordId),
+        value: row.recordId,
+        ...(isExcluded ? { style: "danger" as const } : {}),
+      },
+    });
+  }
+
+  if (overflow > 0) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `_+${overflow} more record${overflow === 1 ? "" : "s"} not shown; they're included in the apply._`,
+        },
+      ],
+    });
+  }
+
+  blocks.push({ type: "divider" });
+
+  if (remaining === 0) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: ":no_entry_sign: All records excluded — nothing will be applied.",
+        },
+      ],
+    });
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Cancel" },
+          action_id: actionId("bulk_cancel", cardId),
+        },
+      ],
+    });
+  } else if (needsConfirm && !proposal.confirmed) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `:warning: *${remaining} records.* Click *Confirm* to proceed; then *Apply* to write to Salesforce.`,
+        },
+      ],
+    });
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          style: "danger",
+          text: { type: "plain_text", text: `Confirm ${remaining} records` },
+          action_id: actionId("bulk_confirm", cardId),
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Cancel" },
+          action_id: actionId("bulk_cancel", cardId),
+        },
+      ],
+    });
+  } else {
+    blocks.push({
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          style: "primary",
+          text: {
+            type: "plain_text",
+            text: `Apply to ${remaining} record${remaining === 1 ? "" : "s"}`,
+          },
+          action_id: actionId("bulk_apply", cardId),
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Cancel" },
+          action_id: actionId("bulk_cancel", cardId),
+        },
+      ],
+    });
+  }
+
+  return {
+    blocks,
+    text: `${header} — ${proposal.recap}`,
+  };
+}
+
+export function bulkRecordCardResolved(
+  proposal: BulkRecordUpdateProposal,
+  results: { recordId: string; ok: boolean; error?: string }[],
+  instanceUrl: string
+): { blocks: KnownBlock[]; text: string } {
+  const okCount = results.filter((r) => r.ok).length;
+  const failCount = results.filter((r) => !r.ok).length;
+  const header = `Bulk update applied — ${okCount} succeeded${failCount > 0 ? `, ${failCount} failed` : ""}`;
+  const blocks: KnownBlock[] = [
+    { type: "header", text: { type: "plain_text", text: header.slice(0, 150) } },
+    { type: "section", text: { type: "mrkdwn", text: proposal.recap } },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          "*Applied:*\n" +
+          proposal.fields
+            .map((f) => "• " + summarizeProposedFieldChange(f))
+            .join("\n"),
+      },
+    },
+    { type: "divider" },
+  ];
+
+  const byId = new Map(results.map((r) => [r.recordId, r]));
+  const ROW_CAP = 20;
+  const rows = proposal.recordSummaries.slice(0, ROW_CAP);
+  for (const row of rows) {
+    const r = byId.get(row.recordId);
+    if (!r) continue;
+    const oppUrl = `${instanceUrl}/${row.recordId}`;
+    const icon = r.ok ? ":white_check_mark:" : ":warning:";
+    const namePart = `<${oppUrl}|*${row.recordName.length > 80 ? row.recordName.slice(0, 77) + "…" : row.recordName}*>`;
+    const detail = r.ok ? "" : `\n_${r.error ?? "Unknown error"}_`;
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `${icon} ${namePart}${detail}` },
+    });
+  }
+  const overflow = proposal.recordSummaries.length - rows.length;
+  if (overflow > 0) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `_+${overflow} more record${overflow === 1 ? "" : "s"} processed; see the audit log for details._`,
+        },
+      ],
+    });
+  }
+  return { blocks, text: header };
 }
 
 export function cardWithFieldResolved(

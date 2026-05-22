@@ -11,6 +11,7 @@ import type {
   PostMeetingPayload,
   Recommendation,
   RecordUpdateProposal,
+  BulkRecordUpdateProposal,
   SfTokens,
   UserPrefs,
 } from "../types.js";
@@ -391,7 +392,8 @@ export async function insertPendingCard(c: {
     | BuySignalPayload
     | PostMeetingPayload
     | MeetingPickerPayload
-    | RecordUpdateProposal;
+    | RecordUpdateProposal
+    | BulkRecordUpdateProposal;
   kind?: PendingCardKind;
 }): Promise<string> {
   const pool = getPool();
@@ -457,7 +459,9 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
               ? "qa_proposal"
               : r.kind === "record_proposal"
                 ? "record_proposal"
-                : "standup";
+                : r.kind === "bulk_record_proposal"
+                  ? "bulk_record_proposal"
+                  : "standup";
   if (kind === "brief") {
     return {
       ...base,
@@ -506,12 +510,31 @@ export async function getPendingCard(id: string): Promise<PendingCard | null> {
       recommendation: recommendation as RecordUpdateProposal,
     };
   }
+  if (kind === "bulk_record_proposal") {
+    return {
+      ...base,
+      kind: "bulk_record_proposal",
+      opportunityId: null,
+      recommendation: recommendation as BulkRecordUpdateProposal,
+    };
+  }
   return {
     ...base,
     kind: "standup",
     opportunityId: r.opportunity_id,
     recommendation: recommendation as Recommendation,
   };
+}
+
+export async function updatePendingCardRecommendation(
+  id: string,
+  recommendation: unknown
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE pending_cards SET recommendation = $2 WHERE id = $1`,
+    [id, JSON.stringify(recommendation)]
+  );
 }
 
 export async function getRecentBuySignalAccountIds(

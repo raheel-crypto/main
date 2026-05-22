@@ -146,7 +146,8 @@ export type PendingCardKind =
   | "post_meeting"
   | "meeting_picker"
   | "qa_proposal"
-  | "record_proposal";
+  | "record_proposal"
+  | "bulk_record_proposal";
 
 export interface PendingCardBase {
   id: string;
@@ -289,6 +290,29 @@ export interface RecordProposalPendingCard extends PendingCardBase {
   recommendation: RecordUpdateProposal;
 }
 
+export interface BulkRecordSummary {
+  recordId: string;
+  recordName: string;
+  contextLabel?: string;
+  currentValues: Record<string, string | number | boolean | null>;
+}
+
+export interface BulkRecordUpdateProposal {
+  sobjectType: string;
+  recordSummaries: BulkRecordSummary[];
+  fields: ProposedField[];
+  recap: string;
+  excludedRecordIds: string[];
+  confirmed: boolean;
+  instanceUrl: string;
+}
+
+export interface BulkRecordProposalPendingCard extends PendingCardBase {
+  kind: "bulk_record_proposal";
+  opportunityId: null;
+  recommendation: BulkRecordUpdateProposal;
+}
+
 export type PendingCard =
   | StandupPendingCard
   | BriefPendingCard
@@ -296,7 +320,8 @@ export type PendingCard =
   | PostMeetingPendingCard
   | MeetingPickerPendingCard
   | QaProposalPendingCard
-  | RecordProposalPendingCard;
+  | RecordProposalPendingCard
+  | BulkRecordProposalPendingCard;
 
 export type AuditAction =
   | "recommended"
@@ -332,7 +357,12 @@ export type AuditAction =
   | "gong_post_call_dropped"
   | "record_proposed_update"
   | "record_apply_failed"
-  | "record_applied";
+  | "record_applied"
+  | "bulk_record_proposed"
+  | "bulk_record_excluded"
+  | "bulk_record_apply_confirmed"
+  | "bulk_record_applied"
+  | "bulk_record_apply_failed";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",

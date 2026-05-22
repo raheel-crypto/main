@@ -122,6 +122,12 @@ export interface ApplyRecordResult {
   error?: string;
 }
 
+export interface BulkApplyResult {
+  recordId: string;
+  ok: boolean;
+  error?: string;
+}
+
 export async function applyRecordFields(args: {
   conn: Connection;
   slackUserId: string;
@@ -182,6 +188,134 @@ export async function applyRecordFields(args: {
         metadata: { sobjectType, recordId, error: err.message },
       });
       results.push({ field: f.field, ok: false, error: err.message });
+    }
+  }
+  return results;
+}
+
+export async function applyBulkRecordFields(args: {
+  conn: Connection;
+  slackUserId: string;
+  sobjectType: string;
+  recordIds: string[];
+  fields: { field: string; newValue: unknown }[];
+  batchId: string;
+}): Promise<BulkApplyResult[]> {
+  const { conn, slackUserId, sobjectType, recordIds, fields, batchId } = args;
+  if (recordIds.length === 0 || fields.length === 0) return [];
+
+  const fieldPayload: Record<string, unknown> = {};
+  for (const f of fields) {
+    fieldPayload[f.field] = coerceForSobject(sobjectType, f.field, f.newValue);
+  }
+
+  const results: BulkApplyResult[] = [];
+
+  if (config.dryRun) {
+    for (const id of recordIds) {
+      for (const f of fields) {
+        await appendAudit({
+          slackUserId,
+          opportunityId: sobjectType === "Opportunity" ? id : null,
+          fieldName: f.field,
+          action: "bulk_record_applied",
+          newValue: String(f.newValue ?? ""),
+          metadata: { dryRun: true, sobjectType, recordId: id, batchId },
+        });
+      }
+      results.push({ recordId: id, ok: true });
+    }
+    return results;
+  }
+
+  // Salesforce Composite API: up to 200 records per PATCH, partial-success via
+  // allOrNone=false. Chunk to be safe; we cap upstream at 50 but keep the
+  // chunker future-proof.
+  const chunks: string[][] = [];
+  for (let i = 0; i < recordIds.length; i += 200) {
+    chunks.push(recordIds.slice(i, i + 200));
+  }
+
+  for (const chunk of chunks) {
+    const body = {
+      allOrNone: false,
+      records: chunk.map((id) => ({
+        attributes: { type: sobjectType },
+        Id: id,
+        ...fieldPayload,
+      })),
+    };
+    const apiVersion =
+      (conn as any).version ?? (conn as any)._defaultVersion ?? "59.0";
+    const path = `/services/data/v${apiVersion}/composite/sobjects`;
+    let responseRecords: { id?: string; success?: boolean; errors?: any[] }[] = [];
+    try {
+      const res: any = await (conn as any).request({
+        method: "PATCH",
+        url: path,
+        body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json" },
+      });
+      responseRecords = Array.isArray(res) ? res : (res?.records ?? []);
+    } catch (err: any) {
+      console.error(
+        `[bulk] composite PATCH failed: ${err?.message ?? err}; falling back to per-record updates.`
+      );
+      for (const id of chunk) {
+        try {
+          await conn.sobject(sobjectType).update({ Id: id, ...fieldPayload } as any);
+          for (const f of fields) {
+            await appendAudit({
+              slackUserId,
+              opportunityId: sobjectType === "Opportunity" ? id : null,
+              fieldName: f.field,
+              action: "bulk_record_applied",
+              newValue: String(f.newValue ?? ""),
+              metadata: { sobjectType, recordId: id, batchId, fallback: true },
+            });
+          }
+          results.push({ recordId: id, ok: true });
+        } catch (e: any) {
+          for (const f of fields) {
+            await appendAudit({
+              slackUserId,
+              opportunityId: sobjectType === "Opportunity" ? id : null,
+              fieldName: f.field,
+              action: "bulk_record_apply_failed",
+              newValue: String(f.newValue ?? ""),
+              metadata: { sobjectType, recordId: id, batchId, error: e.message, fallback: true },
+            });
+          }
+          results.push({ recordId: id, ok: false, error: e.message });
+        }
+      }
+      continue;
+    }
+
+    for (let i = 0; i < chunk.length; i++) {
+      const id = chunk[i];
+      const r = responseRecords[i];
+      const ok = !!r?.success;
+      const errMsg = ok
+        ? undefined
+        : (r?.errors ?? []).map((e: any) => e.message).join("; ") ||
+          "Unknown Salesforce error";
+      for (const f of fields) {
+        await appendAudit({
+          slackUserId,
+          opportunityId: sobjectType === "Opportunity" ? id : null,
+          fieldName: f.field,
+          action: ok ? "bulk_record_applied" : "bulk_record_apply_failed",
+          newValue: String(f.newValue ?? ""),
+          metadata: {
+            sobjectType,
+            recordId: id,
+            batchId,
+            ...(ok ? {} : { error: errMsg }),
+          },
+        });
+      }
+      results.push({ recordId: id, ok, error: errMsg });
     }
   }
   return results;
