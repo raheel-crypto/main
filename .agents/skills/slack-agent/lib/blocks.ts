@@ -15,12 +15,31 @@ export const MARK_CLOSED_WON_ACTION_ID = "mark_closed_won";
 export function buildMarkClosedWonPromptBlocks(args: {
   accountName: string;
   opportunityId: string;
+  /** Full Salesforce URL for the Opp record. Adds a "View in Salesforce"
+   *  link button next to the primary action so RevOps can verify before
+   *  flipping. Omit to skip the link. */
+  opportunityUrl?: string;
   /** True for pre-launch deals with no approval thread on file. */
   isLegacy?: boolean;
 }): unknown[] {
   const legacyNote = args.isLegacy
     ? `\n_(Pre-launch deal — no approval thread on file.)_`
     : "";
+  const buttons: unknown[] = [];
+  if (args.opportunityUrl) {
+    buttons.push({
+      type: "button",
+      text: { type: "plain_text", text: "View in Salesforce" },
+      url: args.opportunityUrl,
+    });
+  }
+  buttons.push({
+    type: "button",
+    action_id: MARK_CLOSED_WON_ACTION_ID,
+    style: "primary",
+    text: { type: "plain_text", text: "Mark Closed Won" },
+    value: args.opportunityId,
+  });
   return [
     {
       type: "section",
@@ -31,18 +50,7 @@ export function buildMarkClosedWonPromptBlocks(args: {
           `Ready to mark this Opportunity as *Closed Won*?`,
       },
     },
-    {
-      type: "actions",
-      elements: [
-        {
-          type: "button",
-          action_id: MARK_CLOSED_WON_ACTION_ID,
-          style: "primary",
-          text: { type: "plain_text", text: "Mark Closed Won" },
-          value: args.opportunityId,
-        },
-      ],
-    },
+    { type: "actions", elements: buttons },
   ];
 }
 

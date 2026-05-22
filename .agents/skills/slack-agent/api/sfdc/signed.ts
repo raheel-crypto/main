@@ -73,6 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const audit = await getLatestApprovedQuoteApproval(opportunityId);
   const accountName = opp.Account?.Name ?? "this account";
+  const opportunityUrl = buildOpportunityUrl(opportunityId);
 
   // Legacy path: no approved Quote_Approval__c exists for this Opp (deal was
   // sent for signature before we launched the approval bot). Post a fresh,
@@ -87,6 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const blocks = buildMarkClosedWonPromptBlocks({
       accountName,
       opportunityId,
+      opportunityUrl,
       isLegacy: true,
     });
     await postMessage({
@@ -118,7 +120,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  const blocks = buildMarkClosedWonPromptBlocks({ accountName, opportunityId });
+  const blocks = buildMarkClosedWonPromptBlocks({
+    accountName,
+    opportunityId,
+    opportunityUrl,
+  });
 
   await postMessage({
     channel: ref.channel,
@@ -128,6 +134,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
 
   return res.status(200).json({ ok: true });
+}
+
+function buildOpportunityUrl(opportunityId: string): string | undefined {
+  const base = process.env.SFDC_LOGIN_URL?.replace(/\/$/, "");
+  if (!base) return undefined;
+  return `${base}/lightning/r/Opportunity/${opportunityId}/view`;
 }
 
 function headerString(v: string | string[] | undefined): string | undefined {
