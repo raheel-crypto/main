@@ -14,6 +14,7 @@ import type {
   Recommendation,
   RecommendedField,
   RecordUpdateProposal,
+  SfApplyError,
 } from "../types.js";
 
 export type ActionVerb =
@@ -584,9 +585,67 @@ export function bulkRecordCard(
   };
 }
 
+function renderErrorDetail(errors: SfApplyError[] | undefined, fallback: string): string {
+  if (!errors || errors.length === 0) {
+    return `\n_${fallback}_`;
+  }
+  const lines = errors.map((e) => {
+    const fieldHint =
+      e.fields && e.fields.length > 0
+        ? `\n  └ *Missing/invalid field${e.fields.length === 1 ? "" : "s"}:* ${e.fields.map((f) => `\`${f}\``).join(", ")}`
+        : "";
+    return `_${e.message}_${fieldHint}`;
+  });
+  return "\n" + lines.join("\n");
+}
+
+function buildFailureSummary(
+  results: {
+    ok: boolean;
+    errors?: SfApplyError[];
+  }[]
+): string | null {
+  const failures = results.filter((r) => !r.ok && r.errors && r.errors.length > 0);
+  if (failures.length === 0) return null;
+  // Bucket by (statusCode + sorted fields signature). If 2+ records share a
+  // bucket, hint the rep that they likely need to set those fields and retry.
+  const buckets = new Map<string, { count: number; statusCode: string; fields: string[]; sample: string }>();
+  for (const r of failures) {
+    for (const e of r.errors!) {
+      const sig = `${e.statusCode}::${[...e.fields].sort().join(",")}`;
+      const existing = buckets.get(sig);
+      if (existing) {
+        existing.count++;
+      } else {
+        buckets.set(sig, {
+          count: 1,
+          statusCode: e.statusCode,
+          fields: e.fields,
+          sample: e.message,
+        });
+      }
+    }
+  }
+  const interesting = [...buckets.values()].filter(
+    (b) => b.count >= 2 && b.fields.length > 0
+  );
+  if (interesting.length === 0) return null;
+  return interesting
+    .map((b) => {
+      const fieldList = b.fields.map((f) => `\`${f}\``).join(", ");
+      return `• *${b.count}* records failed with ${b.statusCode} — need ${fieldList}. Reply with values to set on those fields and I'll retry just the failures.`;
+    })
+    .join("\n");
+}
+
 export function bulkRecordCardResolved(
   proposal: BulkRecordUpdateProposal,
-  results: { recordId: string; ok: boolean; error?: string }[],
+  results: {
+    recordId: string;
+    ok: boolean;
+    error?: string;
+    errors?: SfApplyError[];
+  }[],
   instanceUrl: string
 ): { blocks: KnownBlock[]; text: string } {
   const okCount = results.filter((r) => r.ok).length;
@@ -609,6 +668,18 @@ export function bulkRecordCardResolved(
     { type: "divider" },
   ];
 
+  const failureSummary = buildFailureSummary(results);
+  if (failureSummary) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `:bulb: *Likely fix:*\n${failureSummary}`,
+      },
+    });
+    blocks.push({ type: "divider" });
+  }
+
   const byId = new Map(results.map((r) => [r.recordId, r]));
   const ROW_CAP = 20;
   const rows = proposal.recordSummaries.slice(0, ROW_CAP);
@@ -618,7 +689,9 @@ export function bulkRecordCardResolved(
     const oppUrl = `${instanceUrl}/${row.recordId}`;
     const icon = r.ok ? ":white_check_mark:" : ":warning:";
     const namePart = `<${oppUrl}|*${row.recordName.length > 80 ? row.recordName.slice(0, 77) + "…" : row.recordName}*>`;
-    const detail = r.ok ? "" : `\n_${r.error ?? "Unknown error"}_`;
+    const detail = r.ok
+      ? ""
+      : renderErrorDetail(r.errors, r.error ?? "Unknown error");
     blocks.push({
       type: "section",
       text: { type: "mrkdwn", text: `${icon} ${namePart}${detail}` },

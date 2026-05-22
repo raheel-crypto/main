@@ -290,6 +290,12 @@ export interface RecordProposalPendingCard extends PendingCardBase {
   recommendation: RecordUpdateProposal;
 }
 
+export interface SfApplyError {
+  statusCode: string;
+  message: string;
+  fields: string[];
+}
+
 export interface BulkRecordSummary {
   recordId: string;
   recordName: string;

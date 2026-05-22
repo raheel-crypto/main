@@ -1016,12 +1016,25 @@ async function writeAndReplyRecord(
 
   const failed = results.filter((r) => !r.ok);
   if (failed.length > 0) {
+    const lines: string[] = [];
+    for (const f of failed) {
+      const errs = f.errors ?? [];
+      if (errs.length === 0) {
+        lines.push(`:warning: ${f.field}: ${f.error ?? "unknown error"}`);
+        continue;
+      }
+      for (const e of errs) {
+        const fieldHint =
+          e.fields && e.fields.length > 0
+            ? ` _(missing/invalid: ${e.fields.map((x) => `\`${x}\``).join(", ")})_`
+            : "";
+        lines.push(`:warning: *${f.field}* — ${e.message}${fieldHint}`);
+      }
+    }
     await app.client.chat.postMessage({
       channel: card.slackChannel,
       thread_ts: card.slackMessageTs,
-      text: failed
-        .map((f) => `:warning: ${f.field}: ${f.error ?? "unknown error"}`)
-        .join("\n"),
+      text: lines.join("\n"),
     });
   }
 }

@@ -1,7 +1,47 @@
 import { Connection } from "jsforce";
 import { config } from "../config.js";
 import { appendAudit } from "../db/queries.js";
-import type { RecommendedField } from "../types.js";
+import type { RecommendedField, SfApplyError } from "../types.js";
+
+function parseJsforceError(err: any): SfApplyError[] {
+  if (!err) return [];
+  // jsforce REST errors usually expose .errorCode, .message, .fields
+  if (Array.isArray(err.errors)) {
+    return err.errors.map((e: any) => ({
+      statusCode: e.statusCode ?? e.errorCode ?? "UNKNOWN",
+      message: e.message ?? String(e),
+      fields: Array.isArray(e.fields) ? e.fields : [],
+    }));
+  }
+  return [
+    {
+      statusCode: err.errorCode ?? err.statusCode ?? err.name ?? "UNKNOWN",
+      message: err.message ?? String(err),
+      fields: Array.isArray(err.fields) ? err.fields : [],
+    },
+  ];
+}
+
+function parseCompositeErrors(rawErrors: any): SfApplyError[] {
+  if (!Array.isArray(rawErrors)) return [];
+  return rawErrors.map((e: any) => ({
+    statusCode: e.statusCode ?? "UNKNOWN",
+    message: e.message ?? "Unknown Salesforce error",
+    fields: Array.isArray(e.fields) ? e.fields : [],
+  }));
+}
+
+function flattenErrorMessage(errors: SfApplyError[]): string {
+  return (
+    errors
+      .map((e) => {
+        const fieldHint =
+          e.fields.length > 0 ? ` (fields: ${e.fields.join(", ")})` : "";
+        return `${e.statusCode}: ${e.message}${fieldHint}`;
+      })
+      .join("; ") || "Unknown Salesforce error"
+  );
+}
 
 export interface ApplyResult {
   field: string;
@@ -120,12 +160,14 @@ export interface ApplyRecordResult {
   field: string;
   ok: boolean;
   error?: string;
+  errors?: SfApplyError[];
 }
 
 export interface BulkApplyResult {
   recordId: string;
   ok: boolean;
   error?: string;
+  errors?: SfApplyError[];
 }
 
 export async function applyRecordFields(args: {
@@ -177,6 +219,8 @@ export async function applyRecordFields(args: {
       results.push({ field: f.field, ok: true });
     }
   } catch (err: any) {
+    const structuredErrors = parseJsforceError(err);
+    const flatMessage = flattenErrorMessage(structuredErrors);
     for (const f of fields) {
       await appendAudit({
         slackUserId,
@@ -185,9 +229,14 @@ export async function applyRecordFields(args: {
         action: "record_apply_failed",
         oldValue: String(f.oldValue ?? ""),
         newValue: String(f.newValue ?? ""),
-        metadata: { sobjectType, recordId, error: err.message },
+        metadata: { sobjectType, recordId, errors: structuredErrors },
       });
-      results.push({ field: f.field, ok: false, error: err.message });
+      results.push({
+        field: f.field,
+        ok: false,
+        error: flatMessage,
+        errors: structuredErrors,
+      });
     }
   }
   return results;
@@ -276,6 +325,8 @@ export async function applyBulkRecordFields(args: {
           }
           results.push({ recordId: id, ok: true });
         } catch (e: any) {
+          const structuredErrors = parseJsforceError(e);
+          const flatMsg = flattenErrorMessage(structuredErrors);
           for (const f of fields) {
             await appendAudit({
               slackUserId,
@@ -283,10 +334,21 @@ export async function applyBulkRecordFields(args: {
               fieldName: f.field,
               action: "bulk_record_apply_failed",
               newValue: String(f.newValue ?? ""),
-              metadata: { sobjectType, recordId: id, batchId, error: e.message, fallback: true },
+              metadata: {
+                sobjectType,
+                recordId: id,
+                batchId,
+                errors: structuredErrors,
+                fallback: true,
+              },
             });
           }
-          results.push({ recordId: id, ok: false, error: e.message });
+          results.push({
+            recordId: id,
+            ok: false,
+            error: flatMsg,
+            errors: structuredErrors,
+          });
         }
       }
       continue;
@@ -296,10 +358,8 @@ export async function applyBulkRecordFields(args: {
       const id = chunk[i];
       const r = responseRecords[i];
       const ok = !!r?.success;
-      const errMsg = ok
-        ? undefined
-        : (r?.errors ?? []).map((e: any) => e.message).join("; ") ||
-          "Unknown Salesforce error";
+      const structuredErrors = ok ? [] : parseCompositeErrors(r?.errors);
+      const flatMsg = ok ? undefined : flattenErrorMessage(structuredErrors);
       for (const f of fields) {
         await appendAudit({
           slackUserId,
@@ -311,11 +371,15 @@ export async function applyBulkRecordFields(args: {
             sobjectType,
             recordId: id,
             batchId,
-            ...(ok ? {} : { error: errMsg }),
+            ...(ok ? {} : { errors: structuredErrors }),
           },
         });
       }
-      results.push({ recordId: id, ok, error: errMsg });
+      results.push({
+        recordId: id,
+        ok,
+        ...(ok ? {} : { error: flatMsg, errors: structuredErrors }),
+      });
     }
   }
   return results;
