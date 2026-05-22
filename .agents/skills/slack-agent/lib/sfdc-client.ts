@@ -1,5 +1,5 @@
 import { getSFDCAccessToken } from "./sfdc-auth.js";
-import type { DealContext } from "./types.js";
+import type { ApprovalTier, DealContext, SelectedTerm } from "./types.js";
 
 const API_VERSION = "v60.0";
 
@@ -193,13 +193,62 @@ export async function getLatestApprovedQuoteApproval(
 }
 
 /**
+ * Fetch the SelectedTerm snapshot data for a list of Legal_Term__c codes.
+ * Called at submit time so the rep's term selections are frozen verbatim into
+ * the ApprovalRequest — legal edits to Legal_Term__c.Body__c after submit
+ * never reach the generated order form.
+ *
+ * Drops any code that didn't resolve (inactive, deleted, typo'd by an older
+ * LWC build) and logs a warning. Empty input returns [] without an SOQL call.
+ */
+export async function fetchTermsByCodes(codes: string[]): Promise<SelectedTerm[]> {
+  if (codes.length === 0) return [];
+  const inList = codes.map((c) => `'${escapeSoql(c)}'`).join(",");
+  const soql = encodeURIComponent(
+    `SELECT Id, Term_Code__c, Title__c, Body__c, Category__c, ` +
+      `Required_Tier__c, Sort_Order__c FROM Legal_Term__c ` +
+      `WHERE Term_Code__c IN (${inList}) AND Active__c = true`,
+  );
+  const result = (await sfdcFetch(`/query?q=${soql}`)) as {
+    records: Array<Record<string, unknown>>;
+  };
+  const resolved: SelectedTerm[] = result.records.map((r) => ({
+    sfdc_id: getFieldCI(r, "Id") ?? "",
+    term_code: getFieldCI(r, "Term_Code__c") ?? "",
+    title: getFieldCI(r, "Title__c") ?? "",
+    body: getFieldCI(r, "Body__c") ?? "",
+    category: getFieldCI(r, "Category__c") ?? "",
+    required_tier: normalizeTier(getFieldCI(r, "Required_Tier__c")),
+    sort_order: Number(getFieldCI(r, "Sort_Order__c") ?? 0),
+  }));
+
+  if (resolved.length !== codes.length) {
+    const resolvedCodes = new Set(resolved.map((t) => t.term_code));
+    const missing = codes.filter((c) => !resolvedCodes.has(c));
+    console.warn(
+      `[fetchTermsByCodes] dropped ${missing.length} unresolved term code(s): ${missing.join(", ")}`,
+    );
+  }
+
+  return resolved.sort((a, b) => a.sort_order - b.sort_order);
+}
+
+function normalizeTier(raw: string | null): ApprovalTier {
+  const t = raw?.trim().toLowerCase() ?? "";
+  if (t === "deal_desk" || t === "deal desk") return "deal_desk";
+  if (t === "pod_leader" || t === "pod leader") return "pod_leader";
+  if (t === "james") return "james";
+  return "auto";
+}
+
+/**
  * Case-insensitive field lookup. SFDC returns response keys in the canonical
  * casing the field was created with, which may differ from how we wrote the
  * SOQL (case is preserved on read even though SOQL itself is case-insensitive).
  * e.g. a field created as `Slack_Message_URL__c` reads at `r["Slack_Message_URL__c"]`,
  * not `r["Slack_Message_Url__c"]`.
  */
-function getFieldCI(record: Record<string, unknown>, name: string): string | null {
+export function getFieldCI(record: Record<string, unknown>, name: string): string | null {
   const target = name.toLowerCase();
   for (const [k, v] of Object.entries(record)) {
     if (k.toLowerCase() === target) return typeof v === "string" ? v : v == null ? null : String(v);

@@ -5,6 +5,7 @@ import { routeApproval } from "../../lib/approval.js";
 import { fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
 import { calculatePricing } from "../../lib/pricing.js";
 import { postApprovalRequest, postAuditLog } from "../../lib/revops.js";
+import { fetchTermsByCodes } from "../../lib/sfdc-client.js";
 import { dmFileToUser, dmUser, uploadFileToThread } from "../../lib/slack.js";
 import { stashAt } from "../../lib/state.js";
 import type { AgentOutput, ApprovalRequest, ProcessQuoteJob } from "../../lib/types.js";
@@ -46,7 +47,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function processJob(job: ProcessQuoteJob): Promise<void> {
-  const { context, form, requester } = job;
+  const { context, requester } = job;
+  const form = job.form;
+
+  // Hydrate selected legal terms before pricing/routing so the snapshot
+  // freezes the term bodies at submit time. fetchTermsByCodes returns [] for
+  // missing codes (logged) and an empty array if no codes were sent.
+  form.selected_terms = await fetchTermsByCodes(job.selected_term_codes ?? []);
 
   const pricing = calculatePricing(form);
   const routing = routeApproval(form, pricing, context);

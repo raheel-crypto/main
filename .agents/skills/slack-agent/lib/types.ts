@@ -18,6 +18,33 @@ export interface QuoteForm {
   /** ISO date string YYYY-MM-DD. */
   contract_end_date: string;
   notes: string;
+  /**
+   * Pre-approved legal terms the rep attached to this deal. Resolved from
+   * the SFDC Legal_Term__c library at submit time and snapshotted here so
+   * legal can't change wording between submit and approval. Defaults to
+   * empty when the rep selects nothing or the field is missing (Slack modal,
+   * older approvals deserialized from KV).
+   */
+  selected_terms: SelectedTerm[];
+}
+
+/**
+ * A pre-approved legal clause attached to a quote. Snapshotted from
+ * Legal_Term__c at submit time — `body` is the verbatim text rendered into
+ * the order form, immune to mid-flight edits in SFDC.
+ */
+export interface SelectedTerm {
+  /** Stable code from Legal_Term__c.Term_Code__c (e.g. "PAY_NET_90"). */
+  term_code: string;
+  /** SFDC Id, for drill-back / audit. */
+  sfdc_id: string;
+  title: string;
+  body: string;
+  category: string;
+  /** Minimum approval tier this term requires, regardless of discount. */
+  required_tier: ApprovalTier;
+  /** Stable rendering order from Legal_Term__c.Sort_Order__c. */
+  sort_order: number;
 }
 
 /** Derived monetary breakdown — output of `lib/pricing.ts`. */
@@ -118,6 +145,10 @@ export interface ProcessQuoteJob {
   context: DealContext;
   form: QuoteForm;
   requester: Requester;
+  /** Optional list of Term_Code__c values the rep selected in the LWC.
+   *  The processor hydrates these into form.selected_terms via SOQL so
+   *  the snapshot is authoritative — the LWC never sends term bodies. */
+  selected_term_codes?: string[];
 }
 
 export interface SlashCommandPayload {
