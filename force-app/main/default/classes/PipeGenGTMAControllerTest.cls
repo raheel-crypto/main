@@ -4,6 +4,7 @@ private class PipeGenGTMAControllerTest {
     // ─── Test Data Helpers ───────────────────────────────────────────────────────
 
     private static User makeGTMAUser() {
+        UserRole r = [SELECT Id FROM UserRole WHERE Name = 'GTM Associate' LIMIT 1];
         Profile p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
         User u = new User(
             FirstName   = 'GTMA',
@@ -11,6 +12,7 @@ private class PipeGenGTMAControllerTest {
             Email       = 'gtma.test@example.com',
             Username    = 'gtma.test.' + System.currentTimeMillis() + '@example.com',
             Alias       = 'gtmatest',
+            UserRoleId  = r.Id,
             ProfileId   = p.Id,
             TimeZoneSidKey    = 'America/Los_Angeles',
             LocaleSidKey      = 'en_US',
@@ -41,6 +43,7 @@ private class PipeGenGTMAControllerTest {
             Rep__c                = userId,
             Week_Start_Date__c    = weekStart,
             Commit_Type__c        = type,
+            Motion_Type__c        = 'GTMA Activity',
             Commit_Description__c = 'Test commit',
             Committed_Count__c    = 1,
             Actual_Count__c       = status == 'Completed' ? 1 : 0,
@@ -159,13 +162,13 @@ private class PipeGenGTMAControllerTest {
         Weekly_Commit__c c1 = new Weekly_Commit__c(
             Rep__c = gtma.Id, Week_Start_Date__c = lastWeekStart,
             Commit_Type__c = 'Meeting Booked', Commit_Description__c = 'Test',
-            Committed_Count__c = 1, Target_Account__c = a1.Id,
+            Committed_Count__c = 1, Target_Account__c = a1.Id, Motion_Type__c = 'GTMA Activity',
             Completion_Status__c = 'Completed'
         );
         Weekly_Commit__c c2 = new Weekly_Commit__c(
             Rep__c = gtma.Id, Week_Start_Date__c = lastWeekStart,
             Commit_Type__c = 'Cold Call Made', Commit_Description__c = 'Test',
-            Committed_Count__c = 1, Target_Account__c = a2.Id,
+            Committed_Count__c = 1, Target_Account__c = a2.Id, Motion_Type__c = 'GTMA Activity',
             Completion_Status__c = 'Not Started'
         );
         insert new List<Weekly_Commit__c>{ c1, c2 };
@@ -351,6 +354,7 @@ private class PipeGenGTMAControllerTest {
             Weekly_Commit__c rec = new Weekly_Commit__c(
                 Commit_Type__c        = 'Meeting Booked',
                 Commit_Description__c = 'First meeting at Acme',
+                Motion_Type__c        = 'GTMA Activity',
                 Committed_Count__c    = 1
             );
             saved = PipeGenGTMAController.saveCommit(rec);
@@ -360,7 +364,7 @@ private class PipeGenGTMAControllerTest {
         System.assertNotEquals(null, saved.Id, 'Saved record should have an Id');
         System.assertEquals(gtma.Id, saved.Rep__c, 'Rep__c should be set to current user');
         System.assertNotEquals(null, saved.Week_Start_Date__c, 'Week_Start_Date__c should be set');
-        System.assertEquals(null, saved.Motion_Type__c, 'Motion_Type__c should be null for GTMAs');
+        System.assertEquals('GTMA Activity', saved.Motion_Type__c, 'Motion_Type__c should be null for GTMAs');
     }
 
     @IsTest
