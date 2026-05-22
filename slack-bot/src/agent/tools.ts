@@ -46,8 +46,10 @@ export interface AgentToolCtx {
   userEmail: string;
   userTimezone: string;
   instanceUrl: string;
-  pendingRecordProposal?: RecordUpdateProposal;
-  pendingBulkRecordProposal?: BulkRecordUpdateProposal;
+  sfUserId?: string | null;
+  sfUserName?: string | null;
+  pendingRecordProposals: RecordUpdateProposal[];
+  pendingBulkRecordProposals: BulkRecordUpdateProposal[];
 }
 
 export interface AgentTool {
@@ -736,7 +738,7 @@ const sfProposeRecordUpdate: AgentTool = {
   definition: {
     name: "sf_propose_record_update",
     description:
-      "Draft an update to ANY Salesforce record (Opportunity, Account, Contact, Lead, Task, custom objects, etc.). Does NOT write to Salesforce — it stages a confirmation card the rep clicks to apply. Use this whenever the rep asks to update / change / set / push a field on a record. The tool calls describe() to validate fields exist, are updateable, and match the expected type (picklist, date, currency, boolean, reference). For Lookup(User) fields, you may pass 'me' (resolves to the rep's own User Id) or a name (resolves via User WHERE Name LIKE). For other Lookup fields, pass a real 15/18-char Salesforce Id — use sf_find_account or sf_query first to look up the Id. Call at most once per turn; calling it ends the agent loop. If the tool returns an error (field not found, wrong type, invalid picklist value), read the error and either retry with corrected input or ask the rep to clarify.",
+      "Draft an update to ANY Salesforce record (Opportunity, Account, Contact, Lead, Task, custom objects, etc.). Does NOT write to Salesforce — it stages a confirmation card the rep clicks to apply. Use this whenever the rep asks to update / change / set / push a field on a record. The tool calls describe() to validate fields exist, are updateable, and match the expected type (picklist, date, currency, boolean, reference). For Lookup(User) fields, you may pass 'me' (resolves to the rep's own User Id) or a name (resolves via User WHERE Name LIKE). For other Lookup fields, pass a real 15/18-char Salesforce Id — use sf_find_account or sf_query first to look up the Id. **You may call this tool multiple times in one turn** if the rep asks for changes on multiple records — each call stages a separate card. If the tool returns an error (field not found, wrong type, invalid picklist value), read the error and either retry with corrected input or ask the rep to clarify.",
     input_schema: {
       type: "object",
       properties: {
@@ -908,14 +910,14 @@ const sfProposeRecordUpdate: AgentTool = {
 
     const contextLabel = buildContextLabel(describe.name, recordName, row);
 
-    ctx.pendingRecordProposal = {
+    ctx.pendingRecordProposals.push({
       sobjectType: describe.name,
       recordId: row.Id ?? recordId,
       recordName,
       contextLabel,
       recap,
       fields: proposed,
-    };
+    });
 
     return {
       status: "proposal_recorded",
@@ -926,7 +928,7 @@ const sfProposeRecordUpdate: AgentTool = {
         from: f.currentDisplay ?? f.currentValue,
         to: f.recommendedDisplay ?? f.recommendedValue,
       })),
-      next: "A confirmation card will be posted in the DM with Accept / Edit / Skip / Apply-all buttons. Reply with one short sentence acknowledging the draft — do not restate the field values.",
+      next: "A confirmation card will be posted in the DM with Accept / Edit / Skip / Apply-all buttons. If the rep asked for additional record changes in the same message, call this tool again for each — multiple cards can be staged in one turn. Otherwise reply with one short sentence acknowledging the draft (do not restate the field values).",
     };
   },
 };
@@ -994,7 +996,7 @@ const sfProposeBulkRecordUpdate: AgentTool = {
   definition: {
     name: "sf_propose_bulk_record_update",
     description:
-      "Draft the SAME field updates across multiple Salesforce records of the same SObject in one card. Use when the rep names more than one record or describes a filter ('close lost all the opps from Q1 that never made it past Discovery'). Find the record Ids first with sf_query, then call this with the Id list. Same describe-driven field validation as sf_propose_record_update. Hard cap: 50 records per call. Common-fields-across-all-records model (every record gets the same change); if the rep wants different changes on different records, do them in separate turns. Call at most once per turn; calling it ends the agent loop.",
+      "Draft the SAME field updates across multiple Salesforce records of the same SObject in one card. Use when the rep names more than one record or describes a filter ('close lost all the opps from Q1 that never made it past Discovery'). Find the record Ids first with sf_query, then call this with the Id list. Same describe-driven field validation as sf_propose_record_update. Hard cap: 50 records per call. Common-fields-across-all-records model (every record gets the same change). **You may call this tool multiple times in one turn** if the rep asks for distinct changes on different record sets (e.g. 'move A,B to stage 2 AND closed lost C,D' = two calls, two cards). One card per distinct (set of records, set of field changes) tuple.",
     input_schema: {
       type: "object",
       properties: {
@@ -1195,7 +1197,7 @@ const sfProposeBulkRecordUpdate: AgentTool = {
     const foundIds = new Set(summaries.map((s) => s.recordId));
     const missing = uniqueIds.filter((id) => !foundIds.has(id));
 
-    ctx.pendingBulkRecordProposal = {
+    ctx.pendingBulkRecordProposals.push({
       sobjectType: describe.name,
       recordSummaries: summaries,
       fields: proposedFields,
@@ -1203,7 +1205,7 @@ const sfProposeBulkRecordUpdate: AgentTool = {
       excludedRecordIds: [],
       confirmed: false,
       instanceUrl: ctx.instanceUrl,
-    };
+    });
 
     return {
       status: "proposal_recorded",
@@ -1214,7 +1216,7 @@ const sfProposeBulkRecordUpdate: AgentTool = {
         field: f.field,
         to: f.recommendedDisplay ?? f.recommendedValue,
       })),
-      next: `A bulk confirmation card will be posted in the DM listing all ${summaries.length} records. Reply with one short sentence acknowledging the draft including the count (e.g. "Drafted: close lost ${summaries.length} opportunities — review the list and click Apply").${
+      next: `A bulk confirmation card will be posted in the DM listing all ${summaries.length} records. If the rep asked for additional bulk changes in the same message, call this tool again for each distinct (record set, field set) tuple — multiple cards can be staged in one turn. Otherwise reply with one short sentence acknowledging the draft including the count (e.g. "Drafted: close lost ${summaries.length} opportunities — review the list and click Apply").${
         missing.length > 0
           ? ` Note: ${missing.length} of the requested Id(s) were not found and are excluded from the card.`
           : ""

@@ -90,6 +90,8 @@ export async function runBriefForUser(args: {
       userEmail: user.email,
       userTimezone: user.timezone,
       instanceUrl: conn.instanceUrl!,
+      pendingRecordProposals: [],
+      pendingBulkRecordProposals: [],
     },
   });
 

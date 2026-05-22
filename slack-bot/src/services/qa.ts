@@ -75,17 +75,37 @@ export async function runQaForUser(args: {
   });
 
   const today = DateTime.now().setZone(user.timezone).toISODate();
+
+  let sfUserId: string | null = null;
+  let sfUserName: string | null = null;
+  try {
+    const ident: any = await conn.identity();
+    sfUserId = ident?.user_id ?? null;
+    sfUserName = ident?.display_name ?? null;
+  } catch (err: any) {
+    console.warn("[qa] conn.identity() failed:", err?.message ?? err);
+  }
+
   const agentCtx: AgentToolCtx = {
     conn,
     slackUserId,
     userEmail: user.email,
     userTimezone: user.timezone,
     instanceUrl: conn.instanceUrl!,
+    sfUserId,
+    sfUserName,
+    pendingRecordProposals: [],
+    pendingBulkRecordProposals: [],
   };
+
+  const identityLine =
+    sfUserId && sfUserName
+      ? `You are helping *${sfUserName}* — Salesforce User Id: \`${sfUserId}\` (email: ${user.email}). Default to filtering SOQL by \`OwnerId = '${sfUserId}'\` for any "my", "I", "mine" queries and for any write/bulk-find unless the rep explicitly broadens scope ("all reps", "across the team", "org-wide", etc.).`
+      : `You are helping a rep with email ${user.email}. Default to ownership-filtered queries.`;
   try {
     const result = await runAgent({
       system: QA_SYSTEM,
-      userMessage: `Today is ${today} (${user.timezone}).\n\n${trimmed}`,
+      userMessage: `Today is ${today} (${user.timezone}).\n${identityLine}\n\n${trimmed}`,
       onToolUse: ({ toolNames }) => updateProgress(toolNames),
       ctx: agentCtx,
     });
@@ -97,8 +117,8 @@ export async function runQaForUser(args: {
     );
     const claimsDraft = CARD_ACKNOWLEDGMENT_PATTERN.test(rawAnswer);
     const proposalMissing =
-      !agentCtx.pendingRecordProposal &&
-      !agentCtx.pendingBulkRecordProposal &&
+      agentCtx.pendingRecordProposals.length === 0 &&
+      agentCtx.pendingBulkRecordProposals.length === 0 &&
       (claimsDraft || calledProposeTool);
 
     let answer = rawAnswer;
@@ -136,24 +156,24 @@ export async function runQaForUser(args: {
       },
     });
 
-    if (agentCtx.pendingRecordProposal) {
+    for (const proposal of agentCtx.pendingRecordProposals) {
       await postRecordProposalCard({
         slack,
         channelId,
         slackUserId,
         placeholderTs: ts,
-        proposal: agentCtx.pendingRecordProposal,
+        proposal,
         instanceUrl: conn.instanceUrl!,
       });
     }
 
-    if (agentCtx.pendingBulkRecordProposal) {
+    for (const proposal of agentCtx.pendingBulkRecordProposals) {
       await postBulkRecordProposalCard({
         slack,
         channelId,
         slackUserId,
         placeholderTs: ts,
-        proposal: agentCtx.pendingBulkRecordProposal,
+        proposal,
         instanceUrl: conn.instanceUrl!,
       });
     }

@@ -179,6 +179,8 @@ export async function runPreMeeting(args: {
       userEmail: user.email,
       userTimezone: user.timezone,
       instanceUrl: conn.instanceUrl!,
+      pendingRecordProposals: [],
+      pendingBulkRecordProposals: [],
     },
   });
 
