@@ -299,7 +299,8 @@ public with sharing class PipeGenGTMAController {
         commitRecord.Motion_Type__c     = null; // GTMAs have no motion type
         upsert commitRecord;
         return [
-            SELECT Id, Rep__c, Week_Start_Date__c, Commit_Type__c, Commit_Description__c,
+            SELECT Id, Rep__c, Week_Start_Date__c, Motion_Type__c,
+                   Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
                    Committed_Count__c, Actual_Count__c,
                    Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c
@@ -343,7 +344,7 @@ public with sharing class PipeGenGTMAController {
         insert toInsert;
 
         return [
-            SELECT Id, Commit_Type__c, Commit_Description__c,
+            SELECT Id, Week_Start_Date__c, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
                    Committed_Count__c, Actual_Count__c,
                    Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c

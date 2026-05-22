@@ -17,7 +17,11 @@ private class PipeGenGTMAControllerTest {
             EmailEncodingKey  = 'UTF-8',
             LanguageLocaleKey = 'en_US'
         );
-        insert u;
+        // User is a setup object — must be inserted in its own DML context
+        // to avoid MIXED_DML_OPERATION errors when non-setup objects follow.
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            insert u;
+        }
         return u;
     }
 
