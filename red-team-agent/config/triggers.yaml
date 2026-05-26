@@ -1,29 +1,198 @@
-# Trigger definitions. Each `when` clause is a boolean condition; the first
-# trigger whose conditions are all satisfied fires. The trigger id flows
-# through to personas.py:TRIGGER_TO_PERSONAS to pick the speakers.
-#
-# Supported conditions (extend in app/triggers.py:evaluate_triggers as you go):
-#   stage_in: ["Stage 4 - Demo", "Stage 5 - Proposal"]
-#   days_in_stage_gte: 14
-#   transcript_contains_any: ["openai", "gpt", "homegrown"]
-#   field_changed: "Amount"
-#   last_activity_days_gte: 10
-#   always_on: true      # for smoke tests only — fires unconditionally
+settings:
+  persona_cooldown_hours: 72
+  rep_daily_cap: 6
+  min_amount_to_fire_usd: 5000
+  max_personas_per_cycle: 2
+  fire_threshold: 10
+  manager_cc_threshold: 25
+  segment_aggression:
+    Enterprise: 1.5
+    Mid-Market: 1.0
+    SMB: 0.6
 triggers:
-  - id: smoke_test
-    when:
-      always_on: true
-  # ── replace `smoke_test` with real triggers — examples below ──────────────
-  # - id: stage_aging
-  #   when:
-  #     stage_in: ["Stage 4 - Demo", "Stage 5 - Proposal"]
-  #     days_in_stage_gte: 14
-  # - id: competitor_mentioned
-  #   when:
-  #     transcript_contains_any: ["openai", "anthropic", "homegrown", "build it ourselves"]
-  # - id: champion_silent
-  #   when:
-  #     last_activity_days_gte: 10
-  # - id: security_question_unanswered
-  #   when:
-  #     transcript_contains_any: ["soc 2", "soc2", "pen test", "data residency"]
+- id: gong.competitor.claude
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \b(claude|anthropic|claude\s*for\s*(excel|powerpoint|word|outlook)|claude\s*pro|claude\s*max|claude\s*enterprise|claude\s*opus)\b
+    case_insensitive: true
+  weight: 12
+  maps_to_persona: claude_ae
+  urgency: immediate
+  action: dm_rep
+- id: gong.competitor.chatgpt
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \b(chat\s*gpt|openai|gpt-?[45]|openai\s*enterprise)\b
+    case_insensitive: true
+  weight: 10
+  maps_to_persona: openai_microsoft_ae
+  urgency: immediate
+  action: dm_rep
+- id: gong.competitor.copilot
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \b(microsoft\s*copilot|m365\s*copilot|copilot\s*for\s*m365)\b
+    case_insensitive: true
+  weight: 11
+  maps_to_persona: openai_microsoft_ae
+  urgency: immediate
+  action: dm_rep
+- id: gong.competitor.hebbia
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \bhebbia\b
+    case_insensitive: true
+  weight: 14
+  maps_to_persona: hebbia_ae
+  urgency: immediate
+  action: dm_rep_cc_manager
+- id: gong.competitor.alphasense
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \balpha\s*sense\b|\btegus\b
+    case_insensitive: true
+  weight: 11
+  maps_to_persona: alphasense_ae
+  urgency: immediate
+  action: dm_rep
+- id: gong.competitor.blueflame
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \bblue\s*flame\b|\bdatasite\s*ai\b
+    case_insensitive: true
+  weight: 12
+  maps_to_persona: hebbia_ae
+  urgency: immediate
+  action: dm_rep
+- id: gong.internal_build_signal
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \b(build (it )?(internally|ourselves|our own)|in[- ]?house|prefer to build|api directly|aws bedrock|azure openai|vertex ai|custom build|proprietary (model|build|tool))\b
+    case_insensitive: true
+  weight: 14
+  maps_to_persona: internal_build_advocate
+  urgency: immediate
+  action: dm_rep_cc_manager
+- id: gong.pricing_friction
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \b(too expensive|expensive|big spend|sticker shock|minimum seat|cannot justify|justify that|justify it|cheaper alternative|over budget|hard to see|too high|too much)\b
+    case_insensitive: true
+  weight: 11
+  maps_to_persona: cfo_procurement
+  urgency: immediate
+  action: dm_rep
+- id: gong.security_concern
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \b(soc ?2|iso\s*27001|infosec|security\s*(review|questionnaire|concern)|data\s*residency|dpa|sub.?processor|encryption|compliance review)\b
+    case_insensitive: true
+  weight: 13
+  maps_to_persona: ciso_persona
+  urgency: immediate
+  action: dm_rep_cc_manager
+- id: gong.accuracy_concern
+  source: gong
+  detection:
+    type: regex_on_transcript
+    pattern: \b(hallucinat|inaccurate|wrong answer|unreliable|not (reliable|accurate)|trust (the )?output)\b
+    case_insensitive: true
+  weight: 9
+  maps_to_persona: default_cro_challenger
+  urgency: immediate
+  action: dm_rep
+- id: sf.stage_advance
+  source: salesforce
+  detection:
+    type: field_change
+    field: StageName
+    direction: forward
+    threshold_stage: 3
+  weight: 10
+  maps_to_persona: default_cro_challenger
+  urgency: immediate
+  action: dm_rep
+- id: sf.forecast_commit
+  source: salesforce
+  detection:
+    type: field_change
+    field: ForecastCategoryName
+    new_value_in:
+    - Commit
+    - Best Case
+  weight: 14
+  maps_to_persona: default_cro_challenger
+  urgency: immediate
+  action: dm_rep_cc_manager
+- id: sf.competitor_field_set
+  source: salesforce
+  detection:
+    type: field_populated
+    field: Final_Competitor__c
+  weight: 10
+  maps_to_persona: dynamic
+  urgency: immediate
+  action: dm_rep
+- id: sf.meddpicc_weak_paper_process
+  source: salesforce
+  detection:
+    type: field_threshold
+    field: Paper_Process_Score__c
+    operator: less_than
+    value: 3
+    and_stage_at_least: 3
+  weight: 11
+  maps_to_persona: ciso_persona
+  urgency: immediate
+  action: dm_rep
+- id: sf.meddpicc_weak_decision_process
+  source: salesforce
+  detection:
+    type: field_threshold
+    field: Decision_Process_Score__c
+    operator: less_than
+    value: 3
+    and_stage_at_least: 3
+  weight: 10
+  maps_to_persona: default_cro_challenger
+  urgency: immediate
+  action: dm_rep
+- id: sf.meddpicc_weak_eb
+  source: salesforce
+  detection:
+    type: field_threshold
+    field: Economic_Buyer_Score__c
+    operator: less_than
+    value: 3
+    and_stage_at_least: 3
+  weight: 12
+  maps_to_persona: default_cro_challenger
+  urgency: immediate
+  action: dm_rep_cc_manager
+- id: email.decision_maker_silence
+  source: email
+  detection:
+    type: scheduled_check
+    rule: Last_Touch_With_Decision_Maker__c < TODAY - 10 AND Stage >= 3 AND NOT IsClosed
+  weight: 13
+  maps_to_persona: silent_buyer
+  urgency: immediate
+  action: dm_rep_cc_manager
+- id: sf.deal_aged_no_progress
+  source: salesforce
+  detection:
+    type: scheduled_check
+    rule: LastStageChangeInDays > 30 AND Stage >= 3 AND NOT IsClosed
+  weight: 9
+  maps_to_persona: silent_buyer
+  urgency: next_brief
+  action: dm_rep

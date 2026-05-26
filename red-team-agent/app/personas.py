@@ -1,52 +1,82 @@
 """
-Persona selection + prompt loading.
+Persona selection: given fired triggers, pick the 1-2 personas to fire on this
+cycle.
 
-`select_personas(fired_triggers)` returns the list of persona ids to invoke
-for this eval. Cap is 2 per the v1 spec — too many adversaries on one card
-turns into noise.
+Aggregates weights per `target_persona`, applies the configured fire threshold
++ max-personas cap, and computes the action level (`dm_rep` vs
+`dm_rep_cc_manager`).
 
-`load_prompt(persona_id)` reads the Markdown system prompt from prompts/.
+Per-persona cooldowns are tracked in-memory inside a single Vercel function
+invocation only. On Vercel the filesystem is read-only and each invocation is
+a fresh container, so persistent persona-level cooldown isn't possible without
+a separate Postgres table. Per-opp cooldown (in `red_team_cooldowns`) already
+prevents spam at the broader granularity; per-persona persistence is a
+follow-up.
 """
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
+from typing import List, Tuple
 
-PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+import yaml
 
-# Trigger id → ranked list of personas it can invoke. Drop in your real
-# mapping; the runner takes the top-N distinct personas across all fired
-# triggers.
-TRIGGER_TO_PERSONAS: dict[str, list[str]] = {
-    "stage_aging": ["cfo_procurement", "internal_build_advocate"],
-    "competitor_mentioned": ["claude_ae", "openai_ae"],
-    "champion_silent": ["internal_build_advocate", "cfo_procurement"],
-    "security_question_unanswered": ["ciso_persona"],
-    "discount_pressure": ["cfo_procurement"],
-    # Used by the placeholder always-on trigger so smoke tests have something
-    # to render.
-    "smoke_test": ["claude_ae"],
-}
-
-MAX_PERSONAS_PER_EVAL = 2
+from .schemas import DealContext, FiredTrigger
 
 
-def select_personas(fired_triggers: list[str]) -> list[str]:
+_CONFIG_PATH = Path(__file__).parent.parent / "config" / "triggers.yaml"
+
+
+def select_personas(
+    context: DealContext,
+    fired_triggers: List[FiredTrigger],
+) -> Tuple[List[str], str, List[FiredTrigger]]:
     """
-    Deduplicate by first appearance, cap at MAX_PERSONAS_PER_EVAL. Order
-    matters — the first persona renders at the top of the card.
+    Returns:
+        selected_persona_ids: list of 1-2 persona ids to fire
+        action: 'dm_rep' | 'dm_rep_cc_manager' | 'log_only'
+                | 'below_threshold' | 'no_triggers'
+        triggers_supporting: subset of fired_triggers backing the selected personas
     """
-    seen: list[str] = []
-    for t in fired_triggers:
-        for p in TRIGGER_TO_PERSONAS.get(t, []):
-            if p not in seen:
-                seen.append(p)
-            if len(seen) >= MAX_PERSONAS_PER_EVAL:
-                return seen
-    return seen
+    with open(_CONFIG_PATH) as f:
+        config = yaml.safe_load(f)
+    settings = config["settings"]
 
+    if not fired_triggers:
+        return ([], "no_triggers", [])
 
-def load_prompt(persona_id: str) -> str:
-    path = PROMPTS_DIR / f"{persona_id}.md"
-    if not path.exists():
-        raise FileNotFoundError(f"missing persona prompt: {path}")
-    return path.read_text(encoding="utf-8")
+    # Gate: minimum amount
+    if context.amount < settings["min_amount_to_fire_usd"]:
+        return ([], "below_threshold", [])
+
+    # Aggregate weights per persona
+    persona_scores: dict[str, float] = defaultdict(float)
+    persona_evidence: dict[str, List[FiredTrigger]] = defaultdict(list)
+    for trig in fired_triggers:
+        persona_scores[trig.target_persona] += trig.weight
+        persona_evidence[trig.target_persona].append(trig)
+
+    # Filter below fire threshold
+    threshold = settings["fire_threshold"]
+    eligible = {p: s for p, s in persona_scores.items() if s >= threshold}
+    if not eligible:
+        return ([], "below_threshold", [])
+
+    # Top N personas, sorted by score
+    top = sorted(eligible.items(), key=lambda x: -x[1])[
+        : settings["max_personas_per_cycle"]
+    ]
+    selected_ids = [p for p, _ in top]
+
+    top_score = top[0][1]
+    action = (
+        "dm_rep_cc_manager"
+        if top_score >= settings["manager_cc_threshold"]
+        else "dm_rep"
+    )
+
+    supporting: List[FiredTrigger] = []
+    for p in selected_ids:
+        supporting.extend(persona_evidence[p])
+
+    return (selected_ids, action, supporting)
