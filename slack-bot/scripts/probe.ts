@@ -28,6 +28,9 @@ import {
   fetchPositiveApolloCalls,
 } from "../src/services/sfReads.js";
 import { recommendBuySignal } from "../src/services/buySignalRecommender.js";
+import { buildIntelPack } from "../src/services/redTeamIntelPack.js";
+import { runRedTeamEval } from "../src/services/redTeamHandler.js";
+import { runRedTeamSweepForUser } from "../src/services/redTeamSweep.js";
 
 async function main() {
   const [_, __, kind, ...rest] = process.argv;
@@ -317,8 +320,58 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
+  if (kind === "red-team-pack") {
+    const slackUserId = rest[0];
+    const opportunityId = rest[1];
+    if (!slackUserId || !opportunityId) {
+      console.error(
+        "usage: probe red-team-pack <slack_user_id> <opportunity_id>"
+      );
+      process.exit(1);
+    }
+    const user = await getUser(slackUserId);
+    if (!user) throw new Error(`No user row for ${slackUserId}`);
+    const result = await buildIntelPack({
+      user,
+      opportunityId,
+      triggerEvent: "manual",
+    });
+    if (!result) {
+      console.error("Opportunity not found or inaccessible");
+      process.exit(1);
+    }
+    console.log(JSON.stringify(result.pack, null, 2));
+    return;
+  }
+  if (kind === "red-team") {
+    const slackUserId = rest[0];
+    const opportunityId = rest[1];
+    if (!slackUserId || !opportunityId) {
+      console.error(
+        "usage: probe red-team <slack_user_id> <opportunity_id>"
+      );
+      process.exit(1);
+    }
+    const result = await runRedTeamEval({
+      slackUserId,
+      opportunityId,
+      triggerEvent: "manual",
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  if (kind === "red-team-sweep") {
+    const slackUserId = rest[0];
+    if (!slackUserId) {
+      console.error("usage: probe red-team-sweep <slack_user_id>");
+      process.exit(1);
+    }
+    const result = await runRedTeamSweepForUser(slackUserId);
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal|pre-meeting|post-meeting|resolve-account> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal|pre-meeting|post-meeting|resolve-account|red-team-pack|red-team|red-team-sweep> <args...>"
   );
   process.exit(1);
 }

@@ -10,6 +10,8 @@ import standupRun from "../api/standup/run.js";
 import calendarRun from "../api/calendar/run.js";
 import nooksWebhook from "../api/nooks/webhook.js";
 import gongWebhook from "../api/gong/webhook.js";
+import redTeamSweep from "../api/red-team/sweep.js";
+import redTeamRunForUser from "../api/red-team/run-for-user.js";
 import health from "../api/health.js";
 
 const routes: Record<string, any> = {
@@ -23,6 +25,8 @@ const routes: Record<string, any> = {
   "/api/calendar/run": calendarRun,
   "/api/nooks/webhook": nooksWebhook,
   "/api/gong/webhook": gongWebhook,
+  "/api/red-team/sweep": redTeamSweep,
+  "/api/red-team/run-for-user": redTeamRunForUser,
   "/api/health": health,
 };
 

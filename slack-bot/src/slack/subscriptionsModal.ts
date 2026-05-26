@@ -13,11 +13,13 @@ export const NOOKS_FIREHOSE_NEUTRAL_VALUE = "nooks_firehose_neutral";
 export const NOOKS_FIREHOSE_NEGATIVE_VALUE = "nooks_firehose_negative";
 export const CALENDAR_PRE_VALUE = "calendar_pre";
 export const CALENDAR_POST_VALUE = "calendar_post";
+export const RED_TEAM_VALUE = "red_team_enabled";
 
 export const GONG_BLOCK_ID = "gong_block";
 export const NOOKS_HOST_BLOCK_ID = "nooks_host_block";
 export const NOOKS_FIREHOSE_BLOCK_ID = "nooks_firehose_block";
 export const CALENDAR_BLOCK_ID = "calendar_block";
+export const RED_TEAM_BLOCK_ID = "red_team_block";
 
 const GONG_HOST_OPTION = {
   value: GONG_HOST_VALUE,
@@ -72,6 +74,19 @@ const CALENDAR_POST_OPTION = {
   description: { type: "plain_text" as const, text: "Surfaces missing contacts + quick opp updates." },
 };
 
+const RED_TEAM_OPTION = {
+  value: RED_TEAM_VALUE,
+  text: {
+    type: "plain_text" as const,
+    text: "Send me adversary intel on my advanced-stage deals",
+  },
+  description: {
+    type: "plain_text" as const,
+    text:
+      "Triggers after new Gong calls and once daily. Personas (competitor AE, CFO, CISO) call out risks with quotes from prior dead deals.",
+  },
+};
+
 type Prefs = Pick<
   UserPrefs,
   | "gongRealtimeEnabled"
@@ -84,6 +99,7 @@ type Prefs = Pick<
   | "nooksFirehoseNegative"
   | "calendarPreEnabled"
   | "calendarPostEnabled"
+  | "redTeamEnabled"
 >;
 
 export function subscriptionsModalView(prefs: Prefs | null): View {
@@ -99,6 +115,7 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
       nooksFirehoseNegative: false,
       calendarPreEnabled: false,
       calendarPostEnabled: false,
+      redTeamEnabled: false,
     };
 
   const gongInitial = [
@@ -122,6 +139,10 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
     p.calendarPreEnabled ? CALENDAR_PRE_OPTION : null,
     p.calendarPostEnabled ? CALENDAR_POST_OPTION : null,
   ].filter(Boolean) as Array<typeof CALENDAR_PRE_OPTION>;
+
+  const redTeamInitial = [p.redTeamEnabled ? RED_TEAM_OPTION : null].filter(
+    Boolean
+  ) as Array<typeof RED_TEAM_OPTION>;
 
   return {
     type: "modal",
@@ -194,6 +215,19 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
           initial_options:
             calendarInitial.length > 0 ? calendarInitial : undefined,
           options: [CALENDAR_PRE_OPTION, CALENDAR_POST_OPTION],
+        },
+      },
+      {
+        type: "input",
+        block_id: RED_TEAM_BLOCK_ID,
+        optional: true,
+        label: { type: "plain_text", text: "Red Team" },
+        element: {
+          type: "checkboxes",
+          action_id: "value",
+          initial_options:
+            redTeamInitial.length > 0 ? redTeamInitial : undefined,
+          options: [RED_TEAM_OPTION],
         },
       },
     ],

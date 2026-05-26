@@ -40,6 +40,7 @@ interface UserRow {
   nooks_firehose_negative: boolean | null;
   calendar_pre_enabled: boolean | null;
   calendar_post_enabled: boolean | null;
+  red_team_enabled: boolean | null;
 }
 
 function rowToUserPrefs(r: UserRow): UserPrefs {
@@ -72,6 +73,7 @@ function rowToUserPrefs(r: UserRow): UserPrefs {
     nooksFirehoseNegative,
     calendarPreEnabled: r.calendar_pre_enabled ?? false,
     calendarPostEnabled: r.calendar_post_enabled ?? false,
+    redTeamEnabled: r.red_team_enabled ?? false,
   };
 }
 
@@ -80,7 +82,7 @@ const USER_SELECT_COLUMNS = `slack_user_id, slack_team_id, email, timezone, pref
             gong_firehose_enabled, nooks_realtime_enabled, nooks_firehose_enabled,
             nooks_host_positive, nooks_host_neutral, nooks_host_negative,
             nooks_firehose_positive, nooks_firehose_neutral, nooks_firehose_negative,
-            calendar_pre_enabled, calendar_post_enabled`;
+            calendar_pre_enabled, calendar_post_enabled, red_team_enabled`;
 
 export async function upsertUser(
   p: Omit<
@@ -99,6 +101,7 @@ export async function upsertUser(
     | "nooksFirehoseNegative"
     | "calendarPreEnabled"
     | "calendarPostEnabled"
+    | "redTeamEnabled"
   > & {
     active?: boolean;
   }
@@ -164,6 +167,7 @@ export async function updateSubscriptionPrefs(
     nooksFirehoseNegative?: boolean;
     calendarPreEnabled?: boolean;
     calendarPostEnabled?: boolean;
+    redTeamEnabled?: boolean;
   }
 ): Promise<void> {
   const pool = getPool();
@@ -181,7 +185,8 @@ export async function updateSubscriptionPrefs(
             nooks_firehose_neutral   = COALESCE($8, nooks_firehose_neutral),
             nooks_firehose_negative  = COALESCE($9, nooks_firehose_negative),
             calendar_pre_enabled     = COALESCE($10, calendar_pre_enabled),
-            calendar_post_enabled    = COALESCE($11, calendar_post_enabled)
+            calendar_post_enabled    = COALESCE($11, calendar_post_enabled),
+            red_team_enabled         = COALESCE($12, red_team_enabled)
       WHERE slack_user_id = $1`,
     [
       slackUserId,
@@ -195,6 +200,7 @@ export async function updateSubscriptionPrefs(
       patch.nooksFirehoseNegative ?? null,
       patch.calendarPreEnabled ?? null,
       patch.calendarPostEnabled ?? null,
+      patch.redTeamEnabled ?? null,
     ]
   );
   await pool.query(
@@ -781,4 +787,85 @@ export async function getRecentBulkFailures(
   }
   out.sort((a, b) => b.failedAtIso.localeCompare(a.failedAtIso));
   return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Red Team helpers
+
+export async function getRedTeamEnabledUsers(): Promise<UserPrefs[]> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT ${USER_SELECT_COLUMNS}
+       FROM users WHERE red_team_enabled = true`
+  );
+  return (rows as UserRow[]).map(rowToUserPrefs);
+}
+
+export async function getOppSnapshot(
+  opportunityId: string
+): Promise<{ snapshot: Record<string, unknown>; takenAt: string } | null> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT snapshot, taken_at FROM opp_snapshots WHERE opportunity_id = $1`,
+    [opportunityId]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  const snap =
+    typeof r.snapshot === "string"
+      ? (JSON.parse(r.snapshot) as Record<string, unknown>)
+      : (r.snapshot as Record<string, unknown>);
+  const takenAt =
+    r.taken_at instanceof Date ? r.taken_at.toISOString() : String(r.taken_at);
+  return { snapshot: snap, takenAt };
+}
+
+export async function upsertOppSnapshot(
+  opportunityId: string,
+  snapshot: Record<string, unknown>
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO opp_snapshots (opportunity_id, snapshot, taken_at)
+     VALUES ($1, $2, now())
+     ON CONFLICT (opportunity_id) DO UPDATE SET
+       snapshot = EXCLUDED.snapshot,
+       taken_at = now()`,
+    [opportunityId, JSON.stringify(snapshot)]
+  );
+}
+
+export async function getRedTeamMute(
+  opportunityId: string,
+  slackUserId: string
+): Promise<{ mutedUntilIso: string } | null> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT muted_until FROM red_team_mutes
+      WHERE opportunity_id = $1 AND slack_user_id = $2 AND muted_until > now()
+      LIMIT 1`,
+    [opportunityId, slackUserId]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  const iso =
+    r.muted_until instanceof Date
+      ? r.muted_until.toISOString()
+      : String(r.muted_until);
+  return { mutedUntilIso: iso };
+}
+
+export async function upsertRedTeamMute(
+  opportunityId: string,
+  slackUserId: string,
+  mutedUntilIso: string
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO red_team_mutes (opportunity_id, slack_user_id, muted_until)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (opportunity_id, slack_user_id) DO UPDATE SET
+       muted_until = EXCLUDED.muted_until`,
+    [opportunityId, slackUserId, mutedUntilIso]
+  );
 }

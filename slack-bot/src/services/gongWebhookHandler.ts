@@ -8,6 +8,7 @@ import {
 import { gongCallDigestCard } from "../slack/blocks.js";
 import { summarizeGongCall } from "./gongCallInsights.js";
 import { runGongPostCallSfUpdate } from "./gongPostCallSfUpdate.js";
+import { triggerRedTeamForGongCall } from "./redTeamGongTrigger.js";
 import type { GongWebhookPayload, GongWebhookParty } from "../types.js";
 
 export interface GongHandleResult {
@@ -164,6 +165,20 @@ export async function handleGongWebhook(
             `[gong] post-call SF-update for ${slackUserId} (${routing}) failed:`,
             err?.message ?? err
           );
+        }
+
+        if (routing === "host") {
+          try {
+            await triggerRedTeamForGongCall({
+              slackUserId,
+              payload,
+            });
+          } catch (err: any) {
+            console.error(
+              `[gong] red-team trigger for ${slackUserId} (${routing}) failed:`,
+              err?.message ?? err
+            );
+          }
         }
       }
     } catch (err: any) {

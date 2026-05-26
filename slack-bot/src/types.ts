@@ -23,6 +23,7 @@ export interface UserPrefs {
   nooksFirehoseNegative: boolean;
   calendarPreEnabled: boolean;
   calendarPostEnabled: boolean;
+  redTeamEnabled: boolean;
 }
 
 export type NooksDispositionBucket = "positive" | "neutral" | "negative";
@@ -378,7 +379,11 @@ export type AuditAction =
   | "bulk_record_excluded"
   | "bulk_record_apply_confirmed"
   | "bulk_record_applied"
-  | "bulk_record_apply_failed";
+  | "bulk_record_apply_failed"
+  | "red_team_intel_surfaced"
+  | "red_team_intel_dropped"
+  | "red_team_intel_failed"
+  | "red_team_eval_shadow";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",
@@ -751,3 +756,150 @@ export type BuySignalRecommendation = z.infer<
 >;
 export type BuySignalPayload = z.infer<typeof BuySignalPayloadSchema>;
 export type BuySignalActionKind = (typeof BUY_SIGNAL_ACTION_KINDS)[number];
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Red Team agent — Merlin sends an OpportunityContext to a separate Python
+// service that role-plays adversaries; service returns structured arguments
+// Merlin renders and DMs.
+
+export type RedTeamTriggerEvent =
+  | "gong_call"
+  | "daily_sweep"
+  | "stage_advance"
+  | "manual";
+
+export interface RedTeamGongTranscriptSegment {
+  speakerId: string | null;
+  speakerName: string | null;
+  speakerAffiliation: "Internal" | "External" | "Unknown" | string | null;
+  text: string;
+  startSec: number | null;
+  endSec: number | null;
+}
+
+export interface RedTeamGongCall {
+  callId: string;
+  title: string | null;
+  startedAt: string | null;
+  durationSec: number | null;
+  url: string | null;
+  parties: {
+    name: string | null;
+    email: string | null;
+    affiliation: string | null;
+    title: string | null;
+  }[];
+  brief: string | null;
+  transcript: { speakerSegments: RedTeamGongTranscriptSegment[] } | null;
+}
+
+export interface RedTeamFieldChange {
+  field: string;
+  oldValue: string | number | boolean | null;
+  newValue: string | number | boolean | null;
+  changedAt: string;
+  source: "field_history" | "snapshot_diff";
+}
+
+export interface RedTeamActivity {
+  type: "Task" | "Event";
+  subject: string;
+  activityDate: string | null;
+  description: string | null;
+}
+
+export interface RedTeamIntelPackRequest {
+  schemaVersion: "1";
+  opportunity: {
+    id: string;
+    name: string;
+    stageName: string;
+    type: string | null;
+    amount: number | null;
+    closeDate: string | null;
+    nextStep: string | null;
+    ownerId: string;
+    accountId: string;
+    accountName: string;
+    isRenewal: boolean;
+    customFields: Record<string, unknown>;
+  };
+  owner: {
+    sfUserId: string | null;
+    name: string | null;
+    email: string | null;
+    slackUserId: string;
+  };
+  account: {
+    id: string;
+    name: string;
+    industry: string | null;
+    website: string | null;
+  };
+  recentFieldChanges: RedTeamFieldChange[];
+  gongCalls: RedTeamGongCall[];
+  activities: RedTeamActivity[];
+  triggerEvent: RedTeamTriggerEvent;
+  triggerMetadata: {
+    callId?: string;
+    previousStage?: string;
+  };
+  shadowMode: boolean;
+}
+
+export interface RedTeamCitation {
+  sourceType:
+    | "dead_deal"
+    | "gong_quote"
+    | "objection_quote"
+    | "competitor_profile"
+    | "field_change"
+    | "other";
+  quote: string;
+  sourceLabel: string;
+  sourceUrl?: string | null;
+}
+
+export interface RedTeamPersonaArgument {
+  persona: string;
+  headline: string;
+  claim: string;
+  citations: RedTeamCitation[];
+  riskScore: number;
+}
+
+export const RedTeamCitationSchema = z.object({
+  sourceType: z
+    .enum([
+      "dead_deal",
+      "gong_quote",
+      "objection_quote",
+      "competitor_profile",
+      "field_change",
+      "other",
+    ])
+    .default("other"),
+  quote: z.string().min(1),
+  sourceLabel: z.string().min(1),
+  sourceUrl: z.string().nullable().optional(),
+});
+
+export const RedTeamPersonaArgumentSchema = z.object({
+  persona: z.string().min(1),
+  headline: z.string().min(1),
+  claim: z.string().min(1),
+  citations: z.array(RedTeamCitationSchema).default([]),
+  riskScore: z.number().min(0).max(1).default(0),
+});
+
+export const RedTeamRunResultSchema = z.object({
+  evaluatedAt: z.string(),
+  shadowMode: z.boolean().default(false),
+  firedTriggers: z.array(z.string()).default([]),
+  personasInvoked: z.array(RedTeamPersonaArgumentSchema).default([]),
+  auditLogEntry: z.string().default(""),
+  cooldownUntilIso: z.string().nullable().optional(),
+  dropReason: z.string().nullable().optional(),
+});
+
+export type RedTeamRunResult = z.infer<typeof RedTeamRunResultSchema>;

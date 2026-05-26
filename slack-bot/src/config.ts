@@ -82,6 +82,24 @@ export const config = {
       .map((d) => d.trim().toLowerCase())
       .filter(Boolean),
   },
+  redTeam: {
+    url: optional("RED_TEAM_AGENT_URL"),
+    secret: optional("RED_TEAM_AGENT_SECRET"),
+    shadowMode: optional("RED_TEAM_SHADOW_MODE", "true") === "true",
+    stageAllowlist: optional("RED_TEAM_STAGE_ALLOWLIST", "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    oppFields: optional("RED_TEAM_OPP_FIELDS", "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    dailySweepHourUtc: parseInt(
+      optional("RED_TEAM_DAILY_SWEEP_HOUR_UTC", "14"),
+      10
+    ),
+    redirectToSlackUserId: optional("RED_TEAM_REDIRECT_TO_SLACK_USER_ID"),
+  },
 };
 
 export function assertProduction() {

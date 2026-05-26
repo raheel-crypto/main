@@ -9,8 +9,10 @@ import {
   setCardStatus,
   updatePendingCardRecommendation,
   updateSubscriptionPrefs,
+  upsertRedTeamMute,
   upsertUser,
 } from "../db/queries.js";
+import { muteUntilIso } from "../services/redTeamHandler.js";
 import {
   CALENDAR_BLOCK_ID,
   CALENDAR_POST_VALUE,
@@ -26,6 +28,8 @@ import {
   NOOKS_HOST_NEGATIVE_VALUE,
   NOOKS_HOST_NEUTRAL_VALUE,
   NOOKS_HOST_POSITIVE_VALUE,
+  RED_TEAM_BLOCK_ID,
+  RED_TEAM_VALUE,
   SUBSCRIPTIONS_CALLBACK_ID,
 } from "./subscriptionsModal.js";
 import {
@@ -466,6 +470,36 @@ export function registerInteractivity(app: App): void {
     const parsed = parseActionId((action as any).action_id);
     if (!parsed) return;
     await handleBulkCancel(app, body, parsed.cardId);
+  });
+
+  app.action(/^red_team_mute:.+/, async ({ ack, body, action, client }) => {
+    await ack();
+    const actionId = (action as any).action_id as string;
+    const parts = actionId.split(":");
+    const oppId = parts[2];
+    if (!oppId) return;
+    const slackUserId = (body as any).user?.id;
+    if (!slackUserId) return;
+    const mutedUntilIso = muteUntilIso(7);
+    await upsertRedTeamMute(oppId, slackUserId, mutedUntilIso);
+    await appendAudit({
+      slackUserId,
+      opportunityId: oppId,
+      action: "red_team_intel_dropped",
+      metadata: { reason: "user_muted", mutedUntilIso, source: "card_button" },
+    });
+    const channel = (body as any).channel?.id;
+    if (channel) {
+      try {
+        await client.chat.postEphemeral({
+          channel,
+          user: slackUserId,
+          text: `Muted Red Team for this opportunity until <!date^${Math.floor(
+            new Date(mutedUntilIso).getTime() / 1000
+          )}^{date_short_pretty}|in 7 days>.`,
+        });
+      } catch {}
+    }
   });
 
   app.view(/^add_contact:.+/, async ({ ack, body, view }) => {
@@ -1481,6 +1515,8 @@ export function registerSubscriptionsSubmit(app: App): void {
       [];
     const calendarSelected =
       view.state.values[CALENDAR_BLOCK_ID]?.["value"]?.selected_options ?? [];
+    const redTeamSelected =
+      view.state.values[RED_TEAM_BLOCK_ID]?.["value"]?.selected_options ?? [];
     const has = (
       arr: Array<{ value?: string }>,
       v: string
@@ -1505,6 +1541,7 @@ export function registerSubscriptionsSubmit(app: App): void {
       ),
       calendarPreEnabled: has(calendarSelected, CALENDAR_PRE_VALUE),
       calendarPostEnabled: has(calendarSelected, CALENDAR_POST_VALUE),
+      redTeamEnabled: has(redTeamSelected, RED_TEAM_VALUE),
     };
     await updateSubscriptionPrefs(body.user.id, prefs);
 
@@ -1533,7 +1570,7 @@ export function registerSubscriptionsSubmit(app: App): void {
       prefs.nooksFirehoseNegative
     )}* · Calendar pre: *${onOff(prefs.calendarPreEnabled)}* · Calendar post: *${onOff(
       prefs.calendarPostEnabled
-    )}*.`;
+    )}* · Red Team: *${onOff(prefs.redTeamEnabled)}*.`;
 
     let text = summary;
     if (prefs.calendarPreEnabled || prefs.calendarPostEnabled) {

@@ -11,6 +11,22 @@ export const BUY_SIGNAL_DEDUP_DAYS = 7;
 export const BUY_SIGNAL_MAX_CARDS_PER_RUN = 5;
 export const BUY_SIGNAL_SUBJECT_PATTERN = "%[Apollo]%Connected - Positive%";
 
+export const RED_TEAM_HTTP_TIMEOUT_MS = 90_000;
+export const RED_TEAM_FIELD_HISTORY_LOOKBACK_DAYS = 30;
+export const RED_TEAM_GONG_CALL_LIMIT = 5;
+export const RED_TEAM_ACTIVITY_LIMIT = 25;
+export const RED_TEAM_TRANSCRIPT_SEGMENT_LIMIT = 400;
+export const RED_TEAM_SWEEP_CONCURRENCY = 3;
+export const RED_TEAM_DEFAULT_OPP_FIELDS = [
+  "Notes__c",
+  "Deal_Description__c",
+  "Champion__c",
+  "Economic_Buyer__c",
+  "Decision_Criteria__c",
+  "Pain__c",
+  "Competition__c",
+] as const;
+
 export const NOOKS_FILTER_DIRECTION = "outbound";
 export const NOOKS_FILTER_DISPOSITIONS = [
   "Connected - Positive",

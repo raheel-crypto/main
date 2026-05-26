@@ -3,12 +3,15 @@
   "buildCommand": "echo 'no build step needed'",
   "outputDirectory": ".",
   "crons": [
-    { "path": "/api/cron/tick", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/tick", "schedule": "*/5 * * * *" },
+    { "path": "/api/red-team/sweep", "schedule": "0 14 * * *" }
   ],
   "functions": {
     "api/standup/run.ts": { "maxDuration": 300 },
     "api/cron/tick.ts": { "maxDuration": 60 },
     "api/calendar/run.ts": { "maxDuration": 60 },
-    "api/slack/events.ts": { "maxDuration": 60 }
+    "api/slack/events.ts": { "maxDuration": 60 },
+    "api/red-team/sweep.ts": { "maxDuration": 60 },
+    "api/red-team/run-for-user.ts": { "maxDuration": 300 }
   }
 }

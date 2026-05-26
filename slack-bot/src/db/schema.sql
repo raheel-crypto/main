@@ -119,3 +119,24 @@ CREATE INDEX IF NOT EXISTS idx_users_nooks_host_negative     ON users(nooks_host
 CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose_positive ON users(nooks_firehose_positive) WHERE nooks_firehose_positive = true;
 CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose_neutral  ON users(nooks_firehose_neutral)  WHERE nooks_firehose_neutral  = true;
 CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose_negative ON users(nooks_firehose_negative) WHERE nooks_firehose_negative = true;
+
+-- Red Team agent integration
+ALTER TABLE users ADD COLUMN IF NOT EXISTS red_team_enabled BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_users_red_team ON users(red_team_enabled) WHERE red_team_enabled = true;
+
+CREATE TABLE IF NOT EXISTS opp_snapshots (
+  opportunity_id TEXT PRIMARY KEY,
+  snapshot JSONB NOT NULL,
+  taken_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_opp_snapshots_taken ON opp_snapshots(taken_at DESC);
+
+CREATE TABLE IF NOT EXISTS red_team_mutes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  opportunity_id TEXT NOT NULL,
+  slack_user_id TEXT NOT NULL,
+  muted_until TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(opportunity_id, slack_user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_red_team_mutes_until ON red_team_mutes(muted_until);

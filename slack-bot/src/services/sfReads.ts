@@ -308,3 +308,230 @@ export async function fetchLastStageChangesForOpps(
   }
   return out;
 }
+
+const OPPORTUNITY_CORE_FIELDS = [
+  "Id",
+  "Name",
+  "AccountId",
+  "Account.Name",
+  "Account.Industry",
+  "Account.Website",
+  "StageName",
+  "Amount",
+  "CloseDate",
+  "NextStep",
+  "OwnerId",
+  "Owner.Name",
+  "Owner.Email",
+  "Type",
+  "IsClosed",
+  "CreatedDate",
+] as const;
+
+export interface OpportunityWithCustomFields {
+  id: string;
+  name: string;
+  accountId: string;
+  accountName: string;
+  accountIndustry: string | null;
+  accountWebsite: string | null;
+  stageName: string;
+  type: string | null;
+  amount: number | null;
+  closeDate: string | null;
+  nextStep: string | null;
+  ownerId: string;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  isClosed: boolean;
+  createdDate: string | null;
+  customFields: Record<string, unknown>;
+}
+
+export async function fetchOpportunityWithCustomFields(
+  conn: Connection,
+  opportunityId: string,
+  customFieldApiNames: string[]
+): Promise<OpportunityWithCustomFields | null> {
+  const fields = [
+    ...OPPORTUNITY_CORE_FIELDS,
+    ...customFieldApiNames.filter(
+      (f) => /^[A-Za-z0-9_]+$/.test(f) && !OPPORTUNITY_CORE_FIELDS.includes(f as any)
+    ),
+  ];
+  const soql = `
+    SELECT ${fields.join(", ")}
+      FROM Opportunity
+     WHERE Id = '${escapeSoql(opportunityId)}'
+     LIMIT 1`;
+  let result;
+  try {
+    result = await conn.query(soql);
+  } catch (err: any) {
+    // Some orgs don't have all the requested custom fields. Retry with only
+    // the core set so the intel pack still assembles.
+    const message = String(err?.message ?? err);
+    if (/INVALID_FIELD|No such column/i.test(message)) {
+      const coreOnly = `
+        SELECT ${OPPORTUNITY_CORE_FIELDS.join(", ")}
+          FROM Opportunity
+         WHERE Id = '${escapeSoql(opportunityId)}'
+         LIMIT 1`;
+      result = await conn.query(coreOnly);
+    } else {
+      throw err;
+    }
+  }
+  const r = (result.records as any[])[0];
+  if (!r) return null;
+  const customFields: Record<string, unknown> = {};
+  for (const name of customFieldApiNames) {
+    if (Object.prototype.hasOwnProperty.call(r, name)) {
+      customFields[name] = r[name];
+    }
+  }
+  return {
+    id: r.Id,
+    name: r.Name,
+    accountId: r.AccountId,
+    accountName: r.Account?.Name ?? "",
+    accountIndustry: r.Account?.Industry ?? null,
+    accountWebsite: r.Account?.Website ?? null,
+    stageName: r.StageName,
+    type: r.Type ?? null,
+    amount: typeof r.Amount === "number" ? r.Amount : r.Amount ?? null,
+    closeDate: r.CloseDate ?? null,
+    nextStep: r.NextStep ?? null,
+    ownerId: r.OwnerId,
+    ownerName: r.Owner?.Name ?? null,
+    ownerEmail: r.Owner?.Email ?? null,
+    isClosed: !!r.IsClosed,
+    createdDate: r.CreatedDate ?? null,
+    customFields,
+  };
+}
+
+export interface OpportunityFieldHistoryRow {
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  changedAt: string;
+}
+
+/**
+ * Pull recent field-level changes from `OpportunityFieldHistory`. Some orgs
+ * gate this object; callers should fall back to snapshot-diffing if this
+ * throws or returns empty.
+ */
+export async function fetchOpportunityFieldHistory(
+  conn: Connection,
+  opportunityId: string,
+  sinceIso: string,
+  fields?: string[]
+): Promise<OpportunityFieldHistoryRow[]> {
+  const fieldClause =
+    fields && fields.length > 0
+      ? `AND Field IN (${fields
+          .filter((f) => /^[A-Za-z0-9_]+$/.test(f))
+          .map((f) => `'${f}'`)
+          .join(",")})`
+      : "";
+  const soql = `
+    SELECT Field, OldValue, NewValue, CreatedDate
+      FROM OpportunityFieldHistory
+     WHERE OpportunityId = '${escapeSoql(opportunityId)}'
+       AND CreatedDate >= ${sinceIso}
+       ${fieldClause}
+     ORDER BY CreatedDate DESC
+     LIMIT 200`;
+  const result = await conn.query(soql);
+  const rows: OpportunityFieldHistoryRow[] = [];
+  for (const r of result.records as any[]) {
+    rows.push({
+      field: r.Field,
+      oldValue:
+        r.OldValue == null
+          ? null
+          : typeof r.OldValue === "object"
+            ? JSON.stringify(r.OldValue)
+            : String(r.OldValue),
+      newValue:
+        r.NewValue == null
+          ? null
+          : typeof r.NewValue === "object"
+            ? JSON.stringify(r.NewValue)
+            : String(r.NewValue),
+      changedAt: r.CreatedDate,
+    });
+  }
+  return rows;
+}
+
+interface GongCallTopOpportunity {
+  opportunityId: string;
+  callIds: string[];
+}
+
+/**
+ * For a list of Gong call ids, find the Salesforce Opportunity each one is
+ * attached to (via the Gong-Salesforce sync's standard custom field
+ * `Gong__Gong_Call_Id__c` on Task records or directly on Opportunity).
+ *
+ * Returns a map of callId → opportunityId. Empty when no association exists.
+ *
+ * Falls back to an empty map if the org doesn't have the Gong SF package
+ * installed (the SOQL returns INVALID_FIELD).
+ */
+export async function fetchOppIdsForGongCalls(
+  conn: Connection,
+  callIds: string[]
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (callIds.length === 0) return out;
+  const ids = callIds.map((id) => `'${escapeSoql(id)}'`).join(",");
+  const soql = `
+    SELECT WhatId, Gong__Gong_Call_Id__c
+      FROM Task
+     WHERE Gong__Gong_Call_Id__c IN (${ids})
+       AND WhatId != null
+     ORDER BY CreatedDate DESC`;
+  try {
+    const result = await conn.query(soql);
+    for (const r of result.records as any[]) {
+      const cid = r.Gong__Gong_Call_Id__c;
+      const what = r.WhatId;
+      if (cid && what && typeof what === "string" && what.startsWith("006")) {
+        if (!out.has(cid)) out.set(cid, what);
+      }
+    }
+  } catch (err: any) {
+    const message = String(err?.message ?? err);
+    if (!/INVALID_FIELD|No such column/i.test(message)) throw err;
+  }
+  return out;
+}
+
+export async function fetchOppsForOwnerByStage(
+  conn: Connection,
+  ownerId: string,
+  stageAllowlist: string[],
+  limit = 100
+): Promise<{ id: string; stageName: string }[]> {
+  if (stageAllowlist.length === 0) return [];
+  const stageClause = stageAllowlist
+    .map((s) => `'${escapeSoql(s)}'`)
+    .join(",");
+  const soql = `
+    SELECT Id, StageName
+      FROM Opportunity
+     WHERE OwnerId = '${escapeSoql(ownerId)}'
+       AND IsClosed = false
+       AND StageName IN (${stageClause})
+     ORDER BY CloseDate ASC NULLS LAST
+     LIMIT ${limit}`;
+  const result = await conn.query(soql);
+  return (result.records as any[]).map((r) => ({
+    id: r.Id,
+    stageName: r.StageName,
+  }));
+}
