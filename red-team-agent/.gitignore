@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.env.local
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Runtime state (cooldowns, etc.) — never committed.
+state/*.json
+
+# Local fixtures captured from `npm run probe -w slack-bot red-team-pack`
+# are useful but may contain customer names; gitignore by default and add
+# scrubbed ones explicitly.
+tests/fixtures/*.json
+!tests/fixtures/sample_pack.json

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": "1",
+  "opportunity": {
+    "id": "0061000000000001",
+    "name": "Acme Corp — Q4 Renewal",
+    "stageName": "Stage 4 - Demo",
+    "type": "New Business",
+    "amount": 120000,
+    "closeDate": "2026-06-30",
+    "nextStep": "Send pricing deck",
+    "ownerId": "0051000000000001",
+    "accountId": "0011000000000001",
+    "accountName": "Acme Corp",
+    "isRenewal": false,
+    "customFields": {
+      "Champion__c": "Boomer Sooner",
+      "Economic_Buyer__c": null,
+      "Pain__c": "Manual reporting is killing the team",
+      "Competition__c": "OpenAI, internal build"
+    }
+  },
+  "owner": {
+    "sfUserId": "0051000000000001",
+    "name": "Test Rep",
+    "email": "rep@example.com",
+    "slackUserId": "U12345"
+  },
+  "account": {
+    "id": "0011000000000001",
+    "name": "Acme Corp",
+    "industry": "Financial Services",
+    "website": "https://acme.example.com"
+  },
+  "recentFieldChanges": [
+    {
+      "field": "StageName",
+      "oldValue": "Stage 3 - Discovery",
+      "newValue": "Stage 4 - Demo",
+      "changedAt": "2026-05-20T15:00:00.000Z",
+      "source": "field_history"
+    }
+  ],
+  "gongCalls": [
+    {
+      "callId": "8492",
+      "title": "Acme x Rogo — Demo",
+      "startedAt": "2026-05-25T19:00:00.000Z",
+      "durationSec": 2700,
+      "url": "https://app.gong.io/call?id=8492",
+      "brief": "Demo went well; CFO raised pricing question.",
+      "parties": [
+        {
+          "name": "Test Rep",
+          "email": "rep@example.com",
+          "affiliation": "Internal",
+          "title": "AE"
+        },
+        {
+          "name": "Acme CFO",
+          "email": "cfo@acme.example.com",
+          "affiliation": "External",
+          "title": "CFO"
+        }
+      ],
+      "transcript": {
+        "speakerSegments": [
+          {
+            "speakerId": "s1",
+            "speakerName": "Acme CFO",
+            "speakerAffiliation": "External",
+            "text": "We're also looking at building this internally — what would justify the spend?",
+            "startSec": 412.0,
+            "endSec": 419.0
+          }
+        ]
+      }
+    }
+  ],
+  "activities": [
+    {
+      "type": "Task",
+      "subject": "Send pricing deck",
+      "activityDate": "2026-05-26",
+      "description": null
+    }
+  ],
+  "triggerEvent": "gong_call",
+  "triggerMetadata": {
+    "callId": "8492"
+  },
+  "shadowMode": true
+}

@@ -1,0 +1,29 @@
+# Trigger definitions. Each `when` clause is a boolean condition; the first
+# trigger whose conditions are all satisfied fires. The trigger id flows
+# through to personas.py:TRIGGER_TO_PERSONAS to pick the speakers.
+#
+# Supported conditions (extend in app/triggers.py:evaluate_triggers as you go):
+#   stage_in: ["Stage 4 - Demo", "Stage 5 - Proposal"]
+#   days_in_stage_gte: 14
+#   transcript_contains_any: ["openai", "gpt", "homegrown"]
+#   field_changed: "Amount"
+#   last_activity_days_gte: 10
+#   always_on: true      # for smoke tests only — fires unconditionally
+triggers:
+  - id: smoke_test
+    when:
+      always_on: true
+  # ── replace `smoke_test` with real triggers — examples below ──────────────
+  # - id: stage_aging
+  #   when:
+  #     stage_in: ["Stage 4 - Demo", "Stage 5 - Proposal"]
+  #     days_in_stage_gte: 14
+  # - id: competitor_mentioned
+  #   when:
+  #     transcript_contains_any: ["openai", "anthropic", "homegrown", "build it ourselves"]
+  # - id: champion_silent
+  #   when:
+  #     last_activity_days_gte: 10
+  # - id: security_question_unanswered
+  #   when:
+  #     transcript_contains_any: ["soc 2", "soc2", "pen test", "data residency"]
