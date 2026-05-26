@@ -140,3 +140,12 @@ CREATE TABLE IF NOT EXISTS red_team_mutes (
   UNIQUE(opportunity_id, slack_user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_red_team_mutes_until ON red_team_mutes(muted_until);
+
+-- Owned by the Python red-team-agent (single shared Postgres). The bot owns
+-- the migration; the Python service is a reader/writer only.
+CREATE TABLE IF NOT EXISTS red_team_cooldowns (
+  opportunity_id TEXT PRIMARY KEY,
+  cooled_until TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_red_team_cooldowns_until ON red_team_cooldowns(cooled_until);

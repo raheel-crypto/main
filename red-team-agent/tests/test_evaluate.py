@@ -1,18 +1,21 @@
 """
 End-to-end tests for POST /evaluate.
 
-These exercise the HMAC layer + Pydantic validation + the stub runner. They
-don't call Anthropic — the stub `invoke_persona` returns deterministic
-placeholders. Once you wire up the real persona logic, add tests that mock
-the Anthropic client.
+The HMAC layer + Pydantic validation + the stub runner are exercised; the
+real Anthropic client isn't (the stub `invoke_persona` returns deterministic
+placeholders). Once you wire up persona logic, add tests that mock the
+Anthropic client.
+
+Cooldowns are backed by Postgres in prod but stubbed with an in-memory dict
+here so the suite stays self-contained — no Docker postgres required.
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
-import os
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -23,17 +26,39 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample_pack.json"
 
 
 @pytest.fixture(autouse=True)
-def _env(monkeypatch, tmp_path):
+def _env(monkeypatch):
     monkeypatch.setenv("RED_TEAM_AGENT_SECRET", TEST_SECRET)
-    monkeypatch.setenv("RED_TEAM_STATE_DIR", str(tmp_path / "state"))
-    # Re-import so the env var is picked up.
-    import importlib
 
     import app.cooldowns as cd
     import app.main as m
 
-    importlib.reload(cd)
-    importlib.reload(m)
+    store: dict[str, datetime] = {}
+
+    def fake_is_cooled_down(opp_id: str) -> str | None:
+        until = store.get(opp_id)
+        if not until:
+            return None
+        if until <= datetime.now(timezone.utc):
+            return None
+        return until.isoformat()
+
+    def fake_mark_evaluated(
+        opp_id: str, minutes: int = cd.DEFAULT_COOLDOWN_MINUTES
+    ) -> str:
+        until = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+        store[opp_id] = until
+        return until.isoformat()
+
+    def fake_clear(opp_id: str) -> None:
+        store.pop(opp_id, None)
+
+    # main.py imports the names directly, so patch both modules to be safe.
+    monkeypatch.setattr(cd, "is_cooled_down", fake_is_cooled_down)
+    monkeypatch.setattr(cd, "mark_evaluated", fake_mark_evaluated)
+    monkeypatch.setattr(cd, "clear", fake_clear)
+    monkeypatch.setattr(m, "is_cooled_down", fake_is_cooled_down)
+    monkeypatch.setattr(m, "mark_evaluated", fake_mark_evaluated)
+
     return m
 
 

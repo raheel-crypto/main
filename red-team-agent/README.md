@@ -84,24 +84,50 @@ you can use to iterate without running probes against real Salesforce.
 The boundary code in `app/main.py`, `app/auth.py`, and `app/schemas.py`
 should not need to change as you fill those in.
 
-## Deploy
+## Deploy (Vercel)
 
-### Fly.io / Railway / Render (recommended — single instance, file state)
+This service deploys as its own Vercel project, separate from the slack-bot
+project but sharing the same Postgres database. Cooldown state lives in the
+`red_team_cooldowns` table (slack-bot owns the migration).
+
+One-time setup:
+
+1. From the Vercel dashboard, **Add New… → Project** and import this repo.
+2. Set the **Root Directory** to `red-team-agent`.
+3. **Environment variables** (Production + Preview):
+   - `RED_TEAM_AGENT_SECRET` — same value as on the slack-bot project
+   - `ANTHROPIC_API_KEY`
+   - `POSTGRES_URL` — paste the connection string from the slack-bot project
+     (or attach the same Vercel Postgres store to this project — it injects
+     `POSTGRES_URL` automatically).
+4. **Deploy**. Vercel reads `vercel.json`, routes every path to
+   `api/index.py`, which re-exports the FastAPI app from `app/main.py`.
+
+After deploy, on the **slack-bot project** set
+`RED_TEAM_AGENT_URL=https://<this-project>.vercel.app`.
+
+### Verifying the deploy
 
 ```bash
-docker build -t red-team-agent .
-# then `fly launch`, `railway up`, or your provider's CLI.
+curl https://<this-project>.vercel.app/health
+# → {"ok":"true","service":"red-team-agent"}
 ```
 
-Set `RED_TEAM_AGENT_SECRET`, `ANTHROPIC_API_KEY`, and mount a volume at
-`/data` for cooldown state.
+Then from slack-bot:
 
-### Vercel Python (stateless)
+```bash
+npm run probe -w slack-bot red-team <slack_user_id> <opportunity_id>
+```
 
-Vercel functions are read-only filesystem and reset between invocations, so
-`cooldowns.py`'s file backend will silently lose state. Before deploying
-there, swap `app/cooldowns.py` for a Postgres-backed impl (reuse Merlin's
-`POSTGRES_URL`).
+The probe assembles a real intel pack, POSTs it through Merlin's
+HMAC-signed client, and prints the agent's response (or the cooldown drop
+reason on a second invocation).
+
+### Docker / VM (fallback)
+
+If you ever need a single always-warm instance, `docker build .` still
+works — set `POSTGRES_URL` the same way and skip `RED_TEAM_STATE_DIR`
+(unused with the Postgres backend).
 
 ## Rollout knobs (driven by Merlin)
 
