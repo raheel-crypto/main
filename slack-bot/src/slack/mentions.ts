@@ -4,10 +4,12 @@ import { waitUntil } from "@vercel/functions";
 import { config } from "../config.js";
 import { runBriefForUser } from "../services/brief.js";
 import { runQaForUser } from "../services/qa.js";
+import { runRedTeamFromDm } from "../services/redTeamDm.js";
 import { ensureUserRow } from "./ensureUser.js";
 import { channelMentionReply } from "./blocks.js";
 
 const BRIEF_PREFIX = /^\s*brief\b\s*/i;
+const RED_TEAM_PREFIX = /^\s*red[\s-]?team\b\s*/i;
 const MENTION_TAG = /<@[A-Z0-9]+>/g;
 
 export function registerMentions(app: App): void {
@@ -50,6 +52,11 @@ async function dispatch(
   channelId: string,
   text: string
 ): Promise<void> {
+  if (RED_TEAM_PREFIX.test(text)) {
+    const oppRef = text.replace(RED_TEAM_PREFIX, "").trim();
+    await runRedTeamFromDm({ slackUserId, channelId, oppRef, slack });
+    return;
+  }
   if (BRIEF_PREFIX.test(text)) {
     const accountQuery = text.replace(BRIEF_PREFIX, "").trim();
     await runBriefForUser({ slackUserId, channelId, accountQuery, slack });
