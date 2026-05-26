@@ -1,21 +1,44 @@
 import { WebClient } from "@slack/web-api";
 import { config } from "../config.js";
-import {
-  NOOKS_FILTER_DIRECTION,
-  NOOKS_FILTER_DISPOSITIONS,
-} from "../constants.js";
+import { NOOKS_FILTER_DIRECTION } from "../constants.js";
 import {
   appendAudit,
-  getFirehoseSubscribers,
+  getNooksFirehoseSubscribersFor,
   getUserByEmail,
 } from "../db/queries.js";
 import { nooksCallDigestCard } from "../slack/blocks.js";
-import type { NooksWebhookPayload } from "../types.js";
+import type {
+  NooksDispositionBucket,
+  NooksWebhookPayload,
+} from "../types.js";
 
 export interface NooksHandleResult {
   ok: boolean;
   reason?: string;
   dmTo?: string[];
+}
+
+function parseDispositionBucket(
+  dispositionName: string
+): NooksDispositionBucket | null {
+  const lower = (dispositionName ?? "").toLowerCase();
+  if (lower.includes("positive")) return "positive";
+  if (lower.includes("negative")) return "negative";
+  if (lower.includes("neutral")) return "neutral";
+  return null;
+}
+
+function userWantsHostDisposition(
+  prefs: {
+    nooksHostPositive: boolean;
+    nooksHostNeutral: boolean;
+    nooksHostNegative: boolean;
+  },
+  bucket: NooksDispositionBucket
+): boolean {
+  if (bucket === "positive") return prefs.nooksHostPositive;
+  if (bucket === "neutral") return prefs.nooksHostNeutral;
+  return prefs.nooksHostNegative;
 }
 
 export async function handleNooksWebhook(
@@ -46,11 +69,11 @@ export async function handleNooksWebhook(
     );
     return { ok: true, reason: `filtered_direction:${direction}` };
   }
-  const dispositionLower = dispositionName.toLowerCase();
-  const allowed = NOOKS_FILTER_DISPOSITIONS.map((d) => d.toLowerCase());
-  if (!allowed.includes(dispositionLower)) {
+
+  const bucket = parseDispositionBucket(dispositionName);
+  if (!bucket) {
     console.log(
-      `[nooks] filtered: disposition='${dispositionName}' (want one of '${NOOKS_FILTER_DISPOSITIONS.join("', '")}')`
+      `[nooks] filtered: disposition='${dispositionName}' (not Connected - Positive/Neutral/Negative)`
     );
     return { ok: true, reason: `filtered_disposition:${dispositionName}` };
   }
@@ -59,12 +82,12 @@ export async function handleNooksWebhook(
 
   if (agentEmail) {
     const agent = await getUserByEmail(agentEmail);
-    if (agent?.nooksRealtimeEnabled) {
+    if (agent && userWantsHostDisposition(agent, bucket)) {
       targets.set(agent.slackUserId, "host");
     }
   }
 
-  const firehoseSubs = await getFirehoseSubscribers("nooks");
+  const firehoseSubs = await getNooksFirehoseSubscribersFor(bucket);
   for (const sub of firehoseSubs) {
     if (!targets.has(sub.slackUserId)) {
       targets.set(sub.slackUserId, "firehose");
@@ -90,6 +113,7 @@ export async function handleNooksWebhook(
         callId: payload.callData?.callId ?? null,
         agentEmail,
         disposition: dispositionName,
+        dispositionBucket: bucket,
         routing,
       },
     });

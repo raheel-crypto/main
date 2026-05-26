@@ -8,6 +8,7 @@ import type {
   MeetingRun,
   PendingCard,
   PendingCardKind,
+  NooksDispositionBucket,
   PostMeetingPayload,
   ProposedField,
   Recommendation,
@@ -31,11 +32,23 @@ interface UserRow {
   gong_firehose_enabled: boolean | null;
   nooks_realtime_enabled: boolean | null;
   nooks_firehose_enabled: boolean | null;
+  nooks_host_positive: boolean | null;
+  nooks_host_neutral: boolean | null;
+  nooks_host_negative: boolean | null;
+  nooks_firehose_positive: boolean | null;
+  nooks_firehose_neutral: boolean | null;
+  nooks_firehose_negative: boolean | null;
   calendar_pre_enabled: boolean | null;
   calendar_post_enabled: boolean | null;
 }
 
 function rowToUserPrefs(r: UserRow): UserPrefs {
+  const nooksHostPositive = r.nooks_host_positive ?? false;
+  const nooksHostNeutral = r.nooks_host_neutral ?? false;
+  const nooksHostNegative = r.nooks_host_negative ?? false;
+  const nooksFirehosePositive = r.nooks_firehose_positive ?? false;
+  const nooksFirehoseNeutral = r.nooks_firehose_neutral ?? false;
+  const nooksFirehoseNegative = r.nooks_firehose_negative ?? false;
   return {
     slackUserId: r.slack_user_id,
     slackTeamId: r.slack_team_id,
@@ -47,8 +60,16 @@ function rowToUserPrefs(r: UserRow): UserPrefs {
     active: r.active,
     gongRealtimeEnabled: r.gong_realtime_enabled ?? false,
     gongFirehoseEnabled: r.gong_firehose_enabled ?? false,
-    nooksRealtimeEnabled: r.nooks_realtime_enabled ?? false,
-    nooksFirehoseEnabled: r.nooks_firehose_enabled ?? false,
+    nooksRealtimeEnabled:
+      nooksHostPositive || nooksHostNeutral || nooksHostNegative,
+    nooksFirehoseEnabled:
+      nooksFirehosePositive || nooksFirehoseNeutral || nooksFirehoseNegative,
+    nooksHostPositive,
+    nooksHostNeutral,
+    nooksHostNegative,
+    nooksFirehosePositive,
+    nooksFirehoseNeutral,
+    nooksFirehoseNegative,
     calendarPreEnabled: r.calendar_pre_enabled ?? false,
     calendarPostEnabled: r.calendar_post_enabled ?? false,
   };
@@ -57,6 +78,8 @@ function rowToUserPrefs(r: UserRow): UserPrefs {
 const USER_SELECT_COLUMNS = `slack_user_id, slack_team_id, email, timezone, preferred_hour,
             preferred_minute, last_run_date, active, gong_realtime_enabled,
             gong_firehose_enabled, nooks_realtime_enabled, nooks_firehose_enabled,
+            nooks_host_positive, nooks_host_neutral, nooks_host_negative,
+            nooks_firehose_positive, nooks_firehose_neutral, nooks_firehose_negative,
             calendar_pre_enabled, calendar_post_enabled`;
 
 export async function upsertUser(
@@ -68,6 +91,12 @@ export async function upsertUser(
     | "gongFirehoseEnabled"
     | "nooksRealtimeEnabled"
     | "nooksFirehoseEnabled"
+    | "nooksHostPositive"
+    | "nooksHostNeutral"
+    | "nooksHostNegative"
+    | "nooksFirehosePositive"
+    | "nooksFirehoseNeutral"
+    | "nooksFirehoseNegative"
     | "calendarPreEnabled"
     | "calendarPostEnabled"
   > & {
@@ -127,31 +156,53 @@ export async function updateSubscriptionPrefs(
   patch: {
     gongRealtimeEnabled?: boolean;
     gongFirehoseEnabled?: boolean;
-    nooksRealtimeEnabled?: boolean;
-    nooksFirehoseEnabled?: boolean;
+    nooksHostPositive?: boolean;
+    nooksHostNeutral?: boolean;
+    nooksHostNegative?: boolean;
+    nooksFirehosePositive?: boolean;
+    nooksFirehoseNeutral?: boolean;
+    nooksFirehoseNegative?: boolean;
     calendarPreEnabled?: boolean;
     calendarPostEnabled?: boolean;
   }
 ): Promise<void> {
   const pool = getPool();
+  // Update the granular Nooks per-disposition columns AND mirror the
+  // legacy boolean flags so any reader still expecting them keeps working
+  // until those columns are dropped.
   await pool.query(
     `UPDATE users
-        SET gong_realtime_enabled  = COALESCE($2, gong_realtime_enabled),
-            gong_firehose_enabled  = COALESCE($3, gong_firehose_enabled),
-            nooks_realtime_enabled = COALESCE($4, nooks_realtime_enabled),
-            nooks_firehose_enabled = COALESCE($5, nooks_firehose_enabled),
-            calendar_pre_enabled   = COALESCE($6, calendar_pre_enabled),
-            calendar_post_enabled  = COALESCE($7, calendar_post_enabled)
+        SET gong_realtime_enabled    = COALESCE($2, gong_realtime_enabled),
+            gong_firehose_enabled    = COALESCE($3, gong_firehose_enabled),
+            nooks_host_positive      = COALESCE($4, nooks_host_positive),
+            nooks_host_neutral       = COALESCE($5, nooks_host_neutral),
+            nooks_host_negative      = COALESCE($6, nooks_host_negative),
+            nooks_firehose_positive  = COALESCE($7, nooks_firehose_positive),
+            nooks_firehose_neutral   = COALESCE($8, nooks_firehose_neutral),
+            nooks_firehose_negative  = COALESCE($9, nooks_firehose_negative),
+            calendar_pre_enabled     = COALESCE($10, calendar_pre_enabled),
+            calendar_post_enabled    = COALESCE($11, calendar_post_enabled)
       WHERE slack_user_id = $1`,
     [
       slackUserId,
       patch.gongRealtimeEnabled ?? null,
       patch.gongFirehoseEnabled ?? null,
-      patch.nooksRealtimeEnabled ?? null,
-      patch.nooksFirehoseEnabled ?? null,
+      patch.nooksHostPositive ?? null,
+      patch.nooksHostNeutral ?? null,
+      patch.nooksHostNegative ?? null,
+      patch.nooksFirehosePositive ?? null,
+      patch.nooksFirehoseNeutral ?? null,
+      patch.nooksFirehoseNegative ?? null,
       patch.calendarPreEnabled ?? null,
       patch.calendarPostEnabled ?? null,
     ]
+  );
+  await pool.query(
+    `UPDATE users
+        SET nooks_realtime_enabled = (nooks_host_positive OR nooks_host_neutral OR nooks_host_negative),
+            nooks_firehose_enabled = (nooks_firehose_positive OR nooks_firehose_neutral OR nooks_firehose_negative)
+      WHERE slack_user_id = $1`,
+    [slackUserId]
   );
 }
 
@@ -270,8 +321,27 @@ export async function getFirehoseSubscribers(
   feed: "gong" | "nooks"
 ): Promise<UserPrefs[]> {
   const pool = getPool();
+  const whereClause =
+    feed === "gong"
+      ? "gong_firehose_enabled = true"
+      : "(nooks_firehose_positive OR nooks_firehose_neutral OR nooks_firehose_negative)";
+  const { rows } = await pool.query(
+    `SELECT ${USER_SELECT_COLUMNS}
+       FROM users WHERE ${whereClause}`
+  );
+  return (rows as UserRow[]).map(rowToUserPrefs);
+}
+
+export async function getNooksFirehoseSubscribersFor(
+  bucket: NooksDispositionBucket
+): Promise<UserPrefs[]> {
+  const pool = getPool();
   const column =
-    feed === "gong" ? "gong_firehose_enabled" : "nooks_firehose_enabled";
+    bucket === "positive"
+      ? "nooks_firehose_positive"
+      : bucket === "neutral"
+        ? "nooks_firehose_neutral"
+        : "nooks_firehose_negative";
   const { rows } = await pool.query(
     `SELECT ${USER_SELECT_COLUMNS}
        FROM users WHERE ${column} = true`

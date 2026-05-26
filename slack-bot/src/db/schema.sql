@@ -100,3 +100,22 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_pre_enabled  BOOLEAN NOT NUL
 ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_post_enabled BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS idx_users_calendar_pre  ON users(calendar_pre_enabled)  WHERE calendar_pre_enabled  = true;
 CREATE INDEX IF NOT EXISTS idx_users_calendar_post ON users(calendar_post_enabled) WHERE calendar_post_enabled = true;
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_host_positive      BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_host_neutral       BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_host_negative      BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_firehose_positive  BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_firehose_neutral   BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS nooks_firehose_negative  BOOLEAN NOT NULL DEFAULT false;
+UPDATE users SET nooks_host_positive = true, nooks_host_neutral = true, nooks_host_negative = true
+  WHERE nooks_realtime_enabled = true
+    AND NOT (nooks_host_positive OR nooks_host_neutral OR nooks_host_negative);
+UPDATE users SET nooks_firehose_positive = true, nooks_firehose_neutral = true, nooks_firehose_negative = true
+  WHERE nooks_firehose_enabled = true
+    AND NOT (nooks_firehose_positive OR nooks_firehose_neutral OR nooks_firehose_negative);
+CREATE INDEX IF NOT EXISTS idx_users_nooks_host_positive     ON users(nooks_host_positive)     WHERE nooks_host_positive     = true;
+CREATE INDEX IF NOT EXISTS idx_users_nooks_host_neutral      ON users(nooks_host_neutral)      WHERE nooks_host_neutral      = true;
+CREATE INDEX IF NOT EXISTS idx_users_nooks_host_negative     ON users(nooks_host_negative)     WHERE nooks_host_negative     = true;
+CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose_positive ON users(nooks_firehose_positive) WHERE nooks_firehose_positive = true;
+CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose_neutral  ON users(nooks_firehose_neutral)  WHERE nooks_firehose_neutral  = true;
+CREATE INDEX IF NOT EXISTS idx_users_nooks_firehose_negative ON users(nooks_firehose_negative) WHERE nooks_firehose_negative = true;

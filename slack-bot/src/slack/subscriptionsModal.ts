@@ -5,13 +5,18 @@ export const SUBSCRIPTIONS_CALLBACK_ID = "subscriptions_config";
 
 export const GONG_HOST_VALUE = "gong_realtime";
 export const GONG_FIREHOSE_VALUE = "gong_firehose";
-export const NOOKS_HOST_VALUE = "nooks_realtime";
-export const NOOKS_FIREHOSE_VALUE = "nooks_firehose";
+export const NOOKS_HOST_POSITIVE_VALUE = "nooks_host_positive";
+export const NOOKS_HOST_NEUTRAL_VALUE = "nooks_host_neutral";
+export const NOOKS_HOST_NEGATIVE_VALUE = "nooks_host_negative";
+export const NOOKS_FIREHOSE_POSITIVE_VALUE = "nooks_firehose_positive";
+export const NOOKS_FIREHOSE_NEUTRAL_VALUE = "nooks_firehose_neutral";
+export const NOOKS_FIREHOSE_NEGATIVE_VALUE = "nooks_firehose_negative";
 export const CALENDAR_PRE_VALUE = "calendar_pre";
 export const CALENDAR_POST_VALUE = "calendar_post";
 
 export const GONG_BLOCK_ID = "gong_block";
-export const NOOKS_BLOCK_ID = "nooks_block";
+export const NOOKS_HOST_BLOCK_ID = "nooks_host_block";
+export const NOOKS_FIREHOSE_BLOCK_ID = "nooks_firehose_block";
 export const CALENDAR_BLOCK_ID = "calendar_block";
 
 const GONG_HOST_OPTION = {
@@ -24,16 +29,38 @@ const GONG_FIREHOSE_OPTION = {
   text: { type: "plain_text" as const, text: "(Admin) DM me every Gong call across the org" },
   description: { type: "plain_text" as const, text: "Firehose. Use for live monitoring." },
 };
-const NOOKS_HOST_OPTION = {
-  value: NOOKS_HOST_VALUE,
-  text: { type: "plain_text" as const, text: "DM me after every Nooks call I make" },
-  description: { type: "plain_text" as const, text: "Filtered to Connected - Positive outbound calls." },
+
+const NOOKS_HOST_POSITIVE_OPTION = {
+  value: NOOKS_HOST_POSITIVE_VALUE,
+  text: { type: "plain_text" as const, text: "Positive — outbound calls I marked Connected - Positive" },
+  description: { type: "plain_text" as const, text: "The good ones — buying signals, expansion, validation." },
 };
-const NOOKS_FIREHOSE_OPTION = {
-  value: NOOKS_FIREHOSE_VALUE,
-  text: { type: "plain_text" as const, text: "(Admin) DM me every Nooks call across the org" },
-  description: { type: "plain_text" as const, text: "Firehose, same filter as above." },
+const NOOKS_HOST_NEUTRAL_OPTION = {
+  value: NOOKS_HOST_NEUTRAL_VALUE,
+  text: { type: "plain_text" as const, text: "Neutral — Connected - Neutral" },
+  description: { type: "plain_text" as const, text: "Conversations that didn't push the deal either way." },
 };
+const NOOKS_HOST_NEGATIVE_OPTION = {
+  value: NOOKS_HOST_NEGATIVE_VALUE,
+  text: { type: "plain_text" as const, text: "Negative — Connected - Negative" },
+  description: { type: "plain_text" as const, text: "Objections, churn signals, deals at risk." },
+};
+const NOOKS_FIREHOSE_POSITIVE_OPTION = {
+  value: NOOKS_FIREHOSE_POSITIVE_VALUE,
+  text: { type: "plain_text" as const, text: "Positive — every org-wide Connected - Positive" },
+  description: { type: "plain_text" as const, text: "Admin firehose for positive dialer calls." },
+};
+const NOOKS_FIREHOSE_NEUTRAL_OPTION = {
+  value: NOOKS_FIREHOSE_NEUTRAL_VALUE,
+  text: { type: "plain_text" as const, text: "Neutral — every org-wide Connected - Neutral" },
+  description: { type: "plain_text" as const, text: "Admin firehose for neutral dialer calls." },
+};
+const NOOKS_FIREHOSE_NEGATIVE_OPTION = {
+  value: NOOKS_FIREHOSE_NEGATIVE_VALUE,
+  text: { type: "plain_text" as const, text: "Negative — every org-wide Connected - Negative" },
+  description: { type: "plain_text" as const, text: "Admin firehose for negative dialer calls." },
+};
+
 const CALENDAR_PRE_OPTION = {
   value: CALENDAR_PRE_VALUE,
   text: { type: "plain_text" as const, text: "DM me a brief 5-10 min before each customer meeting" },
@@ -49,31 +76,47 @@ type Prefs = Pick<
   UserPrefs,
   | "gongRealtimeEnabled"
   | "gongFirehoseEnabled"
-  | "nooksRealtimeEnabled"
-  | "nooksFirehoseEnabled"
+  | "nooksHostPositive"
+  | "nooksHostNeutral"
+  | "nooksHostNegative"
+  | "nooksFirehosePositive"
+  | "nooksFirehoseNeutral"
+  | "nooksFirehoseNegative"
   | "calendarPreEnabled"
   | "calendarPostEnabled"
 >;
 
 export function subscriptionsModalView(prefs: Prefs | null): View {
-  const p = prefs ?? {
-    gongRealtimeEnabled: false,
-    gongFirehoseEnabled: false,
-    nooksRealtimeEnabled: false,
-    nooksFirehoseEnabled: false,
-    calendarPreEnabled: false,
-    calendarPostEnabled: false,
-  };
+  const p =
+    prefs ?? {
+      gongRealtimeEnabled: false,
+      gongFirehoseEnabled: false,
+      nooksHostPositive: false,
+      nooksHostNeutral: false,
+      nooksHostNegative: false,
+      nooksFirehosePositive: false,
+      nooksFirehoseNeutral: false,
+      nooksFirehoseNegative: false,
+      calendarPreEnabled: false,
+      calendarPostEnabled: false,
+    };
 
   const gongInitial = [
     p.gongRealtimeEnabled ? GONG_HOST_OPTION : null,
     p.gongFirehoseEnabled ? GONG_FIREHOSE_OPTION : null,
   ].filter(Boolean) as Array<typeof GONG_HOST_OPTION>;
 
-  const nooksInitial = [
-    p.nooksRealtimeEnabled ? NOOKS_HOST_OPTION : null,
-    p.nooksFirehoseEnabled ? NOOKS_FIREHOSE_OPTION : null,
-  ].filter(Boolean) as Array<typeof NOOKS_HOST_OPTION>;
+  const nooksHostInitial = [
+    p.nooksHostPositive ? NOOKS_HOST_POSITIVE_OPTION : null,
+    p.nooksHostNeutral ? NOOKS_HOST_NEUTRAL_OPTION : null,
+    p.nooksHostNegative ? NOOKS_HOST_NEGATIVE_OPTION : null,
+  ].filter(Boolean) as Array<typeof NOOKS_HOST_POSITIVE_OPTION>;
+
+  const nooksFirehoseInitial = [
+    p.nooksFirehosePositive ? NOOKS_FIREHOSE_POSITIVE_OPTION : null,
+    p.nooksFirehoseNeutral ? NOOKS_FIREHOSE_NEUTRAL_OPTION : null,
+    p.nooksFirehoseNegative ? NOOKS_FIREHOSE_NEGATIVE_OPTION : null,
+  ].filter(Boolean) as Array<typeof NOOKS_FIREHOSE_POSITIVE_OPTION>;
 
   const calendarInitial = [
     p.calendarPreEnabled ? CALENDAR_PRE_OPTION : null,
@@ -108,14 +151,36 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
       },
       {
         type: "input",
-        block_id: NOOKS_BLOCK_ID,
+        block_id: NOOKS_HOST_BLOCK_ID,
         optional: true,
-        label: { type: "plain_text", text: "Nooks" },
+        label: { type: "plain_text", text: "Nooks — my dialer calls" },
         element: {
           type: "checkboxes",
           action_id: "value",
-          initial_options: nooksInitial.length > 0 ? nooksInitial : undefined,
-          options: [NOOKS_HOST_OPTION, NOOKS_FIREHOSE_OPTION],
+          initial_options:
+            nooksHostInitial.length > 0 ? nooksHostInitial : undefined,
+          options: [
+            NOOKS_HOST_POSITIVE_OPTION,
+            NOOKS_HOST_NEUTRAL_OPTION,
+            NOOKS_HOST_NEGATIVE_OPTION,
+          ],
+        },
+      },
+      {
+        type: "input",
+        block_id: NOOKS_FIREHOSE_BLOCK_ID,
+        optional: true,
+        label: { type: "plain_text", text: "(Admin) Nooks firehose" },
+        element: {
+          type: "checkboxes",
+          action_id: "value",
+          initial_options:
+            nooksFirehoseInitial.length > 0 ? nooksFirehoseInitial : undefined,
+          options: [
+            NOOKS_FIREHOSE_POSITIVE_OPTION,
+            NOOKS_FIREHOSE_NEUTRAL_OPTION,
+            NOOKS_FIREHOSE_NEGATIVE_OPTION,
+          ],
         },
       },
       {

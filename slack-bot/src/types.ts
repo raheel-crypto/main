@@ -11,11 +11,21 @@ export interface UserPrefs {
   active: boolean;
   gongRealtimeEnabled: boolean;
   gongFirehoseEnabled: boolean;
+  /** @deprecated derived from nooksHost{Positive,Neutral,Negative} — true if any is on. */
   nooksRealtimeEnabled: boolean;
+  /** @deprecated derived from nooksFirehose{Positive,Neutral,Negative} — true if any is on. */
   nooksFirehoseEnabled: boolean;
+  nooksHostPositive: boolean;
+  nooksHostNeutral: boolean;
+  nooksHostNegative: boolean;
+  nooksFirehosePositive: boolean;
+  nooksFirehoseNeutral: boolean;
+  nooksFirehoseNegative: boolean;
   calendarPreEnabled: boolean;
   calendarPostEnabled: boolean;
 }
+
+export type NooksDispositionBucket = "positive" | "neutral" | "negative";
 
 export interface GcTokens {
   slackUserId: string;

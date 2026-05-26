@@ -18,9 +18,14 @@ import {
   GONG_BLOCK_ID,
   GONG_FIREHOSE_VALUE,
   GONG_HOST_VALUE,
-  NOOKS_BLOCK_ID,
-  NOOKS_FIREHOSE_VALUE,
-  NOOKS_HOST_VALUE,
+  NOOKS_FIREHOSE_BLOCK_ID,
+  NOOKS_FIREHOSE_NEGATIVE_VALUE,
+  NOOKS_FIREHOSE_NEUTRAL_VALUE,
+  NOOKS_FIREHOSE_POSITIVE_VALUE,
+  NOOKS_HOST_BLOCK_ID,
+  NOOKS_HOST_NEGATIVE_VALUE,
+  NOOKS_HOST_NEUTRAL_VALUE,
+  NOOKS_HOST_POSITIVE_VALUE,
   SUBSCRIPTIONS_CALLBACK_ID,
 } from "./subscriptionsModal.js";
 import {
@@ -1469,8 +1474,11 @@ export function registerSubscriptionsSubmit(app: App): void {
     await ack();
     const gongSelected =
       view.state.values[GONG_BLOCK_ID]?.["value"]?.selected_options ?? [];
-    const nooksSelected =
-      view.state.values[NOOKS_BLOCK_ID]?.["value"]?.selected_options ?? [];
+    const nooksHostSelected =
+      view.state.values[NOOKS_HOST_BLOCK_ID]?.["value"]?.selected_options ?? [];
+    const nooksFirehoseSelected =
+      view.state.values[NOOKS_FIREHOSE_BLOCK_ID]?.["value"]?.selected_options ??
+      [];
     const calendarSelected =
       view.state.values[CALENDAR_BLOCK_ID]?.["value"]?.selected_options ?? [];
     const has = (
@@ -1480,18 +1488,49 @@ export function registerSubscriptionsSubmit(app: App): void {
     const prefs = {
       gongRealtimeEnabled: has(gongSelected, GONG_HOST_VALUE),
       gongFirehoseEnabled: has(gongSelected, GONG_FIREHOSE_VALUE),
-      nooksRealtimeEnabled: has(nooksSelected, NOOKS_HOST_VALUE),
-      nooksFirehoseEnabled: has(nooksSelected, NOOKS_FIREHOSE_VALUE),
+      nooksHostPositive: has(nooksHostSelected, NOOKS_HOST_POSITIVE_VALUE),
+      nooksHostNeutral: has(nooksHostSelected, NOOKS_HOST_NEUTRAL_VALUE),
+      nooksHostNegative: has(nooksHostSelected, NOOKS_HOST_NEGATIVE_VALUE),
+      nooksFirehosePositive: has(
+        nooksFirehoseSelected,
+        NOOKS_FIREHOSE_POSITIVE_VALUE
+      ),
+      nooksFirehoseNeutral: has(
+        nooksFirehoseSelected,
+        NOOKS_FIREHOSE_NEUTRAL_VALUE
+      ),
+      nooksFirehoseNegative: has(
+        nooksFirehoseSelected,
+        NOOKS_FIREHOSE_NEGATIVE_VALUE
+      ),
       calendarPreEnabled: has(calendarSelected, CALENDAR_PRE_VALUE),
       calendarPostEnabled: has(calendarSelected, CALENDAR_POST_VALUE),
     };
     await updateSubscriptionPrefs(body.user.id, prefs);
 
+    const dispositionList = (
+      pos: boolean,
+      neu: boolean,
+      neg: boolean
+    ): string => {
+      const on = [
+        pos ? "Positive" : null,
+        neu ? "Neutral" : null,
+        neg ? "Negative" : null,
+      ].filter(Boolean);
+      return on.length === 0 ? "off" : on.join(" + ");
+    };
     const onOff = (b: boolean) => (b ? "on" : "off");
     const summary = `Saved.  Gong host: *${onOff(prefs.gongRealtimeEnabled)}* · Gong firehose: *${onOff(
       prefs.gongFirehoseEnabled
-    )}* · Nooks host: *${onOff(prefs.nooksRealtimeEnabled)}* · Nooks firehose: *${onOff(
-      prefs.nooksFirehoseEnabled
+    )}* · Nooks host: *${dispositionList(
+      prefs.nooksHostPositive,
+      prefs.nooksHostNeutral,
+      prefs.nooksHostNegative
+    )}* · Nooks firehose: *${dispositionList(
+      prefs.nooksFirehosePositive,
+      prefs.nooksFirehoseNeutral,
+      prefs.nooksFirehoseNegative
     )}* · Calendar pre: *${onOff(prefs.calendarPreEnabled)}* · Calendar post: *${onOff(
       prefs.calendarPostEnabled
     )}*.`;
