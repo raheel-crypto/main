@@ -172,11 +172,11 @@ async function tryGongCustomObject(
   // Gong only auto-links calls to the Account; the Opportunity link
   // (Gong__Primary_Opportunity__c) is often left blank because that field is
   // populated manually by the rep. So we widen the filter to either link.
-  // Two id-field attempts: prefer `Gong__Call_Id__c`, fall back to `Name`.
+  // Two id-field attempts: prefer `Gong__Call_ID__c`, fall back to `Name`.
   const whereClause =
     `(Gong__Primary_Opportunity__c = '${escapeSoql(opportunityId)}' ` +
     `OR Gong__Primary_Account__c = '${escapeSoql(accountId)}')`;
-  for (const idField of ["Gong__Call_Id__c", "Name"]) {
+  for (const idField of ["Gong__Call_ID__c", "Name"]) {
     const soql = `
       SELECT ${idField}, Gong__Call_Start__c
         FROM Gong__Gong_Call__c
