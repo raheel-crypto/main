@@ -5,7 +5,13 @@ import { QA_SYSTEM } from "../agent/prompts.js";
 import { buildSlackProgressUpdater } from "../agent/progress.js";
 import type { AgentToolCtx } from "../agent/tools.js";
 import {
+  QA_CONVERSATION_MAX_TURNS,
+  QA_CONVERSATION_WINDOW_MINUTES,
+} from "../constants.js";
+import {
   appendAudit,
+  appendQaTurn,
+  getRecentQaTurns,
   getUser,
   insertPendingCard,
   setCardMessageTs,
@@ -102,12 +108,27 @@ export async function runQaForUser(args: {
     sfUserId && sfUserName
       ? `You are helping *${sfUserName}* — Salesforce User Id: \`${sfUserId}\` (email: ${user.email}). Default to filtering SOQL by \`OwnerId = '${sfUserId}'\` for any "my", "I", "mine" queries and for any write/bulk-find unless the rep explicitly broadens scope ("all reps", "across the team", "org-wide", etc.).`
       : `You are helping a rep with email ${user.email}. Default to ownership-filtered queries.`;
+  const priorTurns = await getRecentQaTurns(
+    slackUserId,
+    channelId,
+    QA_CONVERSATION_WINDOW_MINUTES,
+    QA_CONVERSATION_MAX_TURNS
+  );
+  // Prefix the date/identity context only on the LATEST user message;
+  // prior turns are replayed as their raw text. The model handles the
+  // implicit time-of-conversation context fine.
+  const priorMessages = priorTurns.map((t) => ({
+    role: t.role,
+    content: t.content,
+  }));
+
   try {
     const result = await runAgent({
       system: QA_SYSTEM,
       userMessage: `Today is ${today} (${user.timezone}).\n${identityLine}\n\n${trimmed}`,
       onToolUse: ({ toolNames }) => updateProgress(toolNames),
       ctx: agentCtx,
+      priorMessages,
     });
     const rawAnswer = result.finalText || "_(no response)_";
     const calledProposeTool = result.toolCalls.some(
@@ -142,6 +163,13 @@ export async function runQaForUser(args: {
       ts,
       text: answer,
     });
+    // Persist this exchange so the next DM has context. Only persist on a
+    // clean answer — failed-proposal warnings would mislead the model
+    // about what was actually said.
+    if (!proposalMissing) {
+      await appendQaTurn(slackUserId, channelId, "user", trimmed);
+      await appendQaTurn(slackUserId, channelId, "assistant", rawAnswer);
+    }
     await appendAudit({
       slackUserId,
       action: proposalMissing ? "qa_propose_failed" : "qa_answered",

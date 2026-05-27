@@ -869,3 +869,48 @@ export async function upsertRedTeamMute(
     [opportunityId, slackUserId, mutedUntilIso]
   );
 }
+
+export interface QaConversationTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function getRecentQaTurns(
+  slackUserId: string,
+  channelId: string,
+  withinMinutes: number,
+  maxTurns: number
+): Promise<QaConversationTurn[]> {
+  const pool = getPool();
+  const { rows } = await pool.query<{ role: string; content: string }>(
+    `SELECT role, content
+       FROM qa_conversation_turns
+      WHERE slack_user_id = $1
+        AND channel_id = $2
+        AND created_at >= NOW() - ($3 || ' minutes')::interval
+      ORDER BY created_at DESC
+      LIMIT $4`,
+    [slackUserId, channelId, String(withinMinutes), maxTurns]
+  );
+  // Re-order oldest → newest for the agent's messages list.
+  return rows
+    .map((r) => ({
+      role: r.role === "assistant" ? "assistant" : "user",
+      content: r.content,
+    }))
+    .reverse() as QaConversationTurn[];
+}
+
+export async function appendQaTurn(
+  slackUserId: string,
+  channelId: string,
+  role: "user" | "assistant",
+  content: string
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO qa_conversation_turns (slack_user_id, channel_id, role, content)
+     VALUES ($1, $2, $3, $4)`,
+    [slackUserId, channelId, role, content.slice(0, 12_000)]
+  );
+}

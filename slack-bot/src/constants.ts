@@ -12,6 +12,11 @@ export const BUY_SIGNAL_MAX_CARDS_PER_RUN = 5;
 export const BUY_SIGNAL_SUBJECT_PATTERN = "%[Apollo]%Connected - Positive%";
 
 export const RED_TEAM_HTTP_TIMEOUT_MS = 280_000;
+
+// @merlin Q&A in-DM conversation memory: how far back to load prior turns
+// and how many to include in the agent's messages list.
+export const QA_CONVERSATION_WINDOW_MINUTES = 30;
+export const QA_CONVERSATION_MAX_TURNS = 12;
 export const RED_TEAM_FIELD_HISTORY_LOOKBACK_DAYS = 30;
 export const RED_TEAM_GONG_CALL_LIMIT = 5;
 export const RED_TEAM_ACTIVITY_LIMIT = 25;

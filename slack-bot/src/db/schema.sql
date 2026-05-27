@@ -149,3 +149,17 @@ CREATE TABLE IF NOT EXISTS red_team_cooldowns (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_red_team_cooldowns_until ON red_team_cooldowns(cooled_until);
+
+-- @merlin Q&A in-DM conversation memory. Each user/assistant turn in a
+-- single IM is appended; the QA service loads the last N within the
+-- last 30 minutes to thread context into the next agent call.
+CREATE TABLE IF NOT EXISTS qa_conversation_turns (
+  id BIGSERIAL PRIMARY KEY,
+  slack_user_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_qa_turns_lookup
+  ON qa_conversation_turns(slack_user_id, channel_id, created_at DESC);

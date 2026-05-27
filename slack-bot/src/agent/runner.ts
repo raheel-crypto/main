@@ -34,6 +34,13 @@ export interface RunAgentInput {
   toolNames?: string[];
   maxIterations?: number;
   /**
+   * Prior conversation turns (oldest → newest). The agent sees these as
+   * preceding messages before the new userMessage. Used by Q&A to thread
+   * in-DM context across turns. Each entry must be a flat-text message;
+   * tool-use blocks aren't replayed.
+   */
+  priorMessages?: Anthropic.MessageParam[];
+  /**
    * Called after each turn that produces tool_use blocks, before the tools
    * are dispatched. Caller can use it to update a Slack placeholder message
    * with friendly progress text. Fire-and-forget; errors are swallowed so a
@@ -52,6 +59,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     maxTokens = 4096,
     toolNames,
     maxIterations = MAX_TOOL_ITERATIONS,
+    priorMessages,
     onToolUse,
   } = input;
 
@@ -60,6 +68,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     : TOOL_DEFINITIONS;
 
   const messages: Anthropic.MessageParam[] = [
+    ...(priorMessages ?? []),
     { role: "user", content: userMessage },
   ];
   const toolCalls: AgentToolCall[] = [];
