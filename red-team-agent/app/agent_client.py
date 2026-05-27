@@ -269,14 +269,28 @@ async def run_one_shot_with_custom_tool(
             flush=True,
         )
 
-        if et == "agent.custom_tool_use":
+        # Structural match for the tool use: any event whose data carries
+        # both an event id and a structured `input` payload. We don't rely
+        # solely on the `type` field because Anthropic's stream sometimes
+        # carries the discriminator outside our expected key.
+        data = event.get("data") or {}
+        has_tool_use_shape = (
+            isinstance(data.get("input"), dict) and isinstance(data.get("id"), str)
+        )
+        looks_like_tool_use = (
+            et == "agent.custom_tool_use"
+            or "custom_tool_use" in et
+            or has_tool_use_shape
+        )
+
+        if tool_input is None and looks_like_tool_use:
             tool_use_id, tool_input_candidate = _extract_custom_tool_use(
                 event, tool_name
             )
             if tool_input_candidate is None:
                 print(
-                    f"[agent_client] custom_tool_use didn't match {tool_name!r}; "
-                    f"keys={list((event.get('data') or {}).keys())}",
+                    f"[agent_client] looks like tool use but extract failed; "
+                    f"keys={list(data.keys())}",
                     flush=True,
                 )
                 continue
@@ -300,7 +314,6 @@ async def run_one_shot_with_custom_tool(
             seen_idle = True
             break
         elif et == "session.error":
-            data = event.get("data") or {}
             raise ManagedAgentError(f"session error: {data}")
 
     print(
