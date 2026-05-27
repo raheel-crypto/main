@@ -119,17 +119,24 @@ function fieldHistoryToChanges(
 async function discoverRecentGongCalls(
   conn: Connection,
   accountId: string,
+  opportunityId: string,
   limit: number
 ): Promise<string[]> {
   // Look at the org's Task table for the Gong sync's `Gong__Gong_Call_Id__c`
-  // field. Falls back to empty when the package isn't installed.
+  // field on tasks linked to either the Account or the Opportunity — some orgs
+  // log calls against the opp instead of the account. Falls back to empty when
+  // the Gong package isn't installed.
+  const whatIds = [accountId, opportunityId]
+    .filter(Boolean)
+    .map((id) => `'${escapeSoql(id)}'`)
+    .join(", ");
   const soql = `
     SELECT Gong__Gong_Call_Id__c, ActivityDate, CreatedDate
       FROM Task
-     WHERE WhatId = '${escapeSoql(accountId)}'
+     WHERE WhatId IN (${whatIds})
        AND Gong__Gong_Call_Id__c != null
      ORDER BY ActivityDate DESC NULLS LAST, CreatedDate DESC
-     LIMIT ${limit}`;
+     LIMIT ${limit * 2}`;
   try {
     const result = await conn.query(soql);
     const ids: string[] = [];
@@ -137,7 +144,7 @@ async function discoverRecentGongCalls(
       const id = r.Gong__Gong_Call_Id__c;
       if (typeof id === "string" && id && !ids.includes(id)) ids.push(id);
     }
-    return ids;
+    return ids.slice(0, limit);
   } catch (err: any) {
     const message = String(err?.message ?? err);
     if (/INVALID_FIELD|No such column/i.test(message)) return [];
@@ -284,12 +291,30 @@ export async function buildIntelPack(
     gongCallIds = await discoverRecentGongCalls(
       conn,
       opportunity.accountId,
+      opportunity.id,
       RED_TEAM_GONG_CALL_LIMIT
     );
   } else {
     gongCallIds = gongCallIds.slice(0, RED_TEAM_GONG_CALL_LIMIT);
   }
   const gongCalls = await assembleGongCalls(gongCallIds);
+
+  console.log(
+    `[red-team] intel pack assembled for ${opportunity.id}: ` +
+      `customFields=${Object.keys(opportunity.customFields).length} ` +
+      `meddpiccScores=${
+        Object.keys(opportunity.customFields).filter((k) =>
+          k.endsWith("_Score__c")
+        ).length
+      } ` +
+      `fieldChanges=${recentFieldChanges.length} ` +
+      `gongCalls=${gongCalls.length} ` +
+      `transcriptSegments=${gongCalls.reduce(
+        (n, c) => n + (c.transcript?.speakerSegments?.length ?? 0),
+        0
+      )} ` +
+      `activities=${activities.length}`
+  );
 
   const pack: RedTeamIntelPackRequest = {
     schemaVersion: "1",

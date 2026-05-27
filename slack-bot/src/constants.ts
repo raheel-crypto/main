@@ -18,13 +18,33 @@ export const RED_TEAM_ACTIVITY_LIMIT = 25;
 export const RED_TEAM_TRANSCRIPT_SEGMENT_LIMIT = 400;
 export const RED_TEAM_SWEEP_CONCURRENCY = 3;
 export const RED_TEAM_DEFAULT_OPP_FIELDS = [
+  // MEDDPICC evidence text fields
   "Notes__c",
   "Deal_Description__c",
   "Champion__c",
   "Economic_Buyer__c",
   "Decision_Criteria__c",
+  "Decision_Process__c",
+  "Paper_Process__c",
   "Pain__c",
   "Competition__c",
+  "Metrics__c",
+  // MEDDPICC scores — triggers.yaml field_threshold rules key off these
+  "Overall_Score__c",
+  "Champion_Score__c",
+  "Competition_Score__c",
+  "Decision_Process_Score__c",
+  "Decision_Criteria_Score__c",
+  "Economic_Buyer_Score__c",
+  "Paper_Process_Score__c",
+  "Implicate_Pain_Score__c",
+  "Metrics_Score__c",
+  // Strategic fields used for trigger gates + intel-pack retrieval
+  "Final_Competitor__c",
+  "Segment__c",
+  "Business_Type__c",
+  "ForecastCategoryName",
+  "Last_Touch_With_Decision_Maker__c",
 ] as const;
 
 export const NOOKS_FILTER_DIRECTION = "outbound";
