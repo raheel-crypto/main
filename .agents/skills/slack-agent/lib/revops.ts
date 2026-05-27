@@ -135,6 +135,33 @@ export async function postDecisionUpdate(request: ApprovalRequest): Promise<void
   await postAuditLog(request);
 }
 
+/**
+ * Brief one-liner posted to #deal-desk when RevOps uses /quote-manual to
+ * bypass approvals. Returns the {channel, ts} so the order form can be
+ * mirrored into the same thread. Audit trail in the channel, not a full
+ * approval-block post -- the doc is generated and DM'd directly to the
+ * RevOps user, no buttons needed.
+ */
+export async function postManualQuoteNote(request: ApprovalRequest): Promise<{
+  channel: string;
+  ts: string | null;
+}> {
+  const channel = required("REVOPS_CHANNEL");
+  const { context, pricing, requester, request_id, form } = request;
+  const text =
+    `:hammer_and_wrench: *Manual quote* by <@${requester.slack_user_id}> — ` +
+    `${context.account.name} (${context.opportunity.name}). ` +
+    `${form.package}, ${form.users} users, ` +
+    `*${fmtCurrency(pricing.arr ?? pricing.total_amount)}* ARR. ` +
+    `Bypassed approvals. Request ID \`${request_id}\`.`;
+  const res = await postMessage({ channel, text });
+  return { channel, ts: res.ts ?? null };
+}
+
+function fmtCurrency(n: number): string {
+  return n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
 function required(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing required env var: ${name}`);

@@ -24,6 +24,7 @@ import type { ApprovalRequest, Package, ProcessQuoteJob, QuoteForm, Requester } 
 export const config = { api: { bodyParser: false } };
 
 const QUOTE_MODAL_CALLBACK = "quote_modal_submit";
+const QUOTE_MANUAL_MODAL_CALLBACK = "quote_manual_modal_submit";
 const APPROVE_ACTION_ID = "quote_approve";
 const REJECT_ACTION_ID = "quote_reject";
 
@@ -51,8 +52,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).send("Bad payload");
   }
 
-  if (payload.type === "view_submission" && payload.view?.callback_id === QUOTE_MODAL_CALLBACK) {
-    return handleQuoteModalSubmit(payload, res);
+  if (
+    payload.type === "view_submission" &&
+    (payload.view?.callback_id === QUOTE_MODAL_CALLBACK ||
+      payload.view?.callback_id === QUOTE_MANUAL_MODAL_CALLBACK)
+  ) {
+    const isManual = payload.view?.callback_id === QUOTE_MANUAL_MODAL_CALLBACK;
+    return handleQuoteModalSubmit(payload, res, { manual: isManual });
   }
 
   if (payload.type === "block_actions") {
@@ -157,7 +163,11 @@ function parseCsvEnv(v: string | undefined): string[] {
   return v.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: VercelResponse) {
+async function handleQuoteModalSubmit(
+  payload: SlackInteractivityPayload,
+  res: VercelResponse,
+  opts: { manual: boolean } = { manual: false },
+) {
   const view = payload.view!;
   const values = view.state?.values ?? {};
 
@@ -236,7 +246,7 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
     confirmation_channel: null,
   };
 
-  const job: ProcessQuoteJob = { context, form, requester };
+  const job: ProcessQuoteJob = { context, form, requester, manual: opts.manual };
   await fireProcessor(job);
 
   return res.status(200).json({ response_action: "clear" });

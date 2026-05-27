@@ -118,6 +118,10 @@ export interface ProcessQuoteJob {
   context: DealContext;
   form: QuoteForm;
   requester: Requester;
+  /** True when the job was triggered via /quote-manual -- skip routing
+   *  and the agent, mark as approved upfront, generate the doc directly,
+   *  post a brief audit note (not the full approval blocks) to #deal-desk. */
+  manual?: boolean;
 }
 
 export interface SlashCommandPayload {

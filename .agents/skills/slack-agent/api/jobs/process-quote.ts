@@ -3,9 +3,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { runQuoteAgent } from "../../lib/agent.js";
 import { routeApproval } from "../../lib/approval.js";
 import { fmtMoney } from "../../lib/blocks.js";
-import { fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
+import { deliverOrderForm, fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
 import { calculatePricing } from "../../lib/pricing.js";
-import { postApprovalRequest, postAuditLog } from "../../lib/revops.js";
+import { postApprovalRequest, postAuditLog, postManualQuoteNote } from "../../lib/revops.js";
 import { dmFileToUser, dmUser, uploadFileToThread } from "../../lib/slack.js";
 import { stashAt } from "../../lib/state.js";
 import type { AgentOutput, ApprovalRequest, ProcessQuoteJob } from "../../lib/types.js";
@@ -48,6 +48,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 async function processJob(job: ProcessQuoteJob): Promise<void> {
   const { context, form, requester } = job;
+
+  if (job.manual) {
+    await processManualJob({ context, form, requester });
+    return;
+  }
 
   const pricing = calculatePricing(form);
   const routing = routeApproval(form, pricing, context);
@@ -206,4 +211,60 @@ async function notifyPodLeaderViaDM(request: ApprovalRequest): Promise<void> {
       ),
     ),
   );
+}
+
+/**
+ * Manual-quote path triggered by /quote-manual. RevOps fills in the same
+ * modal as a regular quote, but we skip routing/agent/approval-blocks and
+ * go straight to: pricing → approved request → brief #deal-desk note →
+ * audit row → order form DM'd to the RevOps user (who is the requester
+ * for manual quotes). No buttons, no approval gate, fully bypassed.
+ */
+async function processManualJob(args: {
+  context: ProcessQuoteJob["context"];
+  form: ProcessQuoteJob["form"];
+  requester: ProcessQuoteJob["requester"];
+}): Promise<void> {
+  const { context, form, requester } = args;
+  const pricing = calculatePricing(form);
+
+  const request_id = randomUUID().slice(0, 8);
+  const nowIso = new Date().toISOString();
+  const decidedByName = requester.slack_user_name ?? requester.slack_user_id;
+
+  const request: ApprovalRequest = {
+    request_id,
+    state: "approved",
+    created_at: nowIso,
+    decided_at: nowIso,
+    decided_by_slack_user_id: requester.slack_user_id,
+    decided_by_name: `${decidedByName} (manual)`,
+    // Synthetic routing -- no real tier was computed, no approvers gated
+    // the doc. tier_label + reason document why this exists in the audit
+    // log; tier="auto" keeps downstream code that branches on tier
+    // (e.g. blocks renderers) happy without inventing a new tier value.
+    routing: {
+      tier: "auto",
+      allowed_approver_ids: [],
+      tier_label: "Manual quote (RevOps bypass)",
+      reason: "Generated via /quote-manual — approvals bypassed",
+    },
+    context,
+    form,
+    pricing,
+    agent: { summary: "", flags: [] },
+    requester,
+    slack_message: null,
+  };
+
+  try {
+    const posted = await postManualQuoteNote(request);
+    request.slack_message = posted.ts ? { channel: posted.channel, ts: posted.ts } : null;
+  } catch (e) {
+    console.error("manual-quote channel note failed:", e);
+  }
+
+  await stashAt(`approval:${request_id}`, request, 60 * 60 * 24 * 30);
+  await postAuditLog(request);
+  await deliverOrderForm(request);
 }
