@@ -42,15 +42,17 @@ MEDDPICC_FIELD_MAP: Dict[str, str] = {
 }
 
 # Per-MEDDPICC dim, the SF long-text field that holds the rep's evidence.
+# Rogo follows the `<Dim>_Evidence__c` convention; Pain alone has the
+# `Implicate_` prefix to match its score field.
 MEDDPICC_EVIDENCE_FIELD_MAP: Dict[str, str] = {
-    "champion": "Champion__c",
-    "economic_buyer": "Economic_Buyer__c",
-    "decision_criteria": "Decision_Criteria__c",
-    "decision_process": "Decision_Process__c",
-    "paper_process": "Paper_Process__c",
+    "champion": "Champion_Evidence__c",
+    "economic_buyer": "Economic_Buyer_Evidence__c",
+    "decision_criteria": "Decision_Criteria_Evidence__c",
+    "decision_process": "Decision_Process_Evidence__c",
+    "paper_process": "Paper_Process_Evidence__c",
     "pain": "Implicate_Pain_Evidence__c",
-    "metrics": "Metrics__c",
-    "competition": "Competition__c",
+    "metrics": "Metrics_Evidence__c",
+    "competition": "Competition_Evidence__c",
 }
 
 

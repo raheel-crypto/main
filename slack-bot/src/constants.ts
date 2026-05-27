@@ -18,18 +18,18 @@ export const RED_TEAM_ACTIVITY_LIMIT = 25;
 export const RED_TEAM_TRANSCRIPT_SEGMENT_LIMIT = 400;
 export const RED_TEAM_SWEEP_CONCURRENCY = 3;
 export const RED_TEAM_DEFAULT_OPP_FIELDS = [
-  // MEDDPICC evidence text fields
+  // MEDDPICC evidence text fields (Rogo SF: <Dim>_Evidence__c;
+  // Pain follows the Implicate_<Dim>_Evidence__c convention)
   "Notes__c",
   "Deal_Description__c",
-  "Champion__c",
-  "Economic_Buyer__c",
-  "Decision_Criteria__c",
-  "Decision_Process__c",
-  "Paper_Process__c",
-  "Pain__c",
+  "Champion_Evidence__c",
+  "Economic_Buyer_Evidence__c",
+  "Decision_Criteria_Evidence__c",
+  "Decision_Process_Evidence__c",
+  "Paper_Process_Evidence__c",
   "Implicate_Pain_Evidence__c",
-  "Competition__c",
-  "Metrics__c",
+  "Competition_Evidence__c",
+  "Metrics_Evidence__c",
   // MEDDPICC scores — triggers.yaml field_threshold rules key off these
   "Overall_Score__c",
   "Champion_Score__c",
