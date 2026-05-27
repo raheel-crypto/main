@@ -10,7 +10,7 @@ import json
 import os
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Annotated, Iterable, List
+from typing import Annotated, List
 
 from fastapi import Depends, FastAPI, HTTPException, status
 
@@ -30,6 +30,8 @@ from .schemas import (
     PersonaArgument,
     RunResult,
     WireCitation,
+    WireClaim,
+    WireRecommendedAction,
 )
 
 app = FastAPI(title="Red Team Agent", version="0.2.0")
@@ -150,47 +152,34 @@ def _agent_arg_to_wire(
     action: str,
 ) -> PersonaArgument:
     """
-    Squash the agent's richer AgentArgument (multiple claims + recommended
-    actions) into Merlin's flat PersonaArgument. The Slack card renders
-    `headline`, `claim` (free-text), and up to 4 citations.
-
-    The richer shape will land in a follow-up that expands Merlin's
-    `RedTeamPersonaArgument` schema + card; for now we surface everything as
-    a single composed `claim` string so reps see the full content.
+    Translate the agent's AgentArgument (snake_case, internal types) into the
+    wire PersonaArgument (camelCase, Merlin's contract). Per-claim citations
+    and recommended-actions structure survive end-to-end so the Slack card
+    can render them as separate blocks rather than squashed text.
     """
-    claim_lines: list[str] = []
-    for idx, c in enumerate(arg.claims, 1):
-        line = f"{idx}. {c.statement}"
-        if c.pattern_match:
-            line += f"  _Pattern: {c.pattern_match}_"
-        claim_lines.append(line)
-
-    if arg.recommended_actions:
-        claim_lines.append("")
-        claim_lines.append("*Recommended actions this week:*")
-        for ra in arg.recommended_actions:
-            claim_lines.append(
-                f"• {ra.action} — _owner: {ra.owner_role}; by {ra.by_date}; "
-                f"signal: {ra.expected_signal}_"
-            )
-
-    claim = "\n".join(claim_lines) if claim_lines else "(no claims)"
-
-    citations = list(_flatten_citations(arg.claims))[:4]
-
     return PersonaArgument(
         persona=arg.persona_id,
         headline=arg.headline,
-        claim=claim,
-        citations=citations,
         riskScore=_risk_score(action, supporting),
+        claims=[_claim_to_wire(c) for c in arg.claims],
+        recommendedActions=[
+            WireRecommendedAction(
+                action=ra.action,
+                ownerRole=ra.owner_role or "",
+                byDate=ra.by_date or "",
+                expectedSignal=ra.expected_signal or "",
+            )
+            for ra in arg.recommended_actions
+        ],
     )
 
 
-def _flatten_citations(claims: List[Claim]) -> Iterable[WireCitation]:
-    for claim in claims:
-        for c in claim.citations:
-            yield _agent_citation_to_wire(c)
+def _claim_to_wire(c: Claim) -> WireClaim:
+    return WireClaim(
+        statement=c.statement,
+        patternMatch=c.pattern_match,
+        citations=[_agent_citation_to_wire(cit) for cit in c.citations],
+    )
 
 
 def _agent_citation_to_wire(c: AgentCitation) -> WireCitation:

@@ -146,14 +146,27 @@ class WireCitation(_Wire):
     sourceUrl: Optional[str] = None
 
 
+class WireClaim(_Wire):
+    statement: str
+    patternMatch: Optional[str] = None
+    citations: List[WireCitation] = Field(default_factory=list)
+
+
+class WireRecommendedAction(_Wire):
+    action: str
+    ownerRole: str = ""
+    byDate: str = ""
+    expectedSignal: str = ""
+
+
 class PersonaArgument(_Wire):
-    """Flat wire shape Merlin's `RedTeamPersonaArgument` Zod expects."""
+    """Wire shape Merlin's `RedTeamPersonaArgument` Zod expects."""
 
     persona: str
     headline: str
-    claim: str
-    citations: List[WireCitation] = Field(default_factory=list)
     riskScore: float = Field(default=0.0, ge=0.0, le=1.0)
+    claims: List[WireClaim] = Field(default_factory=list)
+    recommendedActions: List[WireRecommendedAction] = Field(default_factory=list)
 
 
 class RunResult(_Wire):

@@ -860,12 +860,25 @@ export interface RedTeamCitation {
   sourceUrl?: string | null;
 }
 
+export interface RedTeamClaim {
+  statement: string;
+  patternMatch?: string | null;
+  citations: RedTeamCitation[];
+}
+
+export interface RedTeamRecommendedAction {
+  action: string;
+  ownerRole: string;
+  byDate: string;
+  expectedSignal: string;
+}
+
 export interface RedTeamPersonaArgument {
   persona: string;
   headline: string;
-  claim: string;
-  citations: RedTeamCitation[];
   riskScore: number;
+  claims: RedTeamClaim[];
+  recommendedActions: RedTeamRecommendedAction[];
 }
 
 export const RedTeamCitationSchema = z.object({
@@ -884,12 +897,25 @@ export const RedTeamCitationSchema = z.object({
   sourceUrl: z.string().nullable().optional(),
 });
 
+export const RedTeamClaimSchema = z.object({
+  statement: z.string().min(1),
+  patternMatch: z.string().nullable().optional(),
+  citations: z.array(RedTeamCitationSchema).default([]),
+});
+
+export const RedTeamRecommendedActionSchema = z.object({
+  action: z.string().min(1),
+  ownerRole: z.string().default(""),
+  byDate: z.string().default(""),
+  expectedSignal: z.string().default(""),
+});
+
 export const RedTeamPersonaArgumentSchema = z.object({
   persona: z.string().min(1),
   headline: z.string().min(1),
-  claim: z.string().min(1),
-  citations: z.array(RedTeamCitationSchema).default([]),
   riskScore: z.number().min(0).max(1).default(0),
+  claims: z.array(RedTeamClaimSchema).default([]),
+  recommendedActions: z.array(RedTeamRecommendedActionSchema).default([]),
 });
 
 export const RedTeamRunResultSchema = z.object({

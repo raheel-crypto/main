@@ -144,7 +144,10 @@ def test_evaluate_happy_path(client):
     assert len(data["personasInvoked"]) >= 1
     persona = data["personasInvoked"][0]
     assert persona["headline"].startswith("Mocked")
-    assert persona["claim"]
+    assert len(persona["claims"]) >= 1
+    assert persona["claims"][0]["statement"]
+    assert len(persona["claims"][0]["citations"]) >= 1
+    assert len(persona["recommendedActions"]) >= 1
     assert data["cooldownUntilIso"]
     assert data["dropReason"] is None
 

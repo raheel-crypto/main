@@ -1,6 +1,9 @@
 import type { KnownBlock } from "@slack/types";
 import type {
+  RedTeamCitation,
+  RedTeamClaim,
   RedTeamPersonaArgument,
+  RedTeamRecommendedAction,
   RedTeamRunResult,
   RedTeamTriggerEvent,
 } from "../types.js";
@@ -65,31 +68,64 @@ export interface RedTeamCardArgs {
   instanceUrl: string;
 }
 
-function personaSection(arg: RedTeamPersonaArgument): KnownBlock[] {
+function citationLine(c: RedTeamCitation): string {
+  const quote = truncate(c.quote.replace(/\s+/g, " "), 220);
+  const label = truncate(c.sourceLabel, 100);
+  const labelPart = c.sourceUrl ? `<${c.sourceUrl}|${label}>` : label;
+  return `• "${quote}" — ${labelPart}`;
+}
+
+function claimBlocks(claim: RedTeamClaim, index: number): KnownBlock[] {
   const blocks: KnownBlock[] = [];
-  const header = `*${personaLabel(arg.persona)}* — ${riskBadge(arg.riskScore)}`;
-  // Slack section mrkdwn cap is 3000 chars. Leave headroom for the header
-  // + italic-marker formatting, then give the claim body as much room as
-  // possible. 600 was leaving 80%+ of the available space empty.
-  const claim = `_${truncate(arg.headline, 140)}_\n${truncate(arg.claim, 2700)}`;
+  const statementLines = [`*${index}.* ${truncate(claim.statement, 1500)}`];
+  if (claim.patternMatch) {
+    statementLines.push(`   _Pattern: ${truncate(claim.patternMatch, 200)}_`);
+  }
   blocks.push({
     type: "section",
-    text: { type: "mrkdwn", text: `${header}\n${claim}` },
+    text: { type: "mrkdwn", text: statementLines.join("\n") },
   });
-  const citationLines: string[] = [];
-  for (const c of arg.citations.slice(0, 4)) {
-    const quote = truncate(c.quote.replace(/\s+/g, " "), 200);
-    const labelPart = c.sourceUrl
-      ? `<${c.sourceUrl}|${truncate(c.sourceLabel, 80)}>`
-      : truncate(c.sourceLabel, 80);
-    citationLines.push(`• "${quote}" — ${labelPart}`);
-  }
+  const citationLines = claim.citations.slice(0, 4).map(citationLine);
   if (citationLines.length > 0) {
     blocks.push({
       type: "context",
-      elements: [
-        { type: "mrkdwn", text: citationLines.join("\n") },
-      ],
+      elements: [{ type: "mrkdwn", text: citationLines.join("\n") }],
+    });
+  }
+  return blocks;
+}
+
+function recommendedActionLine(a: RedTeamRecommendedAction): string {
+  const meta = [a.ownerRole, a.byDate, a.expectedSignal && `signal: ${a.expectedSignal}`]
+    .filter(Boolean)
+    .join(" · ");
+  return meta
+    ? `• ${truncate(a.action, 220)}\n   _${truncate(meta, 240)}_`
+    : `• ${truncate(a.action, 220)}`;
+}
+
+function personaSection(arg: RedTeamPersonaArgument): KnownBlock[] {
+  const blocks: KnownBlock[] = [];
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text:
+        `*${personaLabel(arg.persona)}* — ${riskBadge(arg.riskScore)}\n` +
+        `_${truncate(arg.headline, 200)}_`,
+    },
+  });
+  for (let i = 0; i < arg.claims.length; i++) {
+    blocks.push(...claimBlocks(arg.claims[i], i + 1));
+  }
+  if (arg.recommendedActions.length > 0) {
+    const lines = ["*Recommended actions this week:*"];
+    for (const a of arg.recommendedActions) {
+      lines.push(recommendedActionLine(a));
+    }
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: lines.join("\n") },
     });
   }
   return blocks;
