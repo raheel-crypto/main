@@ -7,7 +7,13 @@
 import type { KnownBlock } from "@slack/types";
 import type {
   ArbiterClaim,
+  ArbiterConcession,
+  ArbiterContradictionPair,
+  ArbiterDiscriminatingVariable,
+  ArbiterProbeFired,
   ArbiterRecommendedAction,
+  ArbiterScenarioBranch,
+  ArbiterSynthesis,
   ArbiterTeamArgument,
   ArbiterVerdict,
   RedTeamTriggerEvent,
@@ -130,6 +136,169 @@ function topActionsBlocks(actions: string[]): KnownBlock[] {
   ];
 }
 
+// ─── v2.1 synthesis renderers ────────────────────────────────────────────────
+
+function discriminatingVariableBlocks(
+  dv: ArbiterDiscriminatingVariable
+): KnownBlock[] {
+  const statusEmoji =
+    dv.this_deal_status === "present"
+      ? "✅"
+      : dv.this_deal_status === "absent"
+        ? "❌"
+        : "❔";
+  return [
+    { type: "divider" },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `🎯 *The discriminating variable*\n` +
+          `*${truncate(dv.variable, 240)}*\n` +
+          `Won cohort: *${dv.won_cohort_pct}%* · Lost cohort: *${dv.lost_cohort_pct}%* · ` +
+          `This deal: ${statusEmoji} *${dv.this_deal_status}*`,
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `_${truncate(dv.implication, 400)}_`,
+        },
+      ],
+    },
+  ];
+}
+
+function ifThenDiagnosticBlocks(
+  scenarios: ArbiterScenarioBranch[]
+): KnownBlock[] {
+  if (scenarios.length === 0) return [];
+  const leanEmoji = (lean: string): string =>
+    lean === "win" ? "🟢" : lean === "loss" ? "🔴" : "🟡";
+
+  const blocks: KnownBlock[] = [
+    { type: "divider" },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: "📅 *Watch for this week*" },
+    },
+  ];
+  for (let i = 0; i < scenarios.length && i < 3; i++) {
+    const s = scenarios[i];
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `*${i + 1}.* ${truncate(s.condition, 250)}\n` +
+          `   → ${leanEmoji(s.new_lean)} *${s.new_probability}%* (${s.new_lean})`,
+      },
+    });
+    if (s.rationale) {
+      blocks.push({
+        type: "context",
+        elements: [
+          { type: "mrkdwn", text: `_${truncate(s.rationale, 300)}_` },
+        ],
+      });
+    }
+  }
+  return blocks;
+}
+
+function resolvedContradictionsBlocks(
+  concessions: ArbiterConcession[]
+): KnownBlock[] {
+  if (concessions.length === 0) return [];
+  const lines = ["*⚖️ What each side gave up in Round 2*"];
+  for (const c of concessions.slice(0, 4)) {
+    const sideLabel = c.conceding_team === "red" ? "🔴 Red" : "🔵 Blue";
+    lines.push(
+      `• ${sideLabel} conceded on *${c.on_topic}*: ${truncate(c.summary, 280)}`
+    );
+    if (c.impact) {
+      lines.push(`   _Impact: ${truncate(c.impact, 220)}_`);
+    }
+  }
+  return [
+    { type: "divider" },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: lines.join("\n") },
+    },
+  ];
+}
+
+function synthesisNarrativeBlock(narrative: string): KnownBlock[] {
+  if (!narrative) return [];
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `> ${truncate(narrative, 800)}`,
+      },
+    },
+  ];
+}
+
+function debateMechanicsContext(verdict: ArbiterVerdict): KnownBlock | null {
+  const parts: string[] = [];
+  if (verdict.firedTriggers.length > 0) {
+    parts.push(`Triggers: ${verdict.firedTriggers.join(", ")}`);
+  }
+  if (verdict.routeReason) {
+    parts.push(`Route: ${verdict.routeReason}`);
+  }
+  if (verdict.probesFired.length > 0) {
+    const probeNames = verdict.probesFired.map((p) => p.probe_type).join(", ");
+    parts.push(`Probes: ${probeNames}`);
+  }
+  if (verdict.contradictionsDetected.length > 0) {
+    parts.push(
+      `Unaddressed contradictions: ${verdict.contradictionsDetected.length}`
+    );
+  }
+  if (parts.length === 0) return null;
+  return {
+    type: "context",
+    elements: [{ type: "mrkdwn", text: parts.join(" · ") }],
+  };
+}
+
+function probabilityHeaderText(verdict: ArbiterVerdict): string {
+  const lines = [probabilityBadge(verdict.probability, verdict.confidence)];
+  // Mechanics line — base rate, MEDDPICC lift, disagreement, round indicator.
+  const mech: string[] = [
+    `Base rate ${Math.round(verdict.baseRate * 100)}%`,
+    `MEDDPICC lift ${(verdict.meddpiccLift * 100).toFixed(1)}pts`,
+    `disagreement *${disagreementLabel(verdict.disagreement)}*`,
+  ];
+  if (verdict.roundsCompleted > 1) {
+    const probeCount = verdict.probesFired.length;
+    mech.push(
+      probeCount > 0
+        ? `Round 2 fired (${probeCount} probe${probeCount === 1 ? "" : "s"})`
+        : "Round 2 fired"
+    );
+  }
+  lines.push(mech.join(" · "));
+  // Show R1 → R2 probability movement when both are present and differ.
+  if (
+    verdict.probabilityRound1 != null &&
+    verdict.probabilityRound2 != null &&
+    verdict.probabilityRound1 !== verdict.probabilityRound2
+  ) {
+    lines.push(
+      `_R1: ${verdict.probabilityRound1}% → R2: ${verdict.probabilityRound2}%_`
+    );
+  }
+  return lines.join("\n");
+}
+
 export interface ArbiterCardOpportunity {
   id: string;
   name: string;
@@ -154,6 +323,8 @@ export function arbiterCard(args: ArbiterCardArgs): {
   const { opportunity, ownerSlackUserId, triggerEvent, verdict, cardId, instanceUrl } = args;
   const triggerLabel = TRIGGER_LABELS[triggerEvent] ?? triggerEvent;
   const text = `Deal review · ${opportunity.name} · ${verdict.probability}%`;
+
+  const synthesis: ArbiterSynthesis | null = verdict.synthesis ?? null;
 
   const blocks: KnownBlock[] = [
     {
@@ -181,14 +352,28 @@ export function arbiterCard(args: ArbiterCardArgs): {
       type: "section",
       text: {
         type: "mrkdwn",
-        text:
-          `${probabilityBadge(verdict.probability, verdict.confidence)}\n` +
-          `Base rate ${Math.round(verdict.baseRate * 100)}% · MEDDPICC lift ${(verdict.meddpiccLift * 100).toFixed(1)}pts · ` +
-          `Red↔Blue disagreement: *${disagreementLabel(verdict.disagreement)}*` +
-          (verdict.roundsCompleted > 1 ? ` · Round 2 fired` : ""),
+        text: probabilityHeaderText(verdict),
       },
     },
   ];
+
+  // Synthesizer narrative — italicized blockquote right under the probability
+  // so the rep sees the "what did the debate reveal" line before any team
+  // arguments. Falls back to the deterministic explanation if synthesis is
+  // unavailable.
+  if (synthesis?.narrative) {
+    blocks.push(...synthesisNarrativeBlock(synthesis.narrative));
+  } else if (verdict.explanation) {
+    blocks.push(...synthesisNarrativeBlock(verdict.explanation));
+  }
+
+  // Discriminating variable — the single most predictive factor. Skipped if
+  // the synthesizer didn't identify one.
+  if (synthesis?.discriminating_variable) {
+    blocks.push(
+      ...discriminatingVariableBlocks(synthesis.discriminating_variable)
+    );
+  }
 
   if (verdict.redArgument) {
     blocks.push(...teamBlocks(verdict.redArgument, "🔴 Red Team — Why this loses"));
@@ -197,17 +382,19 @@ export function arbiterCard(args: ArbiterCardArgs): {
     blocks.push(...teamBlocks(verdict.blueArgument, "🔵 Blue Team — Why this wins"));
   }
 
-  blocks.push(...topActionsBlocks(verdict.topActions));
+  // Resolved contradictions (Round 2 concessions). Surfaces what each side
+  // gave up under probing — the most evidence-of-rigor signal on the card.
+  if (synthesis?.resolved_contradictions?.length) {
+    blocks.push(...resolvedContradictionsBlocks(synthesis.resolved_contradictions));
+  }
 
-  if (verdict.explanation) {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `> ${truncate(verdict.explanation, 800)}`,
-      },
-    });
+  // If/then diagnostic block REPLACES the old topActions when synthesis is
+  // available. Without synthesis, fall back to topActions so we don't ship
+  // an empty action area.
+  if (synthesis?.if_then_diagnostic?.length) {
+    blocks.push(...ifThenDiagnosticBlocks(synthesis.if_then_diagnostic));
+  } else {
+    blocks.push(...topActionsBlocks(verdict.topActions));
   }
 
   const sfUrl = `${instanceUrl.replace(/\/+$/, "")}/${opportunity.id}`;
@@ -229,17 +416,8 @@ export function arbiterCard(args: ArbiterCardArgs): {
     ],
   });
 
-  if (verdict.firedTriggers.length > 0) {
-    blocks.push({
-      type: "context",
-      elements: [
-        {
-          type: "mrkdwn",
-          text: `Triggers: ${verdict.firedTriggers.join(", ")} · Route: ${verdict.routeReason || "default"}`,
-        },
-      ],
-    });
-  }
+  const mechanics = debateMechanicsContext(verdict);
+  if (mechanics) blocks.push(mechanics);
 
   return { blocks, text };
 }
