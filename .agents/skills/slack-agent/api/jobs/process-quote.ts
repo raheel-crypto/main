@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { runQuoteAgent } from "../../lib/agent.js";
 import { routeApproval } from "../../lib/approval.js";
+import { fmtMoney } from "../../lib/blocks.js";
 import { fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
 import { calculatePricing } from "../../lib/pricing.js";
 import { postApprovalRequest, postAuditLog } from "../../lib/revops.js";
@@ -109,6 +110,22 @@ async function processJob(job: ProcessQuoteJob): Promise<void> {
   // are clicked, so we always have one row per quote.
   await postAuditLog(request);
 
+  // Pod-leader-tier deals get one specific named manager mentioned in the
+  // channel post. Channel mentions are easy to miss (notifications off, deep
+  // scrollback, manager not actively watching #deal-desk), so DM them
+  // directly with a quote summary and a deep-link back to the thread where
+  // the Approve/Reject buttons live. Best-effort -- failures don't break the
+  // channel post, which is still the source of truth.
+  if (
+    routing.tier === "pod_leader" &&
+    request.slack_message &&
+    routing.allowed_approver_ids.length > 0
+  ) {
+    await notifyPodLeaderViaDM(request).catch((e) =>
+      console.error("pod leader DM failed:", e),
+    );
+  }
+
   if (requester.slack_user_id) {
     const verb = isAuto ? "auto-approved and posted" : "posted for approval";
     try {
@@ -159,4 +176,47 @@ async function processJob(job: ProcessQuoteJob): Promise<void> {
 function headerString(v: string | string[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0];
   return v;
+}
+
+/**
+ * DM each allowed pod-leader approver with a compact quote summary and a
+ * deep-link to the original #deal-desk post. We DM in parallel -- typically
+ * there's exactly one approver (the Opp Owner's Manager) but the routing
+ * model allows for more.
+ */
+async function notifyPodLeaderViaDM(request: ApprovalRequest): Promise<void> {
+  if (!request.slack_message) return;
+  const { channel, ts } = request.slack_message;
+  const threadUrl = `https://slack.com/archives/${channel}/p${ts.replace(".", "")}`;
+  const { context, pricing, form, requester, request_id, routing } = request;
+
+  const lines: string[] = [
+    `*Approval needed:* ${context.account.name} — ${context.opportunity.name}`,
+    `*Package:* ${form.package}    *Users:* ${form.users}`,
+    `*ARR:* ${fmtMoney(pricing.arr ?? pricing.total_amount)}` +
+      (pricing.tcv != null ? `    *TCV:* ${fmtMoney(pricing.tcv)}` : ""),
+  ];
+  if (pricing.discount_pct != null) {
+    lines.push(`*Discount:* ${(pricing.discount_pct * 100).toFixed(1)}%`);
+  }
+  lines.push(`*Submitted by:* <@${requester.slack_user_id}>`);
+  if (form.selected_terms && form.selected_terms.length > 0) {
+    lines.push(
+      `*Legal terms attached:* ` +
+        form.selected_terms.map((t) => t.title).join(", "),
+    );
+  }
+  lines.push(`*Reason for routing:* ${routing.reason}`);
+  lines.push(
+    `\n<${threadUrl}|Open the #deal-desk thread to approve or reject> — Request ID \`${request_id}\``,
+  );
+
+  const text = lines.join("\n");
+  await Promise.all(
+    routing.allowed_approver_ids.map((userId) =>
+      dmUser(userId, text).catch((e) =>
+        console.error(`pod leader DM to ${userId} failed:`, e),
+      ),
+    ),
+  );
 }

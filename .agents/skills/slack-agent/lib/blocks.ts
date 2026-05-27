@@ -333,7 +333,7 @@ function statusIcon(state: ApprovalState, routing: ApprovalRouting): string {
   return "⚠️";
 }
 
-function fmtMoney(n: number | null | undefined): string {
+export function fmtMoney(n: number | null | undefined): string {
   if (n == null) return "—";
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 }
