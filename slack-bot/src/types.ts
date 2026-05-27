@@ -993,6 +993,53 @@ export const ArbiterTeamScoringSchema = z.object({
   addressed_opponents_top_claim: z.boolean().default(false),
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Upgraded arbiter (v2.1) types — substantive contradiction + synthesis
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const ArbiterConcessionSchema = z.object({
+  conceding_team: z.enum(["red", "blue"]),
+  on_topic: z.string(),
+  summary: z.string(),
+  impact: z.string(),
+});
+
+export const ArbiterScenarioBranchSchema = z.object({
+  condition: z.string(),
+  new_probability: z.number().min(0).max(100),
+  new_lean: z.enum(["win", "loss", "uncertain"]),
+  rationale: z.string(),
+});
+
+export const ArbiterDiscriminatingVariableSchema = z.object({
+  variable: z.string(),
+  won_cohort_pct: z.number(),
+  lost_cohort_pct: z.number(),
+  this_deal_status: z.enum(["present", "absent", "ambiguous"]),
+  implication: z.string(),
+});
+
+export const ArbiterContradictionPairSchema = z.object({
+  red_claim_text: z.string(),
+  blue_claim_text: z.string(),
+  topic: z.string(),
+  unaddressed_by: z.enum(["red", "blue", "both"]),
+});
+
+export const ArbiterProbeFiredSchema = z.object({
+  probe_type: z.string(),
+  target_team: z.enum(["red", "blue"]),
+  question: z.string(),
+  addressed_topic: z.string(),
+});
+
+export const ArbiterSynthesisSchema = z.object({
+  resolved_contradictions: z.array(ArbiterConcessionSchema).default([]),
+  discriminating_variable: ArbiterDiscriminatingVariableSchema.nullable().optional(),
+  if_then_diagnostic: z.array(ArbiterScenarioBranchSchema).default([]),
+  narrative: z.string().default(""),
+});
+
 export const ArbiterVerdictSchema = z.object({
   evaluatedAt: z.string(),
   shadowMode: z.boolean().default(false),
@@ -1013,6 +1060,14 @@ export const ArbiterVerdictSchema = z.object({
   routeReason: z.string().default(""),
   cooldownUntilIso: z.string().nullable().optional(),
   dropReason: z.string().nullable().optional(),
+  // v2.1 — all optional for backward compat with pre-v2.1 deploys
+  probabilityRound1: z.number().nullable().optional(),
+  probabilityRound2: z.number().nullable().optional(),
+  disagreementRound1: z.number().nullable().optional(),
+  disagreementRound2: z.number().nullable().optional(),
+  contradictionsDetected: z.array(ArbiterContradictionPairSchema).default([]),
+  probesFired: z.array(ArbiterProbeFiredSchema).default([]),
+  synthesis: ArbiterSynthesisSchema.nullable().optional(),
 });
 
 export type ArbiterCitation = z.infer<typeof ArbiterCitationSchema>;
@@ -1020,4 +1075,10 @@ export type ArbiterClaim = z.infer<typeof ArbiterClaimSchema>;
 export type ArbiterRecommendedAction = z.infer<typeof ArbiterRecommendedActionSchema>;
 export type ArbiterTeamArgument = z.infer<typeof ArbiterTeamArgumentSchema>;
 export type ArbiterTeamScoring = z.infer<typeof ArbiterTeamScoringSchema>;
+export type ArbiterConcession = z.infer<typeof ArbiterConcessionSchema>;
+export type ArbiterScenarioBranch = z.infer<typeof ArbiterScenarioBranchSchema>;
+export type ArbiterDiscriminatingVariable = z.infer<typeof ArbiterDiscriminatingVariableSchema>;
+export type ArbiterContradictionPair = z.infer<typeof ArbiterContradictionPairSchema>;
+export type ArbiterProbeFired = z.infer<typeof ArbiterProbeFiredSchema>;
+export type ArbiterSynthesis = z.infer<typeof ArbiterSynthesisSchema>;
 export type ArbiterVerdict = z.infer<typeof ArbiterVerdictSchema>;

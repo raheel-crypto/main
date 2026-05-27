@@ -390,3 +390,78 @@ class ArbiterVerdict(_Wire):
     routeReason: str = ""
     cooldownUntilIso: Optional[str] = None
     dropReason: Optional[str] = None
+
+    # ─── Upgraded arbiter (v2.1) — all OPTIONAL for backward compat ─────────
+    # Populated when Round 2 fires; otherwise null/empty.
+    probabilityRound1: Optional[int] = None
+    probabilityRound2: Optional[int] = None
+    disagreementRound1: Optional[float] = None
+    disagreementRound2: Optional[float] = None
+    contradictionsDetected: List["ContradictionPair"] = Field(default_factory=list)
+    probesFired: List["ProbeFired"] = Field(default_factory=list)
+    synthesis: Optional["ArbiterSynthesis"] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Upgraded arbiter (v2.1) — substantive-contradiction detection + synthesis
+# Nested types stay snake_case to match the design-agent contract; the top-
+# level ArbiterVerdict fields are camelCase to match our existing wire shape.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class Concession(BaseModel):
+    """Something one side gave up in Round 2."""
+
+    conceding_team: Literal["red", "blue"]
+    on_topic: str  # short label: "comparable_cohort", "eb_authority", etc.
+    summary: str   # 1-2 sentences describing what was conceded
+    impact: str    # how this changes the analysis
+
+
+class ScenarioBranch(BaseModel):
+    """If/then diagnostic — what to look for in the next 7 days."""
+
+    condition: str
+    new_probability: int = Field(ge=0, le=100)
+    new_lean: Literal["win", "loss", "uncertain"]
+    rationale: str
+
+
+class DiscriminatingVariable(BaseModel):
+    """The single most predictive variable separating won and lost cohorts."""
+
+    variable: str
+    won_cohort_pct: int
+    lost_cohort_pct: int
+    this_deal_status: Literal["present", "absent", "ambiguous"]
+    implication: str
+
+
+class ContradictionPair(BaseModel):
+    """One pair of opposing claims that the Arbiter detected as unaddressed."""
+
+    red_claim_text: str
+    blue_claim_text: str
+    topic: str
+    unaddressed_by: Literal["red", "blue", "both"]
+
+
+class ProbeFired(BaseModel):
+    """Record of one Arbiter probe in Round 2."""
+
+    probe_type: str
+    target_team: Literal["red", "blue"]
+    question: str
+    addressed_topic: str
+
+
+class ArbiterSynthesis(BaseModel):
+    """Output of the post-debate synthesizer — extracts structured insight from the transcript."""
+
+    resolved_contradictions: List[Concession] = Field(default_factory=list)
+    discriminating_variable: Optional[DiscriminatingVariable] = None
+    if_then_diagnostic: List[ScenarioBranch] = Field(default_factory=list)
+    narrative: str = ""
+
+
+ArbiterVerdict.model_rebuild()
