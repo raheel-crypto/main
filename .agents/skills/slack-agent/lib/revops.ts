@@ -25,9 +25,6 @@ export async function postAuditLog(request: ApprovalRequest): Promise<void> {
   } catch (e) {
     console.error("Quote_Approval__c upsert failed:", e);
   }
-  // Child junction rows for term-level reporting. Runs only if terms are
-  // attached; failures inside are logged per-term and don't propagate.
-  await postTermAuditRows(request);
 }
 
 function toQuoteApprovalFields(r: ApprovalRequest): Record<string, unknown> {
@@ -61,45 +58,7 @@ function toQuoteApprovalFields(r: ApprovalRequest): Record<string, unknown> {
     Submitted_By_Name__c: r.requester.slack_user_name,
     Source__c: r.requester.source === "salesforce" ? "Salesforce" : "Slack",
     Slack_Message_Url__c: slackUrl,
-    Term_Codes_Summary__c: (r.form.selected_terms ?? [])
-      .map((t) => t.term_code)
-      .join(","),
   };
-}
-
-/**
- * Upsert one Quote_Approval_Term__c per attached legal term. Junction object
- * gives RevOps reports a clean pivot: GROUP BY Term_Code__c shows which terms
- * are getting attached most often, and to which deals.
- *
- * Best-effort -- failures here are logged but don't break the approval flow
- * (same pattern as the parent audit log).
- */
-export async function postTermAuditRows(request: ApprovalRequest): Promise<void> {
-  const terms = request.form.selected_terms ?? [];
-  if (terms.length === 0) return;
-
-  await Promise.all(
-    terms.map(async (t) => {
-      try {
-        await upsertByExternalId(
-          "Quote_Approval_Term__c",
-          "External_Id__c",
-          `${request.request_id}:${t.term_code}`,
-          {
-            Legal_Term__c: t.sfdc_id,
-            Term_Code__c: t.term_code,
-            Title_Snapshot__c: t.title,
-          },
-        );
-      } catch (e) {
-        console.error(
-          `Quote_Approval_Term__c upsert failed for ${request.request_id}:${t.term_code}:`,
-          e,
-        );
-      }
-    }),
-  );
 }
 
 /**

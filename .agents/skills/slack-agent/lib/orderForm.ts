@@ -5,58 +5,55 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import type { ApprovalRequest } from "./types.js";
 
-const MASTER_TEMPLATE = "order-form.docx";
-
 /**
- * Fallback chain for the 4-template era. Used only if the master template
- * doesn't exist on disk -- once `templates/order-form.docx` is shipped, the
- * legacy files can be deleted and these constants become dead code.
+ * Four templates: cross of {standard, enterprise} × {new business, existing
+ * customer}. Legal requires different language for new-business vs
+ * renewal/expansion deals, so the order form picks one per quote.
  */
-const LEGACY_TEMPLATE_FILES = {
+const TEMPLATE_FILES = {
   standardNew: "order-form-standard-new.docx",
   standardExisting: "order-form-standard-existing.docx",
   enterpriseNew: "order-form-enterprise-new.docx",
   enterpriseExisting: "order-form-enterprise-existing.docx",
 } as const;
 
-const templateCache: Record<string, Buffer> = {};
+const templateCache: Partial<Record<keyof typeof TEMPLATE_FILES, Buffer>> = {};
 
 /**
- * Resolve a template file by trying `process.cwd()/templates/` first, then
- * the path next to this module. On Vercel, esbuild bundles `lib/orderForm.ts`
- * into the calling function's output, so `import.meta.url`-relative paths can
- * drift from where the included template files actually land. `process.cwd()`
- * is the function's project root at runtime and is the more reliable anchor.
+ * Resolve a template file by trying both `process.cwd()` and the path next to
+ * this module. On Vercel, esbuild bundles `lib/orderForm.ts` into the calling
+ * function's output, so `import.meta.url`-relative paths can drift from where
+ * the included template files actually land. `process.cwd()` is the function's
+ * project root at runtime and is the more reliable anchor — but we keep both
+ * as fallbacks for local dev where the bundled path works.
  */
-async function loadTemplate(filename: string): Promise<Buffer | null> {
-  if (templateCache[filename]) return templateCache[filename];
+async function loadTemplate(kind: keyof typeof TEMPLATE_FILES): Promise<Buffer> {
+  if (templateCache[kind]) return templateCache[kind]!;
 
+  const filename = TEMPLATE_FILES[kind];
   const candidates = [
     join(process.cwd(), "templates", filename),
     join(dirname(fileURLToPath(import.meta.url)), "..", "templates", filename),
   ];
 
+  const errors: string[] = [];
   for (const path of candidates) {
     try {
       const buf = await readFile(path);
-      console.log(`[orderForm] loaded ${filename} from ${path} (${buf.length} bytes)`);
-      templateCache[filename] = buf;
+      console.log(`[orderForm] loaded ${kind} from ${path} (${buf.length} bytes)`);
+      templateCache[kind] = buf;
       return buf;
-    } catch {
-      // try next candidate
+    } catch (e) {
+      errors.push(`${path}: ${(e as Error).message}`);
     }
   }
-  return null;
+  throw new Error(`Could not load template ${filename}. Tried:\n${errors.join("\n")}`);
 }
 
-/**
- * Pick which legacy template applies for a given request — used only when the
- * master template isn't on disk yet. Once the master ships, this is dead code.
- */
-function pickLegacyTemplate(
+function pickTemplate(
   segment: string | null,
   type: string | null,
-): keyof typeof LEGACY_TEMPLATE_FILES {
+): keyof typeof TEMPLATE_FILES {
   const isEnterprise = segment?.trim().toLowerCase() === "enterprise";
   const isNewBusiness = type?.trim().toLowerCase() === "new business";
   if (isEnterprise) return isNewBusiness ? "enterpriseNew" : "enterpriseExisting";
@@ -64,43 +61,26 @@ function pickLegacyTemplate(
 }
 
 export function orderFormFilename(request: ApprovalRequest): string {
-  const safeAccount =
-    request.context.account.name.replace(/[^A-Za-z0-9_\- ]+/g, "").trim() || "Account";
+  const safeAccount = request.context.account.name.replace(/[^A-Za-z0-9_\- ]+/g, "").trim() || "Account";
   return `Rogo Order Form - ${safeAccount}.docx`;
 }
 
 /**
  * Generate the prefilled order form for an approved quote.
  *
- * Template tags are `{{Field Name}}` for values and `{{#flag}}…{{/flag}}` for
- * conditional sections / loops. The custom parser handles flat value lookups
- * (including keys with spaces and dots like `{{Account.Name}}`); docxtemplater
- * handles section/loop traversal natively.
- *
- * Prefers `templates/order-form.docx` (the master template with conditional
- * sections). Falls back to the 4-file segment×type set if the master isn't on
- * disk yet, so the transition can happen in a separate commit from the code
- * change without breaking production.
+ * Template tags are `{{Field Name}}` — including ones with spaces and dots
+ * (e.g. `{{Account.Name}}`, `{{Contract Length}}`). The custom parser treats
+ * each tag as a literal key into the data object so the SFDC-style names in
+ * the template map 1:1 to the keys below without needing nested objects.
  */
 export async function fillOrderForm(request: ApprovalRequest): Promise<Buffer> {
-  const master = await loadTemplate(MASTER_TEMPLATE);
-  const buf =
-    master ??
-    (await loadTemplate(
-      LEGACY_TEMPLATE_FILES[
-        pickLegacyTemplate(
-          request.context.account.segment,
-          request.context.opportunity.type,
-        )
-      ],
-    ));
-  if (!buf) {
-    throw new Error(
-      `Could not load any order form template (looked for ${MASTER_TEMPLATE} and the 4 legacy variants in templates/)`,
-    );
-  }
-
+  const kind = pickTemplate(
+    request.context.account.segment,
+    request.context.opportunity.type,
+  );
+  const buf = await loadTemplate(kind);
   const zip = new PizZip(buf);
+
   const doc = new Docxtemplater(zip, {
     delimiters: { start: "{{", end: "}}" },
     paragraphLoop: true,
@@ -115,72 +95,31 @@ export async function fillOrderForm(request: ApprovalRequest): Promise<Buffer> {
   return doc.getZip().generate({ type: "nodebuffer", compression: "DEFLATE" });
 }
 
-function buildData(request: ApprovalRequest): Record<string, unknown> {
+function buildData(request: ApprovalRequest): Record<string, string | number> {
   const { context, form, pricing } = request;
-  const isEnterprise = context.account.segment?.trim().toLowerCase() === "enterprise";
-  const isNewBusiness = context.opportunity.type?.trim().toLowerCase() === "new business";
-  // Sort here too -- fetchTermsByCodes already sorts at fetch time, but
-  // re-sorting makes render order resilient to snapshot reordering and to
-  // future callers that bypass the SOQL helper.
-  const terms = [...(form.selected_terms ?? [])].sort(
-    (a, b) => a.sort_order - b.sort_order,
-  );
-  const termScope = (t: (typeof terms)[number]) => ({
-    title: t.title,
-    body: t.body,
-    category: t.category,
-  });
-  const selectedTerms = terms.map(termScope);
-
   return {
-    // Boolean flags drive the master template's conditional sections.
-    // Both positive and negative variants are exposed so legal can write
-    // {{#isStandard}}...{{/isStandard}} instead of inverted sections.
-    isEnterprise,
-    isStandard: !isEnterprise,
-    isNewBusiness,
-    isExistingCustomer: !isNewBusiness,
-
-    // Catch-all loop -- renders every attached term in Sort_Order__c order.
-    // Use this when the template has one "Special Terms" block at the bottom.
-    selected_terms: selectedTerms,
-
-    // Per-category buckets -- let the template scatter terms across the
-    // doc by Category__c. Each bucket is a subset of selected_terms in the
-    // same Sort_Order__c order. Empty buckets render nothing. Categories
-    // match the Legal_Term__c.Category__c picklist values.
-    terms_payment: termsInCategory(terms, "Payment").map(termScope),
-    terms_renewal: termsInCategory(terms, "Renewal").map(termScope),
-    terms_liability: termsInCategory(terms, "Liability").map(termScope),
-    terms_ip: termsInCategory(terms, "IP").map(termScope),
-    terms_data: termsInCategory(terms, "Data").map(termScope),
-    terms_termination: termsInCategory(terms, "Termination").map(termScope),
-    terms_other: termsInCategory(terms, "Other").map(termScope),
-
-    // Existing flat-key data — unchanged. Templates can reference these
-    // unconditionally, or wrap them in {{#isEnterprise}} sections etc.
     "Account.Name": context.account.name,
     "Contract Length": formatContractLength(pricing.contract_months),
     "Contract Start Date": formatDateLong(form.contract_start_date),
+    // Standard template uses {{ARR}} (no hosting fee in non-Enterprise deals,
+    // so the order form just shows the ARR). Enterprise template uses
+    // {{Platform Fee}} broken out separately from the hosting fee line.
     "ARR": formatCurrency(pricing.arr ?? pricing.total_amount),
     "Platform Fee": formatCurrency(pricing.platform_fee_total),
+    // Enterprise templates also break out hosting fee + credits commit.
+    // Provide both casings so the templates can edit the case without code.
     "Hosting Fee": formatCurrency(form.hosting_fee),
     "hosting fee": formatCurrency(form.hosting_fee),
     "Credits Commit": formatCurrency(pricing.credits_commit_total),
     "credits commit": formatCurrency(pricing.credits_commit_total),
+    // Standard template uses "Price per user"; enterprise template uses
+    // lowercase "price per user". Provide both so either template renders.
     "Price per user": formatCurrency(form.price_per_user),
     "price per user": formatCurrency(form.price_per_user),
+    // Total Credits is a credit count, not a dollar amount.
     "Total Credits": formatCount(form.total_credits),
     "Users": form.users,
   };
-}
-
-function termsInCategory<T extends { category: string }>(
-  terms: ReadonlyArray<T>,
-  category: string,
-): T[] {
-  const target = category.trim().toLowerCase();
-  return terms.filter((t) => t.category.trim().toLowerCase() === target);
 }
 
 function formatCount(n: number): string {

@@ -208,21 +208,6 @@ export function buildApprovalBlocks(args: BuildArgs): unknown[] {
     },
   ];
 
-  if (form.selected_terms && form.selected_terms.length > 0) {
-    blocks.push({ type: "divider" });
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text:
-          "*Legal terms attached*\n" +
-          form.selected_terms
-            .map((t) => `• *${t.title}* _(${t.category})_`)
-            .join("\n"),
-      },
-    });
-  }
-
   if (form.notes.trim()) {
     blocks.push({ type: "divider" });
     blocks.push({

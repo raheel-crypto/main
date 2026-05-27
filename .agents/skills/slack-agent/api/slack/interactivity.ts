@@ -227,9 +227,6 @@ async function handleQuoteModalSubmit(payload: SlackInteractivityPayload, res: V
     contract_start_date: startDate,
     contract_end_date: endDate,
     notes,
-    // Slack modal doesn't surface a term picker in v1 -- LWC is the only
-    // path that can attach legal terms. Always [] here.
-    selected_terms: [],
   };
 
   const intakeId = view.private_metadata;

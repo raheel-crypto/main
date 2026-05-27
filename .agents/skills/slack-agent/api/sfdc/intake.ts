@@ -15,10 +15,6 @@ interface IntakePayload {
     contract_start_date?: string;
     contract_end_date?: string;
     notes?: string;
-    /** Stable Term_Code__c values for any pre-approved legal clauses the rep
-     *  selected in the LWC. Resolved into full SelectedTerm objects in the
-     *  processor. Omitted / empty = no terms. */
-    selected_term_codes?: string[];
   };
   requester: {
     slack_user_id: string;
@@ -62,13 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     contract_start_date: String(payload.form.contract_start_date ?? ""),
     contract_end_date: String(payload.form.contract_end_date ?? ""),
     notes: String(payload.form.notes ?? ""),
-    // Carry the term-code list as a hint for the processor; the actual
-    // SelectedTerm[] snapshot is hydrated there via fetchTermsByCodes.
-    selected_terms: [],
   };
-  const selectedTermCodes = Array.isArray(payload.form.selected_term_codes)
-    ? payload.form.selected_term_codes.filter((c): c is string => typeof c === "string" && c.length > 0)
-    : [];
   const requester: Requester = {
     source: "salesforce",
     slack_user_id: payload.requester.slack_user_id,
@@ -76,12 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     confirmation_channel: null,
   };
 
-  const job: ProcessQuoteJob = {
-    context,
-    form,
-    requester,
-    selected_term_codes: selectedTermCodes,
-  };
+  const job: ProcessQuoteJob = { context, form, requester };
 
   // Fire-and-forget the processor. Apex callout returns quickly so the
   // LWC can show a success toast while the agent + Slack post happen async.

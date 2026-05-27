@@ -6,7 +6,6 @@ import { fmtMoney } from "../../lib/blocks.js";
 import { fillOrderForm, orderFormFilename } from "../../lib/orderForm.js";
 import { calculatePricing } from "../../lib/pricing.js";
 import { postApprovalRequest, postAuditLog } from "../../lib/revops.js";
-import { fetchTermsByCodes } from "../../lib/sfdc-client.js";
 import { dmFileToUser, dmUser, uploadFileToThread } from "../../lib/slack.js";
 import { stashAt } from "../../lib/state.js";
 import type { AgentOutput, ApprovalRequest, ProcessQuoteJob } from "../../lib/types.js";
@@ -48,13 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 async function processJob(job: ProcessQuoteJob): Promise<void> {
-  const { context, requester } = job;
-  const form = job.form;
-
-  // Hydrate selected legal terms before pricing/routing so the snapshot
-  // freezes the term bodies at submit time. fetchTermsByCodes returns [] for
-  // missing codes (logged) and an empty array if no codes were sent.
-  form.selected_terms = await fetchTermsByCodes(job.selected_term_codes ?? []);
+  const { context, form, requester } = job;
 
   const pricing = calculatePricing(form);
   const routing = routeApproval(form, pricing, context);
@@ -200,12 +193,6 @@ async function notifyPodLeaderViaDM(request: ApprovalRequest): Promise<void> {
     lines.push(`*Discount:* ${(pricing.discount_pct * 100).toFixed(1)}%`);
   }
   lines.push(`*Submitted by:* <@${requester.slack_user_id}>`);
-  if (form.selected_terms && form.selected_terms.length > 0) {
-    lines.push(
-      `*Legal terms attached:* ` +
-        form.selected_terms.map((t) => t.title).join(", "),
-    );
-  }
   lines.push(`*Reason for routing:* ${routing.reason}`);
   lines.push(
     `\n<${threadUrl}|Open the #deal-desk thread to approve or reject> — Request ID \`${request_id}\``,
