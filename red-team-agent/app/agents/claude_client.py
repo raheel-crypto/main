@@ -49,5 +49,8 @@ async def call_agent(
         environment_env_name=env_prefix[1],
         vault_env_name=env_prefix[2],
     )
+    # Managed agents don't always include persona_id / deal_name in the
+    # submit_argument output; inject them so validation succeeds.
+    tool_input.setdefault("persona_id", persona_id)
     raw = AgentArgument.model_validate(tool_input)
     return TeamArgument.from_agent_argument(raw, team)

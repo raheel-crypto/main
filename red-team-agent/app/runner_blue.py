@@ -48,6 +48,12 @@ async def run_blue_team(
         environment_env_name="BLUE_TEAM_ENVIRONMENT_ID",
         vault_env_name="BLUE_TEAM_VAULT_IDS",
     )
+    # BlueHat Merlin's submit_argument schema doesn't always include
+    # persona_id / deal_name; inject them from call context so validation
+    # succeeds. We already know which persona we asked for and which
+    # account/opp the eval is on.
+    tool_input.setdefault("persona_id", persona_id)
+    tool_input.setdefault("deal_name", context.account_name)
     try:
         raw = AgentArgument.model_validate(tool_input)
     except Exception as exc:

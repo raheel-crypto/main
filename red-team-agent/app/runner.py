@@ -51,6 +51,8 @@ async def run_red_team_for_arbiter(
         user_message=user_message,
         tool_name="submit_argument",
     )
+    tool_input.setdefault("persona_id", persona_id)
+    tool_input.setdefault("deal_name", context.account_name)
     raw = AgentArgument.model_validate(tool_input)
     return TeamArgument.from_agent_argument(raw, "red")
 
@@ -76,6 +78,8 @@ async def run_red_team(
         user_message=user_message,
         tool_name="submit_argument",
     )
+    tool_input.setdefault("persona_id", persona_id)
+    tool_input.setdefault("deal_name", context.account_name)
     try:
         return AgentArgument.model_validate(tool_input)
     except Exception as exc:
