@@ -309,6 +309,21 @@ export async function fetchLastStageChangesForOpps(
   return out;
 }
 
+let _queryableOpportunityFieldsCache: Set<string> | null = null;
+
+async function getQueryableOpportunityFields(
+  conn: Connection
+): Promise<Set<string>> {
+  if (_queryableOpportunityFieldsCache) return _queryableOpportunityFieldsCache;
+  const meta: any = await conn.describe("Opportunity");
+  const set = new Set<string>();
+  for (const f of (meta?.fields ?? []) as Array<{ name: string }>) {
+    if (f?.name) set.add(f.name);
+  }
+  _queryableOpportunityFieldsCache = set;
+  return set;
+}
+
 const OPPORTUNITY_CORE_FIELDS = [
   "Id",
   "Name",
@@ -353,12 +368,22 @@ export async function fetchOpportunityWithCustomFields(
   opportunityId: string,
   customFieldApiNames: string[]
 ): Promise<OpportunityWithCustomFields | null> {
-  const fields = [
-    ...OPPORTUNITY_CORE_FIELDS,
-    ...customFieldApiNames.filter(
-      (f) => /^[A-Za-z0-9_]+$/.test(f) && !OPPORTUNITY_CORE_FIELDS.includes(f as any)
-    ),
-  ];
+  // Describe Opportunity once per cold start and filter the requested fields
+  // down to those that actually exist in this org. One bad field name in the
+  // SELECT would cause SF to reject the whole query with INVALID_FIELD —
+  // pre-filtering avoids dropping the whole custom-field set on one typo.
+  const queryable = await getQueryableOpportunityFields(conn);
+  const requested = customFieldApiNames.filter((f) =>
+    /^[A-Za-z0-9_]+$/.test(f) && !OPPORTUNITY_CORE_FIELDS.includes(f as any)
+  );
+  const known = requested.filter((f) => queryable.has(f));
+  const dropped = requested.filter((f) => !queryable.has(f));
+  if (dropped.length > 0) {
+    console.warn(
+      `[red-team] Opportunity is missing fields, skipping: ${dropped.join(", ")}`
+    );
+  }
+  const fields = [...OPPORTUNITY_CORE_FIELDS, ...known];
   const soql = `
     SELECT ${fields.join(", ")}
       FROM Opportunity
@@ -368,10 +393,13 @@ export async function fetchOpportunityWithCustomFields(
   try {
     result = await conn.query(soql);
   } catch (err: any) {
-    // Some orgs don't have all the requested custom fields. Retry with only
-    // the core set so the intel pack still assembles.
+    // Defensive fallback — should be unreachable after the describe filter,
+    // but keeps the intel pack assembling if describe metadata is stale.
     const message = String(err?.message ?? err);
     if (/INVALID_FIELD|No such column/i.test(message)) {
+      console.error(
+        `[red-team] custom field query failed after describe filter (${message}); falling back to core fields`
+      );
       const coreOnly = `
         SELECT ${OPPORTUNITY_CORE_FIELDS.join(", ")}
           FROM Opportunity
@@ -385,7 +413,7 @@ export async function fetchOpportunityWithCustomFields(
   const r = (result.records as any[])[0];
   if (!r) return null;
   const customFields: Record<string, unknown> = {};
-  for (const name of customFieldApiNames) {
+  for (const name of known) {
     if (Object.prototype.hasOwnProperty.call(r, name)) {
       customFields[name] = r[name];
     }

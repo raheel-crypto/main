@@ -239,27 +239,47 @@ async def run_one_shot_with_custom_tool(
         environment_env_name=environment_env_name,
         vault_env_name=vault_env_name,
     )
+    print(f"[agent_client] session={session_id} title={title!r}", flush=True)
     await send_user_message(session_id, user_message)
 
     tool_input: dict[str, Any] | None = None
     seen_idle = False
+    event_count = 0
 
     async for event in stream_events(session_id):
+        event_count += 1
         et = _event_type_of(event)
+        # Truncated preview helps diagnose shape mismatches without flooding
+        # logs.  For high-volume sessions, drop to print only certain events.
+        data_preview = json.dumps(event.get("data") or {})[:600]
+        print(
+            f"[agent_client] event#{event_count} type={et!r} data={data_preview}",
+            flush=True,
+        )
+
         if et == "agent.custom_tool_use":
             tool_use_id, tool_input_candidate = _extract_custom_tool_use(
                 event, tool_name
             )
             if tool_input_candidate is None:
-                # Different custom tool; ignore (let the agent continue).
+                print(
+                    f"[agent_client] custom_tool_use didn't match {tool_name!r}; "
+                    f"keys={list((event.get('data') or {}).keys())}",
+                    flush=True,
+                )
                 continue
             tool_input = tool_input_candidate
+            print(
+                f"[agent_client] captured {tool_name} input "
+                f"keys={list(tool_input.keys())} use_id={tool_use_id}",
+                flush=True,
+            )
             if tool_use_id:
                 await send_custom_tool_result(
                     session_id, tool_use_id, {"status": "received"}
                 )
+                print(f"[agent_client] acked {tool_name}", flush=True)
             else:
-                # Tool emitted but no id to ack — shouldn't happen; surface it.
                 print(
                     f"[agent_client] missing custom_tool_use_id in event: {event}",
                     flush=True,
@@ -270,6 +290,12 @@ async def run_one_shot_with_custom_tool(
         elif et == "session.error":
             data = event.get("data") or {}
             raise ManagedAgentError(f"session error: {data}")
+
+    print(
+        f"[agent_client] stream ended events={event_count} idle={seen_idle} "
+        f"tool_input_captured={tool_input is not None}",
+        flush=True,
+    )
 
     if tool_input is None:
         raise ManagedAgentError(

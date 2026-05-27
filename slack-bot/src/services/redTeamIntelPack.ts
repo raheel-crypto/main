@@ -122,15 +122,26 @@ async function discoverRecentGongCalls(
   opportunityId: string,
   limit: number
 ): Promise<string[]> {
-  // Look at the org's Task table for the Gong sync's `Gong__Gong_Call_Id__c`
-  // field on tasks linked to either the Account or the Opportunity — some orgs
-  // log calls against the opp instead of the account. Falls back to empty when
-  // the Gong package isn't installed.
+  // Gong's SF package logs calls as `Gong__Gong_Call__c` records linked to
+  // the Opportunity via `Gong__Primary_Opportunity__c`. The Gong call ID lives
+  // on either `Gong__Call_Id__c` (if the customer has the field) or the
+  // record's `Name` (the package's default).
+  //
+  // Falls back to Task-based discovery for orgs that don't have the Gong
+  // package installed but log call ids on Tasks via `Gong__Gong_Call_Id__c`.
+  const gongCustomObject = await tryGongCustomObject(
+    conn,
+    opportunityId,
+    accountId,
+    limit
+  );
+  if (gongCustomObject !== null) return gongCustomObject;
+
   const whatIds = [accountId, opportunityId]
     .filter(Boolean)
     .map((id) => `'${escapeSoql(id)}'`)
     .join(", ");
-  const soql = `
+  const fallbackSoql = `
     SELECT Gong__Gong_Call_Id__c, ActivityDate, CreatedDate
       FROM Task
      WHERE WhatId IN (${whatIds})
@@ -138,7 +149,7 @@ async function discoverRecentGongCalls(
      ORDER BY ActivityDate DESC NULLS LAST, CreatedDate DESC
      LIMIT ${limit * 2}`;
   try {
-    const result = await conn.query(soql);
+    const result = await conn.query(fallbackSoql);
     const ids: string[] = [];
     for (const r of result.records as any[]) {
       const id = r.Gong__Gong_Call_Id__c;
@@ -147,9 +158,44 @@ async function discoverRecentGongCalls(
     return ids.slice(0, limit);
   } catch (err: any) {
     const message = String(err?.message ?? err);
-    if (/INVALID_FIELD|No such column/i.test(message)) return [];
+    if (/INVALID_FIELD|No such column|sObject type/i.test(message)) return [];
     throw err;
   }
+}
+
+async function tryGongCustomObject(
+  conn: Connection,
+  opportunityId: string,
+  accountId: string,
+  limit: number
+): Promise<string[] | null> {
+  // Two attempts: prefer `Gong__Call_Id__c`, fall back to `Name`.
+  for (const idField of ["Gong__Call_Id__c", "Name"]) {
+    const soql = `
+      SELECT ${idField}, Gong__Call_Start__c
+        FROM Gong__Gong_Call__c
+       WHERE Gong__Primary_Opportunity__c = '${escapeSoql(opportunityId)}'
+       ORDER BY Gong__Call_Start__c DESC NULLS LAST
+       LIMIT ${limit}`;
+    try {
+      const result = await conn.query(soql);
+      const ids: string[] = [];
+      for (const r of result.records as any[]) {
+        const raw = r[idField];
+        if (typeof raw === "string" && raw && !ids.includes(raw)) ids.push(raw);
+      }
+      return ids;
+    } catch (err: any) {
+      const message = String(err?.message ?? err);
+      // The custom object doesn't exist in this org — fall through to the
+      // Task-based discovery. INVALID_FIELD means the object exists but this
+      // field name doesn't; try the next id-field candidate.
+      if (/sObject type 'Gong__Gong_Call__c'/i.test(message)) return null;
+      if (/INVALID_FIELD|No such column/i.test(message)) continue;
+      throw err;
+    }
+  }
+  return null;
 }
 
 async function assembleGongCalls(
