@@ -21,10 +21,10 @@ from typing import List, Tuple
 
 import yaml
 
-from .schemas import DealContext, FiredTrigger
+from ..schemas import DealContext, FiredTrigger
 
 
-_CONFIG_PATH = Path(__file__).parent.parent / "config" / "triggers.yaml"
+_CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "triggers.yaml"
 
 
 def select_personas(

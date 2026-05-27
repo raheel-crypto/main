@@ -236,9 +236,18 @@ class DealContext(BaseModel):
     recent_gong_calls: int = 0
     gong_competitor_mentions: List[GongMention] = Field(default_factory=list)
     gong_objection_mentions: List[GongMention] = Field(default_factory=list)
+    # Blue Team evidence bucket — same external-speaker segments as the
+    # competitor/objection lists; Blue's prompt narrows them via win-pattern
+    # keywords.
+    gong_positive_mentions: List[GongMention] = Field(default_factory=list)
     gong_recent_summary: Optional[str] = None
 
     sf_recent_field_changes: List[Dict[str, Any]] = Field(default_factory=list)
+
+    # Routing hints from the trigger evaluation. Populated by the arbiter
+    # entry point so `personas.routing.route_personas` can pick the right
+    # Red+Blue pair without re-running the rules engine.
+    fired_triggers: List[Dict[str, Any]] = Field(default_factory=list)
 
     last_inbound_email_date: Optional[datetime] = None
     last_outbound_email_date: Optional[datetime] = None
@@ -297,3 +306,87 @@ class AgentArgument(BaseModel):
 
 AgentArgument.model_rebuild()
 Claim.model_rebuild()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ARBITER TYPES — added for Phase 2 (Blue Team) + Phase 3 (Arbiter)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TeamArgument(BaseModel):
+    """
+    Arbiter-side view of an agent argument: `AgentArgument` plus the `team`
+    discriminator the scorer + multi_turn code reads. Built from the raw
+    managed-agent output via `from_agent_argument(arg, team)`.
+    """
+
+    team: Literal["red", "blue"]
+    persona_id: str
+    deal_name: str
+    headline: str
+    claims: List[Claim] = Field(default_factory=list)
+    recommended_actions: List[RecommendedAction] = Field(default_factory=list)
+
+    @classmethod
+    def from_agent_argument(
+        cls, arg: "AgentArgument", team: Literal["red", "blue"]
+    ) -> "TeamArgument":
+        return cls(team=team, **arg.model_dump())
+
+
+class ScoredClaim(BaseModel):
+    """One claim plus its 5-dimension evidence-quality breakdown."""
+
+    claim: Claim
+    specificity: int  # 0-3
+    recency: int  # 0-3
+    source_quality: int  # 0-3
+    counter_response: int  # 0-2 (filled in Round 2)
+    quality: int = 0  # sum, 0-13
+
+
+class TeamScoring(BaseModel):
+    team: Literal["red", "blue"]
+    total_score: float
+    avg_quality: float
+    n_claims: int
+    scored_claims: List[ScoredClaim] = Field(default_factory=list)
+    addressed_opponents_top_claim: bool = False
+
+
+class RouteResult(BaseModel):
+    red_persona_id: str
+    blue_persona_id: str
+    reason: str
+
+
+class ArbiterRequest(_Wire):
+    """Optional /arbiter override knobs. /arbiter still accepts the standard
+    IntelPackRequest as its primary input — this is the in-body toggle for
+    multi-turn behavior."""
+
+    enable_followup: bool = True
+
+
+class ArbiterVerdict(_Wire):
+    """Response body for `POST /arbiter`. Merlin's Zod parses this exactly."""
+
+    evaluatedAt: str
+    shadowMode: bool = False
+    opportunityId: str
+    probability: int = Field(ge=0, le=100)
+    confidence: Literal["High", "Medium", "Low"]
+    disagreement: float = Field(ge=0.0, le=1.0)
+    baseRate: float
+    meddpiccLift: float
+    redArgument: Optional[TeamArgument] = None
+    blueArgument: Optional[TeamArgument] = None
+    redScoring: Optional[TeamScoring] = None
+    blueScoring: Optional[TeamScoring] = None
+    topActions: List[str] = Field(default_factory=list)
+    explanation: str = ""
+    roundsCompleted: int = 1
+    firedTriggers: List[str] = Field(default_factory=list)
+    routeReason: str = ""
+    cooldownUntilIso: Optional[str] = None
+    dropReason: Optional[str] = None

@@ -70,7 +70,9 @@ def pack_to_context(pack: IntelPackRequest) -> DealContext:
         for dim, sf_name in MEDDPICC_EVIDENCE_FIELD_MAP.items()
     }
 
-    competitor_mentions, objection_mentions = _extract_gong_mentions(pack.gongCalls)
+    competitor_mentions, objection_mentions, positive_mentions = (
+        _extract_gong_mentions(pack.gongCalls)
+    )
     gong_recent_summary = pack.gongCalls[0].brief if pack.gongCalls else None
 
     sf_field_changes = [
@@ -117,6 +119,7 @@ def pack_to_context(pack: IntelPackRequest) -> DealContext:
         recent_gong_calls=len(pack.gongCalls),
         gong_competitor_mentions=competitor_mentions,
         gong_objection_mentions=objection_mentions,
+        gong_positive_mentions=positive_mentions,
         gong_recent_summary=gong_recent_summary,
         sf_recent_field_changes=sf_field_changes,
     )
@@ -124,13 +127,14 @@ def pack_to_context(pack: IntelPackRequest) -> DealContext:
 
 def _extract_gong_mentions(
     calls: List[GongCall],
-) -> tuple[List[GongMention], List[GongMention]]:
+) -> tuple[List[GongMention], List[GongMention], List[GongMention]]:
     """
     Promote external-affiliated transcript segments to GongMention objects so
     triggers.py's regex evaluation can iterate over them.
 
-    Returns the same list for both buckets — the regex patterns filter what
-    actually counts as a competitor mention vs objection mention.
+    Returns the same list in all three buckets (competitor / objection /
+    positive) — the regex / keyword patterns downstream narrow what actually
+    counts in each bucket.
     """
     mentions: List[GongMention] = []
     for call in calls:
@@ -154,8 +158,8 @@ def _extract_gong_mentions(
                     excerpt=seg.text.strip(),
                 )
             )
-    # Same list, both buckets. Trigger regex narrows them.
-    return (mentions, mentions)
+    # Same list, three buckets. Downstream patterns narrow each.
+    return (mentions, mentions, mentions)
 
 
 def _role_label(seg: TranscriptSegment) -> Optional[str]:
