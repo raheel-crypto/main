@@ -92,7 +92,9 @@ async def evaluate(
             dropReason="no_triggers_fired",
         )
 
-    selected, action, supporting = personas_mod.select_personas(context, fired)
+    selected, action, supporting = personas_mod.select_personas(
+        context, fired, manual=(pack.triggerEvent == "manual")
+    )
     if not selected:
         return RunResult(
             evaluatedAt=evaluated_at,
