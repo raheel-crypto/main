@@ -10,7 +10,11 @@ import { ensureUserRow } from "./ensureUser.js";
 import { channelMentionReply } from "./blocks.js";
 
 const BRIEF_PREFIX = /^\s*brief\b\s*/i;
+// Both `red team <opp>` and `arbiter <opp>` trigger the deal-evaluation
+// pipeline (Red Team + Blue Team + Arbiter). Two verbs because reps mix them
+// up — same underlying handler.
 const RED_TEAM_PREFIX = /^\s*red[\s-]?team\b\s*/i;
+const ARBITER_PREFIX = /^\s*arbiter\b\s*/i;
 // `sync <notion-url> to <opp>` — match only when a URL follows; the bare word
 // "sync" is too easy to type accidentally.
 const NOTION_SYNC_PREFIX = /^\s*sync\b\s+https?:\/\//i;
@@ -61,8 +65,11 @@ async function dispatch(
     await runNotionSync({ slackUserId, channelId, rawText: rest, slack });
     return;
   }
-  if (RED_TEAM_PREFIX.test(text)) {
-    const oppRef = text.replace(RED_TEAM_PREFIX, "").trim();
+  if (RED_TEAM_PREFIX.test(text) || ARBITER_PREFIX.test(text)) {
+    const oppRef = text
+      .replace(RED_TEAM_PREFIX, "")
+      .replace(ARBITER_PREFIX, "")
+      .trim();
     await runRedTeamFromDm({ slackUserId, channelId, oppRef, slack });
     return;
   }
