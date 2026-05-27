@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
+import { dmFileToUser, uploadFileToThread } from "./slack.js";
 import type { ApprovalRequest } from "./types.js";
 
 /**
@@ -154,4 +155,46 @@ function formatCurrency(n: number): string {
     currency: "USD",
     maximumFractionDigits: 2,
   });
+}
+
+/**
+ * Generate the order form and DM it to the rep, then mirror it into the
+ * approval thread so RevOps can see exactly what went out. Used by both the
+ * regular button-click approval flow (interactivity.ts) and the admin
+ * `/quote-override` slash command, so the doc gets generated regardless of
+ * which path approved the quote. Best-effort -- failures are logged but
+ * don't throw, since the approval is already recorded.
+ */
+export async function deliverOrderForm(request: ApprovalRequest): Promise<void> {
+  const repId = request.requester.slack_user_id;
+  if (!repId) return;
+  try {
+    const file = await fillOrderForm(request);
+    const filename = orderFormFilename(request);
+    await dmFileToUser({
+      userId: repId,
+      file,
+      filename,
+      initialComment:
+        `Your order form for *${request.context.account.name}* ` +
+        `(${request.context.opportunity.name}) is approved and ready for signature. ` +
+        `Request ID: \`${request.request_id}\``,
+    });
+
+    if (request.slack_message) {
+      try {
+        await uploadFileToThread({
+          channel: request.slack_message.channel,
+          thread_ts: request.slack_message.ts,
+          file,
+          filename,
+          initialComment: "Order form generated and sent to the rep.",
+        });
+      } catch (e) {
+        console.error("order form thread mirror failed:", e);
+      }
+    }
+  } catch (e) {
+    console.error("order form delivery failed:", e);
+  }
 }

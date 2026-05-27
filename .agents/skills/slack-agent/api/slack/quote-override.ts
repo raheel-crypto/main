@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { deliverOrderForm } from "../../lib/orderForm.js";
 import { postDecisionUpdate } from "../../lib/revops.js";
 import { verifySlackSignature } from "../../lib/slack.js";
 import { retrieve, stashAt } from "../../lib/state.js";
@@ -54,10 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Do the work synchronously — Vercel Fluid Compute would kill us if we
-  // responded first. The work is 2 Slack API calls + Chatter post, fits
-  // well under Slack's 3-second slash command timeout.
+  // responded first. Approval path also generates and DMs the order form,
+  // same as the button-click flow in interactivity.ts.
   try {
-    request.state = action.toLowerCase() === "approve" ? "approved" : "rejected";
+    const approved = action.toLowerCase() === "approve";
+    request.state = approved ? "approved" : "rejected";
     request.decided_at = new Date().toISOString();
     request.decided_by_slack_user_id = userId;
     request.decided_by_name = `${userName} (override)`;
@@ -65,9 +67,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await stashAt(`approval:${requestId}`, request, 60 * 60 * 24 * 30);
     await postDecisionUpdate(request);
 
+    if (approved) {
+      // Same path the button-click approval uses -- order form gets DM'd to
+      // the rep and mirrored into the approval thread. Best-effort: errors
+      // here are logged inside deliverOrderForm but don't fail the override.
+      await deliverOrderForm(request);
+    }
+
+    const docNote = approved ? " Order form DM'd to the rep." : "";
     return res.status(200).json({
       response_type: "ephemeral",
-      text: `:white_check_mark: Force-${action.toLowerCase()} applied to \`${requestId}\`. #deal-desk post updated.`,
+      text: `:white_check_mark: Force-${action.toLowerCase()} applied to \`${requestId}\`. #deal-desk post updated.${docNote}`,
     });
   } catch (e) {
     console.error("quote-override failed:", e);
