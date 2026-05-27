@@ -11,7 +11,7 @@ export const BUY_SIGNAL_DEDUP_DAYS = 7;
 export const BUY_SIGNAL_MAX_CARDS_PER_RUN = 5;
 export const BUY_SIGNAL_SUBJECT_PATTERN = "%[Apollo]%Connected - Positive%";
 
-export const RED_TEAM_HTTP_TIMEOUT_MS = 90_000;
+export const RED_TEAM_HTTP_TIMEOUT_MS = 280_000;
 export const RED_TEAM_FIELD_HISTORY_LOOKBACK_DAYS = 30;
 export const RED_TEAM_GONG_CALL_LIMIT = 5;
 export const RED_TEAM_ACTIVITY_LIMIT = 25;
