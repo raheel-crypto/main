@@ -17,8 +17,42 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .agent_client import ManagedAgentError, run_one_shot_with_custom_tool
-from .schemas import AgentArgument, DealContext, FiredTrigger
+from .prompt_assembly.red_prompt import build_red_user_message
+from .schemas import AgentArgument, DealContext, FiredTrigger, TeamArgument
 from . import intel_pack
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Arbiter-side wrapper (uses prompt_assembly so Red + Blue stay symmetric)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def run_red_team_for_arbiter(
+    context: DealContext,
+    persona_id: str,
+    supporting_triggers: List[FiredTrigger],
+) -> Optional[TeamArgument]:
+    """Same as run_red_team below but builds the user message via the shared
+    prompt_assembly module (the one Blue also uses) and returns a TeamArgument
+    so the scorer can consume it directly."""
+    title = f"RedHat Merlin — {context.account_name} ({persona_id})"
+    fired = [
+        {
+            "trigger_id": t.trigger_id,
+            "weight": t.weight,
+            "evidence": t.evidence,
+            "target_persona": t.target_persona,
+        }
+        for t in supporting_triggers
+    ]
+    user_message = build_red_user_message(context, persona_id, fired)
+    tool_input = await run_one_shot_with_custom_tool(
+        title=title,
+        user_message=user_message,
+        tool_name="submit_argument",
+    )
+    raw = AgentArgument.model_validate(tool_input)
+    return TeamArgument.from_agent_argument(raw, "red")
 
 
 _PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
