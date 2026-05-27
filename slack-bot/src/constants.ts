@@ -27,6 +27,7 @@ export const RED_TEAM_DEFAULT_OPP_FIELDS = [
   "Decision_Process__c",
   "Paper_Process__c",
   "Pain__c",
+  "Implicate_Pain_Evidence__c",
   "Competition__c",
   "Metrics__c",
   // MEDDPICC scores — triggers.yaml field_threshold rules key off these

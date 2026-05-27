@@ -183,26 +183,32 @@ async def stream_events(session_id: str) -> AsyncIterator[dict[str, Any]]:
 
 
 def _event_type_of(event_envelope: dict[str, Any]) -> str:
-    """SSE servers vary in whether they emit `event: foo` or only `data: {type: foo}`."""
-    et = event_envelope.get("event")
-    if et:
-        return et
+    """
+    Anthropic's managed-agent SSE emits every line as `event: message` and puts
+    the actual event-type discriminator inside `data.type`. Prefer the data
+    type; fall back to the SSE event name only if data has no type.
+    """
     data = event_envelope.get("data") or {}
-    return data.get("type") or ""
+    type_in_data = data.get("type")
+    if type_in_data:
+        return type_in_data
+    return event_envelope.get("event") or ""
 
 
 def _extract_custom_tool_use(
     event_envelope: dict[str, Any], tool_name: str
 ) -> tuple[str | None, dict[str, Any] | None]:
     """
-    Pull the (custom_tool_use_id, input) for the named tool from a custom_tool_use
-    event. Tolerant of minor shape variations; logs the raw envelope for
-    debugging when nothing matches.
+    Pull the (custom_tool_use_id, input) from a custom_tool_use event.
+
+    Anthropic's managed-agent payload doesn't include a `tool_name` field on
+    the event itself — the tool is identified at the session level. We accept
+    any custom_tool_use event and trust that our agent only has one custom
+    tool registered (the caller filters by name if multiple tools exist).
+    `tool_name` is retained for the parameter signature; we still surface
+    keys on mismatch when needed.
     """
     data = event_envelope.get("data") or {}
-    name = data.get("tool_name") or data.get("name")
-    if name != tool_name:
-        return (None, None)
     tool_use_id = (
         data.get("custom_tool_use_id")
         or data.get("id")
@@ -212,8 +218,14 @@ def _extract_custom_tool_use(
         data.get("input")
         or data.get("arguments")
         or data.get("payload")
-        or {}
     )
+    if tool_input is None:
+        # No input payload present — surface the keys for debugging.
+        return (None, None)
+    name_field = data.get("tool_name") or data.get("name")
+    if name_field and name_field != tool_name:
+        # Different named tool — skip; let the agent continue.
+        return (None, None)
     return (tool_use_id, tool_input)
 
 

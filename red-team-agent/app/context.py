@@ -48,7 +48,7 @@ MEDDPICC_EVIDENCE_FIELD_MAP: Dict[str, str] = {
     "decision_criteria": "Decision_Criteria__c",
     "decision_process": "Decision_Process__c",
     "paper_process": "Paper_Process__c",
-    "pain": "Pain__c",
+    "pain": "Implicate_Pain_Evidence__c",
     "metrics": "Metrics__c",
     "competition": "Competition__c",
 }

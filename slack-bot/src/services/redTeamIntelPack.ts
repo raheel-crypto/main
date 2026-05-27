@@ -169,12 +169,18 @@ async function tryGongCustomObject(
   accountId: string,
   limit: number
 ): Promise<string[] | null> {
-  // Two attempts: prefer `Gong__Call_Id__c`, fall back to `Name`.
+  // Gong only auto-links calls to the Account; the Opportunity link
+  // (Gong__Primary_Opportunity__c) is often left blank because that field is
+  // populated manually by the rep. So we widen the filter to either link.
+  // Two id-field attempts: prefer `Gong__Call_Id__c`, fall back to `Name`.
+  const whereClause =
+    `(Gong__Primary_Opportunity__c = '${escapeSoql(opportunityId)}' ` +
+    `OR Gong__Primary_Account__c = '${escapeSoql(accountId)}')`;
   for (const idField of ["Gong__Call_Id__c", "Name"]) {
     const soql = `
       SELECT ${idField}, Gong__Call_Start__c
         FROM Gong__Gong_Call__c
-       WHERE Gong__Primary_Opportunity__c = '${escapeSoql(opportunityId)}'
+       WHERE ${whereClause}
        ORDER BY Gong__Call_Start__c DESC NULLS LAST
        LIMIT ${limit}`;
     try {
@@ -187,9 +193,6 @@ async function tryGongCustomObject(
       return ids;
     } catch (err: any) {
       const message = String(err?.message ?? err);
-      // The custom object doesn't exist in this org — fall through to the
-      // Task-based discovery. INVALID_FIELD means the object exists but this
-      // field name doesn't; try the next id-field candidate.
       if (/sObject type 'Gong__Gong_Call__c'/i.test(message)) return null;
       if (/INVALID_FIELD|No such column/i.test(message)) continue;
       throw err;
