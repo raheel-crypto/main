@@ -68,7 +68,10 @@ export interface RedTeamCardArgs {
 function personaSection(arg: RedTeamPersonaArgument): KnownBlock[] {
   const blocks: KnownBlock[] = [];
   const header = `*${personaLabel(arg.persona)}* — ${riskBadge(arg.riskScore)}`;
-  const claim = `_${truncate(arg.headline, 140)}_\n${truncate(arg.claim, 600)}`;
+  // Slack section mrkdwn cap is 3000 chars. Leave headroom for the header
+  // + italic-marker formatting, then give the claim body as much room as
+  // possible. 600 was leaving 80%+ of the available space empty.
+  const claim = `_${truncate(arg.headline, 140)}_\n${truncate(arg.claim, 2700)}`;
   blocks.push({
     type: "section",
     text: { type: "mrkdwn", text: `${header}\n${claim}` },
