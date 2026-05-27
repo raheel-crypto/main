@@ -14,6 +14,7 @@ import { getConnectionForUser } from "./salesforceClient.js";
 import {
   escapeSoql,
   fetchActivities,
+  fetchEarliestStageEntry,
   fetchOpportunityFieldHistory,
   fetchOpportunityWithCustomFields,
   type OpportunityFieldHistoryRow,
@@ -347,6 +348,20 @@ export async function buildIntelPack(
     gongCallIds = gongCallIds.slice(0, RED_TEAM_GONG_CALL_LIMIT);
   }
   const gongCalls = await assembleGongCalls(gongCallIds);
+
+  // "Age in days" the agent reads is days since the opp first entered
+  // Stage 2 — i.e., how long the deal has been actively worked past
+  // discovery. Stuff it on customFields so the Python side picks it up
+  // without a schema change. Uses LIKE '2%' to tolerate stage labels
+  // like "2 - Discovery", "Stage 2 - Qualified", etc.
+  const stage2EnteredAt = await fetchEarliestStageEntry(
+    conn,
+    opportunity.id,
+    "2"
+  );
+  if (stage2EnteredAt) {
+    opportunity.customFields["Stage2EnteredAt"] = stage2EnteredAt;
+  }
 
   console.log(
     `[red-team] intel pack assembled for ${opportunity.id}: ` +

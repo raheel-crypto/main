@@ -83,7 +83,14 @@ def pack_to_context(pack: IntelPackRequest) -> DealContext:
         for fc in pack.recentFieldChanges
     ]
 
-    age_in_days = _days_since(cf.get("CreatedDate"))
+    # Age = days since the opp first entered Stage 2 (post-discovery).
+    # Falls back to CreatedDate if the slack-bot couldn't find a Stage 2
+    # entry — e.g., for an opp that went straight from Stage 1 to a
+    # closed state, or for orgs whose stage names don't follow the
+    # "2 - ..." prefix convention.
+    age_in_days = _days_since(cf.get("Stage2EnteredAt")) or _days_since(
+        cf.get("CreatedDate")
+    )
     last_dm_touch_days = _days_since(cf.get("Last_Touch_With_Decision_Maker__c"))
 
     return DealContext(

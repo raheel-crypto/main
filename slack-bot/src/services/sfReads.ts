@@ -290,6 +290,36 @@ export async function fetchOpportunityStagePicklist(
   }
 }
 
+export async function fetchEarliestStageEntry(
+  conn: Connection,
+  opportunityId: string,
+  stagePrefix: string
+): Promise<string | null> {
+  // OpportunityHistory logs a row each time the opp is modified, with the
+  // StageName at that moment. The earliest row where StageName starts with
+  // `stagePrefix` is when the opp first entered that stage.
+  // Soql LIKE matching escapes %; we pass the prefix literally so callers
+  // control the wildcard placement.
+  const soql = `
+    SELECT CreatedDate, StageName
+      FROM OpportunityHistory
+     WHERE OpportunityId = '${escapeSoql(opportunityId)}'
+       AND StageName LIKE '${escapeSoql(stagePrefix)}%'
+     ORDER BY CreatedDate ASC
+     LIMIT 1`;
+  try {
+    const result = await conn.query(soql);
+    const row = (result.records as any[])[0];
+    return row?.CreatedDate ?? null;
+  } catch (err: any) {
+    console.warn(
+      `[red-team] fetchEarliestStageEntry(${opportunityId}, ${stagePrefix}) failed:`,
+      err?.message ?? err
+    );
+    return null;
+  }
+}
+
 export async function fetchLastStageChangesForOpps(
   conn: Connection,
   oppIds: string[]
