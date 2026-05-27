@@ -17,6 +17,10 @@ export const RED_TEAM_HTTP_TIMEOUT_MS = 280_000;
 // and how many to include in the agent's messages list.
 export const QA_CONVERSATION_WINDOW_MINUTES = 30;
 export const QA_CONVERSATION_MAX_TURNS = 12;
+
+// Notion sync: hard cap on the body text fed into the recommender. Notion
+// pages can be huge; truncating keeps the prompt size bounded.
+export const NOTION_MAX_CHARS = 60_000;
 export const RED_TEAM_FIELD_HISTORY_LOOKBACK_DAYS = 30;
 export const RED_TEAM_GONG_CALL_LIMIT = 5;
 export const RED_TEAM_ACTIVITY_LIMIT = 25;

@@ -58,6 +58,12 @@ export const config = {
   anthropic: {
     apiKey: optional("ANTHROPIC_API_KEY"),
   },
+  notion: {
+    // Org-wide internal-integration token (starts with `secret_`). Pages must
+    // be shared with this integration in Notion before the API will return
+    // their content.
+    token: optional("NOTION_TOKEN"),
+  },
   postgres: {
     url:
       process.env.POSTGRES_URL ||

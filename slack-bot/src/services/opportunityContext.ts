@@ -14,7 +14,7 @@ import {
   fetchLastStageChangesForOpps,
 } from "./sfReads.js";
 
-async function getStagePicklist(conn: Connection): Promise<string[]> {
+export async function getStagePicklist(conn: Connection): Promise<string[]> {
   try {
     const desc = await conn.describe("Opportunity");
     const stageField = desc.fields.find((f) => f.name === "StageName");
@@ -130,6 +130,57 @@ export async function buildContext(
     opps: oppsWithContext,
     totalCalls: callsResult.length,
     totalActivities,
+  };
+}
+
+/**
+ * Build an OppContext for a single Opportunity by id. Skips Gong-call and
+ * usage fetches — callers that want those should still go through
+ * `buildContext`. Designed for on-demand flows (notion sync, channel sync,
+ * @merlin brief) where the document/transcript is the recommender's input,
+ * not Gong/Usage.
+ */
+export async function buildContextForSingleOpp(
+  conn: Connection,
+  opportunityId: string
+): Promise<OppContext | null> {
+  const soql = `
+    SELECT Id, Name, AccountId, Account.Name, StageName, Amount, CloseDate,
+           NextStep, OwnerId
+      FROM Opportunity
+     WHERE Id = '${escape(opportunityId)}'
+     LIMIT 1`;
+  const result = await conn.query(soql);
+  const r = (result.records as any[])[0];
+  if (!r) return null;
+  const opp: SfOpportunity = {
+    id: r.Id,
+    name: r.Name,
+    accountId: r.AccountId,
+    accountName: r.Account?.Name ?? "",
+    stageName: r.StageName,
+    amount: r.Amount ?? null,
+    closeDate: r.CloseDate,
+    nextStep: r.NextStep ?? null,
+    ownerId: r.OwnerId,
+    lastStageChangeDate: null,
+  };
+  const [stageChanges, stagePicklist, activitiesByOpp] = await Promise.all([
+    fetchLastStageChangesForOpps(conn, [opp.id]),
+    getStagePicklist(conn),
+    fetchActivities(
+      conn,
+      [opp.id],
+      DateTime.utc().minus({ days: 90 }).toISO()!
+    ),
+  ]);
+  opp.lastStageChangeDate = stageChanges.get(opp.id) ?? null;
+  return {
+    opp,
+    activities: activitiesByOpp.get(opp.id) ?? [],
+    calls: [],
+    usage: [],
+    picklistOptions: { stage: stagePicklist },
   };
 }
 

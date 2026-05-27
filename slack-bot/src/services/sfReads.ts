@@ -103,6 +103,68 @@ export interface AccountOpportunity {
   ownerId: string;
 }
 
+export interface OppNameMatch {
+  id: string;
+  name: string;
+  accountId: string;
+  accountName: string;
+  stage: string;
+  amount: number | null;
+  closeDate: string | null;
+  isClosed: boolean;
+  ownerId: string;
+  ownerName: string | null;
+}
+
+/**
+ * Fuzzy-name lookup for an Opportunity. Prefers opps owned by `ownerSfUserId`
+ * when provided, then opens up to org-wide. Caller decides how to handle
+ * multiple results (disambiguation card vs friendly error).
+ */
+export async function findOpportunitiesByName(
+  conn: Connection,
+  query: string,
+  ownerSfUserId?: string,
+  limit = 6
+): Promise<OppNameMatch[]> {
+  const owned = ownerSfUserId
+    ? await runOppNameQuery(conn, query, ownerSfUserId, limit)
+    : [];
+  if (owned.length > 0) return owned;
+  return runOppNameQuery(conn, query, undefined, limit);
+}
+
+async function runOppNameQuery(
+  conn: Connection,
+  query: string,
+  ownerSfUserId: string | undefined,
+  limit: number
+): Promise<OppNameMatch[]> {
+  const ownerClause = ownerSfUserId
+    ? `AND OwnerId = '${escapeSoql(ownerSfUserId)}'`
+    : "";
+  const q = `
+    SELECT Id, Name, AccountId, Account.Name, StageName, Amount, CloseDate,
+           IsClosed, OwnerId, Owner.Name
+      FROM Opportunity
+     WHERE Name LIKE '%${escapeSoql(query)}%' ${ownerClause}
+     ORDER BY IsClosed ASC, CloseDate ASC NULLS LAST
+     LIMIT ${limit}`;
+  const result = await conn.query(q);
+  return (result.records as any[]).map((r) => ({
+    id: r.Id,
+    name: r.Name,
+    accountId: r.AccountId,
+    accountName: r.Account?.Name ?? "",
+    stage: r.StageName,
+    amount: r.Amount ?? null,
+    closeDate: r.CloseDate ?? null,
+    isClosed: !!r.IsClosed,
+    ownerId: r.OwnerId,
+    ownerName: r.Owner?.Name ?? null,
+  }));
+}
+
 export async function fetchOpportunitiesForAccount(
   conn: Connection,
   accountId: string,

@@ -3,6 +3,7 @@ import { WebClient } from "@slack/web-api";
 import { waitUntil } from "@vercel/functions";
 import { config } from "../config.js";
 import { runBriefForUser } from "../services/brief.js";
+import { runNotionSync } from "../services/notionSync.js";
 import { runQaForUser } from "../services/qa.js";
 import { runRedTeamFromDm } from "../services/redTeamDm.js";
 import { ensureUserRow } from "./ensureUser.js";
@@ -10,6 +11,9 @@ import { channelMentionReply } from "./blocks.js";
 
 const BRIEF_PREFIX = /^\s*brief\b\s*/i;
 const RED_TEAM_PREFIX = /^\s*red[\s-]?team\b\s*/i;
+// `sync <notion-url> to <opp>` — match only when a URL follows; the bare word
+// "sync" is too easy to type accidentally.
+const NOTION_SYNC_PREFIX = /^\s*sync\b\s+https?:\/\//i;
 const MENTION_TAG = /<@[A-Z0-9]+>/g;
 
 export function registerMentions(app: App): void {
@@ -52,6 +56,11 @@ async function dispatch(
   channelId: string,
   text: string
 ): Promise<void> {
+  if (NOTION_SYNC_PREFIX.test(text)) {
+    const rest = text.replace(/^\s*sync\b\s*/i, "").trim();
+    await runNotionSync({ slackUserId, channelId, rawText: rest, slack });
+    return;
+  }
   if (RED_TEAM_PREFIX.test(text)) {
     const oppRef = text.replace(RED_TEAM_PREFIX, "").trim();
     await runRedTeamFromDm({ slackUserId, channelId, oppRef, slack });
