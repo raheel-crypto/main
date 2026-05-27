@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { isAuthorizedApprover } from "../../lib/approval.js";
+import { getAuthorization } from "../../lib/approval.js";
 import {
   MARK_CLOSED_WON_ACTION_ID,
   buildMarkClosedWonErrorBlocks,
@@ -275,12 +275,13 @@ async function handleApproveReject(
     return res.status(200).send("");
   }
 
-  if (!isAuthorizedApprover(request.routing, userId)) {
+  const auth = getAuthorization(request.routing, userId);
+  if (!auth.authorized) {
     const names = request.routing.allowed_approver_ids.map((id) => `<@${id}>`).join(" or ");
     if (payload.response_url) {
       await updateViaResponseUrl(payload.response_url, {
         response_type: "ephemeral",
-        text: `Only ${names || "the assigned approver"} can act on this request.`,
+        text: `Only ${names || "the assigned approver"} or a RevOps approver can act on this request.`,
         replace_original: false,
       });
     }
@@ -290,7 +291,12 @@ async function handleApproveReject(
   request.state = action.action_id === APPROVE_ACTION_ID ? "approved" : "rejected";
   request.decided_at = new Date().toISOString();
   request.decided_by_slack_user_id = userId;
-  request.decided_by_name = payload.user?.username ?? payload.user?.name ?? userId;
+  const decidedByName = payload.user?.username ?? payload.user?.name ?? userId;
+  // Suffix when RevOps acted on a deal that wasn't routed to them -- same
+  // convention as the /quote-override slash command, so the audit trail
+  // ("Alice (override)") reads identically regardless of how the override
+  // was applied.
+  request.decided_by_name = auth.isOverride ? `${decidedByName} (override)` : decidedByName;
 
   await stashAt(`approval:${requestId}`, request, 60 * 60 * 24 * 30);
   await postDecisionUpdate(request);

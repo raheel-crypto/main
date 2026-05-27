@@ -86,7 +86,37 @@ export function isAuthorizedApprover(
   routing: ApprovalRouting,
   slackUserId: string,
 ): boolean {
-  return routing.allowed_approver_ids.includes(slackUserId);
+  return getAuthorization(routing, slackUserId).authorized;
+}
+
+/**
+ * Authorization check with override-awareness. A RevOps approver
+ * (DEAL_DESK_APPROVER_IDS) can act on ANY pending quote -- even one routed
+ * to a Pod Leader or James -- as a button-click override, so RevOps can
+ * unblock deals without needing to use the /quote-override slash command.
+ *
+ * `isOverride` is true when the user wasn't in `allowed_approver_ids` for
+ * this routing but qualified via the RevOps fallback. The caller uses that
+ * to suffix the decided-by name with "(override)" so the audit trail is
+ * clear: "alice (override)" approved a deal that was routed to "@VP Sales".
+ *
+ * Order of precedence: explicit allowed_approver_ids first. If the user is
+ * BOTH the assigned approver AND a RevOps member (e.g. a deal-desk-tier
+ * deal where any RevOps user is the primary approver), they're treated as
+ * the primary approver, NOT an override.
+ */
+export function getAuthorization(
+  routing: ApprovalRouting,
+  slackUserId: string,
+): { authorized: boolean; isOverride: boolean } {
+  if (routing.allowed_approver_ids.includes(slackUserId)) {
+    return { authorized: true, isOverride: false };
+  }
+  const revops = parseCsvEnv(process.env.DEAL_DESK_APPROVER_IDS);
+  if (revops.includes(slackUserId)) {
+    return { authorized: true, isOverride: true };
+  }
+  return { authorized: false, isOverride: false };
 }
 
 function parseCsvEnv(v: string | undefined): string[] {
