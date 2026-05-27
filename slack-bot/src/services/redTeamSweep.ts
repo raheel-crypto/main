@@ -7,9 +7,9 @@ import {
   getUser,
 } from "../db/queries.js";
 import pLimit from "../util/pLimit.js";
+import { runDealEvaluation } from "./dealEvaluationHandler.js";
 import {
   isUserEligible,
-  runRedTeamEval,
   stageInAllowlist,
 } from "./redTeamHandler.js";
 import {
@@ -159,7 +159,7 @@ export async function runRedTeamSweepForUser(
     opps.map((o) =>
       limit(async () => {
         if (!stageInAllowlist(o.stageName)) return;
-        const r = await runRedTeamEval({
+        const r = await runDealEvaluation({
           slackUserId,
           opportunityId: o.id,
           triggerEvent: "daily_sweep",

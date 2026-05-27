@@ -31,6 +31,7 @@ import { recommendBuySignal } from "../src/services/buySignalRecommender.js";
 import { buildIntelPack } from "../src/services/redTeamIntelPack.js";
 import { runRedTeamEval } from "../src/services/redTeamHandler.js";
 import { runRedTeamSweepForUser } from "../src/services/redTeamSweep.js";
+import { runDealEvaluation } from "../src/services/dealEvaluationHandler.js";
 
 async function main() {
   const [_, __, kind, ...rest] = process.argv;
@@ -370,8 +371,23 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
+  if (kind === "arbiter") {
+    const slackUserId = rest[0];
+    const opportunityId = rest[1];
+    if (!slackUserId || !opportunityId) {
+      console.error("usage: probe arbiter <slack_user_id> <opportunity_id>");
+      process.exit(1);
+    }
+    const result = await runDealEvaluation({
+      slackUserId,
+      opportunityId,
+      triggerEvent: "manual",
+    });
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal|pre-meeting|post-meeting|resolve-account|red-team-pack|red-team|red-team-sweep> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal|pre-meeting|post-meeting|resolve-account|red-team-pack|red-team|red-team-sweep|arbiter> <args...>"
   );
   process.exit(1);
 }

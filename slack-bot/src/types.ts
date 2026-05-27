@@ -385,6 +385,10 @@ export type AuditAction =
   | "red_team_intel_dropped"
   | "red_team_intel_failed"
   | "red_team_eval_shadow"
+  | "arbiter_evaluated"
+  | "arbiter_intel_dropped"
+  | "arbiter_intel_failed"
+  | "arbiter_eval_shadow"
   | "notion_synced"
   | "notion_sync_dropped";
 
@@ -932,3 +936,88 @@ export const RedTeamRunResultSchema = z.object({
 });
 
 export type RedTeamRunResult = z.infer<typeof RedTeamRunResultSchema>;
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Arbiter (Red Team + Blue Team + deterministic scorer) wire contract
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const ArbiterCitationSchema = z.object({
+  kind: z.enum([
+    "gong",
+    "salesforce",
+    "prior_deal",
+    "intel_pack",
+    "public_source",
+  ]),
+  reference: z.string(),
+  excerpt: z.string().nullable().optional(),
+});
+
+export const ArbiterClaimSchema = z.object({
+  statement: z.string().min(1),
+  citations: z.array(ArbiterCitationSchema).default([]),
+  pattern_match: z.string().nullable().optional(),
+});
+
+export const ArbiterRecommendedActionSchema = z.object({
+  action: z.string().min(1),
+  owner_role: z.string().default(""),
+  by_date: z.string().default(""),
+  expected_signal: z.string().default(""),
+});
+
+export const ArbiterTeamArgumentSchema = z.object({
+  team: z.enum(["red", "blue"]),
+  persona_id: z.string().min(1),
+  deal_name: z.string(),
+  headline: z.string().min(1),
+  claims: z.array(ArbiterClaimSchema).default([]),
+  recommended_actions: z.array(ArbiterRecommendedActionSchema).default([]),
+});
+
+export const ArbiterScoredClaimSchema = z.object({
+  claim: ArbiterClaimSchema,
+  specificity: z.number(),
+  recency: z.number(),
+  source_quality: z.number(),
+  counter_response: z.number(),
+  quality: z.number(),
+});
+
+export const ArbiterTeamScoringSchema = z.object({
+  team: z.enum(["red", "blue"]),
+  total_score: z.number(),
+  avg_quality: z.number(),
+  n_claims: z.number(),
+  scored_claims: z.array(ArbiterScoredClaimSchema).default([]),
+  addressed_opponents_top_claim: z.boolean().default(false),
+});
+
+export const ArbiterVerdictSchema = z.object({
+  evaluatedAt: z.string(),
+  shadowMode: z.boolean().default(false),
+  opportunityId: z.string(),
+  probability: z.number().min(0).max(100),
+  confidence: z.enum(["High", "Medium", "Low"]),
+  disagreement: z.number().min(0).max(1),
+  baseRate: z.number(),
+  meddpiccLift: z.number(),
+  redArgument: ArbiterTeamArgumentSchema.nullable().optional(),
+  blueArgument: ArbiterTeamArgumentSchema.nullable().optional(),
+  redScoring: ArbiterTeamScoringSchema.nullable().optional(),
+  blueScoring: ArbiterTeamScoringSchema.nullable().optional(),
+  topActions: z.array(z.string()).default([]),
+  explanation: z.string().default(""),
+  roundsCompleted: z.number().default(1),
+  firedTriggers: z.array(z.string()).default([]),
+  routeReason: z.string().default(""),
+  cooldownUntilIso: z.string().nullable().optional(),
+  dropReason: z.string().nullable().optional(),
+});
+
+export type ArbiterCitation = z.infer<typeof ArbiterCitationSchema>;
+export type ArbiterClaim = z.infer<typeof ArbiterClaimSchema>;
+export type ArbiterRecommendedAction = z.infer<typeof ArbiterRecommendedActionSchema>;
+export type ArbiterTeamArgument = z.infer<typeof ArbiterTeamArgumentSchema>;
+export type ArbiterTeamScoring = z.infer<typeof ArbiterTeamScoringSchema>;
+export type ArbiterVerdict = z.infer<typeof ArbiterVerdictSchema>;

@@ -1,5 +1,5 @@
 import type { WebClient } from "@slack/web-api";
-import { runRedTeamEval } from "./redTeamHandler.js";
+import { runDealEvaluation } from "./dealEvaluationHandler.js";
 
 const SF_OPP_ID_PATTERN = /^006[a-zA-Z0-9]{12}([a-zA-Z0-9]{3})?$/;
 
@@ -30,36 +30,35 @@ export async function runRedTeamFromDm(args: {
 
   const placeholder = await slack.chat.postMessage({
     channel: channelId,
-    text: `:hourglass_flowing_sand: Running Red Team eval on \`${trimmed}\`…`,
+    text: `:hourglass_flowing_sand: Running Red Team + Blue Team + Arbiter on \`${trimmed}\`… (takes 30-60s)`,
   });
   const ts = placeholder.ts!;
 
   let summary: string;
   try {
-    const result = await runRedTeamEval({
+    const result = await runDealEvaluation({
       slackUserId,
       opportunityId: trimmed,
       triggerEvent: "manual",
     });
 
-    const n = result.personasInvoked ?? 0;
     const triggers = (result.firedTriggers ?? []).join(", ") || "(none)";
 
     switch (result.reason) {
       case "surfaced":
-        summary = `:white_check_mark: Done — card sent to <@${result.slackUserId}> · ${n} persona${n === 1 ? "" : "s"} fired · triggers: ${triggers}.`;
+        summary = `:white_check_mark: Done — deal-review card sent to <@${result.slackUserId}> · *${result.probability}%* (${result.confidence} confidence) · triggers: ${triggers}.`;
         break;
       case "shadow_mode":
-        summary = `:eye: Shadow mode on — eval completed, ${n} persona${n === 1 ? "" : "s"} would have fired (no DM). Audit row written. Set \`RED_TEAM_SHADOW_MODE=false\` and redeploy to see the card.`;
+        summary = `:eye: Shadow mode on — verdict computed (*${result.probability}%*, ${result.confidence}). No DM. Audit row written. Set \`RED_TEAM_SHADOW_MODE=false\` and redeploy to see the card.`;
         break;
       case "muted":
         summary = ":mute: This opp is muted for you — wait for the mute to expire or remove it from the `red_team_mutes` table.";
         break;
       case "cooldown":
-        summary = ":snowflake: Cooled down — the agent recently evaluated this opp. Wait for the cooldown to expire or clear the row in `red_team_cooldowns`.";
+        summary = ":snowflake: Cooled down — the arbiter recently evaluated this opp. Wait or clear the row in `red_team_cooldowns`.";
         break;
-      case "no_personas_fired":
-        summary = `:no_entry_sign: No personas fired. Triggers evaluated: ${triggers}. Check the trigger rules in \`config/triggers.yaml\`.`;
+      case "missing_argument":
+        summary = ":no_entry_sign: One or both teams (Red/Blue) failed to produce a valid argument. Check Vercel logs on the red-team-agent project.";
         break;
       case "sf_not_connected":
         summary = ":warning: Connect Salesforce first via `/standup connect`.";
@@ -68,10 +67,10 @@ export async function runRedTeamFromDm(args: {
         summary = `:warning: Couldn't find opp \`${trimmed}\`. Check the Id and your SF access.`;
         break;
       case "agent_not_configured":
-        summary = ":warning: Red Team agent isn't configured — set `RED_TEAM_AGENT_URL` and `RED_TEAM_AGENT_SECRET` on the slack-bot project and redeploy.";
+        summary = ":warning: Arbiter isn't configured — set `RED_TEAM_AGENT_URL` and `RED_TEAM_AGENT_SECRET` on the slack-bot project and redeploy.";
         break;
       case "agent_call_failed":
-        summary = ":x: The Python agent rejected the call. Check Vercel logs on the red-team-agent project.";
+        summary = ":x: The arbiter rejected the call. Check Vercel logs on the red-team-agent project.";
         break;
       case "intel_pack_failed":
         summary = ":x: Couldn't assemble the intel pack (SF or Gong fetch failed). Check Vercel logs on slack-bot.";

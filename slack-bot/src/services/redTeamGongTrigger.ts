@@ -1,8 +1,8 @@
 import { Connection } from "jsforce";
 import { appendAudit, getUser } from "../db/queries.js";
+import { runDealEvaluation } from "./dealEvaluationHandler.js";
 import {
   isUserEligible,
-  runRedTeamEval,
   stageInAllowlist,
 } from "./redTeamHandler.js";
 import {
@@ -137,7 +137,7 @@ export async function triggerRedTeamForGongCall(
     return { ok: true, reason: "stage_not_eligible" };
   }
 
-  const result = await runRedTeamEval({
+  const result = await runDealEvaluation({
     slackUserId,
     opportunityId: lookup.opportunityId,
     triggerEvent: "gong_call",
