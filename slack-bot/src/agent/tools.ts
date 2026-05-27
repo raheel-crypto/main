@@ -17,7 +17,6 @@ import {
   lookupRogoCustomer,
   query as rogoQueryRaw,
 } from "../services/rogoClient.js";
-import { BUY_SIGNAL_SUBJECT_PATTERN } from "../constants.js";
 import {
   describeObject,
   findField,
@@ -343,12 +342,12 @@ const rogoGetUsage: AgentTool = {
   },
 };
 
-const sfGetRecentPositiveCalls: AgentTool = {
-  name: "sf_get_recent_positive_calls",
+const sfGetRecentDialerCalls: AgentTool = {
+  name: "sf_get_recent_dialer_calls",
   definition: {
-    name: "sf_get_recent_positive_calls",
+    name: "sf_get_recent_dialer_calls",
     description:
-      "Fetch recent 'Connected - Positive' Apollo/Nooks dialer Tasks. Filter by ownerId (GTMA) and/or accountId. Returns Task records with subject, ActivityDate, owner, and description (the call summary).",
+      "Fetch recent Apollo/Nooks dialer Tasks (every disposition: Connected - Positive, Connected - Neutral, Connected - Negative, No Answer, Gatekeeper, etc.). Filter by ownerId (GTMA), accountId, or an optional disposition string. Returns Task records with subject, ActivityDate, owner, and description (the call summary). For the more specific buy-signal use case where you only want Connected - Positive, pass disposition='Connected - Positive'.",
     input_schema: {
       type: "object",
       properties: {
@@ -359,6 +358,11 @@ const sfGetRecentPositiveCalls: AgentTool = {
         accountId: {
           type: "string",
           description: "Filter to tasks on this Account (WhatId). Optional.",
+        },
+        disposition: {
+          type: "string",
+          description:
+            "Optional disposition substring to filter the Subject by (e.g. 'Connected - Positive', 'No Answer', 'Gatekeeper'). Omit to include all dispositions.",
         },
         sinceIso: {
           type: "string",
@@ -374,13 +378,17 @@ const sfGetRecentPositiveCalls: AgentTool = {
   async execute(input, ctx) {
     const ownerId = (input as any).ownerId as string | undefined;
     const accountId = (input as any).accountId as string | undefined;
+    const disposition = (input as any).disposition as string | undefined;
     const sinceIso =
       ((input as any).sinceIso as string | undefined) ??
       DateTime.utc().minus({ days: 7 }).toISODate()!;
     const limit = Math.min(Math.max(Number((input as any).limit) || 50, 1), 200);
     const sinceDate = sinceIso.slice(0, 10);
+    const subjectPattern = disposition
+      ? `%[Apollo]%${disposition}%`
+      : "%[Apollo]%";
     const filters: string[] = [
-      `Subject LIKE '${escapeSoql(BUY_SIGNAL_SUBJECT_PATTERN)}'`,
+      `Subject LIKE '${escapeSoql(subjectPattern)}'`,
       `ActivityDate >= ${sinceDate}`,
     ];
     if (ownerId) filters.push(`OwnerId = '${escapeSoql(ownerId)}'`);
@@ -1234,7 +1242,7 @@ export const ALL_TOOLS: AgentTool[] = [
   gongGetCalls,
   rogoGetUsage,
   rogoCheckCustomer,
-  sfGetRecentPositiveCalls,
+  sfGetRecentDialerCalls,
   rogoDescribe,
   rogoQuery,
   sfProposeRecordUpdate,

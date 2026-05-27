@@ -18,7 +18,7 @@ const TOOL_PROGRESS: Record<string, { priority: number; text: string }> = {
     text: ":clipboard: Checking recent activities…",
   },
   sf_query: { priority: 25, text: ":mag: Querying Salesforce…" },
-  sf_get_recent_positive_calls: {
+  sf_get_recent_dialer_calls: {
     priority: 30,
     text: ":telephone_receiver: Checking dialer history…",
   },
