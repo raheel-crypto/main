@@ -10,7 +10,7 @@ import json
 import os
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, status
 
@@ -21,6 +21,7 @@ from . import runner
 from . import runner_blue
 from . import triggers as triggers_mod
 from .arbiter import multi_turn, probability, scorer
+from .arbiter.synthesizer import synthesize_debate
 from .auth import verify_signature
 from .context import pack_to_context
 from .cooldowns import is_cooled_down, mark_evaluated
@@ -28,6 +29,7 @@ from .personas.routing import route_personas
 from .schemas import (
     AgentArgument,
     ArbiterRequest,
+    ArbiterSynthesis,
     ArbiterVerdict,
     Claim,
     Citation as AgentCitation,
@@ -369,33 +371,85 @@ async def arbiter(
             dropReason="missing_argument",
         )
 
-    # Score both arguments (counter-response factored in by passing opponent).
+    # ── Round 1: score, compute disagreement + probability ──────────────────
     red_scoring = scorer.score_team_argument(red_arg, opponent=blue_arg)
     blue_scoring = scorer.score_team_argument(blue_arg, opponent=red_arg)
-    disagreement = probability.compute_disagreement(red_scoring, blue_scoring)
+    disagreement_r1 = probability.compute_disagreement(red_scoring, blue_scoring)
+    prob_r1, _, base_rate, meddpicc_lift = probability.compute_probability(
+        context, red_scoring, blue_scoring
+    )
+
+    # ── Evaluate Round 2 trigger (substantive contradiction OR weak quality) ─
+    should_round_2, contradictions = multi_turn.evaluate_followup_need(
+        red_arg, blue_arg, red_scoring, blue_scoring, disagreement_r1
+    )
 
     rounds_completed = 1
-    if enable_followup and multi_turn.needs_followup(
-        red_scoring, blue_scoring, disagreement
-    ):
+    probes_fired = []
+    red_r2 = None
+    blue_r2 = None
+    disagreement_r2 = None
+    prob_r2 = None
+
+    # ── Round 2 (conditional) ───────────────────────────────────────────────
+    if enable_followup and should_round_2:
         try:
-            red_arg, blue_arg = await multi_turn.run_round_2(
-                context, red_arg, blue_arg, red_scoring, blue_scoring
+            red_r2, blue_r2, probes_fired = await multi_turn.run_round_2(
+                context, red_arg, blue_arg, red_scoring, blue_scoring, contradictions
             )
-            red_scoring = scorer.score_team_argument(red_arg, opponent=blue_arg)
-            blue_scoring = scorer.score_team_argument(blue_arg, opponent=red_arg)
-            disagreement = probability.compute_disagreement(red_scoring, blue_scoring)
+            red_scoring = scorer.score_team_argument(red_r2, opponent=blue_r2)
+            blue_scoring = scorer.score_team_argument(blue_r2, opponent=red_r2)
+            disagreement_r2 = probability.compute_disagreement(red_scoring, blue_scoring)
+            prob_r2, _, _, _ = probability.compute_probability(
+                context, red_scoring, blue_scoring
+            )
             rounds_completed = 2
         except Exception as exc:
             print(f"[arbiter] round 2 failed: {exc}", flush=True)
 
-    prob_pct, confidence, base_rate, meddpicc_lift = probability.compute_probability(
+    # ── Final probability + confidence ──────────────────────────────────────
+    prob_pct, confidence, _, _ = probability.compute_probability(
         context, red_scoring, blue_scoring
     )
+    disagreement = (
+        disagreement_r2 if disagreement_r2 is not None else disagreement_r1
+    )
 
-    top_actions = _select_top_actions(red_arg, blue_arg, max_actions=3)
-    explanation = _build_explanation(
-        prob_pct, confidence, base_rate, meddpicc_lift, red_scoring, blue_scoring, route.reason
+    # ── Final arguments = latest round ──────────────────────────────────────
+    final_red = red_r2 if red_r2 is not None else red_arg
+    final_blue = blue_r2 if blue_r2 is not None else blue_arg
+
+    # ── Synthesize (best-effort Claude call to extract structured insight) ──
+    synthesis = None
+    if enable_followup:
+        try:
+            synthesis = await synthesize_debate(
+                context,
+                red_arg,
+                blue_arg,
+                red_r2,
+                blue_r2,
+                red_scoring,
+                blue_scoring,
+                prob_pct,
+            )
+        except Exception as exc:
+            print(f"[arbiter] synthesis failed: {exc}", flush=True)
+            synthesis = ArbiterSynthesis(
+                narrative=f"Synthesis unavailable: {str(exc)[:200]}"
+            )
+
+    top_actions = _select_top_actions_v2(final_red, final_blue, synthesis)
+    explanation = _build_explanation_v2(
+        prob_pct,
+        confidence,
+        base_rate,
+        meddpicc_lift,
+        red_scoring,
+        blue_scoring,
+        route.reason,
+        rounds_completed,
+        synthesis,
     )
 
     mark_evaluated(pack.opportunity.id)
@@ -406,11 +460,11 @@ async def arbiter(
         opportunityId=pack.opportunity.id,
         probability=prob_pct,
         confidence=confidence,
-        disagreement=disagreement,
+        disagreement=round(disagreement, 2),
         baseRate=base_rate,
-        meddpiccLift=meddpicc_lift,
-        redArgument=red_arg,
-        blueArgument=blue_arg,
+        meddpiccLift=round(meddpicc_lift, 3),
+        redArgument=final_red,
+        blueArgument=final_blue,
         redScoring=red_scoring,
         blueScoring=blue_scoring,
         topActions=top_actions,
@@ -418,6 +472,16 @@ async def arbiter(
         roundsCompleted=rounds_completed,
         firedTriggers=[t.trigger_id for t in fired],
         routeReason=route.reason,
+        # v2.1 fields
+        probabilityRound1=prob_r1,
+        probabilityRound2=prob_r2,
+        disagreementRound1=round(disagreement_r1, 2),
+        disagreementRound2=(
+            round(disagreement_r2, 2) if disagreement_r2 is not None else None
+        ),
+        contradictionsDetected=contradictions,
+        probesFired=probes_fired,
+        synthesis=synthesis,
     )
 
 
@@ -494,7 +558,7 @@ def _build_explanation(
     blue: "scorer.TeamScoring",
     route_reason: str,
 ) -> str:
-    """One-paragraph human-readable synthesis the rep reads on the card."""
+    """One-paragraph synthesis (v2.0 — used only when synthesis is unavailable)."""
     delta = blue.total_score - red.total_score
     direction = (
         "Blue made the stronger case"
@@ -512,6 +576,64 @@ def _build_explanation(
         f"(Red {red.total_score:.0f} pts, Blue {blue.total_score:.0f} pts "
         f"across {red.n_claims}+{blue.n_claims} claims)."
     )
+
+
+# ─── v2.1 helpers: prefer synthesis-driven actions + explanation ─────────────
+
+
+def _select_top_actions_v2(
+    red: TeamArgument,
+    blue: TeamArgument,
+    synthesis: Optional[ArbiterSynthesis],
+) -> List[str]:
+    """
+    Prefer the synthesis's if/then scenarios as actions — they're more
+    diagnostic than persona-suggested actions because they tell the rep
+    exactly what observable signal to watch for and how it shifts the
+    probability. Fall back to merging persona actions when synthesis is
+    unavailable.
+    """
+    if synthesis and synthesis.if_then_diagnostic:
+        out: list[str] = []
+        for s in synthesis.if_then_diagnostic[:3]:
+            out.append(
+                f"Watch for: {s.condition} → probability becomes "
+                f"{s.new_probability}% ({s.new_lean})"
+            )
+        return out
+    return _select_top_actions(red, blue, max_actions=3)
+
+
+def _build_explanation_v2(
+    prob_pct: int,
+    confidence: str,
+    base_rate: float,
+    meddpicc_lift: float,
+    red: "scorer.TeamScoring",
+    blue: "scorer.TeamScoring",
+    route_reason: str,
+    rounds_completed: int,
+    synthesis: Optional[ArbiterSynthesis],
+) -> str:
+    """
+    Round-aware explanation; appends the synthesizer's narrative when
+    available so the rep gets the structured "what did the debate reveal"
+    line right under the probability badge.
+    """
+    base = _build_explanation(
+        prob_pct, confidence, base_rate, meddpicc_lift, red, blue, route_reason
+    )
+    round_note = (
+        f" Resolved after {rounds_completed} round(s)."
+        if rounds_completed > 1
+        else ""
+    )
+    narrative = (
+        f" {synthesis.narrative}"
+        if synthesis and synthesis.narrative
+        else ""
+    )
+    return f"{base}{round_note}{narrative}"
 
 
 # Convenience for `python -m app.main` — not needed under uvicorn / Vercel.
