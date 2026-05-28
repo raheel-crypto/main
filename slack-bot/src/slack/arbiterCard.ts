@@ -155,7 +155,7 @@ function discriminatingVariableBlocks(
         type: "mrkdwn",
         text:
           `🎯 *The discriminating variable*\n` +
-          `*${truncate(dv.variable, 240)}*\n` +
+          `*${truncate(dv.variable, 400)}*\n` +
           `Won cohort: *${dv.won_cohort_pct}%* · Lost cohort: *${dv.lost_cohort_pct}%* · ` +
           `This deal: ${statusEmoji} *${dv.this_deal_status}*`,
       },
@@ -165,7 +165,7 @@ function discriminatingVariableBlocks(
       elements: [
         {
           type: "mrkdwn",
-          text: `_${truncate(dv.implication, 400)}_`,
+          text: `_${truncate(dv.implication, 900)}_`,
         },
       ],
     },
@@ -193,7 +193,7 @@ function ifThenDiagnosticBlocks(
       text: {
         type: "mrkdwn",
         text:
-          `*${i + 1}.* ${truncate(s.condition, 250)}\n` +
+          `*${i + 1}.* ${truncate(s.condition, 600)}\n` +
           `   → ${leanEmoji(s.new_lean)} *${s.new_probability}%* (${s.new_lean})`,
       },
     });
@@ -201,7 +201,7 @@ function ifThenDiagnosticBlocks(
       blocks.push({
         type: "context",
         elements: [
-          { type: "mrkdwn", text: `_${truncate(s.rationale, 300)}_` },
+          { type: "mrkdwn", text: `_${truncate(s.rationale, 900)}_` },
         ],
       });
     }
@@ -213,23 +213,43 @@ function resolvedContradictionsBlocks(
   concessions: ArbiterConcession[]
 ): KnownBlock[] {
   if (concessions.length === 0) return [];
-  const lines = ["*⚖️ What each side gave up in Round 2*"];
-  for (const c of concessions.slice(0, 4)) {
-    const sideLabel = c.conceding_team === "red" ? "🔴 Red" : "🔵 Blue";
-    lines.push(
-      `• ${sideLabel} conceded on *${c.on_topic}*: ${truncate(c.summary, 280)}`
-    );
-    if (c.impact) {
-      lines.push(`   _Impact: ${truncate(c.impact, 220)}_`);
-    }
-  }
-  return [
+  const blocks: KnownBlock[] = [
     { type: "divider" },
     {
       type: "section",
-      text: { type: "mrkdwn", text: lines.join("\n") },
+      text: {
+        type: "mrkdwn",
+        text: "*⚖️ What each side gave up in Round 2*",
+      },
     },
   ];
+  // One section + one context block per concession. Per-item blocks keep
+  // each concession well under Slack's 3000-char section limit so the
+  // impact line doesn't get cut mid-sentence.
+  for (const c of concessions.slice(0, 4)) {
+    const sideLabel = c.conceding_team === "red" ? "🔴 Red" : "🔵 Blue";
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `${sideLabel} conceded on *${c.on_topic}*\n` +
+          truncate(c.summary, 1200),
+      },
+    });
+    if (c.impact) {
+      blocks.push({
+        type: "context",
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `_Impact: ${truncate(c.impact, 800)}_`,
+          },
+        ],
+      });
+    }
+  }
+  return blocks;
 }
 
 function synthesisNarrativeBlock(narrative: string): KnownBlock[] {
@@ -239,7 +259,9 @@ function synthesisNarrativeBlock(narrative: string): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `> ${truncate(narrative, 800)}`,
+        // 2800 leaves headroom under Slack's 3000-char section limit so a
+        // long synthesizer narrative doesn't get cut mid-sentence.
+        text: `> ${truncate(narrative, 2800)}`,
       },
     },
   ];
