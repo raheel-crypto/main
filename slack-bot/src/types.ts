@@ -159,7 +159,8 @@ export type PendingCardKind =
   | "qa_proposal"
   | "record_proposal"
   | "bulk_record_proposal"
-  | "notion_sync";
+  | "notion_sync"
+  | "channel_sync";
 
 export interface PendingCardBase {
   id: string;
@@ -390,7 +391,11 @@ export type AuditAction =
   | "arbiter_intel_failed"
   | "arbiter_eval_shadow"
   | "notion_synced"
-  | "notion_sync_dropped";
+  | "notion_sync_dropped"
+  | "channel_bound"
+  | "channel_unbound"
+  | "channel_synced"
+  | "channel_sync_dropped";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",

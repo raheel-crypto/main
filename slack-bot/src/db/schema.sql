@@ -163,3 +163,24 @@ CREATE TABLE IF NOT EXISTS qa_conversation_turns (
 );
 CREATE INDEX IF NOT EXISTS idx_qa_turns_lookup
   ON qa_conversation_turns(slack_user_id, channel_id, created_at DESC);
+
+-- Deal-channel sync: one Slack channel ↔ one Salesforce Opportunity.
+-- Reps bind via `/merlin-deal bind <opp>`; subsequent `/merlin-deal sync` (or
+-- the post-bind prompt buttons) pulls channel history → recommender → DMs the
+-- binder the standard oppCard. last_synced_at lets us default the sync window
+-- to "since the last sync" instead of re-reading every message every time.
+CREATE TABLE IF NOT EXISTS channel_bindings (
+  slack_channel_id TEXT PRIMARY KEY,
+  slack_team_id TEXT NOT NULL,
+  opportunity_id TEXT NOT NULL,
+  account_id TEXT,
+  opportunity_name TEXT NOT NULL,
+  account_name TEXT,
+  bound_by_slack_user_id TEXT NOT NULL,
+  bound_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_synced_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_channel_bindings_opp
+  ON channel_bindings(opportunity_id);
+CREATE INDEX IF NOT EXISTS idx_channel_bindings_owner
+  ON channel_bindings(bound_by_slack_user_id);

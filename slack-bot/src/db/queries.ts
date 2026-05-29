@@ -914,3 +914,117 @@ export async function appendQaTurn(
     [slackUserId, channelId, role, content.slice(0, 12_000)]
   );
 }
+
+// ─── Channel bindings ──────────────────────────────────────────────────────
+
+export interface ChannelBinding {
+  slackChannelId: string;
+  slackTeamId: string;
+  opportunityId: string;
+  accountId: string | null;
+  opportunityName: string;
+  accountName: string | null;
+  boundBySlackUserId: string;
+  boundAt: string;
+  lastSyncedAt: string | null;
+}
+
+function rowToChannelBinding(r: any): ChannelBinding {
+  return {
+    slackChannelId: r.slack_channel_id,
+    slackTeamId: r.slack_team_id,
+    opportunityId: r.opportunity_id,
+    accountId: r.account_id,
+    opportunityName: r.opportunity_name,
+    accountName: r.account_name,
+    boundBySlackUserId: r.bound_by_slack_user_id,
+    boundAt:
+      r.bound_at instanceof Date ? r.bound_at.toISOString() : String(r.bound_at),
+    lastSyncedAt: r.last_synced_at
+      ? r.last_synced_at instanceof Date
+        ? r.last_synced_at.toISOString()
+        : String(r.last_synced_at)
+      : null,
+  };
+}
+
+export async function upsertChannelBinding(input: {
+  slackChannelId: string;
+  slackTeamId: string;
+  opportunityId: string;
+  accountId: string | null;
+  opportunityName: string;
+  accountName: string | null;
+  boundBySlackUserId: string;
+}): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO channel_bindings (
+       slack_channel_id, slack_team_id, opportunity_id, account_id,
+       opportunity_name, account_name, bound_by_slack_user_id
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (slack_channel_id) DO UPDATE SET
+       slack_team_id = EXCLUDED.slack_team_id,
+       opportunity_id = EXCLUDED.opportunity_id,
+       account_id = EXCLUDED.account_id,
+       opportunity_name = EXCLUDED.opportunity_name,
+       account_name = EXCLUDED.account_name,
+       bound_by_slack_user_id = EXCLUDED.bound_by_slack_user_id,
+       bound_at = now(),
+       last_synced_at = NULL`,
+    [
+      input.slackChannelId,
+      input.slackTeamId,
+      input.opportunityId,
+      input.accountId,
+      input.opportunityName,
+      input.accountName,
+      input.boundBySlackUserId,
+    ]
+  );
+}
+
+export async function getChannelBinding(
+  slackChannelId: string
+): Promise<ChannelBinding | null> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT * FROM channel_bindings WHERE slack_channel_id = $1 LIMIT 1`,
+    [slackChannelId]
+  );
+  return rows[0] ? rowToChannelBinding(rows[0]) : null;
+}
+
+export async function deleteChannelBinding(
+  slackChannelId: string
+): Promise<boolean> {
+  const pool = getPool();
+  const r = await pool.query(
+    `DELETE FROM channel_bindings WHERE slack_channel_id = $1`,
+    [slackChannelId]
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+export async function setChannelLastSyncedAt(
+  slackChannelId: string,
+  iso: string
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE channel_bindings SET last_synced_at = $2 WHERE slack_channel_id = $1`,
+    [slackChannelId, iso]
+  );
+}
+
+export async function getChannelBindingsForOpp(
+  opportunityId: string
+): Promise<ChannelBinding[]> {
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT * FROM channel_bindings WHERE opportunity_id = $1`,
+    [opportunityId]
+  );
+  return rows.map(rowToChannelBinding);
+}

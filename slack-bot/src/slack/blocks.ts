@@ -2299,3 +2299,152 @@ export function postMeetingLogTaskModal(
     ],
   };
 }
+
+// ─── Deal-channel sync ─────────────────────────────────────────────────────
+
+export interface OppDisambiguationCandidate {
+  id: string;
+  name: string;
+  accountName: string;
+  stage: string;
+  amount: number | null;
+  isClosed: boolean;
+  ownerName: string | null;
+}
+
+/**
+ * Ephemeral disambiguation card shown when `/merlin-deal bind <query>` matches
+ * more than one Opportunity. Each candidate gets a Bind button.
+ */
+export function bindDisambiguationBlocks(
+  query: string,
+  candidates: OppDisambiguationCandidate[],
+  slackChannelId: string
+): { blocks: KnownBlock[]; text: string } {
+  const blocks: KnownBlock[] = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `:mag: Multiple opps match \`${query}\`. Pick one to bind this channel to:`,
+      },
+    },
+  ];
+  for (const c of candidates.slice(0, 5)) {
+    const amount =
+      c.amount != null ? ` · $${Math.round(c.amount).toLocaleString()}` : "";
+    const closed = c.isClosed ? " · _closed_" : "";
+    const owner = c.ownerName ? ` · ${c.ownerName}` : "";
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${c.name}*\n_${c.accountName} · ${c.stage}${amount}${closed}${owner}_`,
+      },
+      accessory: {
+        type: "button",
+        action_id: `bind_pick_opp:${slackChannelId}:${c.id}`,
+        text: { type: "plain_text", text: "Bind to this opp" },
+        value: c.id,
+      },
+    });
+  }
+  return {
+    blocks,
+    text: `Multiple opps match "${query}" — pick one to bind`,
+  };
+}
+
+/**
+ * Ephemeral message that fires immediately after a successful bind. Offers
+ * four "first read" options; each button triggers a channel sync against
+ * the chosen window.
+ */
+export function postBindPromptBlocks(
+  slackChannelId: string,
+  opportunityName: string
+): { blocks: KnownBlock[]; text: string } {
+  const blocks: KnownBlock[] = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `:link: Bound this channel to *${opportunityName}*.\n` +
+          `Want me to read recent channel history now and DM you the suggested updates?`,
+      },
+    },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          action_id: `channel_sync_window:${slackChannelId}:7`,
+          text: { type: "plain_text", text: "Last 7 days" },
+        },
+        {
+          type: "button",
+          action_id: `channel_sync_window:${slackChannelId}:30`,
+          text: { type: "plain_text", text: "Last 30 days" },
+        },
+        {
+          type: "button",
+          action_id: `channel_sync_window:${slackChannelId}:all`,
+          text: { type: "plain_text", text: "Entire channel history" },
+        },
+        {
+          type: "button",
+          action_id: `channel_sync_skip:${slackChannelId}`,
+          text: { type: "plain_text", text: "Skip — I'll sync later" },
+          style: "danger",
+        },
+      ],
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text:
+            `Tip: \`/merlin-deal sync\` re-runs the sync any time; ` +
+            `\`/merlin-deal status\` shows the current binding; ` +
+            `\`/merlin-deal unbind\` removes it.`,
+        },
+      ],
+    },
+  ];
+  return {
+    blocks,
+    text: `Bound this channel to ${opportunityName} — read recent history now?`,
+  };
+}
+
+export function channelBindStatusBlocks(args: {
+  opportunityName: string;
+  accountName: string | null;
+  boundBySlackUserId: string;
+  lastSyncedAt: string | null;
+  instanceUrl: string;
+  opportunityId: string;
+}): { blocks: KnownBlock[]; text: string } {
+  const sfUrl = `${args.instanceUrl.replace(/\/+$/, "")}/${args.opportunityId}`;
+  const lastSynced = args.lastSyncedAt
+    ? `last synced ${args.lastSyncedAt}`
+    : "_never synced — run `/merlin-deal sync` to pull history_";
+  return {
+    text: `Bound to ${args.opportunityName}`,
+    blocks: [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text:
+            `:link: This channel is bound to <${sfUrl}|*${args.opportunityName}*>` +
+            (args.accountName ? ` (${args.accountName})` : "") +
+            `\n` +
+            `Bound by <@${args.boundBySlackUserId}> · ${lastSynced}`,
+        },
+      },
+    ],
+  };
+}

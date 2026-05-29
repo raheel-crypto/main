@@ -3,15 +3,18 @@ import { WebClient } from "@slack/web-api";
 import { config } from "../config.js";
 import {
   appendAudit,
+  getChannelBinding,
   getGcTokens,
   getPendingCard,
   getUser,
   setCardStatus,
   updatePendingCardRecommendation,
   updateSubscriptionPrefs,
+  upsertChannelBinding,
   upsertRedTeamMute,
   upsertUser,
 } from "../db/queries.js";
+import { runChannelSync } from "../services/channelSync.js";
 import { muteUntilIso } from "../services/redTeamHandler.js";
 import {
   CALENDAR_BLOCK_ID,
@@ -59,6 +62,7 @@ import {
   editFieldModal,
   editProposedFieldModal,
   parseActionId,
+  postBindPromptBlocks,
   postMeetingAddContactModal,
   postMeetingLogTaskModal,
   postMeetingUpdateOppModal,
@@ -470,6 +474,155 @@ export function registerInteractivity(app: App): void {
     const parsed = parseActionId((action as any).action_id);
     if (!parsed) return;
     await handleBulkCancel(app, body, parsed.cardId);
+  });
+
+  // ─── /merlin-deal channel sync ──────────────────────────────────────────
+
+  // User picked an opp from the disambiguation list in /merlin-deal bind.
+  app.action(/^bind_pick_opp:.+/, async ({ ack, body, action, respond }) => {
+    await ack();
+    const actionId = (action as any).action_id as string;
+    // Shape: bind_pick_opp:<channelId>:<oppId>
+    const parts = actionId.split(":");
+    const slackChannelId = parts[1];
+    const oppId = parts[2];
+    if (!slackChannelId || !oppId) return;
+    const slackUserId = (body as any).user?.id;
+    const slackTeamId = (body as any).team?.id;
+    if (!slackUserId || !slackTeamId) return;
+
+    let conn;
+    try {
+      conn = await getConnectionForUser(slackUserId);
+    } catch (err) {
+      if (err instanceof SfNotConnectedError) {
+        await respond({
+          response_type: "ephemeral",
+          replace_original: true,
+          text: ":lock: Connect Salesforce first with `/standup connect`, then re-run `/merlin-deal bind`.",
+        });
+        return;
+      }
+      throw err;
+    }
+    // Re-query the opp so we get authoritative name + accountId.
+    let match: {
+      id: string;
+      name: string;
+      accountId: string | null;
+      accountName: string;
+    };
+    try {
+      const q = await conn.query(
+        `SELECT Id, Name, AccountId, Account.Name FROM Opportunity WHERE Id = '${oppId}' LIMIT 1`
+      );
+      const r = (q.records as any[])[0];
+      if (!r) {
+        await respond({
+          response_type: "ephemeral",
+          replace_original: true,
+          text: ":warning: That opportunity is no longer accessible.",
+        });
+        return;
+      }
+      match = {
+        id: r.Id,
+        name: r.Name,
+        accountId: r.AccountId ?? null,
+        accountName: r.Account?.Name ?? "",
+      };
+    } catch (err: any) {
+      await respond({
+        response_type: "ephemeral",
+        replace_original: true,
+        text: `:warning: Couldn't look up that opportunity: ${String(err?.message ?? err).slice(0, 200)}`,
+      });
+      return;
+    }
+
+    await upsertChannelBinding({
+      slackChannelId,
+      slackTeamId,
+      opportunityId: match.id,
+      accountId: match.accountId,
+      opportunityName: match.name,
+      accountName: match.accountName,
+      boundBySlackUserId: slackUserId,
+    });
+    await appendAudit({
+      slackUserId,
+      opportunityId: match.id,
+      action: "channel_bound",
+      metadata: {
+        slackChannelId,
+        opportunityName: match.name,
+        accountName: match.accountName,
+        via: "disambiguation",
+      },
+    });
+
+    const card = postBindPromptBlocks(slackChannelId, match.name);
+    await respond({
+      response_type: "ephemeral",
+      replace_original: true,
+      blocks: card.blocks,
+      text: card.text,
+    });
+  });
+
+  // One of the four post-bind "first read" buttons.
+  app.action(/^channel_sync_window:.+/, async ({ ack, body, action, respond }) => {
+    await ack();
+    const actionId = (action as any).action_id as string;
+    // Shape: channel_sync_window:<channelId>:<7|30|all>
+    const parts = actionId.split(":");
+    const slackChannelId = parts[1];
+    const windowToken = parts[2];
+    if (!slackChannelId || !windowToken) return;
+    const slackUserId = (body as any).user?.id;
+    if (!slackUserId) return;
+
+    const binding = await getChannelBinding(slackChannelId);
+    if (!binding) {
+      await respond({
+        response_type: "ephemeral",
+        replace_original: true,
+        text: ":warning: Binding is missing — re-run `/merlin-deal bind <opp>`.",
+      });
+      return;
+    }
+
+    const windowDays: number | "all" =
+      windowToken === "all" ? "all" : Number(windowToken);
+    const label =
+      windowDays === "all"
+        ? "entire channel history"
+        : `last ${windowDays} day${windowDays === 1 ? "" : "s"}`;
+
+    await respond({
+      response_type: "ephemeral",
+      replace_original: true,
+      text: `:hourglass_flowing_sand: Pulling ${label} from <#${slackChannelId}> and reconciling with *${binding.opportunityName}*. <@${binding.boundBySlackUserId}> will get a DM in 30-60s.`,
+    });
+
+    const slack = new WebClient(config.slack.botToken);
+    runChannelSync({
+      slackChannelId,
+      triggeredBySlackUserId: slackUserId,
+      windowDays,
+      slack,
+    }).catch((err) => {
+      console.error("[channel_sync_window] failed:", err);
+    });
+  });
+
+  app.action(/^channel_sync_skip:.+/, async ({ ack, respond }) => {
+    await ack();
+    await respond({
+      response_type: "ephemeral",
+      replace_original: true,
+      text: ":white_check_mark: Skipped. Run `/merlin-deal sync` whenever you want to pull history.",
+    });
   });
 
   app.action(/^red_team_mute:.+/, async ({ ack, body, action, client }) => {
