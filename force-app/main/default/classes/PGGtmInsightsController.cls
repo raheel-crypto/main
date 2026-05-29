@@ -17,6 +17,12 @@ public with sharing class PGGtmInsightsController {
 
     private static final String GTM_ROLE_NAME = 'GTM Associate';
 
+    // Meeting_Type__c value Nektar applies to non-pipeline meetings (e.g.
+    // bulk webinar invite acceptances, internal syncs). Excluded from the
+    // GTMA meetings count so a 200-acceptor webinar doesn't show up as
+    // 200 meetings booked.
+    private static final String NON_DEAL_MEETING_TYPE = 'Non-Deal Related';
+
     private static final Set<String> ALL_DASHBOARD_TYPES = new Set<String>{
         'New Business', 'Upsell', 'Pilot'
     };
@@ -543,14 +549,16 @@ public with sharing class PGGtmInsightsController {
         ];
     }
 
-    // GTMA meetings: no Nektar or Meeting_Type filter. GTMAs book a broader
-    // mix of meetings than AEs, and the team wants every Event they own to
-    // count — not just the Discovery / First Meeting pipe-gen subset.
+    // GTMA meetings: every Event the GTMA owns in the window, EXCEPT
+    // Meeting_Type__c = 'Non-Deal Related' (Nektar's tag for bulk webinar
+    // invite acceptances, internal syncs, etc.). Untagged meetings
+    // (Meeting_Type__c = null) still count.
     private static List<AggregateResult> queryEventMeetings(Set<Id> gtms, String windowLabel) {
         if (windowLabel == 'CW') {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
                 WHERE OwnerId IN :gtms AND ActivityDate = THIS_WEEK
+                  AND (Meeting_Type__c = null OR Meeting_Type__c != :NON_DEAL_MEETING_TYPE)
                 GROUP BY OwnerId, Owner.Name
             ];
         }
@@ -558,6 +566,7 @@ public with sharing class PGGtmInsightsController {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
                 WHERE OwnerId IN :gtms AND ActivityDate = LAST_WEEK
+                  AND (Meeting_Type__c = null OR Meeting_Type__c != :NON_DEAL_MEETING_TYPE)
                 GROUP BY OwnerId, Owner.Name
             ];
         }
@@ -565,6 +574,7 @@ public with sharing class PGGtmInsightsController {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
                 WHERE OwnerId IN :gtms AND ActivityDate = THIS_MONTH
+                  AND (Meeting_Type__c = null OR Meeting_Type__c != :NON_DEAL_MEETING_TYPE)
                 GROUP BY OwnerId, Owner.Name
             ];
         }
@@ -572,12 +582,14 @@ public with sharing class PGGtmInsightsController {
             return [
                 SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
                 WHERE OwnerId IN :gtms AND ActivityDate = LAST_MONTH
+                  AND (Meeting_Type__c = null OR Meeting_Type__c != :NON_DEAL_MEETING_TYPE)
                 GROUP BY OwnerId, Owner.Name
             ];
         }
         return [
             SELECT OwnerId oid, Owner.Name oname, COUNT(Id) cnt FROM Event
             WHERE OwnerId IN :gtms AND ActivityDate = THIS_FISCAL_QUARTER
+              AND (Meeting_Type__c = null OR Meeting_Type__c != :NON_DEAL_MEETING_TYPE)
             GROUP BY OwnerId, Owner.Name
         ];
     }
