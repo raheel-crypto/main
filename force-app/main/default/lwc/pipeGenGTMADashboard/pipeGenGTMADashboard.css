@@ -877,3 +877,34 @@
     color: rgba(255, 255, 255, 0.25);
     font-weight: 500;
 }
+
+/* ─── Cross-role pill ────────────────────────────────────────────────────── */
+.pill--ae-target {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+/* ─── Manual completion toggle ───────────────────────────────────────────── */
+.commit-toggle {
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+    line-height: 1.6;
+}
+.commit-toggle--undone {
+    background: rgba(124, 58, 237, 0.15);
+    color: #c4b5fd;
+    border: 1px solid rgba(124, 58, 237, 0.3);
+}
+.commit-toggle--undone:hover { background: rgba(124, 58, 237, 0.3); }
+.commit-toggle--done {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.commit-toggle--done:hover { background: rgba(16, 185, 129, 0.08); }
