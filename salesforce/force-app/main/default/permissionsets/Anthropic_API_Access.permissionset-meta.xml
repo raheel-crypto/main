@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Grants access to the Anthropic API external credential for order form extraction.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>Anthropic API Access</label>
+    <externalCredentialPrincipalAccesses>
+        <enabled>true</enabled>
+        <externalCredentialPrincipal>Anthropic_External_Cred-AnthropicPrincipal</externalCredentialPrincipal>
+    </externalCredentialPrincipalAccesses>
+    <classAccesses>
+        <apexClass>OrderFormExtractor</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>OrderFormExtractionJob</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>OrderFormPicklistMapper</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+</PermissionSet>
