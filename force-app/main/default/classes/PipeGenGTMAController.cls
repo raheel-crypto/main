@@ -1,6 +1,6 @@
 public with sharing class PipeGenGTMAController {
 
-    // ─── Wrapper Classes ────────────────────────────────────────────────────────
+    // ─── Wrapper Classes ──────────────────────────────────────────────
 
     public class GTMADashboardData {
         @AuraEnabled public GTMAWeeklyTarget      weeklyTarget;
@@ -34,6 +34,7 @@ public with sharing class PipeGenGTMAController {
         @AuraEnabled public Date     lastActivityDate;
         @AuraEnabled public DateTime lastGongCallDate;
         @AuraEnabled public Integer  contactCount;
+        @AuraEnabled public Boolean  isAETarget;
     }
 
     public class AccountCard {
@@ -55,7 +56,7 @@ public with sharing class PipeGenGTMAController {
         @AuraEnabled public Integer earlyStageOppCount;
     }
 
-    // ─── Verification Config ─────────────────────────────────────────────────────
+    // ─── Verification Config ─────────────────────────────────────────────────
 
     // Commit types verified via Event.Meeting_Type__c on the target account
     private static final Map<String, Set<String>> GTMA_MEETING_TYPE_MAP =
@@ -69,7 +70,7 @@ public with sharing class PipeGenGTMAController {
     private static final String STAGE_DEMO        = '1 - Demo';
     private static final String STAGE_DISCOVERY   = '2 - Discovery';
 
-    // ─── Main Entry Point ────────────────────────────────────────────────────────
+    // ─── Main Entry Point ────────────────────────────────────────────────
 
     @AuraEnabled(cacheable=false)
     public static GTMADashboardData getGTMADashboardData() {
@@ -82,7 +83,7 @@ public with sharing class PipeGenGTMAController {
         return d;
     }
 
-    // ─── Weekly Target ───────────────────────────────────────────────────────────
+    // ─── Weekly Target ───────────────────────────────────────────────────
 
     private static GTMAWeeklyTarget buildWeeklyTarget(Id userId) {
         GTMAWeeklyTarget wt = new GTMAWeeklyTarget();
@@ -98,7 +99,8 @@ public with sharing class PipeGenGTMAController {
         List<Weekly_Commit__c> commits = [
             SELECT Id, Completion_Status__c
             FROM Weekly_Commit__c
-            WHERE Rep__c = :userId AND Week_Start_Date__c = :weekStart
+            WHERE (Rep__c = :userId OR (Is_Shared__c = true AND Shared_Partner__c = :userId))
+              AND Week_Start_Date__c = :weekStart
         ];
         wt.total = commits.size();
         wt.completed = 0;
@@ -115,14 +117,14 @@ public with sharing class PipeGenGTMAController {
         return wt;
     }
 
-    // ─── Target Accounts ────────────────────────────────────────────────────────
+    // ─── Target Accounts ────────────────────────────────────────────────
 
     private static List<AccountRow> buildTargetAccounts(Id userId) {
         List<AccountRow> rows = new List<AccountRow>();
 
         List<Account> accounts = [
             SELECT Id, Name, Type, Account_Status__c, ARR__c, Estimated_TAM__c, Website,
-                   LastActivityDate,
+                   Target_Account__c, LastActivityDate,
                 (SELECT Gong__Call_Start__c FROM Gong__Conversations__r
                  ORDER BY Gong__Call_Start__c DESC LIMIT 1),
                 (SELECT Id FROM Contacts WHERE IsDeleted = false)
@@ -146,12 +148,13 @@ public with sharing class PipeGenGTMAController {
             if (!a.Gong__Conversations__r.isEmpty()) {
                 row.lastGongCallDate = a.Gong__Conversations__r[0].Gong__Call_Start__c;
             }
+            row.isAETarget = a.Target_Account__c;
             rows.add(row);
         }
         return rows;
     }
 
-    // ─── This Week's Commits ─────────────────────────────────────────────────────
+    // ─── This Week's Commits ───────────────────────────────────────────────────
 
     private static List<Weekly_Commit__c> buildThisWeekCommits(Id userId) {
         Date weekStart = getWeekStart(Date.today());
@@ -160,15 +163,17 @@ public with sharing class PipeGenGTMAController {
             SELECT Id, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
                    Committed_Count__c, Actual_Count__c,
-                   Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c
+                   Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c,
+                   Is_Shared__c, Shared_Partner__c, Rep__c
             FROM Weekly_Commit__c
-            WHERE Rep__c = :userId AND Week_Start_Date__c = :weekStart
+            WHERE (Rep__c = :userId OR (Is_Shared__c = true AND Shared_Partner__c = :userId))
+              AND Week_Start_Date__c = :weekStart
             ORDER BY CreatedDate ASC
         ];
         return verifyAndPersistGTMACommits(commits, userId, weekStart, weekEnd);
     }
 
-    // ─── Last Week's Scorecard ───────────────────────────────────────────────────
+    // ─── Last Week's Scorecard ──────────────────────────────────────────────────
 
     private static GTMAScorecardData buildLastWeekScorecard(Id userId) {
         GTMAScorecardData sc = new GTMAScorecardData();
@@ -177,9 +182,10 @@ public with sharing class PipeGenGTMAController {
 
         List<Weekly_Commit__c> commits = [
             SELECT Id, Commit_Type__c, Completion_Status__c,
-                   Target_Account__c, Committed_Count__c, Actual_Count__c
+                   Target_Account__c, Committed_Count__c, Actual_Count__c, Is_Shared__c
             FROM Weekly_Commit__c
-            WHERE Rep__c = :userId AND Week_Start_Date__c = :lastWeekStart
+            WHERE (Rep__c = :userId OR (Is_Shared__c = true AND Shared_Partner__c = :userId))
+              AND Week_Start_Date__c = :lastWeekStart
         ];
         commits = verifyAndPersistGTMACommits(commits, userId, lastWeekStart, lastWeekEnd);
 
@@ -211,7 +217,7 @@ public with sharing class PipeGenGTMAController {
         return sc;
     }
 
-    // ─── Account Selection ───────────────────────────────────────────────────────
+    // ─── Account Selection ──────────────────────────────────────────────────
 
     @AuraEnabled(cacheable=false)
     public static List<AccountCard> getGTMAAccountsForSelection() {
@@ -290,7 +296,7 @@ public with sharing class PipeGenGTMAController {
         if (!updates.isEmpty()) update updates;
     }
 
-    // ─── Commit Mutations ────────────────────────────────────────────────────────
+    // ─── Commit Mutations ──────────────────────────────────────────────────
 
     @AuraEnabled
     public static Weekly_Commit__c saveCommit(Weekly_Commit__c commitRecord) {
@@ -302,7 +308,8 @@ public with sharing class PipeGenGTMAController {
                    Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
                    Committed_Count__c, Actual_Count__c,
-                   Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c
+                   Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c,
+                   Is_Shared__c, Shared_Partner__c
             FROM Weekly_Commit__c WHERE Id = :commitRecord.Id
         ];
     }
@@ -310,6 +317,30 @@ public with sharing class PipeGenGTMAController {
     @AuraEnabled
     public static void deleteCommit(Id commitId) {
         delete new Weekly_Commit__c(Id = commitId);
+    }
+
+    @AuraEnabled
+    public static Weekly_Commit__c toggleCommitComplete(Id commitId) {
+        Weekly_Commit__c c = [
+            SELECT Id, Completion_Status__c, Committed_Count__c
+            FROM Weekly_Commit__c WHERE Id = :commitId LIMIT 1
+        ];
+        if (c.Completion_Status__c == 'Completed') {
+            c.Completion_Status__c = 'Not Started';
+            c.Actual_Count__c      = 0;
+        } else {
+            c.Completion_Status__c = 'Completed';
+            c.Actual_Count__c      = c.Committed_Count__c != null ? c.Committed_Count__c.intValue() : 1;
+        }
+        update c;
+        return [
+            SELECT Id, Commit_Type__c, Commit_Description__c,
+                   Target_Account__c, Target_Account__r.Name,
+                   Committed_Count__c, Actual_Count__c,
+                   Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c,
+                   Is_Shared__c, Shared_Partner__c
+            FROM Weekly_Commit__c WHERE Id = :commitId
+        ];
     }
 
     @AuraEnabled
@@ -353,7 +384,7 @@ public with sharing class PipeGenGTMAController {
         ];
     }
 
-    // ─── Activity Verification ───────────────────────────────────────────────────
+    // ─── Activity Verification ─────────────────────────────────────────────────
 
     private static List<Weekly_Commit__c> verifyAndPersistGTMACommits(
             List<Weekly_Commit__c> commits, Id userId, Date weekStart, Date weekEnd) {
@@ -453,7 +484,7 @@ public with sharing class PipeGenGTMAController {
         return commits;
     }
 
-    // ─── Helpers ─────────────────────────────────────────────────────────────────
+    // ─── Helpers ──────────────────────────────────────────────────────────
 
     private static String deriveStatus(Integer actual, Decimal committed) {
         Integer target = committed != null ? committed.intValue() : 1;
