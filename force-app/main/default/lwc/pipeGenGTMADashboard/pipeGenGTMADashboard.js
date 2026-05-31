@@ -3,6 +3,7 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getGTMADashboardData          from '@salesforce/apex/PipeGenGTMAController.getGTMADashboardData';
 import saveCommit                    from '@salesforce/apex/PipeGenGTMAController.saveCommit';
 import deleteCommit                  from '@salesforce/apex/PipeGenGTMAController.deleteCommit';
+import toggleCommitComplete          from '@salesforce/apex/PipeGenGTMAController.toggleCommitComplete';
 import getGTMAAccountsForSelection   from '@salesforce/apex/PipeGenGTMAController.getGTMAAccountsForSelection';
 import updateGTMATargetAccounts      from '@salesforce/apex/PipeGenGTMAController.updateGTMATargetAccounts';
 import carryForwardGTMACommits       from '@salesforce/apex/PipeGenGTMAController.carryForwardGTMACommits';
@@ -33,7 +34,7 @@ const EMPTY_COMMIT = () => ({
 
 export default class PipeGenGTMADashboard extends LightningElement {
 
-    // ─── Dashboard state ──────────────────────────────────────────────────────
+    // ─── Dashboard state ─────────────────────────────────────────────────────
     @track data                 = null;
     @track isLoading            = true;
     @track errorMessage         = null;
@@ -43,7 +44,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
     @track accountSearchResults = [];
     @track newCommit            = EMPTY_COMMIT();
 
-    // ─── Account card tab state ───────────────────────────────────────────────
+    // ─── Account card tab state ─────────────────────────────────────────────────
     @track accountCards       = [];
     @track accountCardsLoaded = false;
     @track isLoadingCards     = false;
@@ -51,13 +52,13 @@ export default class PipeGenGTMADashboard extends LightningElement {
     @track cardSearchTerm     = '';
     @track accountSortBy      = 'name';
 
-    // ─── Lifecycle ────────────────────────────────────────────────────────────
+    // ─── Lifecycle ──────────────────────────────────────────────────────────
 
     connectedCallback() {
         this.loadData();
     }
 
-    // ─── Data Loading ─────────────────────────────────────────────────────────
+    // ─── Data Loading ────────────────────────────────────────────────────────
 
     async loadData() {
         this.isLoading    = true;
@@ -98,7 +99,9 @@ export default class PipeGenGTMADashboard extends LightningElement {
             statusDotClass:  status === 'Completed' ? 'status-dot status-dot--complete'
                            : status === 'Partial'   ? 'status-dot status-dot--partial'
                            :                          'status-dot status-dot--pending',
-            commitCardClass: `commit-card commit-card--gtma commit-card--${statusSuffix}`
+            commitCardClass: `commit-card commit-card--gtma commit-card--${statusSuffix}`,
+            toggleLabel:     status === 'Completed' ? 'Unmark' : 'Mark Complete',
+            toggleBtnClass:  `commit-toggle${status === 'Completed' ? ' commit-toggle--done' : ' commit-toggle--undone'}`
         };
     }
 
@@ -136,7 +139,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         };
     }
 
-    // ─── Computed — visibility ────────────────────────────────────────────────
+    // ─── Computed — visibility ─────────────────────────────────────────────────
 
     get isReady()           { return !this.isLoading && !this.errorMessage && !!this.data; }
     get hasError()          { return !!this.errorMessage; }
@@ -145,7 +148,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
     get hasAccountResults() { return this.accountSearchResults.length > 0; }
     get accountCountLabel() { return `${this.data?.targetAccounts?.length || 0} accounts`; }
 
-    // ─── Computed — weekly target header ─────────────────────────────────────
+    // ─── Computed — weekly target header ───────────────────────────────────────────
 
     get wt() { return this.data?.weeklyTarget || {}; }
 
@@ -178,7 +181,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
             .sort(commitStatusSort);
     }
 
-    // ─── Computed — scorecard ─────────────────────────────────────────────────
+    // ─── Computed — scorecard ───────────────────────────────────────────────────
 
     get scorecard() {
         const sc = this.data?.lastWeekScorecard || {};
@@ -190,7 +193,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         };
     }
 
-    // ─── Computed — commit form options ──────────────────────────────────────
+    // ─── Computed — commit form options ───────────────────────────────────────────
 
     get commitTypeOptions() { return GTMA_COMMIT_TYPES; }
 
@@ -202,7 +205,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         ];
     }
 
-    // ─── Computed — account segments ─────────────────────────────────────────
+    // ─── Computed — account segments ─────────────────────────────────────────────────
 
     get sortedFilteredCards() {
         const term = this.cardSearchTerm.toLowerCase();
@@ -297,7 +300,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         await this.loadData();
     }
 
-    // ─── Commit Form Handlers ─────────────────────────────────────────────────
+    // ─── Commit Form Handlers ───────────────────────────────────────────────────
 
     openCommitForm()  { this.showCommitForm = true;  this.newCommit = EMPTY_COMMIT(); this.accountSearchResults = []; }
     closeCommitForm() { this.showCommitForm = false; }
@@ -309,7 +312,6 @@ export default class PipeGenGTMADashboard extends LightningElement {
     handleAccountSearch(e) {
         const term = e.detail.value || '';
         this.newCommit = { ...this.newCommit, accountName: term };
-        // Search all target accounts + any loaded account cards
         const pool = [
             ...(this.data?.targetAccounts || []),
             ...this.accountCards
@@ -354,7 +356,6 @@ export default class PipeGenGTMADashboard extends LightningElement {
                 ...this.data,
                 thisWeekCommits: [...(this.data.thisWeekCommits || []), this.enrichCommit(saved)]
             };
-            // Update weekly target counts
             const wt = { ...(this.data.weeklyTarget || {}) };
             wt.total = (wt.total || 0) + 1;
             this.data = { ...this.data, weeklyTarget: wt };
@@ -381,6 +382,21 @@ export default class PipeGenGTMADashboard extends LightningElement {
         }
     }
 
+    async handleToggleComplete(e) {
+        const id = e.currentTarget.dataset.id;
+        try {
+            const updated = await toggleCommitComplete({ commitId: id });
+            this.data = {
+                ...this.data,
+                thisWeekCommits: (this.data.thisWeekCommits || []).map(c =>
+                    c.Id === id ? this.enrichCommit(updated) : c
+                )
+            };
+        } catch (err) {
+            this.toast('Error', 'Could not update commit status.', 'error');
+        }
+    }
+
     async handleCarryForward() {
         this.isCarryingForward = true;
         try {
@@ -399,7 +415,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         }
     }
 
-    // ─── Account Cards Handlers ───────────────────────────────────────────────
+    // ─── Account Cards Handlers ──────────────────────────────────────────────────
 
     async handleAccountsTabActive() {
         if (this.accountCardsLoaded) return;
@@ -448,7 +464,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         }
     }
 
-    // ─── Utilities ────────────────────────────────────────────────────────────
+    // ─── Utilities ──────────────────────────────────────────────────────────
 
     daysSince(dateStr, today) {
         return Math.floor((today - new Date(dateStr)) / 86400000);
