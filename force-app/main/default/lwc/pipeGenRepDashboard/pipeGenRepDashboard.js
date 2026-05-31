@@ -5,7 +5,7 @@ import saveCommit                    from '@salesforce/apex/PipeGenController.sa
 import deleteCommit                  from '@salesforce/apex/PipeGenController.deleteCommit';
 import getAccountsForSelection       from '@salesforce/apex/PipeGenController.getAccountsForSelection';
 import updateTargetAccounts          from '@salesforce/apex/PipeGenController.updateTargetAccounts';
-import markCommitComplete            from '@salesforce/apex/PipeGenController.markCommitComplete';
+import toggleCommitComplete          from '@salesforce/apex/PipeGenController.toggleCommitComplete';
 import carryForwardIncompleteCommits from '@salesforce/apex/PipeGenController.carryForwardIncompleteCommits';
 
 const CURRENCY   = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -27,7 +27,7 @@ const EMPTY_COMMIT = () => ({
 
 export default class PipeGenRepDashboard extends LightningElement {
 
-    // ─── Dashboard state ──────────────────────────────────────────────────────
+    // ─── Dashboard state ─────────────────────────────────────────────────────
     @track data                 = null;
     @track isLoading            = true;
     @track errorMessage         = null;
@@ -37,7 +37,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     @track accountSearchResults = [];
     @track newCommit            = EMPTY_COMMIT();
 
-    // ─── Deal Intelligence modal ──────────────────────────────────────────────
+    // ─── Deal Intelligence modal ─────────────────────────────────────────────────
     @track selectedOppId   = null;
     @track selectedOppName = '';
 
@@ -58,7 +58,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         if (e.target === e.currentTarget) this.closeScoreCard();
     }
 
-    // ─── Account card tab state ───────────────────────────────────────────────
+    // ─── Account card tab state ─────────────────────────────────────────────────
     @track accountCards         = [];
     @track accountCardsLoaded   = false;
     @track isLoadingCards       = false;
@@ -66,13 +66,13 @@ export default class PipeGenRepDashboard extends LightningElement {
     @track cardSearchTerm       = '';
     @track accountSortBy        = 'name';
 
-    // ─── Lifecycle ────────────────────────────────────────────────────────────
+    // ─── Lifecycle ──────────────────────────────────────────────────────────
 
     connectedCallback() {
         this.loadData();
     }
 
-    // ─── Data Loading ─────────────────────────────────────────────────────────
+    // ─── Data Loading ────────────────────────────────────────────────────────
 
     async loadData() {
         this.isLoading    = true;
@@ -101,14 +101,11 @@ export default class PipeGenRepDashboard extends LightningElement {
         const actual     = c.Actual_Count__c    || 0;
         const committed  = c.Committed_Count__c || 1;
         const status     = c.Completion_Status__c || 'Not Started';
-        const isMEDDPICC = c.Commit_Type__c === 'MEDDPICC Complete';
         const isNN       = c.Motion_Type__c === 'Net New';
         const motionSuffix = isNN ? 'nn' : 'prog';
         const statusSuffix = status === 'Completed' ? 'complete'
                            : status === 'Partial'   ? 'partial'
                            :                          'pending';
-        // Explicitly read relationship objects before spread — LWC SObject proxies
-        // do not always enumerate relationship fields when spread with {...c}
         const acctRel = c.Target_Account__r     || null;
         const oppRel  = c.Target_Opportunity__r || null;
         const refName = (acctRel && acctRel.Name) || (oppRel && oppRel.Name) || '';
@@ -116,7 +113,6 @@ export default class PipeGenRepDashboard extends LightningElement {
             ...c,
             Target_Account__r:     acctRel,
             Target_Opportunity__r: oppRel,
-            isMEDDPICC,
             isCompleted:     status === 'Completed',
             progressLabel:   `${actual} / ${committed}`,
             refName,
@@ -124,7 +120,8 @@ export default class PipeGenRepDashboard extends LightningElement {
                            : status === 'Partial'   ? 'status-dot status-dot--partial'
                            :                          'status-dot status-dot--pending',
             commitCardClass: `commit-card commit-card--${motionSuffix} commit-card--${statusSuffix}`,
-            showMarkDone:    isMEDDPICC && status !== 'Completed'
+            toggleLabel:    status === 'Completed' ? 'Unmark' : 'Mark Complete',
+            toggleBtnClass: `commit-toggle${status === 'Completed' ? ' commit-toggle--done' : ' commit-toggle--undone'}`
         };
     }
 
@@ -197,7 +194,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         };
     }
 
-    // ─── Computed — visibility ────────────────────────────────────────────────
+    // ─── Computed — visibility ─────────────────────────────────────────────────
 
     get isReady()              { return !this.isLoading && !this.errorMessage && !!this.data; }
     get hasError()             { return !!this.errorMessage; }
@@ -216,12 +213,12 @@ export default class PipeGenRepDashboard extends LightningElement {
         return this.staleOppCount > 0 && this.progressionCommits.length === 0;
     }
 
-    // ─── Computed — labels ────────────────────────────────────────────────────
+    // ─── Computed — labels ──────────────────────────────────────────────────
 
     get accountCountLabel()   { return `${this.data?.targetAccounts?.length || 0} accounts`; }
     get inFlightCountLabel()  { return `${this.data?.inFlightOpps?.length   || 0} opps`; }
 
-    // ─── Computed — pipeline target ──────────────────────────────────────────
+    // ─── Computed — pipeline target ──────────────────────────────────────────────
 
     get qt()                       { return this.data?.quarterlyTarget || {}; }
     get pipelinePercent()          { return pct(this.qt.pipelineActual, this.qt.pipelineTarget); }
@@ -232,7 +229,7 @@ export default class PipeGenRepDashboard extends LightningElement {
     }
     get progressBarStyle() {
         const w = this.pipelinePercent;
-        const hue = Math.round(w * 1.2); // 0% = red (0°), 100% = green (120°)
+        const hue = Math.round(w * 1.2);
         return `width:${w}%;background-color:hsl(${hue},72%,42%);`;
     }
     get stageCards() {
@@ -259,7 +256,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         });
     }
 
-    // ─── Computed — opps by stage ────────────────────────────────────────────
+    // ─── Computed — opps by stage ──────────────────────────────────────────────
 
     get inFlightOppsByStage() {
         const opps = this.data?.inFlightOpps || [];
@@ -293,7 +290,7 @@ export default class PipeGenRepDashboard extends LightningElement {
             .sort(commitStatusSort);
     }
 
-    // ─── Computed — scorecard ─────────────────────────────────────────────────
+    // ─── Computed — scorecard ───────────────────────────────────────────────────
 
     get scorecard() {
         const sc = this.data?.lastWeekScorecard || {};
@@ -304,7 +301,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         };
     }
 
-    // ─── Computed — commit form options ──────────────────────────────────────
+    // ─── Computed — commit form options ───────────────────────────────────────────
 
     get motionOptions() {
         return [
@@ -347,7 +344,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         ];
     }
 
-    // ─── Computed — account segments ─────────────────────────────────────────
+    // ─── Computed — account segments ─────────────────────────────────────────────────
 
     get sortedFilteredCards() {
         const term = this.cardSearchTerm.toLowerCase();
@@ -438,7 +435,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         };
     }
 
-    // ─── Commit Form Handlers ─────────────────────────────────────────────────
+    // ─── Commit Form Handlers ───────────────────────────────────────────────────
 
     openCommitForm()  { this.showCommitForm = true; this.newCommit = EMPTY_COMMIT(); this.accountSearchResults = []; }
     closeCommitForm() { this.showCommitForm = false; }
@@ -510,13 +507,18 @@ export default class PipeGenRepDashboard extends LightningElement {
         }
     }
 
-    async handleMarkMEDDPICCComplete(e) {
+    async handleToggleComplete(e) {
         const id = e.currentTarget.dataset.id;
         try {
-            await markCommitComplete({ commitId: id });
-            await this.loadData();
+            const updated = await toggleCommitComplete({ commitId: id });
+            this.data = {
+                ...this.data,
+                thisWeekCommits: (this.data.thisWeekCommits || []).map(c =>
+                    c.Id === id ? this.enrichCommit(updated) : c
+                )
+            };
         } catch (err) {
-            this.toast('Error', 'Could not mark commit complete.', 'error');
+            this.toast('Error', 'Could not update commit status.', 'error');
         }
     }
 
@@ -538,7 +540,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         }
     }
 
-    // ─── Account Cards Handlers ───────────────────────────────────────────────
+    // ─── Account Cards Handlers ──────────────────────────────────────────────────
 
     async handleAccountsTabActive() {
         if (this.accountCardsLoaded) return;
@@ -592,7 +594,7 @@ export default class PipeGenRepDashboard extends LightningElement {
         }
     }
 
-    // ─── Utilities ────────────────────────────────────────────────────────────
+    // ─── Utilities ──────────────────────────────────────────────────────────
 
     daysSince(dateStr, today) {
         return Math.floor((today - new Date(dateStr)) / 86400000);

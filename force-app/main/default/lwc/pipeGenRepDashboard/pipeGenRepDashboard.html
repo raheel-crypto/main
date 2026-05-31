@@ -107,6 +107,9 @@
                                                     <template lwc:if={acct.showStatusPill}>
                                                         <span class="pill pill--status">{acct.accountStatus}</span>
                                                     </template>
+                                                    <template lwc:if={acct.hasGtmaAssociate}>
+                                                        <span class="pill pill--gtma">GTMA</span>
+                                                    </template>
                                                 </div>
                                                 <div class="card-financials">
                                                     <template lwc:if={acct.showArr}>
@@ -281,6 +284,7 @@
                                                     <div class="ctile-desc">{c.Commit_Description__c}</div>
                                                     <div class="ctile-footer">
                                                         <span class="cc-progress">{c.progressLabel}</span>
+                                                        <button class={c.toggleBtnClass} data-id={c.Id} onclick={handleToggleComplete}>{c.toggleLabel}</button>
                                                         <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
                                                 </div>
@@ -310,13 +314,9 @@
                                                     <div class="ctile-desc">{c.Commit_Description__c}</div>
                                                     <div class="ctile-footer">
                                                         <span class="cc-progress">{c.progressLabel}</span>
+                                                        <button class={c.toggleBtnClass} data-id={c.Id} onclick={handleToggleComplete}>{c.toggleLabel}</button>
                                                         <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
                                                     </div>
-                                                    <template lwc:if={c.showMarkDone}>
-                                                        <div class="slds-m-top_x-small">
-                                                            <lightning-button label="Mark Done" size="x-small" variant="success" data-id={c.Id} onclick={handleMarkMEDDPICCComplete}></lightning-button>
-                                                        </div>
-                                                    </template>
                                                 </div>
                                             </template>
                                         </div>
