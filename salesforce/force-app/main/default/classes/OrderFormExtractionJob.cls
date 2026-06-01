@@ -151,14 +151,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static Opportunity loadOpportunity(Id oppId) {
         return [
             SELECT Id, Type,
-                   Contract_Start_Date__c, Contract_End_Date__c,
-                   Contract_Length_Mos__c, Contract_Length_Days__c,
-                   Seat_Licenses__c, Total_Licenses__c, Num_Users__c,
+                   Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Mos__c,
+                   Seat_Licenses__c, Num_Users__c,
                    License_Fees__c, Platform_Connection_Fee__c, Professional_Service_Fees__c,
-                   Total_Contract_Value__c, Amount,
-                   Annual_Recurring_Revenue__c, ARR__c,
+                   Total_Contract_Value__c, Amount, Annual_Recurring_Revenue__c,
                    Renewal_Terms__c, Subscription_Schedule__c, Payment_Terms__c, Credit_Terms__c,
-                   Pricing_Structure__c, Billing_Contact__c, ELA__c,
+                   Billing_Contact__c, ELA__c,
                    Trial_Start_Date__c, Trial_End_Date__c, Trial_Length_Days__c,
                    Trial_Users__c, Trial_Price__c, Paid_Trial__c, Pilot_Success_Criteria__c,
                    Notes__c
@@ -208,11 +206,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             if (current.Contract_Start_Date__c == null && startDate != null) { changes.Contract_Start_Date__c = startDate; anyChange = true; }
             if (current.Contract_End_Date__c == null && endDate != null)     { changes.Contract_End_Date__c   = endDate;   anyChange = true; }
             if (current.Contract_Length_Mos__c == null && lenMos != null)    { changes.Contract_Length_Mos__c = lenMos;    anyChange = true; }
-            if (current.Contract_Length_Days__c == null && lenDays != null)  { changes.Contract_Length_Days__c = lenDays;  anyChange = true; }
 
             Decimal seats = toDecimal(extracted.get('Seat_Licenses'));
             if (current.Seat_Licenses__c == null && seats != null)   { changes.Seat_Licenses__c = seats; anyChange = true; }
-            if (current.Total_Licenses__c == null && seats != null)  { changes.Total_Licenses__c = seats; anyChange = true; }
             if (current.Num_Users__c == null && seats != null)       { changes.Num_Users__c = seats; anyChange = true; }
         }
 
@@ -228,7 +224,6 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (current.Total_Contract_Value__c == null && tcv != null)             { changes.Total_Contract_Value__c = tcv; anyChange = true; }
         if (current.Amount == null && tcv != null)                              { changes.Amount = tcv; anyChange = true; }
         if (current.Annual_Recurring_Revenue__c == null && arr != null)         { changes.Annual_Recurring_Revenue__c = arr; anyChange = true; }
-        if (current.ARR__c == null && arr != null)                              { changes.ARR__c = arr; anyChange = true; }
 
         String renewal = OrderFormPicklistMapper.mapRenewalTerms((String) extracted.get('Renewal_Terms'));
         if (current.Renewal_Terms__c == null && renewal != null) { changes.Renewal_Terms__c = renewal; anyChange = true; }
@@ -242,9 +237,6 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         String credTerms = OrderFormPicklistMapper.mapCreditTerms((String) extracted.get('Credit_Terms'));
         if (current.Credit_Terms__c == null && credTerms != null) { changes.Credit_Terms__c = credTerms; anyChange = true; }
 
-        String pricingStruct = OrderFormPicklistMapper.mapPricingStructure((String) extracted.get('Pricing_Structure'));
-        if (current.Pricing_Structure__c == null && pricingStruct != null) { changes.Pricing_Structure__c = pricingStruct; anyChange = true; }
-
         String billingEmail = (String) extracted.get('Billing_Contact_Email');
         if (String.isBlank(current.Billing_Contact__c) && String.isNotBlank(billingEmail)) {
             changes.Billing_Contact__c = billingEmail;
@@ -252,7 +244,6 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         }
 
         Boolean ela = toBoolean(extracted.get('ELA'));
-        if (ela == null && pricingStruct != null) ela = pricingStruct.startsWith('ELA');
         if (current.ELA__c == false && ela == true) { changes.ELA__c = true; anyChange = true; }
 
         String specialTerms = (String) extracted.get('Special_Terms');

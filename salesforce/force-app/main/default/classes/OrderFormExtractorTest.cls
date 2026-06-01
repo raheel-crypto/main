@@ -87,7 +87,6 @@ private class OrderFormExtractorTest {
             'Subscription_Schedule' => 'Annual',
             'Payment_Terms' => 'Annual',
             'Credit_Terms' => 'Net 30 days',
-            'Pricing_Structure' => 'Seats with unlimited usage',
             'Billing_Contact_Email' => 'billing@customer.com',
             'Special_Terms' => 'MFN clause; standard MSA otherwise.'
         };
@@ -107,10 +106,10 @@ private class OrderFormExtractorTest {
 
         Opportunity after = [
             SELECT Type, Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Mos__c,
-                   Seat_Licenses__c, Total_Licenses__c, Num_Users__c,
-                   License_Fees__c, Total_Contract_Value__c, Amount, Annual_Recurring_Revenue__c, ARR__c,
+                   Seat_Licenses__c, Num_Users__c,
+                   License_Fees__c, Total_Contract_Value__c, Amount, Annual_Recurring_Revenue__c,
                    Renewal_Terms__c, Subscription_Schedule__c, Payment_Terms__c, Credit_Terms__c,
-                   Pricing_Structure__c, Billing_Contact__c, Notes__c
+                   Billing_Contact__c, Notes__c
             FROM Opportunity WHERE Id = :opp.Id
         ];
         System.assertEquals('New Business', after.Type);
@@ -118,18 +117,15 @@ private class OrderFormExtractorTest {
         System.assertEquals(Date.newInstance(2027, 5, 31), after.Contract_End_Date__c);
         System.assertEquals(12, after.Contract_Length_Mos__c);
         System.assertEquals(25, after.Seat_Licenses__c);
-        System.assertEquals(25, after.Total_Licenses__c);
         System.assertEquals(25, after.Num_Users__c);
         System.assertEquals(150000, after.License_Fees__c);
         System.assertEquals(150000, after.Total_Contract_Value__c);
         System.assertEquals(150000, after.Amount);
         System.assertEquals(150000, after.Annual_Recurring_Revenue__c);
-        System.assertEquals(150000, after.ARR__c);
         System.assertEquals('Auto-renew (90-day)', after.Renewal_Terms__c);
         System.assertEquals('Annual', after.Subscription_Schedule__c);
         System.assertEquals('Annual', after.Payment_Terms__c);
         System.assertEquals('Net-30', after.Credit_Terms__c);
-        System.assertEquals('Seats: Unlimited Usage, No Throttling', after.Pricing_Structure__c);
         System.assertEquals('billing@customer.com', after.Billing_Contact__c);
         System.assert(after.Notes__c != null && after.Notes__c.contains('MFN'), 'Notes should include special terms');
     }
