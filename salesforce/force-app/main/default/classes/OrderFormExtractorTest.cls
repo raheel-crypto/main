@@ -433,19 +433,70 @@ private class OrderFormExtractorTest {
 
     @isTest
     static void picklistMapper_directValues() {
+        // Renewal terms - all branches
         System.assertEquals('Auto-renew (90-day)', OrderFormPicklistMapper.mapRenewalTerms('renews unless 90 days notice'));
         System.assertEquals('Auto-renew (60-day)', OrderFormPicklistMapper.mapRenewalTerms('auto with 60 day notice'));
+        System.assertEquals('Auto-renew (30-day)', OrderFormPicklistMapper.mapRenewalTerms('30 day auto'));
         System.assertEquals('Auto-renew (30-day)', OrderFormPicklistMapper.mapRenewalTerms('evergreen'));
+        System.assertEquals('Auto-renew (30-day)', OrderFormPicklistMapper.mapRenewalTerms('auto-renews each term'));
         System.assertEquals('Manual renewal', OrderFormPicklistMapper.mapRenewalTerms('mutual written agreement'));
-        System.assertEquals('Net-30', OrderFormPicklistMapper.mapCreditTerms('Net 30 days'));
+        System.assertEquals('Manual renewal', OrderFormPicklistMapper.mapRenewalTerms('will not auto-renew'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms(null));
+        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms('   '));
+        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms('whatever'));
+
+        // Credit terms - all 4 Net values plus negative
         System.assertEquals('Net-15', OrderFormPicklistMapper.mapCreditTerms('NET-15'));
+        System.assertEquals('Net-30', OrderFormPicklistMapper.mapCreditTerms('Net 30 days'));
+        System.assertEquals('Net-45', OrderFormPicklistMapper.mapCreditTerms('payable Net 45'));
+        System.assertEquals('Net-60', OrderFormPicklistMapper.mapCreditTerms('NET60'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapCreditTerms('whenever'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapCreditTerms(null));
+
+        // Subscription schedule - all 4 cadences
         System.assertEquals('Annual', OrderFormPicklistMapper.mapSubscriptionSchedule('Billed annually'));
+        System.assertEquals('Annual', OrderFormPicklistMapper.mapSubscriptionSchedule('yearly'));
         System.assertEquals('Quarterly', OrderFormPicklistMapper.mapSubscriptionSchedule('every quarter'));
+        System.assertEquals('Monthly', OrderFormPicklistMapper.mapSubscriptionSchedule('monthly invoicing'));
+        System.assertEquals('Bi-Annual', OrderFormPicklistMapper.mapSubscriptionSchedule('bi-annual cadence'));
+        System.assertEquals('Bi-Annual', OrderFormPicklistMapper.mapSubscriptionSchedule('semi-annual'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapSubscriptionSchedule(null));
+        System.assertEquals(null, OrderFormPicklistMapper.mapSubscriptionSchedule('unknown'));
+
+        // Payment terms - all 4
+        System.assertEquals('Annual', OrderFormPicklistMapper.mapPaymentTerms('billed annually'));
+        System.assertEquals('Semi-Annual', OrderFormPicklistMapper.mapPaymentTerms('Semi-Annual installments'));
+        System.assertEquals('Quarterly', OrderFormPicklistMapper.mapPaymentTerms('quarterly payment'));
+        System.assertEquals('Monthly', OrderFormPicklistMapper.mapPaymentTerms('paid monthly'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapPaymentTerms(null));
+        System.assertEquals(null, OrderFormPicklistMapper.mapPaymentTerms('weekly'));
+
+        // Type - hit all branches
         System.assertEquals('Pilot', OrderFormPicklistMapper.mapType('Proof of Concept'));
+        System.assertEquals('Pilot', OrderFormPicklistMapper.mapType('30-day Trial'));
+        System.assertEquals('Pilot', OrderFormPicklistMapper.mapType('POC agreement'));
         System.assertEquals('Renewal', OrderFormPicklistMapper.mapType('annual renewal'));
         System.assertEquals('Upsell', OrderFormPicklistMapper.mapType('expansion order'));
+        System.assertEquals('Upsell', OrderFormPicklistMapper.mapType('Add-On Seats'));
+        System.assertEquals('Downsell', OrderFormPicklistMapper.mapType('seat reduction'));
+        System.assertEquals('Contract Restructure', OrderFormPicklistMapper.mapType('contract restructure'));
+        System.assertEquals('Debooking', OrderFormPicklistMapper.mapType('debooking event'));
         System.assertEquals('New Business', OrderFormPicklistMapper.mapType('NEW BUSINESS'));
-        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms(null));
-        System.assertEquals(null, OrderFormPicklistMapper.mapCreditTerms('whenever'));
+        System.assertEquals('New Business', OrderFormPicklistMapper.mapType('new logo'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapType(null));
+        System.assertEquals(null, OrderFormPicklistMapper.mapType('mystery'));
+
+        // Pricing structure - all branches
+        System.assertEquals('Seats: Unlimited Usage, No Throttling', OrderFormPicklistMapper.mapPricingStructure('Seats: Unlimited Usage, No Throttling'));
+        System.assertEquals('Seats: Unlimited Usage, with Throttling', OrderFormPicklistMapper.mapPricingStructure('unlimited usage subject to fair use'));
+        System.assertEquals('Seats: Unlimited Usage, with Throttling', OrderFormPicklistMapper.mapPricingStructure('unlimited with rate limits'));
+        System.assertEquals('Seats: Unlimited Usage, No Throttling', OrderFormPicklistMapper.mapPricingStructure('unlimited seats'));
+        System.assertEquals('Seats: Credit-Based Usage', OrderFormPicklistMapper.mapPricingStructure('per-seat credits'));
+        System.assertEquals('ELA: Credit-Based Usage', OrderFormPicklistMapper.mapPricingStructure('Enterprise license with credit pool'));
+        System.assertEquals('ELA: Unlimited Usage, No Throttling', OrderFormPicklistMapper.mapPricingStructure('Enterprise License, unlimited'));
+        System.assertEquals('ELA: Unlimited Usage, with Throttling', OrderFormPicklistMapper.mapPricingStructure('ELA unlimited subject to fair use throttling'));
+        System.assertEquals('Custom', OrderFormPicklistMapper.mapPricingStructure('Custom pricing arrangement'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapPricingStructure(null));
+        System.assertEquals(null, OrderFormPicklistMapper.mapPricingStructure('something weird'));
     }
 }
