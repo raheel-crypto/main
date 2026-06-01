@@ -66,16 +66,27 @@ def _build_system_prompt(req: ChatRequest) -> str:
     if syn and syn.discriminating_variable:
         dv = syn.discriminating_variable
         disc = (
-            f"\nDISCRIMINATING VARIABLE: \"{dv.variable}\" — "
-            f"won cohort {dv.won_cohort_pct}%, lost cohort {dv.lost_cohort_pct}%, "
-            f"this deal: {dv.this_deal_status}."
+            f"\nDISCRIMINATING VARIABLE (the predictor that most separates "
+            f"won vs lost cohorts):\n"
+            f"  variable: \"{dv.variable}\"\n"
+            f"  won-cohort presence: {dv.won_cohort_pct}%, lost-cohort presence: {dv.lost_cohort_pct}%\n"
+            f"  this deal: {dv.this_deal_status}\n"
+            f"  (Use this as colour ONLY. If the rep proposes changing the deal's "
+            f"status on this variable, you MUST call recompute_probability — do "
+            f"NOT estimate a new probability yourself.)"
         )
 
     diagnostics = ""
     if syn and syn.if_then_diagnostic:
-        diagnostics = "\nIF/THEN DIAGNOSTICS ALREADY ON RECORD:\n" + "\n".join(
-            f"  - IF {b.condition} -> ~{b.new_probability}% ({b.new_lean})"
-            for b in syn.if_then_diagnostic
+        # IMPORTANT: list only the condition labels, NOT the precomputed
+        # probabilities. Surfacing the numbers tempts the moderator to parrot
+        # them instead of calling recompute_probability. The tool will re-derive
+        # the same number (and route through _match_scenario_branch when the
+        # hypothetical overlaps a diagnostic condition).
+        diagnostics = (
+            "\nON-RECORD WHAT-IF DIAGNOSTICS (conditions only — call "
+            "recompute_probability for any number):\n"
+            + "\n".join(f"  - IF {b.condition}" for b in syn.if_then_diagnostic)
         )
 
     concessions = ""
@@ -99,22 +110,65 @@ def _build_system_prompt(req: ChatRequest) -> str:
 
     lean = "WIN" if v.probability >= 50 else "LOSS" if v.probability < 30 else "UNCERTAIN"
 
-    return f"""You are the Arbiter for a Red Team / Blue Team deal-review system, now in
-interactive mode answering a rep's follow-up in a Slack thread.
+    return f"""You are the Arbiter Moderator for a Red Team / Blue Team deal-review
+system, now in interactive mode answering a rep's follow-up in a Slack thread.
 
-CRITICAL ROLE BOUNDARY — you do NOT invent opinions:
-- You explain the verdict and the evidence already on record.
-- When the rep asks you to push back AS a team, or "what would Blue/Red say",
-  you MUST call summon_blue_team / summon_red_team. Do not impersonate a team
-  from memory.
-- When the rep asks a what-if ("would your view change if..."), you MUST call
-  recompute_probability. Do not guess a new number.
-- When the rep asks about a prior deal by name, call lookup_prior_deal.
-- You MAY answer directly ONLY for questions about what the verdict already
-  says (e.g. "why is the probability {v.probability}%", "what was the biggest
-  gap", "summarize the synthesis").
-- Ground every claim in the stored evidence or a tool result. Never fabricate
-  a citation.
+══════════════════════════════════════════════════════════════════════════════
+INTEGRITY RULE — read this carefully, it is the entire point of your role.
+══════════════════════════════════════════════════════════════════════════════
+
+You have NO opinions of your own. You DO NOT advise. You DO NOT invent a
+position the underlying system didn't produce. Your job is to ROUTE the
+rep's follow-up to exactly one of the four tools below — or, occasionally,
+to answer a strictly factual question about what the verdict already says.
+
+Route MAP — match the rep's message against these patterns and call the
+matching tool. When a single message has two intents (e.g. "what changes if
+X, and how should I frame the conversation?"), call BOTH tools in sequence.
+
+  • Rep proposes a hypothetical / scenario / change to the deal
+    ("what if I do X", "if I send Y by Friday", "would your view change if…",
+     "I'm planning to meet the EB this week, what changes?")
+      → call recompute_probability(hypothetical, meddpicc_changes)
+      → DO NOT estimate a new probability from the if/then diagnostics or
+        from any number in this prompt. The tool returns the canonical
+        answer; quote it. Even if the hypothetical maps obviously onto an
+        on-record diagnostic, you still call the tool.
+
+  • Rep asks for advice, framing, talking points, negotiation tactics, what
+    to do next, how to approach a stakeholder, how to push the deal forward
+    ("how should I frame X?", "any advice on Y?", "what should I do
+    about Z?", "how do I sell to the CFO?")
+      → call summon_blue_team(focused_question)  ← Blue argues the win
+        case and proposes concrete moves. NEVER write advice yourself.
+
+  • Rep asks for pushback / risk-side / Red's view on something
+    ("Red is wrong about X", "I don't buy the EB gap", "what would Red
+     say about Y?", "defend the loss case for me")
+      → call summon_red_team(focused_question)
+
+  • Rep asks the opposite team's view ("what would Blue say about Red's
+    CFO claim?", "what would Red say about my champion?")
+      → call summon_blue_team OR summon_red_team for the team named
+
+  • Rep asks for a prior deal's detail by name
+    ("show me the Charlesbank deal", "tell me about BNPP")
+      → call lookup_prior_deal(deal_name)
+
+You MAY answer directly — and ONLY — when the rep asks a purely descriptive
+question about what's already on record:
+  ✓ "why is the probability {v.probability}%"
+  ✓ "what was the biggest gap"
+  ✓ "summarize the synthesis"
+  ✓ "what did Red argue"
+  ✗ "what if I [...]"  → recompute_probability, ALWAYS
+  ✗ "how should I [...]"  → summon_blue_team, ALWAYS
+  ✗ "what's the impact of [...]"  → recompute_probability
+
+When in doubt, ROUTE. A redundant tool call is fine. Answering from your own
+synthesis of the verdict is NOT fine.
+
+══════════════════════════════════════════════════════════════════════════════
 
 THE DEAL: {opp_name} — {acct_name}, {amount_str}, stage {stage}.
 
@@ -133,12 +187,17 @@ BLUE TEAM'S CLAIMS (win case):
 {blue_claims}
 {concessions}{disc}{diagnostics}
 
-STYLE: concise, direct, Slack-ready (mrkdwn — *bold* not **bold**). Lead with
-the answer. Cite specific scores, deal names, and evidence. No preamble. When
-you summoned a team, attribute it ("Red's pushback:" / "Blue's response:").
-When recompute_probability returns, lead with the new % and lean, then the
-rationale. Keep replies under ~250 words unless the rep explicitly asks for
-more.
+══════════════════════════════════════════════════════════════════════════════
+
+STYLE (for the moments you do speak — i.e. framing the tool output):
+- Concise, direct, Slack mrkdwn (single *bold*, not **bold**).
+- Lead with the team/system result attributed: "Red's pushback:",
+  "Blue's response:", or "Scenario re-evaluation:" (for recompute output).
+- Quote the tool's verbatim claims and rationale. No re-summary.
+- After presenting one tool's output, OFFER another tool: "Want Blue's view?"
+  or "Want me to run a what-if?" — never write the other view yourself.
+- Keep your own connective tissue under ~3 sentences. The tool's output is
+  the answer; you're the courier.
 """
 
 
@@ -180,6 +239,78 @@ def _history_to_messages(
         msgs.append({"role": "assistant", "content": "\n\n".join(pending_assistant)})
     msgs.append({"role": "user", "content": new_user_message.strip() or "(empty)"})
     return msgs
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# First-hop tool-choice gate
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# Phrases that genuinely look like "tell me what's on record" — these are the
+# only ones where we let the moderator answer without forcing a tool call.
+_DESCRIPTIVE_PATTERNS = (
+    "why is the probability",
+    "what is the probability",
+    "what's the probability",
+    "what was the biggest gap",
+    "summarize the synthesis",
+    "summarise the synthesis",
+    "summarize the verdict",
+    "summarise the verdict",
+    "what did red argue",
+    "what did blue argue",
+    "what are red's claims",
+    "what are blue's claims",
+    "explain the verdict",
+)
+
+# Phrases that always signal a tool route — even when the rep frames it as a
+# question. Belt-and-braces with the prompt rule.
+_ROUTE_TRIGGERS = (
+    "what if",
+    "what changes",
+    "would your view change",
+    "would the probability change",
+    "how should",
+    "any advice",
+    "advise",
+    "advice",
+    "how do i",
+    "what should i",
+    "frame the conversation",
+    "talking points",
+    "push back",
+    "pushback",
+    "red is wrong",
+    "blue is wrong",
+    "what would red say",
+    "what would blue say",
+    "show me the",
+    "tell me about",
+    "if i ",
+)
+
+
+def _should_force_tool_call(user_message: str) -> bool:
+    """
+    Return True when the rep's message looks anything but a pure descriptive
+    lookup of the verdict. Forcing tool_choice='any' on the first hop is the
+    integrity backstop that prevents the moderator from parroting on-record
+    numbers from its system prompt.
+    """
+    msg = (user_message or "").strip().lower()
+    if not msg:
+        return False
+    # If any explicit route trigger fires, force.
+    for t in _ROUTE_TRIGGERS:
+        if t in msg:
+            return True
+    # If the message looks purely descriptive, let the moderator answer.
+    for p in _DESCRIPTIVE_PATTERNS:
+        if p in msg:
+            return False
+    # Default: force. Better to over-route than to invent.
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -258,12 +389,24 @@ async def run_arbiter_chat(req: ChatRequest) -> ChatResponse:
     hops_used = 0
     max_hops = _max_hops()
 
-    for _ in range(max_hops):
+    for hop_index in range(max_hops):
+        # On the FIRST hop, force the moderator to call a tool unless the rep
+        # explicitly asked a purely descriptive question. This is the integrity
+        # backstop — without it the model regularly answers from system-prompt
+        # context (parroting the on-record if/then diagnostic numbers) instead
+        # of calling recompute_probability. On hops 2+ we relax to "auto" so
+        # the moderator can frame the tool's output as text.
+        if hop_index == 0 and _should_force_tool_call(req.userMessage):
+            tool_choice: dict = {"type": "any"}
+        else:
+            tool_choice = {"type": "auto"}
+
         resp = await client.messages.create(
             model=MODEL,
             max_tokens=1500,
             system=system,
             tools=chat_tools.CHAT_TOOLS,
+            tool_choice=tool_choice,
             messages=messages,
         )
 
