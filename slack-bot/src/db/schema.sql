@@ -200,3 +200,37 @@ CREATE INDEX IF NOT EXISTS idx_opp_watch_user_time
   ON opp_watch_runs(slack_user_id, fired_at DESC);
 CREATE INDEX IF NOT EXISTS idx_opp_watch_opp_time
   ON opp_watch_runs(opportunity_id, fired_at DESC);
+
+-- Conversational Arbiter Moderator (Red Team Phase 4). One row per verdict
+-- card seeded after `chat.postMessage`; reps reply in thread and the Merlin
+-- mentions handler routes to the moderator. verdict + intel pack are snapshotted
+-- so the moderator can summon Red/Blue without re-running the debate or
+-- re-fetching SF/Gong data.
+CREATE TABLE IF NOT EXISTS verdict_conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slack_user_id TEXT NOT NULL,
+  slack_channel_id TEXT NOT NULL,
+  slack_thread_ts TEXT NOT NULL,
+  opportunity_id TEXT NOT NULL,
+  verdict JSONB NOT NULL,
+  intel_pack JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_activity_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_verdict_conv_thread
+  ON verdict_conversations(slack_channel_id, slack_thread_ts);
+CREATE INDEX IF NOT EXISTS idx_verdict_conv_user_recent
+  ON verdict_conversations(slack_user_id, last_activity_at DESC);
+
+-- One row per turn in a verdict conversation. Separate from qa_conversation_turns
+-- because the role enum + metadata shape differ (moderator/red/blue/system).
+CREATE TABLE IF NOT EXISTS verdict_conversation_turns (
+  id BIGSERIAL PRIMARY KEY,
+  conversation_id UUID NOT NULL REFERENCES verdict_conversations(id) ON DELETE CASCADE,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_verdict_turns_conv
+  ON verdict_conversation_turns(conversation_id, created_at);

@@ -464,4 +464,61 @@ class ArbiterSynthesis(BaseModel):
     narrative: str = ""
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# CONVERSATIONAL ARBITER MODERATOR (Phase 4) — /arbiter/chat wire types
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+ArbiterChatRole = Literal["user", "moderator", "red", "blue", "system"]
+
+ArbiterChatToolName = Literal[
+    "summon_red_team",
+    "summon_blue_team",
+    "recompute_probability",
+    "lookup_prior_deal",
+]
+
+ArbiterChatScenarioLean = Literal["win", "loss", "uncertain"]
+
+
+class ChatConversationTurn(_Wire):
+    role: ArbiterChatRole
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class ChatToolCallTrace(_Wire):
+    tool: ArbiterChatToolName
+    input: Dict[str, Any] = Field(default_factory=dict)
+    resultSummary: str = ""
+
+
+class ChatRequest(_Wire):
+    """POST /arbiter/chat — rep's follow-up in a verdict thread.
+
+    `verdict` is the original ArbiterVerdict snapshot; `intelPack` is the full
+    IntelPackRequest used at debate time. Both carried in the body so the
+    Python service stays stateless (cooldown table aside)."""
+
+    conversationId: str
+    verdict: ArbiterVerdict
+    intelPack: Dict[str, Any]
+    priorTurns: List[ChatConversationTurn] = Field(default_factory=list)
+    userMessage: str
+
+
+class ChatResponse(_Wire):
+    """Response from the moderator. `appendedTurns` are turns Merlin should
+    write to verdict_conversation_turns alongside the moderator's reply — one
+    per summoned team / recomputation / lookup."""
+
+    reply: str
+    toolCalls: List[ChatToolCallTrace] = Field(default_factory=list)
+    recomputedProbability: Optional[int] = None
+    recomputedLean: Optional[ArbiterChatScenarioLean] = None
+    scenarioRationale: Optional[str] = None
+    hopsUsed: int = 0
+    appendedTurns: List[ChatConversationTurn] = Field(default_factory=list)
+
+
 ArbiterVerdict.model_rebuild()

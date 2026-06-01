@@ -411,7 +411,9 @@ export type AuditAction =
   | "channel_synced"
   | "channel_sync_dropped"
   | "opp_watch_surfaced"
-  | "opp_watch_dropped";
+  | "opp_watch_dropped"
+  | "arbiter_chat"
+  | "arbiter_chat_failed";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",
@@ -1103,3 +1105,82 @@ export type ArbiterContradictionPair = z.infer<typeof ArbiterContradictionPairSc
 export type ArbiterProbeFired = z.infer<typeof ArbiterProbeFiredSchema>;
 export type ArbiterSynthesis = z.infer<typeof ArbiterSynthesisSchema>;
 export type ArbiterVerdict = z.infer<typeof ArbiterVerdictSchema>;
+
+// ─── Conversational Arbiter Moderator (Phase 4) ──────────────────────────────
+// Wire types for POST /arbiter/chat. The moderator never opines — it routes
+// the rep's question to one of four tools and returns the result verbatim with
+// minimal framing.
+
+export const ArbiterChatRoleSchema = z.enum([
+  "user",
+  "moderator",
+  "red",
+  "blue",
+  "system",
+]);
+
+export const ArbiterChatConversationTurnSchema = z.object({
+  role: ArbiterChatRoleSchema,
+  content: z.string(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const ArbiterChatToolNameSchema = z.enum([
+  "summon_red_team",
+  "summon_blue_team",
+  "recompute_probability",
+  "lookup_prior_deal",
+]);
+
+export const ArbiterChatToolCallTraceSchema = z.object({
+  tool: ArbiterChatToolNameSchema,
+  input: z.record(z.string(), z.unknown()).default({}),
+  resultSummary: z.string().default(""),
+});
+
+export const ArbiterChatRequestSchema = z.object({
+  conversationId: z.string(),
+  verdict: ArbiterVerdictSchema,
+  intelPack: z.record(z.string(), z.unknown()),
+  priorTurns: z.array(ArbiterChatConversationTurnSchema).default([]),
+  userMessage: z.string(),
+});
+
+export const ArbiterChatScenarioLeanSchema = z.enum([
+  "win",
+  "loss",
+  "uncertain",
+]);
+
+export const ArbiterChatResponseSchema = z.object({
+  reply: z.string(),
+  toolCalls: z.array(ArbiterChatToolCallTraceSchema).default([]),
+  recomputedProbability: z.number().int().min(0).max(100).nullable().optional(),
+  recomputedLean: ArbiterChatScenarioLeanSchema.nullable().optional(),
+  scenarioRationale: z.string().nullable().optional(),
+  hopsUsed: z.number().int().min(0).default(0),
+  // Each summon/lookup tool that returned a structured payload — appended to
+  // verdict_conversation_turns by Merlin alongside the moderator's reply so
+  // the audit can render each team's verbatim response.
+  appendedTurns: z.array(ArbiterChatConversationTurnSchema).default([]),
+});
+
+export type ArbiterChatRole = z.infer<typeof ArbiterChatRoleSchema>;
+export type ArbiterChatConversationTurn = z.infer<typeof ArbiterChatConversationTurnSchema>;
+export type ArbiterChatToolName = z.infer<typeof ArbiterChatToolNameSchema>;
+export type ArbiterChatToolCallTrace = z.infer<typeof ArbiterChatToolCallTraceSchema>;
+export type ArbiterChatRequest = z.infer<typeof ArbiterChatRequestSchema>;
+export type ArbiterChatScenarioLean = z.infer<typeof ArbiterChatScenarioLeanSchema>;
+export type ArbiterChatResponse = z.infer<typeof ArbiterChatResponseSchema>;
+
+export interface VerdictConversation {
+  id: string;
+  slackUserId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  opportunityId: string;
+  verdict: ArbiterVerdict;
+  intelPack: Record<string, unknown>;
+  createdAt: string;
+  lastActivityAt: string;
+}

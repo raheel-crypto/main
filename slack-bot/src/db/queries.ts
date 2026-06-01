@@ -17,6 +17,10 @@ import type {
   SfApplyError,
   SfTokens,
   UserPrefs,
+  ArbiterChatConversationTurn,
+  ArbiterChatRole,
+  ArbiterVerdict,
+  VerdictConversation,
 } from "../types.js";
 
 interface UserRow {
@@ -1077,4 +1081,149 @@ export async function getRecentOppWatchOppIds(
     [slackUserId, String(withinDays)]
   );
   return new Set(rows.map((r) => r.opportunity_id));
+}
+
+// ─── Verdict conversations (Arbiter Moderator) ────────────────────────────
+
+interface VerdictConversationRow {
+  id: string;
+  slack_user_id: string;
+  slack_channel_id: string;
+  slack_thread_ts: string;
+  opportunity_id: string;
+  verdict: ArbiterVerdict;
+  intel_pack: Record<string, unknown>;
+  created_at: string;
+  last_activity_at: string;
+}
+
+function rowToVerdictConversation(
+  row: VerdictConversationRow
+): VerdictConversation {
+  return {
+    id: row.id,
+    slackUserId: row.slack_user_id,
+    slackChannelId: row.slack_channel_id,
+    slackThreadTs: row.slack_thread_ts,
+    opportunityId: row.opportunity_id,
+    verdict: row.verdict,
+    intelPack: row.intel_pack,
+    createdAt: row.created_at,
+    lastActivityAt: row.last_activity_at,
+  };
+}
+
+export async function insertVerdictConversation(args: {
+  slackUserId: string;
+  slackChannelId: string;
+  slackThreadTs: string;
+  opportunityId: string;
+  verdict: ArbiterVerdict;
+  intelPack: Record<string, unknown>;
+}): Promise<string> {
+  const pool = getPool();
+  const { rows } = await pool.query<{ id: string }>(
+    `INSERT INTO verdict_conversations
+       (slack_user_id, slack_channel_id, slack_thread_ts, opportunity_id,
+        verdict, intel_pack)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`,
+    [
+      args.slackUserId,
+      args.slackChannelId,
+      args.slackThreadTs,
+      args.opportunityId,
+      JSON.stringify(args.verdict),
+      JSON.stringify(args.intelPack),
+    ]
+  );
+  return rows[0]!.id;
+}
+
+export async function getVerdictConversationByThread(
+  slackChannelId: string,
+  slackThreadTs: string
+): Promise<VerdictConversation | null> {
+  const pool = getPool();
+  const { rows } = await pool.query<VerdictConversationRow>(
+    `SELECT id, slack_user_id, slack_channel_id, slack_thread_ts,
+            opportunity_id, verdict, intel_pack, created_at, last_activity_at
+       FROM verdict_conversations
+      WHERE slack_channel_id = $1
+        AND slack_thread_ts = $2
+      LIMIT 1`,
+    [slackChannelId, slackThreadTs]
+  );
+  return rows[0] ? rowToVerdictConversation(rows[0]) : null;
+}
+
+export async function getVerdictConversationById(
+  conversationId: string
+): Promise<VerdictConversation | null> {
+  const pool = getPool();
+  const { rows } = await pool.query<VerdictConversationRow>(
+    `SELECT id, slack_user_id, slack_channel_id, slack_thread_ts,
+            opportunity_id, verdict, intel_pack, created_at, last_activity_at
+       FROM verdict_conversations
+      WHERE id = $1
+      LIMIT 1`,
+    [conversationId]
+  );
+  return rows[0] ? rowToVerdictConversation(rows[0]) : null;
+}
+
+export async function touchVerdictConversationActivity(
+  conversationId: string
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `UPDATE verdict_conversations
+        SET last_activity_at = NOW()
+      WHERE id = $1`,
+    [conversationId]
+  );
+}
+
+export async function appendVerdictConversationTurn(args: {
+  conversationId: string;
+  role: ArbiterChatRole;
+  content: string;
+  metadata?: Record<string, unknown> | null;
+}): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO verdict_conversation_turns
+       (conversation_id, role, content, metadata)
+     VALUES ($1, $2, $3, $4)`,
+    [
+      args.conversationId,
+      args.role,
+      args.content.slice(0, 16_000),
+      args.metadata ? JSON.stringify(args.metadata) : null,
+    ]
+  );
+}
+
+export async function getVerdictConversationTurns(
+  conversationId: string,
+  limit = 200
+): Promise<ArbiterChatConversationTurn[]> {
+  const pool = getPool();
+  const { rows } = await pool.query<{
+    role: string;
+    content: string;
+    metadata: Record<string, unknown> | null;
+  }>(
+    `SELECT role, content, metadata
+       FROM verdict_conversation_turns
+      WHERE conversation_id = $1
+      ORDER BY created_at ASC, id ASC
+      LIMIT $2`,
+    [conversationId, limit]
+  );
+  return rows.map((r) => ({
+    role: (r.role as ArbiterChatRole) ?? "user",
+    content: r.content,
+    metadata: r.metadata ?? undefined,
+  }));
 }
