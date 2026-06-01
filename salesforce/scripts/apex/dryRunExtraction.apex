@@ -93,8 +93,8 @@ System.debug('--- HTTP STATUS: ' + resp.getStatusCode());
 System.debug('--- RAW RESPONSE BODY (chunked):');
 String rawBody = resp.getBody();
 for (Integer i = 0; i < rawBody.length(); i += CHUNK) {
-    Integer end = Math.min(i + CHUNK, rawBody.length());
-    System.debug('[' + i + '..' + end + '] ' + rawBody.substring(i, end));
+    Integer endIdx = Math.min(i + CHUNK, rawBody.length());
+    System.debug('[' + i + '..' + endIdx + '] ' + rawBody.substring(i, endIdx));
 }
 
 if (resp.getStatusCode() < 200 || resp.getStatusCode() >= 300) {
@@ -116,8 +116,8 @@ for (Object block : content) {
 
 System.debug('--- ASSISTANT TEXT (chunked):');
 for (Integer i = 0; i < assistantText.length(); i += CHUNK) {
-    Integer end = Math.min(i + CHUNK, assistantText.length());
-    System.debug('[' + i + '..' + end + '] ' + assistantText.substring(i, end));
+    Integer endIdx = Math.min(i + CHUNK, assistantText.length());
+    System.debug('[' + i + '..' + endIdx + '] ' + assistantText.substring(i, endIdx));
 }
 
 // Strip optional ``` code fences before parsing
@@ -141,8 +141,8 @@ try {
 System.debug('--- EXTRACTED JSON (pretty):');
 String pretty = JSON.serializePretty(extracted);
 for (Integer i = 0; i < pretty.length(); i += CHUNK) {
-    Integer end = Math.min(i + CHUNK, pretty.length());
-    System.debug('[' + i + '..' + end + '] ' + pretty.substring(i, end));
+    Integer endIdx = Math.min(i + CHUNK, pretty.length());
+    System.debug('[' + i + '..' + endIdx + '] ' + pretty.substring(i, endIdx));
 }
 
 // --- 8. Show what fields WOULD be written (no DML) ---
