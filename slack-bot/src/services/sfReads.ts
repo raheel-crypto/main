@@ -655,3 +655,105 @@ export async function fetchOppsForOwnerByStage(
     stageName: r.StageName,
   }));
 }
+
+export interface AtRiskOpportunity {
+  id: string;
+  name: string;
+  accountId: string;
+  accountName: string;
+  stage: string;
+  amount: number | null;
+  closeDate: string | null;
+  type: string | null;
+  nextStep: string | null;
+  lastActivityDate: string | null;
+  daysToClose: number | null;
+  daysSinceActivity: number | null;
+  reason: "renewal_approaching" | "stalled" | "both";
+}
+
+/**
+ * Pull renewals approaching close AND stalled opps for a single rep, classified
+ * by reason. One SOQL call. Drops any opp that's already closed.
+ *
+ * `lookaheadDays` controls the renewal window; `stallDays` controls the stall
+ * threshold. Both default from constants. `excludeOppIds` is the set of opps
+ * we already surfaced today (e.g., the standup's main opp list) so we don't
+ * double-DM.
+ */
+export async function fetchAtRiskOpportunities(
+  conn: Connection,
+  ownerSfUserId: string,
+  opts: {
+    lookaheadDays: number;
+    stallDays: number;
+    excludeOppIds?: Set<string>;
+  }
+): Promise<AtRiskOpportunity[]> {
+  // SOQL `NEXT_N_DAYS:n` only matches the [today, today+n] window, which is
+  // exactly what we want for renewals. `LAST_N_DAYS:n` matches [today-n, today]
+  // — we want LastActivityDate OLDER than that for "stalled", so we use
+  // `< LAST_N_DAYS:n` semantics (i.e., LastActivityDate < today - n).
+  const soql = `
+    SELECT Id, Name, AccountId, Account.Name, StageName, Amount, CloseDate,
+           Type, NextStep, LastActivityDate
+      FROM Opportunity
+     WHERE OwnerId = '${escapeSoql(ownerSfUserId)}'
+       AND IsClosed = false
+       AND (
+         (CloseDate <= NEXT_N_DAYS:${opts.lookaheadDays}
+           AND (Type LIKE '%Renewal%' OR StageName LIKE '%Renewal%')
+         )
+         OR (LastActivityDate = null
+           OR LastActivityDate < LAST_N_DAYS:${opts.stallDays}
+         )
+       )
+     ORDER BY CloseDate ASC NULLS LAST
+     LIMIT 100`;
+  const result = await conn.query(soql);
+  const exclude = opts.excludeOppIds ?? new Set<string>();
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const out: AtRiskOpportunity[] = [];
+  for (const r of result.records as any[]) {
+    if (exclude.has(r.Id)) continue;
+    const close = r.CloseDate ? new Date(r.CloseDate) : null;
+    const lastAct = r.LastActivityDate ? new Date(r.LastActivityDate) : null;
+    const daysToClose = close
+      ? Math.round((close.getTime() - today.getTime()) / 86_400_000)
+      : null;
+    const daysSinceActivity = lastAct
+      ? Math.round((today.getTime() - lastAct.getTime()) / 86_400_000)
+      : null;
+    const typeOrStage = `${r.Type ?? ""} ${r.StageName ?? ""}`.toLowerCase();
+    const isRenewal =
+      /renewal/.test(typeOrStage) &&
+      daysToClose != null &&
+      daysToClose >= 0 &&
+      daysToClose <= opts.lookaheadDays;
+    const isStalled =
+      lastAct == null || (daysSinceActivity ?? 0) >= opts.stallDays;
+    const reason: AtRiskOpportunity["reason"] = isRenewal && isStalled
+      ? "both"
+      : isRenewal
+        ? "renewal_approaching"
+        : "stalled";
+    out.push({
+      id: r.Id,
+      name: r.Name,
+      accountId: r.AccountId,
+      accountName: r.Account?.Name ?? "",
+      stage: r.StageName,
+      amount: r.Amount ?? null,
+      closeDate: r.CloseDate ?? null,
+      type: r.Type ?? null,
+      nextStep: r.NextStep ?? null,
+      lastActivityDate: r.LastActivityDate ?? null,
+      daysToClose,
+      daysSinceActivity,
+      reason,
+    });
+  }
+  return out;
+}

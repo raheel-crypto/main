@@ -184,3 +184,19 @@ CREATE INDEX IF NOT EXISTS idx_channel_bindings_opp
   ON channel_bindings(opportunity_id);
 CREATE INDEX IF NOT EXISTS idx_channel_bindings_owner
   ON channel_bindings(bound_by_slack_user_id);
+
+-- At-risk opp watch: a per-opp + per-rep + per-reason record so we don't
+-- re-surface the same stalled/renewal opp every day. Within the dedup window
+-- (7 days), the orchestrator skips opps that already fired.
+CREATE TABLE IF NOT EXISTS opp_watch_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slack_user_id TEXT NOT NULL,
+  opportunity_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  card_id UUID,
+  fired_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_opp_watch_user_time
+  ON opp_watch_runs(slack_user_id, fired_at DESC);
+CREATE INDEX IF NOT EXISTS idx_opp_watch_opp_time
+  ON opp_watch_runs(opportunity_id, fired_at DESC);

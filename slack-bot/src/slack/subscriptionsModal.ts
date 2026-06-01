@@ -78,12 +78,12 @@ const RED_TEAM_OPTION = {
   value: RED_TEAM_VALUE,
   text: {
     type: "plain_text" as const,
-    text: "Send me adversary intel on my advanced-stage deals",
+    text: "Run the full Red/Blue debate + Arbiter on my advanced-stage deals",
   },
   description: {
     type: "plain_text" as const,
     text:
-      "Triggers after new Gong calls and once daily. Personas (competitor AE, CFO, CISO) call out risks with quotes from prior dead deals.",
+      "Triggers after new Gong calls and once daily. Red and Blue argue the deal in parallel; the Arbiter scores both arguments, runs Round 2 probes if they're talking past each other, and DMs a calibrated win probability with concrete next steps.",
   },
 };
 
@@ -221,7 +221,7 @@ export function subscriptionsModalView(prefs: Prefs | null): View {
         type: "input",
         block_id: RED_TEAM_BLOCK_ID,
         optional: true,
-        label: { type: "plain_text", text: "Red Team" },
+        label: { type: "plain_text", text: "Deal evaluation (Red + Blue + Arbiter)" },
         element: {
           type: "checkboxes",
           action_id: "value",

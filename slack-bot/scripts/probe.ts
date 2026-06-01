@@ -386,8 +386,41 @@ async function main() {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
+  if (kind === "opp-watch") {
+    const slackUserId = rest[0];
+    if (!slackUserId) {
+      console.error("usage: probe opp-watch <slack_user_id>");
+      process.exit(1);
+    }
+    const user = await getUser(slackUserId);
+    if (!user) throw new Error(`No user row for ${slackUserId}`);
+    const conn = await getConnectionForUser(slackUserId);
+    const ident = await conn.identity();
+    const sfUserId = (ident as any).user_id as string;
+    const { fetchAtRiskOpportunities } = await import(
+      "../src/services/sfReads.js"
+    );
+    const { RENEWAL_LOOKAHEAD_DAYS, STALL_THRESHOLD_DAYS } = await import(
+      "../src/constants.js"
+    );
+    const candidates = await fetchAtRiskOpportunities(conn, sfUserId, {
+      lookaheadDays: RENEWAL_LOOKAHEAD_DAYS,
+      stallDays: STALL_THRESHOLD_DAYS,
+    });
+    console.log(
+      `[opp-watch] ${candidates.length} at-risk opps (post-DB-dedup not applied in probe):`
+    );
+    for (const c of candidates) {
+      console.log(
+        `  · ${c.name} (${c.id}) — ${c.reason} · stage=${c.stage} · ` +
+          `closeIn=${c.daysToClose}d · daysSinceActivity=${c.daysSinceActivity}d · ` +
+          `amount=${c.amount} · type=${c.type}`
+      );
+    }
+    return;
+  }
   console.error(
-    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal|pre-meeting|post-meeting|resolve-account|red-team-pack|red-team|red-team-sweep|arbiter> <args...>"
+    "usage: probe <gong|sf|usage|rogo-bootstrap|rogo-customer|rogo-usage|agent|buy-signals|gong-webhook|gcal|pre-meeting|post-meeting|resolve-account|red-team-pack|red-team|red-team-sweep|arbiter|opp-watch> <args...>"
   );
   process.exit(1);
 }

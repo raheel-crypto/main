@@ -1047,3 +1047,34 @@ export async function getChannelBindingsForOpps(
   }
   return out;
 }
+
+// ─── At-risk opp watch ─────────────────────────────────────────────────────
+
+export async function insertOppWatchRun(args: {
+  slackUserId: string;
+  opportunityId: string;
+  reason: string;
+  cardId: string | null;
+}): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO opp_watch_runs (slack_user_id, opportunity_id, reason, card_id)
+     VALUES ($1, $2, $3, $4)`,
+    [args.slackUserId, args.opportunityId, args.reason, args.cardId]
+  );
+}
+
+export async function getRecentOppWatchOppIds(
+  slackUserId: string,
+  withinDays: number
+): Promise<Set<string>> {
+  const pool = getPool();
+  const { rows } = await pool.query<{ opportunity_id: string }>(
+    `SELECT DISTINCT opportunity_id
+       FROM opp_watch_runs
+      WHERE slack_user_id = $1
+        AND fired_at >= NOW() - ($2 || ' days')::interval`,
+    [slackUserId, String(withinDays)]
+  );
+  return new Set(rows.map((r) => r.opportunity_id));
+}

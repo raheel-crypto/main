@@ -21,6 +21,15 @@ export const QA_CONVERSATION_MAX_TURNS = 12;
 // Notion sync: hard cap on the body text fed into the recommender. Notion
 // pages can be huge; truncating keeps the prompt size bounded.
 export const NOTION_MAX_CHARS = 60_000;
+
+// At-risk opp watch. Reuse the standup runner; flags renewals whose
+// CloseDate is within N days AND stalled opps with no LastActivityDate
+// movement in N days. Dedup window prevents re-pinging the rep about the
+// same opp every day.
+export const RENEWAL_LOOKAHEAD_DAYS = 60;
+export const STALL_THRESHOLD_DAYS = 14;
+export const OPP_WATCH_DEDUP_DAYS = 7;
+export const OPP_WATCH_MAX_CARDS_PER_RUN = 5;
 export const RED_TEAM_FIELD_HISTORY_LOOKBACK_DAYS = 30;
 export const RED_TEAM_GONG_CALL_LIMIT = 5;
 export const RED_TEAM_ACTIVITY_LIMIT = 25;

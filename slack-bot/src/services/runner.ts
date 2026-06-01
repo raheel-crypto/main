@@ -20,6 +20,7 @@ import { buildContext } from "./opportunityContext.js";
 import { recommendForOpp } from "./recommender.js";
 import { postAudit } from "./auditChannel.js";
 import { runBuySignalsForUser } from "./buySignals.js";
+import { runOppWatchForUser } from "./oppWatch.js";
 
 export interface RunResult {
   ran: boolean;
@@ -27,6 +28,7 @@ export interface RunResult {
   oppsConsidered?: number;
   cardsPosted?: number;
   buySignalCardsPosted?: number;
+  oppWatchCardsPosted?: number;
 }
 
 export async function runStandupForUser(slackUserId: string): Promise<RunResult> {
@@ -99,7 +101,31 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
         metadata: { reason: "pipeline_error", error: err?.message ?? String(err) },
       });
     }
-    if (buySignalResult.cardsPosted === 0) {
+    let oppWatchResult = { cardsPosted: 0 };
+    try {
+      const res = await runOppWatchForUser({
+        slackUserId,
+        conn,
+        slack,
+        sfUserId,
+        channelId: null,
+        threadTs: null,
+        instanceUrl: conn.instanceUrl!,
+        alreadySurfacedOppIds: new Set<string>(),
+      });
+      oppWatchResult = { cardsPosted: res.cardsPosted };
+    } catch (err: any) {
+      console.error("[opp_watch] failed:", err);
+      await appendAudit({
+        slackUserId,
+        action: "opp_watch_dropped",
+        metadata: { reason: "pipeline_error", error: err?.message ?? String(err) },
+      });
+    }
+    if (
+      buySignalResult.cardsPosted === 0 &&
+      oppWatchResult.cardsPosted === 0
+    ) {
       await slack.chat.postMessage({
         channel: slackUserId,
         unfurl_links: false,
@@ -113,6 +139,7 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
       oppsConsidered: 0,
       cardsPosted: 0,
       buySignalCardsPosted: buySignalResult.cardsPosted,
+      oppWatchCardsPosted: oppWatchResult.cardsPosted,
     };
   }
 
@@ -169,7 +196,17 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
         action: "recommended",
         oldValue: String(f.currentValue ?? ""),
         newValue: String(f.recommendedValue ?? ""),
-        metadata: { rationale: f.rationale },
+        metadata: {
+          rationale: f.rationale,
+          ...(r.channelContext
+            ? {
+                channelContextUsed: true,
+                channelId: r.channelContext.slackChannelId,
+                channelLookbackDays: r.channelContext.lookbackDays,
+                channelMessageCount: r.channelContext.messageCount,
+              }
+            : {}),
+        },
       });
     }
   }
@@ -195,15 +232,39 @@ export async function runStandupForUser(slackUserId: string): Promise<RunResult>
     });
   }
 
+  let oppWatchCardsPosted = 0;
+  try {
+    const alreadySurfaced = new Set(opps.map((o) => o.opp.id));
+    const res = await runOppWatchForUser({
+      slackUserId,
+      conn,
+      slack,
+      sfUserId,
+      channelId: channel,
+      threadTs,
+      instanceUrl: conn.instanceUrl!,
+      alreadySurfacedOppIds: alreadySurfaced,
+    });
+    oppWatchCardsPosted = res.cardsPosted;
+  } catch (err: any) {
+    console.error("[opp_watch] failed:", err);
+    await appendAudit({
+      slackUserId,
+      action: "opp_watch_dropped",
+      metadata: { reason: "pipeline_error", error: err?.message ?? String(err) },
+    });
+  }
+
   await markToday(user.slackUserId, user.timezone);
   await postAudit(
-    `Standup ran for <@${slackUserId}>: ${present.length} opp cards + ${buySignalCardsPosted} buy-signal cards across ${opps.length} opps.`
+    `Standup ran for <@${slackUserId}>: ${present.length} opp cards + ${buySignalCardsPosted} buy-signal cards + ${oppWatchCardsPosted} at-risk cards across ${opps.length} opps.`
   );
   return {
     ran: true,
     oppsConsidered: opps.length,
     cardsPosted: present.length,
     buySignalCardsPosted,
+    oppWatchCardsPosted,
   };
 }
 
@@ -222,7 +283,11 @@ async function safeRecommend(
       });
       return null;
     }
-    return { opp: ctx.opp, recommendation: r };
+    return {
+      opp: ctx.opp,
+      recommendation: r,
+      channelContext: ctx.channelContext,
+    };
   } catch (err: any) {
     await appendAudit({
       slackUserId,

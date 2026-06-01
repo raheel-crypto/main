@@ -2448,3 +2448,63 @@ export function channelBindStatusBlocks(args: {
     ],
   };
 }
+
+// ─── At-risk opp watch ─────────────────────────────────────────────────────
+
+export type OppWatchReason = "renewal_approaching" | "stalled" | "both";
+
+export interface OppWatchCardOpts {
+  reason: OppWatchReason;
+  daysToClose: number | null;
+  daysSinceActivity: number | null;
+}
+
+/**
+ * Wraps the standard oppCard with a header context block explaining WHY this
+ * opp surfaced ("⚠️ Renewal closes in 14d · last activity 23d ago"). Keeps
+ * the recommendation card identical to the standup version so all existing
+ * accept/edit/skip/apply_all handlers work unchanged.
+ */
+export function oppWatchCard(
+  cardId: string,
+  rec: Recommendation,
+  oppOpts: { name: string; accountName: string; instanceUrl: string },
+  watch: OppWatchCardOpts
+): { blocks: KnownBlock[]; text: string } {
+  const base = oppCard(cardId, rec, oppOpts);
+  const badge = oppWatchBadge(watch);
+  // Prepend the warning badge as a context block so it reads above the
+  // existing header section.
+  const blocks: KnownBlock[] = [
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: badge }],
+    },
+    ...base.blocks,
+  ];
+  return { blocks, text: `⚠️ ${watch.reason}: ${base.text}` };
+}
+
+export function oppWatchBadge(watch: OppWatchCardOpts): string {
+  const parts: string[] = [];
+  if (
+    watch.reason === "renewal_approaching" ||
+    watch.reason === "both"
+  ) {
+    const d = watch.daysToClose;
+    parts.push(
+      d != null
+        ? `:warning: *Renewal closes in ${d} day${d === 1 ? "" : "s"}*`
+        : `:warning: *Renewal approaching*`
+    );
+  }
+  if (watch.reason === "stalled" || watch.reason === "both") {
+    const d = watch.daysSinceActivity;
+    parts.push(
+      d != null
+        ? `:hourglass_flowing_sand: *Last activity ${d} day${d === 1 ? "" : "s"} ago*`
+        : `:hourglass_flowing_sand: *No logged activity*`
+    );
+  }
+  return parts.join(" · ");
+}
