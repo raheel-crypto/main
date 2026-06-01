@@ -114,16 +114,16 @@ public with sharing class OrderFormApplier {
 
     private static Opportunity buildFillBlanksUpdate(Opportunity opp, Order_Form_Extraction__c row, List<String> log) {
         Opportunity changes = new Opportunity(Id = opp.Id);
-        Boolean any = false;
+        Boolean anyChange = false;
         Boolean isPilot = 'Pilot'.equals(row.Type__c) || 'Pilot'.equals(opp.Type);
 
         if (isPilot) {
-            any = trySetDate('Trial_Start_Date__c', opp.Trial_Start_Date__c, row.Contract_Start_Date__c, changes, log) || any;
-            any = trySetDate('Trial_End_Date__c',   opp.Trial_End_Date__c,   row.Contract_End_Date__c,   changes, log) || any;
+            anyChange = trySetDate('Trial_Start_Date__c', opp.Trial_Start_Date__c, row.Contract_Start_Date__c, changes, log) || anyChange;
+            anyChange = trySetDate('Trial_End_Date__c',   opp.Trial_End_Date__c,   row.Contract_End_Date__c,   changes, log) || anyChange;
             if (opp.Trial_Users__c == null && row.Seat_Licenses__c != null) {
                 changes.Trial_Users__c = row.Seat_Licenses__c;
                 log.add('Wrote Trial_Users__c=' + row.Seat_Licenses__c);
-                any = true;
+                anyChange = true;
             } else if (opp.Trial_Users__c != null && row.Seat_Licenses__c != null && opp.Trial_Users__c != row.Seat_Licenses__c) {
                 log.add('Skipped Trial_Users__c (existing=' + opp.Trial_Users__c + ', extracted=' + row.Seat_Licenses__c + ')');
             }
@@ -131,81 +131,81 @@ public with sharing class OrderFormApplier {
             if (opp.Trial_Price__c == null && trialPrice != null) {
                 changes.Trial_Price__c = trialPrice;
                 log.add('Wrote Trial_Price__c=' + trialPrice);
-                any = true;
+                anyChange = true;
             }
             if (opp.Paid_Trial__c == false && row.Paid_Trial__c == true) {
                 changes.Paid_Trial__c = true;
                 log.add('Wrote Paid_Trial__c=true');
-                any = true;
+                anyChange = true;
             }
             if (String.isBlank(opp.Pilot_Success_Criteria__c) && String.isNotBlank(row.Pilot_Success_Criteria__c)) {
                 changes.Pilot_Success_Criteria__c = row.Pilot_Success_Criteria__c;
                 log.add('Wrote Pilot_Success_Criteria__c');
-                any = true;
+                anyChange = true;
             }
         } else {
-            any = trySetDate('Contract_Start_Date__c', opp.Contract_Start_Date__c, row.Contract_Start_Date__c, changes, log) || any;
-            any = trySetDate('Contract_End_Date__c',   opp.Contract_End_Date__c,   row.Contract_End_Date__c,   changes, log) || any;
+            anyChange = trySetDate('Contract_Start_Date__c', opp.Contract_Start_Date__c, row.Contract_Start_Date__c, changes, log) || anyChange;
+            anyChange = trySetDate('Contract_End_Date__c',   opp.Contract_End_Date__c,   row.Contract_End_Date__c,   changes, log) || anyChange;
             if (opp.Contract_Length_Mos__c == null && row.Contract_Length_Months__c != null) {
                 changes.Contract_Length_Mos__c = row.Contract_Length_Months__c;
                 log.add('Wrote Contract_Length_Mos__c=' + row.Contract_Length_Months__c);
-                any = true;
+                anyChange = true;
             }
             if (opp.Seat_Licenses__c == null && row.Seat_Licenses__c != null) {
                 changes.Seat_Licenses__c = row.Seat_Licenses__c;
                 log.add('Wrote Seat_Licenses__c=' + row.Seat_Licenses__c);
-                any = true;
+                anyChange = true;
             } else if (opp.Seat_Licenses__c != null && row.Seat_Licenses__c != null && opp.Seat_Licenses__c != row.Seat_Licenses__c) {
                 log.add('Skipped Seat_Licenses__c (existing=' + opp.Seat_Licenses__c + ', extracted=' + row.Seat_Licenses__c + ')');
             }
             if (opp.Num_Users__c == null && row.Seat_Licenses__c != null) {
                 changes.Num_Users__c = row.Seat_Licenses__c;
                 log.add('Wrote Num_Users__c=' + row.Seat_Licenses__c);
-                any = true;
+                anyChange = true;
             }
             if (opp.License_Fees__c == null && row.License_Fees__c != null) {
                 changes.License_Fees__c = row.License_Fees__c;
                 log.add('Wrote License_Fees__c=' + row.License_Fees__c);
-                any = true;
+                anyChange = true;
             } else if (opp.License_Fees__c != null && row.License_Fees__c != null && opp.License_Fees__c != row.License_Fees__c) {
                 log.add('Skipped License_Fees__c (existing=' + opp.License_Fees__c + ', extracted=' + row.License_Fees__c + ')');
             }
         }
 
-        any = trySetDecimal('Platform_Connection_Fee__c', opp.Platform_Connection_Fee__c, row.Platform_Connection_Fee__c, changes, log) || any;
-        any = trySetDecimal('Professional_Service_Fees__c', opp.Professional_Service_Fees__c, row.Professional_Service_Fees__c, changes, log) || any;
-        any = trySetDecimal('Total_Contract_Value__c', opp.Total_Contract_Value__c, row.Total_Contract_Value__c, changes, log) || any;
+        anyChange = trySetDecimal('Platform_Connection_Fee__c', opp.Platform_Connection_Fee__c, row.Platform_Connection_Fee__c, changes, log) || anyChange;
+        anyChange = trySetDecimal('Professional_Service_Fees__c', opp.Professional_Service_Fees__c, row.Professional_Service_Fees__c, changes, log) || anyChange;
+        anyChange = trySetDecimal('Total_Contract_Value__c', opp.Total_Contract_Value__c, row.Total_Contract_Value__c, changes, log) || anyChange;
         if (opp.Amount == null && row.Total_Contract_Value__c != null) {
             changes.Amount = row.Total_Contract_Value__c;
             log.add('Wrote Amount=' + row.Total_Contract_Value__c);
-            any = true;
+            anyChange = true;
         }
-        any = trySetDecimal('Annual_Recurring_Revenue__c', opp.Annual_Recurring_Revenue__c, row.Annual_Recurring_Revenue__c, changes, log) || any;
-        any = trySetPicklist('Renewal_Terms__c', opp.Renewal_Terms__c, row.Renewal_Terms__c, changes, log) || any;
-        any = trySetPicklist('Subscription_Schedule__c', opp.Subscription_Schedule__c, row.Subscription_Schedule__c, changes, log) || any;
-        any = trySetPicklist('Payment_Terms__c', opp.Payment_Terms__c, row.Payment_Terms__c, changes, log) || any;
-        any = trySetPicklist('Credit_Terms__c', opp.Credit_Terms__c, row.Credit_Terms__c, changes, log) || any;
+        anyChange = trySetDecimal('Annual_Recurring_Revenue__c', opp.Annual_Recurring_Revenue__c, row.Annual_Recurring_Revenue__c, changes, log) || anyChange;
+        anyChange = trySetPicklist('Renewal_Terms__c', opp.Renewal_Terms__c, row.Renewal_Terms__c, changes, log) || anyChange;
+        anyChange = trySetPicklist('Subscription_Schedule__c', opp.Subscription_Schedule__c, row.Subscription_Schedule__c, changes, log) || anyChange;
+        anyChange = trySetPicklist('Payment_Terms__c', opp.Payment_Terms__c, row.Payment_Terms__c, changes, log) || anyChange;
+        anyChange = trySetPicklist('Credit_Terms__c', opp.Credit_Terms__c, row.Credit_Terms__c, changes, log) || anyChange;
 
         if (String.isBlank(opp.Billing_Contact__c) && String.isNotBlank(row.Billing_Contact_Email__c)) {
             changes.Billing_Contact__c = row.Billing_Contact_Email__c;
             log.add('Wrote Billing_Contact__c=' + row.Billing_Contact_Email__c);
-            any = true;
+            anyChange = true;
         }
         if (opp.ELA__c == false && row.ELA__c == true) {
             changes.ELA__c = true;
             log.add('Wrote ELA__c=true');
-            any = true;
+            anyChange = true;
         }
 
         String notesAppendix = composeNotesAppendix(row);
         if (String.isNotBlank(notesAppendix) && String.isBlank(opp.Notes__c)) {
             changes.Notes__c = notesAppendix;
             log.add('Wrote Notes__c (special terms / credits appendix)');
-            any = true;
+            anyChange = true;
         }
 
-        if (!any) log.add('No fields written; Opportunity already had values for everything extracted.');
-        return any ? changes : null;
+        if (!anyChange) log.add('No fields written; Opportunity already had values for everything extracted.');
+        return anyChange ? changes : null;
     }
 
     private static Boolean trySetDate(String fieldName, Date current, Date extracted, Opportunity changes, List<String> log) {
