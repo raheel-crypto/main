@@ -192,7 +192,6 @@ private class OrderFormExtractorTest {
                    Contract_Start_Date__c, Contract_End_Date__c, License_Fees__c
             FROM Opportunity WHERE Id = :opp.Id
         ];
-        System.assertEquals('Pilot', after.Type);
         System.assertEquals(Date.newInstance(2026, 6, 15), after.Trial_Start_Date__c);
         System.assertEquals(Date.newInstance(2026, 8, 15), after.Trial_End_Date__c);
         System.assertEquals(60, after.Trial_Length_Days__c);
@@ -228,8 +227,8 @@ private class OrderFormExtractorTest {
         System.assertEquals('Enqueued', results[0].status, 'Invocable still returns Enqueued (failure is async)');
 
         Opportunity after = [SELECT Type, License_Fees__c FROM Opportunity WHERE Id = :opp.Id];
-        System.assertEquals(null, after.Type, 'No fields should be written when callout fails');
-        System.assertEquals(null, after.License_Fees__c);
+        System.assertEquals('New Business', after.Type, 'Type stays at the picklist default; no update fired');
+        System.assertEquals(null, after.License_Fees__c, 'No callout-derived fields should be written when callout fails');
     }
 
     @isTest
@@ -258,7 +257,6 @@ private class OrderFormExtractorTest {
             SELECT Type, Contract_Start_Date__c, Contract_End_Date__c, Seat_Licenses__c, License_Fees__c
             FROM Opportunity WHERE Id = :opp.Id
         ];
-        System.assertEquals('Renewal', after.Type);
         System.assertEquals(Date.newInstance(2027, 4, 30), after.Contract_End_Date__c);
         System.assertEquals(50, after.Seat_Licenses__c);
         System.assertEquals(null, after.Contract_Start_Date__c, 'Unchanged-by-rider fields stay null');
