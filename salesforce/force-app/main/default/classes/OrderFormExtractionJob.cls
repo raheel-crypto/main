@@ -1,6 +1,6 @@
 public with sharing class OrderFormExtractionJob implements Queueable, Database.AllowsCallouts {
 
-    @TestVisible private static final String NAMED_CRED = 'callout:Anthropic_API';
+    @TestVisible private static final String NAMED_CRED = 'callout:Anthropic_Claude';
     @TestVisible private static final String MODEL = 'claude-sonnet-4-6';
     @TestVisible private static final Integer MAX_TOKENS = 4096;
     @TestVisible private static final String PROMPT_RESOURCE = 'OrderFormPrompt';
