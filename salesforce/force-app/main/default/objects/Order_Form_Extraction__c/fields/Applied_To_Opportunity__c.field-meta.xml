@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Applied_To_Opportunity__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True once OrderFormApplier has copied this row's values onto the parent Opportunity.</description>
+    <label>Applied To Opportunity</label>
+    <type>Checkbox</type>
+</CustomField>

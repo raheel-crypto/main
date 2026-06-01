@@ -44,7 +44,7 @@ public with sharing class OrderFormExtractor {
                 System.enqueueJob(new OrderFormExtractionJob(r.opportunityId, cdl.ContentDocumentId));
                 res.status = 'Enqueued';
                 res.contentDocumentId = cdl.ContentDocumentId;
-                res.message = 'Queued extraction for ContentDocument ' + cdl.ContentDocumentId + '.';
+                res.message = 'Queued extraction for ContentDocument ' + cdl.ContentDocumentId + '. A new Order_Form_Extraction__c row will be created; apply it via OrderFormApplier.';
             }
             results.add(res);
         }

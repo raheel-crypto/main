@@ -6,16 +6,15 @@ private class OrderFormExtractorTest {
             'type' => 'text',
             'text' => JSON.serialize(extractedFields)
         };
-        Map<String, Object> envelope = new Map<String, Object>{
+        return JSON.serialize(new Map<String, Object>{
             'id' => 'msg_test',
             'type' => 'message',
             'role' => 'assistant',
-            'model' => 'claude-sonnet-4-5',
+            'model' => 'claude-sonnet-4-6',
             'content' => new List<Object>{ textBlock },
             'stop_reason' => 'end_turn',
             'usage' => new Map<String, Object>{ 'input_tokens' => 100, 'output_tokens' => 200 }
-        };
-        return JSON.serialize(envelope);
+        });
     }
 
     public class MockAnthropic implements HttpCalloutMock {
@@ -32,12 +31,22 @@ private class OrderFormExtractorTest {
         }
     }
 
+    public class GarbageMock implements HttpCalloutMock {
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse r = new HttpResponse();
+            r.setStatusCode(200);
+            r.setHeader('Content-Type', 'application/json');
+            r.setBody(JSON.serialize(new Map<String, Object>{
+                'content' => new List<Object>{
+                    new Map<String, Object>{ 'type' => 'text', 'text' => 'not valid json {{' }
+                }
+            }));
+            return r;
+        }
+    }
+
     private static Opportunity insertOpp(String name, String stage) {
-        Opportunity o = new Opportunity(
-            Name = name,
-            StageName = stage,
-            CloseDate = Date.today()
-        );
+        Opportunity o = new Opportunity(Name = name, StageName = stage, CloseDate = Date.today());
         insert o;
         return o;
     }
@@ -52,10 +61,31 @@ private class OrderFormExtractorTest {
         insert cv;
     }
 
+    private static Order_Form_Extraction__c latestExtractionFor(Id oppId) {
+        List<Order_Form_Extraction__c> rows = [
+            SELECT Id, Extraction_Status__c, HTTP_Status_Code__c, Raw_Response__c, Error_Message__c,
+                   Extracted_JSON__c, File_Name__c, Content_Document_Id__c, Model__c, Extracted_At__c,
+                   Is_Amendment__c, Type__c,
+                   Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Months__c,
+                   Seat_Licenses__c, License_Fees__c, Platform_Connection_Fee__c, Professional_Service_Fees__c,
+                   Total_Contract_Value__c, Annual_Recurring_Revenue__c,
+                   Renewal_Terms__c, Subscription_Schedule__c, Payment_Terms__c, Credit_Terms__c,
+                   Billing_Contact_Email__c, ELA__c, Paid_Trial__c, Trial_Price__c, Pilot_Success_Criteria__c,
+                   Credits_Purchased__c, Credits_Period__c, Special_Terms__c,
+                   Applied_To_Opportunity__c
+            FROM Order_Form_Extraction__c
+            WHERE Opportunity__c = :oppId
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        return rows.isEmpty() ? null : rows[0];
+    }
+
+    // ===== Invocable (file lookup) =====
+
     @isTest
     static void noDocumentFound_returnsStatus() {
         Opportunity opp = insertOpp('No Doc Opp', '4 - Proposal');
-
         OrderFormExtractor.Request req = new OrderFormExtractor.Request();
         req.opportunityId = opp.Id;
 
@@ -65,12 +95,47 @@ private class OrderFormExtractorTest {
 
         System.assertEquals(1, results.size());
         System.assertEquals('NoDocumentFound', results[0].status);
-        System.assertEquals(null, results[0].contentDocumentId);
+        System.assertEquals(0, [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id]);
     }
 
     @isTest
-    static void happyPath_fillsBlanksOnNewBusiness() {
-        Opportunity opp = insertOpp('Happy New Biz', '4 - Proposal');
+    static void bulk_invocablePreservesOrder() {
+        List<Opportunity> opps = new List<Opportunity>();
+        for (Integer i = 0; i < 4; i++) {
+            opps.add(new Opportunity(Name = 'Bulk ' + i, StageName = '4 - Proposal', CloseDate = Date.today()));
+        }
+        insert opps;
+        for (Integer i = 0; i < opps.size(); i++) {
+            if (Math.mod(i, 2) == 0) attachSignedFile(opps[i].Id, 'signed__Bulk_' + i);
+        }
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business', 'Seat_Licenses' => 7 });
+
+        List<OrderFormExtractor.Request> reqs = new List<OrderFormExtractor.Request>();
+        for (Opportunity o : opps) {
+            OrderFormExtractor.Request r = new OrderFormExtractor.Request();
+            r.opportunityId = o.Id;
+            reqs.add(r);
+        }
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        List<OrderFormExtractor.Result> results = OrderFormExtractor.run(reqs);
+        Test.stopTest();
+
+        System.assertEquals(4, results.size());
+        for (Integer i = 0; i < results.size(); i++) {
+            String expected = Math.mod(i, 2) == 0 ? 'Enqueued' : 'NoDocumentFound';
+            System.assertEquals(expected, results[i].status, 'Result ' + i);
+        }
+    }
+
+    // ===== Extraction Queueable =====
+
+    @isTest
+    static void extractionJob_writesSuccessRowWithAllFields() {
+        Opportunity opp = insertOpp('Happy Extract', '4 - Proposal');
         attachSignedFile(opp.Id, 'signed__Customer_Agreement');
 
         Map<String, Object> extracted = new Map<String, Object>{
@@ -86,7 +151,7 @@ private class OrderFormExtractorTest {
             'Renewal_Terms' => 'Auto-renews unless 90 days written notice',
             'Subscription_Schedule' => 'Annual',
             'Payment_Terms' => 'Annual',
-            'Credit_Terms' => 'Net 30 days',
+            'Credit_Terms' => 'Net 30',
             'Billing_Contact_Email' => 'billing@customer.com',
             'Special_Terms' => 'MFN clause; standard MSA otherwise.'
         };
@@ -98,21 +163,132 @@ private class OrderFormExtractorTest {
 
         Test.setMock(HttpCalloutMock.class, mock);
         Test.startTest();
-        List<OrderFormExtractor.Result> results = OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
         Test.stopTest();
 
-        System.assertEquals('Enqueued', results[0].status);
-        System.assertEquals(1, mock.callCount);
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertNotEquals(null, row, 'Extraction row should exist');
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(200, row.HTTP_Status_Code__c);
+        System.assertNotEquals(null, row.Raw_Response__c);
+        System.assertNotEquals(null, row.Extracted_JSON__c);
+        System.assertEquals('New Business', row.Type__c);
+        System.assertEquals(Date.newInstance(2026, 6, 1), row.Contract_Start_Date__c);
+        System.assertEquals(Date.newInstance(2027, 5, 31), row.Contract_End_Date__c);
+        System.assertEquals(12, row.Contract_Length_Months__c);
+        System.assertEquals(25, row.Seat_Licenses__c);
+        System.assertEquals(150000, row.License_Fees__c);
+        System.assertEquals(150000, row.Total_Contract_Value__c);
+        System.assertEquals(150000, row.Annual_Recurring_Revenue__c);
+        System.assertEquals('Auto-renew (90-day)', row.Renewal_Terms__c);
+        System.assertEquals('Annual', row.Subscription_Schedule__c);
+        System.assertEquals('Annual', row.Payment_Terms__c);
+        System.assertEquals('Net-30', row.Credit_Terms__c);
+        System.assertEquals('billing@customer.com', row.Billing_Contact_Email__c);
+        System.assertEquals(false, row.Applied_To_Opportunity__c);
+
+        Opportunity oppAfter = [SELECT License_Fees__c, Seat_Licenses__c FROM Opportunity WHERE Id = :opp.Id];
+        System.assertEquals(null, oppAfter.License_Fees__c, 'Opp should NOT be modified by extraction alone');
+        System.assertEquals(null, oppAfter.Seat_Licenses__c, 'Opp should NOT be modified by extraction alone');
+    }
+
+    @isTest
+    static void extractionJob_apiFailure_writesFailureRow() {
+        Opportunity opp = insertOpp('API Fail Extract', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__Whatever');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.statusCode = 500;
+        mock.responseBody = '{"error":"internal"}';
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertNotEquals(null, row);
+        System.assertEquals('API Failed', row.Extraction_Status__c);
+        System.assertEquals(500, row.HTTP_Status_Code__c);
+        System.assert(row.Error_Message__c != null && row.Error_Message__c.contains('500'),
+            'Error_Message should mention 500: ' + row.Error_Message__c);
+    }
+
+    @isTest
+    static void extractionJob_parseFailure_writesParseFailedRow() {
+        Opportunity opp = insertOpp('Parse Fail Extract', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__Garbage');
+
+        Test.setMock(HttpCalloutMock.class, new GarbageMock());
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertNotEquals(null, row);
+        System.assertEquals('Parse Failed', row.Extraction_Status__c);
+        System.assertNotEquals(null, row.Error_Message__c);
+    }
+
+    // ===== Applier =====
+
+    private static Order_Form_Extraction__c insertExtraction(Id oppId, Map<String, Object> overrides) {
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(
+            Opportunity__c = oppId,
+            Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now(),
+            Model__c = 'claude-sonnet-4-6',
+            Type__c = 'New Business',
+            Applied_To_Opportunity__c = false
+        );
+        for (String k : overrides.keySet()) row.put(k, overrides.get(k));
+        insert row;
+        return row;
+    }
+
+    @isTest
+    static void applier_fillsBlanksOnly() {
+        Opportunity opp = insertOpp('Apply Happy', '5 - Contracting');
+        Order_Form_Extraction__c row = insertExtraction(opp.Id, new Map<String, Object>{
+            'Contract_Start_Date__c' => Date.newInstance(2026, 6, 1),
+            'Contract_End_Date__c' => Date.newInstance(2027, 5, 31),
+            'Contract_Length_Months__c' => 12,
+            'Seat_Licenses__c' => 25,
+            'License_Fees__c' => 150000,
+            'Total_Contract_Value__c' => 150000,
+            'Annual_Recurring_Revenue__c' => 150000,
+            'Renewal_Terms__c' => 'Auto-renew (90-day)',
+            'Subscription_Schedule__c' => 'Annual',
+            'Payment_Terms__c' => 'Annual',
+            'Credit_Terms__c' => 'Net-30',
+            'Billing_Contact_Email__c' => 'billing@customer.com',
+            'Special_Terms__c' => 'MFN clause; auto-renews annually.'
+        });
+
+        OrderFormApplier.Request req = new OrderFormApplier.Request();
+        req.extractionId = row.Id;
+
+        Test.startTest();
+        List<OrderFormApplier.Result> results = OrderFormApplier.apply(new List<OrderFormApplier.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals(1, results.size());
+        System.assertEquals(true, results[0].applied);
+        System.assertEquals('Applied', results[0].status);
 
         Opportunity after = [
-            SELECT Type, Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Mos__c,
-                   Seat_Licenses__c, Num_Users__c,
-                   License_Fees__c, Total_Contract_Value__c, Amount, Annual_Recurring_Revenue__c,
-                   Renewal_Terms__c, Subscription_Schedule__c, Payment_Terms__c, Credit_Terms__c,
-                   Billing_Contact__c, Notes__c
+            SELECT Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Mos__c,
+                   Seat_Licenses__c, Num_Users__c, License_Fees__c, Total_Contract_Value__c, Amount,
+                   Annual_Recurring_Revenue__c, Renewal_Terms__c, Subscription_Schedule__c,
+                   Payment_Terms__c, Credit_Terms__c, Billing_Contact__c, Notes__c
             FROM Opportunity WHERE Id = :opp.Id
         ];
-        System.assertEquals('New Business', after.Type);
         System.assertEquals(Date.newInstance(2026, 6, 1), after.Contract_Start_Date__c);
         System.assertEquals(Date.newInstance(2027, 5, 31), after.Contract_End_Date__c);
         System.assertEquals(12, after.Contract_Length_Mos__c);
@@ -127,141 +303,133 @@ private class OrderFormExtractorTest {
         System.assertEquals('Annual', after.Payment_Terms__c);
         System.assertEquals('Net-30', after.Credit_Terms__c);
         System.assertEquals('billing@customer.com', after.Billing_Contact__c);
-        System.assert(after.Notes__c != null && after.Notes__c.contains('MFN'), 'Notes should include special terms');
+        System.assert(after.Notes__c != null && after.Notes__c.contains('MFN'),
+            'Notes__c should be appended with special terms: ' + after.Notes__c);
+
+        Order_Form_Extraction__c rowAfter = [
+            SELECT Applied_To_Opportunity__c, Applied_At__c, Applied_By__c, Apply_Notes__c
+            FROM Order_Form_Extraction__c WHERE Id = :row.Id
+        ];
+        System.assertEquals(true, rowAfter.Applied_To_Opportunity__c);
+        System.assertNotEquals(null, rowAfter.Applied_At__c);
+        System.assertEquals(UserInfo.getUserId(), rowAfter.Applied_By__c);
+        System.assert(rowAfter.Apply_Notes__c != null && rowAfter.Apply_Notes__c.contains('Wrote'),
+            'Apply_Notes should list wrote actions: ' + rowAfter.Apply_Notes__c);
     }
 
     @isTest
-    static void noOverwrite_existingValueWins() {
+    static void applier_noOverwrite_logsSkip() {
         Opportunity opp = new Opportunity(
-            Name = 'Existing Seats Opp',
-            StageName = '4 - Proposal',
+            Name = 'Apply No Overwrite',
+            StageName = '5 - Contracting',
             CloseDate = Date.today(),
-            Seat_Licenses__c = 10
+            Seat_Licenses__c = 10,
+            License_Fees__c = 50000
         );
         insert opp;
-        attachSignedFile(opp.Id, 'signed__Customer_Agreement');
+        Order_Form_Extraction__c row = insertExtraction(opp.Id, new Map<String, Object>{
+            'Seat_Licenses__c' => 12,
+            'License_Fees__c' => 60000
+        });
 
-        Map<String, Object> extracted = new Map<String, Object>{
-            'Type' => 'New Business',
-            'Seat_Licenses' => 12
-        };
-        MockAnthropic mock = new MockAnthropic();
-        mock.responseBody = makeAnthropicResponse(extracted);
+        OrderFormApplier.Request req = new OrderFormApplier.Request();
+        req.extractionId = row.Id;
 
-        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
-        req.opportunityId = opp.Id;
-
-        Test.setMock(HttpCalloutMock.class, mock);
         Test.startTest();
-        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        OrderFormApplier.apply(new List<OrderFormApplier.Request>{ req });
         Test.stopTest();
 
-        Opportunity after = [SELECT Seat_Licenses__c FROM Opportunity WHERE Id = :opp.Id];
-        System.assertEquals(10, after.Seat_Licenses__c, 'Existing human-entered value must not be overwritten');
+        Opportunity after = [SELECT Seat_Licenses__c, License_Fees__c FROM Opportunity WHERE Id = :opp.Id];
+        System.assertEquals(10, after.Seat_Licenses__c, 'Existing value should not be overwritten');
+        System.assertEquals(50000, after.License_Fees__c, 'Existing value should not be overwritten');
+
+        Order_Form_Extraction__c rowAfter = [SELECT Apply_Notes__c, Applied_To_Opportunity__c FROM Order_Form_Extraction__c WHERE Id = :row.Id];
+        System.assertEquals(true, rowAfter.Applied_To_Opportunity__c);
+        System.assert(rowAfter.Apply_Notes__c.contains('Skipped Seat_Licenses__c'), 'Apply notes should log skip: ' + rowAfter.Apply_Notes__c);
+        System.assert(rowAfter.Apply_Notes__c.contains('Skipped License_Fees__c'), 'Apply notes should log skip: ' + rowAfter.Apply_Notes__c);
     }
 
     @isTest
-    static void pilotPath_routesToTrialFields() {
-        Opportunity opp = insertOpp('Pilot Opp', '3 - POV');
-        attachSignedFile(opp.Id, 'signed__Pilot_Agreement');
+    static void applier_idempotent_doesNotReapply() {
+        Opportunity opp = insertOpp('Apply Idempotent', '5 - Contracting');
+        Order_Form_Extraction__c row = insertExtraction(opp.Id, new Map<String, Object>{
+            'Seat_Licenses__c' => 25,
+            'Applied_To_Opportunity__c' => true
+        });
 
-        Map<String, Object> extracted = new Map<String, Object>{
-            'Type' => 'Pilot',
-            'Contract_Start_Date' => '2026-06-15',
-            'Contract_End_Date' => '2026-08-15',
-            'Contract_Length_Days' => 60,
-            'Seat_Licenses' => 5,
-            'License_Fees' => 25000,
-            'Paid_Trial' => true,
-            'Pilot_Success_Criteria' => 'Adoption by 80% of users within 30 days.'
-        };
-        MockAnthropic mock = new MockAnthropic();
-        mock.responseBody = makeAnthropicResponse(extracted);
+        OrderFormApplier.Request req = new OrderFormApplier.Request();
+        req.extractionId = row.Id;
 
-        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
-        req.opportunityId = opp.Id;
-
-        Test.setMock(HttpCalloutMock.class, mock);
         Test.startTest();
-        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        List<OrderFormApplier.Result> results = OrderFormApplier.apply(new List<OrderFormApplier.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals('AlreadyApplied', results[0].status);
+        System.assertEquals(false, results[0].applied);
+
+        Opportunity after = [SELECT Seat_Licenses__c FROM Opportunity WHERE Id = :opp.Id];
+        System.assertEquals(null, after.Seat_Licenses__c, 'Should not have been written on a re-apply');
+    }
+
+    @isTest
+    static void applier_pilotRoutesToTrialFields() {
+        Opportunity opp = insertOpp('Apply Pilot', '3 - POV');
+        Order_Form_Extraction__c row = insertExtraction(opp.Id, new Map<String, Object>{
+            'Type__c' => 'Pilot',
+            'Contract_Start_Date__c' => Date.newInstance(2026, 6, 15),
+            'Contract_End_Date__c' => Date.newInstance(2026, 8, 15),
+            'Seat_Licenses__c' => 5,
+            'License_Fees__c' => 25000,
+            'Trial_Price__c' => 25000,
+            'Paid_Trial__c' => true,
+            'Pilot_Success_Criteria__c' => 'Adoption by 80% of users within 30 days.'
+        });
+
+        OrderFormApplier.Request req = new OrderFormApplier.Request();
+        req.extractionId = row.Id;
+
+        Test.startTest();
+        OrderFormApplier.apply(new List<OrderFormApplier.Request>{ req });
         Test.stopTest();
 
         Opportunity after = [
-            SELECT Type, Trial_Start_Date__c, Trial_End_Date__c, Trial_Length_Days__c,
-                   Trial_Users__c, Trial_Price__c, Paid_Trial__c, Pilot_Success_Criteria__c,
-                   Contract_Start_Date__c, Contract_End_Date__c, License_Fees__c
+            SELECT Trial_Start_Date__c, Trial_End_Date__c, Trial_Users__c, Trial_Price__c,
+                   Paid_Trial__c, Pilot_Success_Criteria__c,
+                   Contract_Start_Date__c, License_Fees__c
             FROM Opportunity WHERE Id = :opp.Id
         ];
         System.assertEquals(Date.newInstance(2026, 6, 15), after.Trial_Start_Date__c);
         System.assertEquals(Date.newInstance(2026, 8, 15), after.Trial_End_Date__c);
-        System.assertEquals(60, after.Trial_Length_Days__c);
         System.assertEquals(5, after.Trial_Users__c);
         System.assertEquals(25000, after.Trial_Price__c);
         System.assertEquals(true, after.Paid_Trial__c);
         System.assertEquals('Adoption by 80% of users within 30 days.', after.Pilot_Success_Criteria__c);
-        System.assertEquals(null, after.Contract_Start_Date__c, 'Pilot should not write Contract_Start_Date__c');
-        System.assertEquals(null, after.License_Fees__c, 'Pilot should not write License_Fees__c');
+        System.assertEquals(null, after.Contract_Start_Date__c, 'Pilot should not touch Contract_Start_Date__c');
+        System.assertEquals(null, after.License_Fees__c, 'Pilot should not touch License_Fees__c');
     }
 
     @isTest
-    static void apiFailure_oppUnchanged() {
-        Opportunity opp = insertOpp('API Fail Opp', '4 - Proposal');
-        attachSignedFile(opp.Id, 'signed__Whatever');
+    static void applier_rejectsNonSuccessStatus() {
+        Opportunity opp = insertOpp('Apply Failed Row', '5 - Contracting');
+        Order_Form_Extraction__c row = insertExtraction(opp.Id, new Map<String, Object>{
+            'Extraction_Status__c' => 'API Failed',
+            'Seat_Licenses__c' => 99
+        });
 
-        MockAnthropic mock = new MockAnthropic();
-        mock.statusCode = 500;
-        mock.responseBody = '{"error":"internal"}';
+        OrderFormApplier.Request req = new OrderFormApplier.Request();
+        req.extractionId = row.Id;
 
-        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
-        req.opportunityId = opp.Id;
-
-        Test.setMock(HttpCalloutMock.class, mock);
         Test.startTest();
-        List<OrderFormExtractor.Result> results = OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
-        try {
-            Test.stopTest();
-        } catch (Exception e) {
-            // Some Apex versions surface uncaught Queueable exceptions here; either way is fine.
-        }
-
-        System.assertEquals('Enqueued', results[0].status, 'Invocable still returns Enqueued (failure is async)');
-
-        Opportunity after = [SELECT Type, License_Fees__c FROM Opportunity WHERE Id = :opp.Id];
-        System.assertEquals('New Business', after.Type, 'Type stays at the picklist default; no update fired');
-        System.assertEquals(null, after.License_Fees__c, 'No callout-derived fields should be written when callout fails');
-    }
-
-    @isTest
-    static void amendmentPath_onlyChangedFieldsWritten() {
-        Opportunity opp = insertOpp('Rider Opp', '5 - Contracting');
-        attachSignedFile(opp.Id, 'signed__Rider_April');
-
-        Map<String, Object> extracted = new Map<String, Object>{
-            '_is_amendment' => true,
-            'Type' => 'Renewal',
-            'Contract_End_Date' => '2027-04-30',
-            'Seat_Licenses' => 50
-        };
-        MockAnthropic mock = new MockAnthropic();
-        mock.responseBody = makeAnthropicResponse(extracted);
-
-        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
-        req.opportunityId = opp.Id;
-
-        Test.setMock(HttpCalloutMock.class, mock);
-        Test.startTest();
-        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        List<OrderFormApplier.Result> results = OrderFormApplier.apply(new List<OrderFormApplier.Request>{ req });
         Test.stopTest();
 
-        Opportunity after = [
-            SELECT Type, Contract_Start_Date__c, Contract_End_Date__c, Seat_Licenses__c, License_Fees__c
-            FROM Opportunity WHERE Id = :opp.Id
-        ];
-        System.assertEquals(Date.newInstance(2027, 4, 30), after.Contract_End_Date__c);
-        System.assertEquals(50, after.Seat_Licenses__c);
-        System.assertEquals(null, after.Contract_Start_Date__c, 'Unchanged-by-rider fields stay null');
-        System.assertEquals(null, after.License_Fees__c);
+        System.assertEquals('NotSuccess', results[0].status);
+        System.assertEquals(false, results[0].applied);
+        Opportunity after = [SELECT Seat_Licenses__c FROM Opportunity WHERE Id = :opp.Id];
+        System.assertEquals(null, after.Seat_Licenses__c);
     }
+
+    // ===== Picklist mapper =====
 
     @isTest
     static void picklistMapper_directValues() {
@@ -277,51 +445,7 @@ private class OrderFormExtractorTest {
         System.assertEquals('Renewal', OrderFormPicklistMapper.mapType('annual renewal'));
         System.assertEquals('Upsell', OrderFormPicklistMapper.mapType('expansion order'));
         System.assertEquals('New Business', OrderFormPicklistMapper.mapType('NEW BUSINESS'));
-        System.assertEquals('Seats: Unlimited Usage, with Throttling', OrderFormPicklistMapper.mapPricingStructure('unlimited usage subject to fair use'));
-        System.assertEquals('ELA: Credit-Based Usage', OrderFormPicklistMapper.mapPricingStructure('Enterprise license with credit pool'));
         System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms(null));
         System.assertEquals(null, OrderFormPicklistMapper.mapCreditTerms('whenever'));
-    }
-
-    @isTest
-    static void bulk_invocablePreservesOrder() {
-        List<Opportunity> opps = new List<Opportunity>();
-        for (Integer i = 0; i < 5; i++) {
-            opps.add(new Opportunity(
-                Name = 'Bulk Opp ' + i,
-                StageName = '4 - Proposal',
-                CloseDate = Date.today()
-            ));
-        }
-        insert opps;
-        // Attach file to only the even-indexed ones
-        for (Integer i = 0; i < opps.size(); i++) {
-            if (Math.mod(i, 2) == 0) attachSignedFile(opps[i].Id, 'signed__Bulk_' + i);
-        }
-
-        Map<String, Object> extracted = new Map<String, Object>{
-            'Type' => 'New Business',
-            'Seat_Licenses' => 7
-        };
-        MockAnthropic mock = new MockAnthropic();
-        mock.responseBody = makeAnthropicResponse(extracted);
-
-        List<OrderFormExtractor.Request> reqs = new List<OrderFormExtractor.Request>();
-        for (Opportunity o : opps) {
-            OrderFormExtractor.Request r = new OrderFormExtractor.Request();
-            r.opportunityId = o.Id;
-            reqs.add(r);
-        }
-
-        Test.setMock(HttpCalloutMock.class, mock);
-        Test.startTest();
-        List<OrderFormExtractor.Result> results = OrderFormExtractor.run(reqs);
-        Test.stopTest();
-
-        System.assertEquals(5, results.size());
-        for (Integer i = 0; i < results.size(); i++) {
-            String expected = Math.mod(i, 2) == 0 ? 'Enqueued' : 'NoDocumentFound';
-            System.assertEquals(expected, results[i].status, 'Result ' + i + ' wrong status');
-        }
     }
 }

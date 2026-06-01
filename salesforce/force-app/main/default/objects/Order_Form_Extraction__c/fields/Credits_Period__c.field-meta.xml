@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credits_Period__c</fullName>
+    <label>Credits Period</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>false</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>month</fullName><default>false</default><label>month</label></value>
+            <value><fullName>quarter</fullName><default>false</default><label>quarter</label></value>
+            <value><fullName>year</fullName><default>false</default><label>year</label></value>
+            <value><fullName>contract</fullName><default>false</default><label>contract</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

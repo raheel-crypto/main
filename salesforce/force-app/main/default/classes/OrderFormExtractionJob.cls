@@ -4,6 +4,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     @TestVisible private static final String MODEL = 'claude-sonnet-4-6';
     @TestVisible private static final Integer MAX_TOKENS = 4096;
     @TestVisible private static final String PROMPT_RESOURCE = 'OrderFormPrompt';
+    @TestVisible private static final Integer RAW_RESPONSE_LIMIT = 131072;
+    @TestVisible private static final Integer EXTRACTED_JSON_LIMIT = 32768;
+    @TestVisible private static final Integer ERROR_MESSAGE_LIMIT = 32768;
 
     private final Id opportunityId;
     private final Id contentDocumentId;
@@ -14,20 +17,64 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     public void execute(QueueableContext ctx) {
-        Blob pdfBytes = loadLatestVersion(contentDocumentId);
-        if (pdfBytes == null) {
-            throw new OrderFormException('No ContentVersion data for ContentDocumentId ' + contentDocumentId);
-        }
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(
+            Opportunity__c = opportunityId,
+            Content_Document_Id__c = contentDocumentId,
+            File_Name__c = lookupFileName(contentDocumentId),
+            Extracted_At__c = System.now(),
+            Model__c = MODEL
+        );
 
-        String body = buildRequestBody(pdfBytes);
-        String responseText = callAnthropic(body);
-        Map<String, Object> extracted = parseAssistantJson(responseText);
+        try {
+            Blob pdfBytes = loadLatestVersion(contentDocumentId);
+            if (pdfBytes == null) {
+                row.Extraction_Status__c = 'No Document';
+                row.Error_Message__c = 'No ContentVersion data for ContentDocumentId ' + contentDocumentId;
+                insert row;
+                return;
+            }
 
-        Opportunity current = loadOpportunity(opportunityId);
-        Opportunity oppUpdate = buildFillBlanksUpdate(current, extracted);
-        if (oppUpdate != null) {
-            update oppUpdate;
+            String body = buildRequestBody(pdfBytes);
+            HttpResponse resp = callAnthropic(body);
+            row.HTTP_Status_Code__c = resp.getStatusCode();
+            row.Raw_Response__c = truncate(resp.getBody(), RAW_RESPONSE_LIMIT);
+
+            if (resp.getStatusCode() < 200 || resp.getStatusCode() >= 300) {
+                row.Extraction_Status__c = 'API Failed';
+                row.Error_Message__c = truncate('HTTP ' + resp.getStatusCode() + ': ' + resp.getBody(), ERROR_MESSAGE_LIMIT);
+                insert row;
+                return;
+            }
+
+            Map<String, Object> extracted;
+            try {
+                extracted = parseAssistantJson(resp.getBody());
+            } catch (Exception e) {
+                row.Extraction_Status__c = 'Parse Failed';
+                row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
+                insert row;
+                return;
+            }
+
+            row.Extracted_JSON__c = truncate(JSON.serializePretty(extracted), EXTRACTED_JSON_LIMIT);
+            populateExtractedFields(row, extracted);
+            row.Extraction_Status__c = 'Success';
+            insert row;
+
+        } catch (Exception e) {
+            row.Extraction_Status__c = 'API Failed';
+            row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
+            try {
+                insert row;
+            } catch (Exception e2) {
+                System.debug(LoggingLevel.ERROR, 'Failed to record extraction error row: ' + e2.getMessage());
+            }
         }
+    }
+
+    private static String lookupFileName(Id contentDocumentId) {
+        List<ContentDocument> docs = [SELECT Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
+        return docs.isEmpty() ? null : docs[0].Title;
     }
 
     @TestVisible
@@ -35,8 +82,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         List<ContentVersion> versions = [
             SELECT VersionData
             FROM ContentVersion
-            WHERE ContentDocumentId = :contentDocumentId
-              AND IsLatest = true
+            WHERE ContentDocumentId = :contentDocumentId AND IsLatest = true
             LIMIT 1
         ];
         return versions.isEmpty() ? null : versions[0].VersionData;
@@ -47,14 +93,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         String systemPrompt = loadPrompt();
         String base64Pdf = EncodingUtil.base64Encode(pdfBytes);
 
-        Map<String, Object> documentSource = new Map<String, Object>{
-            'type' => 'base64',
-            'media_type' => 'application/pdf',
-            'data' => base64Pdf
-        };
         Map<String, Object> documentBlock = new Map<String, Object>{
             'type' => 'document',
-            'source' => documentSource
+            'source' => new Map<String, Object>{
+                'type' => 'base64',
+                'media_type' => 'application/pdf',
+                'data' => base64Pdf
+            }
         };
         Map<String, Object> textBlock = new Map<String, Object>{
             'type' => 'text',
@@ -64,20 +109,17 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             'role' => 'user',
             'content' => new List<Object>{ documentBlock, textBlock }
         };
-        Map<String, Object> payload = new Map<String, Object>{
+        return JSON.serialize(new Map<String, Object>{
             'model' => MODEL,
             'max_tokens' => MAX_TOKENS,
             'system' => systemPrompt,
             'messages' => new List<Object>{ userMessage }
-        };
-        return JSON.serialize(payload);
+        });
     }
 
     @TestVisible
     private static String loadPrompt() {
-        List<StaticResource> resources = [
-            SELECT Body FROM StaticResource WHERE Name = :PROMPT_RESOURCE LIMIT 1
-        ];
+        List<StaticResource> resources = [SELECT Body FROM StaticResource WHERE Name = :PROMPT_RESOURCE LIMIT 1];
         if (resources.isEmpty()) {
             throw new OrderFormException('Static resource "' + PROMPT_RESOURCE + '" not found.');
         }
@@ -85,7 +127,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     @TestVisible
-    private static String callAnthropic(String body) {
+    private static HttpResponse callAnthropic(String body) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint(NAMED_CRED + '/v1/messages');
         req.setMethod('POST');
@@ -93,14 +135,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         req.setHeader('anthropic-beta', 'pdfs-2024-09-25');
         req.setTimeout(120000);
         req.setBody(body);
-
-        HttpResponse resp = new Http().send(req);
-        Integer code = resp.getStatusCode();
-        if (code < 200 || code >= 300) {
-            System.debug(LoggingLevel.ERROR, 'Anthropic non-2xx ' + code + ': ' + resp.getBody());
-            throw new OrderFormException('Anthropic API returned HTTP ' + code);
-        }
-        return resp.getBody();
+        return new Http().send(req);
     }
 
     @TestVisible
@@ -121,14 +156,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (String.isBlank(assistantText)) {
             throw new OrderFormException('Anthropic response had no text block.');
         }
-
         String jsonText = stripCodeFence(assistantText);
-        Object parsed;
-        try {
-            parsed = JSON.deserializeUntyped(jsonText);
-        } catch (Exception e) {
-            throw new OrderFormException('Failed to parse extracted JSON: ' + e.getMessage());
-        }
+        Object parsed = JSON.deserializeUntyped(jsonText);
         if (!(parsed instanceof Map<String, Object>)) {
             throw new OrderFormException('Extracted JSON was not an object.');
         }
@@ -148,150 +177,60 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     @TestVisible
-    private static Opportunity loadOpportunity(Id oppId) {
-        return [
-            SELECT Id, Type,
-                   Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Mos__c,
-                   Seat_Licenses__c, Num_Users__c,
-                   License_Fees__c, Platform_Connection_Fee__c, Professional_Service_Fees__c,
-                   Total_Contract_Value__c, Amount, Annual_Recurring_Revenue__c,
-                   Renewal_Terms__c, Subscription_Schedule__c, Payment_Terms__c, Credit_Terms__c,
-                   Billing_Contact__c, ELA__c,
-                   Trial_Start_Date__c, Trial_End_Date__c, Trial_Length_Days__c,
-                   Trial_Users__c, Trial_Price__c, Paid_Trial__c, Pilot_Success_Criteria__c,
-                   Notes__c
-            FROM Opportunity
-            WHERE Id = :oppId
-            LIMIT 1
-        ];
-    }
-
-    @TestVisible
-    private static Opportunity buildFillBlanksUpdate(Opportunity current, Map<String, Object> extracted) {
-        Boolean isAmendment = toBoolean(extracted.get('_is_amendment'));
-        String mappedType = OrderFormPicklistMapper.mapType((String) extracted.get('Type'));
-        Boolean isPilot = 'Pilot'.equals(mappedType) || 'Pilot'.equals(current.Type);
-
-        Opportunity changes = new Opportunity(Id = current.Id);
-        Boolean anyChange = false;
-
-        if (current.Type == null && mappedType != null) {
-            changes.Type = mappedType;
-            anyChange = true;
-        }
-
-        Date startDate = parseDate((String) extracted.get('Contract_Start_Date'));
-        Date endDate = parseDate((String) extracted.get('Contract_End_Date'));
-        Decimal lenMos = toDecimal(extracted.get('Contract_Length_Months'));
-        Decimal lenDays = toDecimal(extracted.get('Contract_Length_Days'));
-
-        if (isPilot) {
-            if (current.Trial_Start_Date__c == null && startDate != null) { changes.Trial_Start_Date__c = startDate; anyChange = true; }
-            if (current.Trial_End_Date__c == null && endDate != null)     { changes.Trial_End_Date__c   = endDate;   anyChange = true; }
-            if (current.Trial_Length_Days__c == null && lenDays != null)  { changes.Trial_Length_Days__c = lenDays;  anyChange = true; }
-            Decimal seats = toDecimal(extracted.get('Seat_Licenses'));
-            if (current.Trial_Users__c == null && seats != null)          { changes.Trial_Users__c = seats; anyChange = true; }
-            Decimal trialPrice = toDecimal(extracted.get('Trial_Price'));
-            if (trialPrice == null) trialPrice = toDecimal(extracted.get('License_Fees'));
-            if (current.Trial_Price__c == null && trialPrice != null)     { changes.Trial_Price__c = trialPrice; anyChange = true; }
-            Boolean paidTrial = toBoolean(extracted.get('Paid_Trial'));
-            if (paidTrial == null && trialPrice != null) paidTrial = (trialPrice > 0);
-            if (current.Paid_Trial__c == false && paidTrial == true)      { changes.Paid_Trial__c = true; anyChange = true; }
-            String criteria = (String) extracted.get('Pilot_Success_Criteria');
-            if (String.isBlank(current.Pilot_Success_Criteria__c) && String.isNotBlank(criteria)) {
-                changes.Pilot_Success_Criteria__c = criteria;
-                anyChange = true;
-            }
-        } else {
-            if (current.Contract_Start_Date__c == null && startDate != null) { changes.Contract_Start_Date__c = startDate; anyChange = true; }
-            if (current.Contract_End_Date__c == null && endDate != null)     { changes.Contract_End_Date__c   = endDate;   anyChange = true; }
-            if (current.Contract_Length_Mos__c == null && lenMos != null)    { changes.Contract_Length_Mos__c = lenMos;    anyChange = true; }
-
-            Decimal seats = toDecimal(extracted.get('Seat_Licenses'));
-            if (current.Seat_Licenses__c == null && seats != null)   { changes.Seat_Licenses__c = seats; anyChange = true; }
-            if (current.Num_Users__c == null && seats != null)       { changes.Num_Users__c = seats; anyChange = true; }
-        }
-
-        Decimal licenseFees = toDecimal(extracted.get('License_Fees'));
-        Decimal platformFee = toDecimal(extracted.get('Platform_Connection_Fee'));
-        Decimal proServices = toDecimal(extracted.get('Professional_Service_Fees'));
-        Decimal tcv = toDecimal(extracted.get('Total_Contract_Value'));
-        Decimal arr = toDecimal(extracted.get('Annual_Recurring_Revenue'));
-
-        if (!isPilot && current.License_Fees__c == null && licenseFees != null) { changes.License_Fees__c = licenseFees; anyChange = true; }
-        if (current.Platform_Connection_Fee__c == null && platformFee != null)  { changes.Platform_Connection_Fee__c = platformFee; anyChange = true; }
-        if (current.Professional_Service_Fees__c == null && proServices != null){ changes.Professional_Service_Fees__c = proServices; anyChange = true; }
-        if (current.Total_Contract_Value__c == null && tcv != null)             { changes.Total_Contract_Value__c = tcv; anyChange = true; }
-        if (current.Amount == null && tcv != null)                              { changes.Amount = tcv; anyChange = true; }
-        if (current.Annual_Recurring_Revenue__c == null && arr != null)         { changes.Annual_Recurring_Revenue__c = arr; anyChange = true; }
-
-        String renewal = OrderFormPicklistMapper.mapRenewalTerms((String) extracted.get('Renewal_Terms'));
-        if (current.Renewal_Terms__c == null && renewal != null) { changes.Renewal_Terms__c = renewal; anyChange = true; }
-
-        String subSched = OrderFormPicklistMapper.mapSubscriptionSchedule((String) extracted.get('Subscription_Schedule'));
-        if (current.Subscription_Schedule__c == null && subSched != null) { changes.Subscription_Schedule__c = subSched; anyChange = true; }
-
-        String payTerms = OrderFormPicklistMapper.mapPaymentTerms((String) extracted.get('Payment_Terms'));
-        if (current.Payment_Terms__c == null && payTerms != null) { changes.Payment_Terms__c = payTerms; anyChange = true; }
-
-        String credTerms = OrderFormPicklistMapper.mapCreditTerms((String) extracted.get('Credit_Terms'));
-        if (current.Credit_Terms__c == null && credTerms != null) { changes.Credit_Terms__c = credTerms; anyChange = true; }
-
-        String billingEmail = (String) extracted.get('Billing_Contact_Email');
-        if (String.isBlank(current.Billing_Contact__c) && String.isNotBlank(billingEmail)) {
-            changes.Billing_Contact__c = billingEmail;
-            anyChange = true;
-        }
-
+    private static void populateExtractedFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
+        Boolean amend = toBoolean(extracted.get('_is_amendment'));
+        row.Is_Amendment__c = amend == true;
+        row.Type__c = OrderFormPicklistMapper.mapType((String) extracted.get('Type'));
+        row.Contract_Start_Date__c = parseDate((String) extracted.get('Contract_Start_Date'));
+        row.Contract_End_Date__c = parseDate((String) extracted.get('Contract_End_Date'));
+        row.Contract_Length_Months__c = toDecimal(extracted.get('Contract_Length_Months'));
+        row.Contract_Length_Days__c = toDecimal(extracted.get('Contract_Length_Days'));
+        row.Seat_Licenses__c = toDecimal(extracted.get('Seat_Licenses'));
+        row.License_Fees__c = toDecimal(extracted.get('License_Fees'));
+        row.Platform_Connection_Fee__c = toDecimal(extracted.get('Platform_Connection_Fee'));
+        row.Professional_Service_Fees__c = toDecimal(extracted.get('Professional_Service_Fees'));
+        row.Total_Contract_Value__c = toDecimal(extracted.get('Total_Contract_Value'));
+        row.Annual_Recurring_Revenue__c = toDecimal(extracted.get('Annual_Recurring_Revenue'));
+        row.Renewal_Terms__c = OrderFormPicklistMapper.mapRenewalTerms((String) extracted.get('Renewal_Terms'));
+        row.Subscription_Schedule__c = OrderFormPicklistMapper.mapSubscriptionSchedule((String) extracted.get('Subscription_Schedule'));
+        row.Payment_Terms__c = OrderFormPicklistMapper.mapPaymentTerms((String) extracted.get('Payment_Terms'));
+        row.Credit_Terms__c = OrderFormPicklistMapper.mapCreditTerms((String) extracted.get('Credit_Terms'));
+        row.Pricing_Structure__c = truncate((String) extracted.get('Pricing_Structure'), 100);
+        row.Billing_Contact_Email__c = (String) extracted.get('Billing_Contact_Email');
         Boolean ela = toBoolean(extracted.get('ELA'));
-        if (current.ELA__c == false && ela == true) { changes.ELA__c = true; anyChange = true; }
-
-        String specialTerms = (String) extracted.get('Special_Terms');
-        Decimal credits = toDecimal(extracted.get('Credits_Purchased'));
-        String creditsPeriod = (String) extracted.get('Credits_Period');
-        String appendix = composeNotesAppendix(specialTerms, credits, creditsPeriod, isAmendment);
-        if (String.isNotBlank(appendix) && String.isBlank(current.Notes__c)) {
-            changes.Notes__c = appendix;
-            anyChange = true;
-        }
-
-        return anyChange ? changes : null;
+        row.ELA__c = ela == true;
+        Boolean paid = toBoolean(extracted.get('Paid_Trial'));
+        row.Paid_Trial__c = paid == true;
+        row.Trial_Price__c = toDecimal(extracted.get('Trial_Price'));
+        row.Pilot_Success_Criteria__c = truncate((String) extracted.get('Pilot_Success_Criteria'), 32768);
+        row.Credits_Purchased__c = toDecimal(extracted.get('Credits_Purchased'));
+        row.Credits_Period__c = mapCreditsPeriod((String) extracted.get('Credits_Period'));
+        row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
     }
 
-    private static String composeNotesAppendix(String specialTerms, Decimal credits, String period, Boolean isAmendment) {
-        List<String> parts = new List<String>();
-        if (credits != null) {
-            String periodStr = String.isNotBlank(period) ? ' per ' + period : '';
-            parts.add('Credits: ' + credits.toPlainString() + periodStr);
-        }
-        if (String.isNotBlank(specialTerms)) {
-            parts.add('Special terms: ' + specialTerms);
-        }
-        if (isAmendment == true) {
-            parts.add('[Source: amendment / rider]');
-        }
-        return parts.isEmpty() ? null : String.join(parts, '\n');
+    private static String mapCreditsPeriod(String raw) {
+        if (String.isBlank(raw)) return null;
+        String s = raw.toLowerCase().trim();
+        if (s.startsWith('mo')) return 'month';
+        if (s.startsWith('qu')) return 'quarter';
+        if (s.startsWith('ye') || s.startsWith('an')) return 'year';
+        if (s.startsWith('co')) return 'contract';
+        return null;
     }
 
     private static Date parseDate(String iso) {
         if (String.isBlank(iso)) return null;
-        try {
-            return Date.valueOf(iso);
-        } catch (Exception e) {
-            return null;
-        }
+        try { return Date.valueOf(iso); } catch (Exception e) { return null; }
     }
 
     private static Decimal toDecimal(Object v) {
         if (v == null) return null;
         if (v instanceof Decimal) return (Decimal) v;
-        if (v instanceof Integer) return Decimal.valueOf((Integer) v);
-        if (v instanceof Long) return Decimal.valueOf((Long) v);
-        if (v instanceof Double) return Decimal.valueOf((Double) v);
-        if (v instanceof String) {
-            try { return Decimal.valueOf(((String) v).trim()); } catch (Exception e) { return null; }
+        try {
+            return Decimal.valueOf(String.valueOf(v).trim());
+        } catch (Exception e) {
+            return null;
         }
-        return null;
     }
 
     private static Boolean toBoolean(Object v) {
@@ -303,6 +242,11 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             if (s == 'false' || s == 'no') return false;
         }
         return null;
+    }
+
+    private static String truncate(String s, Integer maxLen) {
+        if (s == null) return null;
+        return s.length() > maxLen ? s.substring(0, maxLen) : s;
     }
 
     public class OrderFormException extends Exception {}

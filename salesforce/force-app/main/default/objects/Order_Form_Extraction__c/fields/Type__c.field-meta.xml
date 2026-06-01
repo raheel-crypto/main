@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Type__c</fullName>
+    <label>Type</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>false</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>New Business</fullName><default>false</default><label>New Business</label></value>
+            <value><fullName>Renewal</fullName><default>false</default><label>Renewal</label></value>
+            <value><fullName>Upsell</fullName><default>false</default><label>Upsell</label></value>
+            <value><fullName>Downsell</fullName><default>false</default><label>Downsell</label></value>
+            <value><fullName>Pilot</fullName><default>false</default><label>Pilot</label></value>
+            <value><fullName>Contract Restructure</fullName><default>false</default><label>Contract Restructure</label></value>
+            <value><fullName>Debooking</fullName><default>false</default><label>Debooking</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
