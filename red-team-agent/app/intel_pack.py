@@ -21,6 +21,7 @@ from .schemas import DealContext, GongMention
 _INTEL_DIR = Path(__file__).parent.parent / "intel"
 
 _DEAD_DEALS: Optional[list] = None
+_WON_DEALS: Optional[list] = None
 _COMP_QUOTES: Optional[list] = None
 _OBJ_QUOTES: Optional[list] = None
 _COMP_PROFILES: Optional[dict] = None
@@ -47,13 +48,33 @@ def _safe_load_json(path: Path, default):
 
 
 def _load() -> None:
-    global _DEAD_DEALS, _COMP_QUOTES, _OBJ_QUOTES, _COMP_PROFILES, _COHORT_STATS
+    global _DEAD_DEALS, _WON_DEALS, _COMP_QUOTES, _OBJ_QUOTES, _COMP_PROFILES, _COHORT_STATS
     if _DEAD_DEALS is None:
         _DEAD_DEALS = _safe_load_json(_INTEL_DIR / "dead_deals.json", [])
+        _WON_DEALS = _safe_load_json(_INTEL_DIR / "won_deals.json", [])
         _COMP_QUOTES = _safe_load_json(_INTEL_DIR / "competitor_quotes.json", [])
         _OBJ_QUOTES = _safe_load_json(_INTEL_DIR / "objection_quotes.json", [])
         _COMP_PROFILES = _safe_load_json(_INTEL_DIR / "competitor_profiles.json", {})
         _COHORT_STATS = _safe_load_json(_INTEL_DIR / "cohort_stats.json", {})
+
+
+def find_deal_by_name(name: str) -> Optional[dict]:
+    """Look up a prior deal by name (case-insensitive substring match). Scans
+    won_deals first, then dead_deals. Returns the first hit or None."""
+    _load()
+    if not name or not name.strip():
+        return None
+    q = name.strip().lower()
+    for pool in ((_WON_DEALS or []), (_DEAD_DEALS or [])):
+        for d in pool:
+            n = (d.get("name") or d.get("deal_name") or d.get("account") or "").lower()
+            if q == n:
+                return d
+        for d in pool:
+            n = (d.get("name") or d.get("deal_name") or d.get("account") or "").lower()
+            if q in n or n in q:
+                return d
+    return None
 
 
 def find_similar_dead_deals(

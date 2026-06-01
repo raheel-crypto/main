@@ -229,6 +229,214 @@ def _extract_custom_tool_use(
     return (tool_use_id, tool_input)
 
 
+def _extract_assistant_text(event_envelope: dict[str, Any]) -> str | None:
+    """
+    Best-effort extraction of plain assistant text from an SSE event. Managed
+    agents emit text in several shapes depending on the event type; we sniff
+    the common ones rather than assume one. Returns None if no text-like
+    content is present.
+    """
+    data = event_envelope.get("data") or {}
+    # Direct text field
+    text = data.get("text")
+    if isinstance(text, str) and text.strip():
+        return text
+    # delta.text shape
+    delta = data.get("delta") or {}
+    if isinstance(delta, dict):
+        dt = delta.get("text")
+        if isinstance(dt, str) and dt.strip():
+            return dt
+    # content blocks shape: [{type:"text", text:"..."}]
+    content = data.get("content")
+    if isinstance(content, list):
+        out: list[str] = []
+        for blk in content:
+            if isinstance(blk, dict) and blk.get("type") == "text":
+                t = blk.get("text")
+                if isinstance(t, str):
+                    out.append(t)
+        if out:
+            return "".join(out)
+    # message.content shape
+    msg = data.get("message") or {}
+    if isinstance(msg, dict):
+        mc = msg.get("content")
+        if isinstance(mc, list):
+            out = []
+            for blk in mc:
+                if isinstance(blk, dict) and blk.get("type") == "text":
+                    t = blk.get("text")
+                    if isinstance(t, str):
+                        out.append(t)
+            if out:
+                return "".join(out)
+    return None
+
+
+async def run_tool_loop(
+    title: str,
+    user_message: str,
+    *,
+    tool_handlers: dict[str, Any],
+    agent_env_name: str,
+    environment_env_name: str,
+    vault_env_name: str,
+    max_hops: int = 4,
+) -> dict[str, Any]:
+    """
+    Multi-hop tool-use loop for the Arbiter Moderator.
+
+    `tool_handlers` maps tool name → `async def(tool_input) -> tuple[dict, str]`
+    where the returned tuple is `(result_payload_for_agent, summary_for_audit)`.
+    The result_payload is JSON-serialized and sent back as the
+    `user.custom_tool_result`; the summary is recorded in `tool_calls[].result_summary`
+    for downstream audit / Slack rendering.
+
+    Stops on:
+      • `session.status_idle` / `session.completed` (clean finish)
+      • `max_hops` exceeded (the agent's prompt forbids further calls after this)
+      • Tool handler raises (recorded as `is_error: true`, agent may recover)
+
+    Returns `{"text": str, "tool_calls": list[{tool, input, result_summary}], "hops_used": int}`.
+    """
+    session_id = await create_session(
+        title=title,
+        agent_env_name=agent_env_name,
+        environment_env_name=environment_env_name,
+        vault_env_name=vault_env_name,
+    )
+    print(f"[moderator_client] session={session_id} title={title!r}", flush=True)
+    await send_user_message(session_id, user_message)
+
+    text_buf: list[str] = []
+    tool_calls: list[dict[str, Any]] = []
+    hops_used = 0
+    event_count = 0
+    seen_idle = False
+
+    async for event in stream_events(session_id):
+        event_count += 1
+        et = _event_type_of(event)
+        data = event.get("data") or {}
+        data_preview = json.dumps(data)[:600]
+        print(
+            f"[moderator_client] event#{event_count} type={et!r} data={data_preview}",
+            flush=True,
+        )
+
+        # 1. Text capture
+        chunk = _extract_assistant_text(event)
+        if chunk:
+            text_buf.append(chunk)
+
+        # 2. Tool-use detection (structural — see notes on run_one_shot)
+        has_tool_use_shape = (
+            isinstance(data.get("input"), dict) and isinstance(data.get("id"), str)
+        )
+        looks_like_tool_use = (
+            et == "agent.custom_tool_use"
+            or "custom_tool_use" in et
+            or has_tool_use_shape
+        )
+
+        if looks_like_tool_use:
+            tool_use_id = (
+                data.get("custom_tool_use_id")
+                or data.get("id")
+                or data.get("tool_use_id")
+            )
+            tool_input = (
+                data.get("input")
+                or data.get("arguments")
+                or data.get("payload")
+                or {}
+            )
+            tool_name = data.get("tool_name") or data.get("name") or ""
+
+            handler = tool_handlers.get(tool_name)
+            if handler is None:
+                # Unknown tool — fail soft so the agent can pivot.
+                err_payload = {
+                    "error": f"unknown_tool: {tool_name}",
+                    "available": sorted(tool_handlers.keys()),
+                }
+                if tool_use_id:
+                    await send_custom_tool_result(
+                        session_id, tool_use_id, err_payload, is_error=True
+                    )
+                tool_calls.append({
+                    "tool": tool_name,
+                    "input": tool_input,
+                    "result_summary": f"unknown_tool: {tool_name}",
+                })
+                continue
+
+            if hops_used >= max_hops:
+                # Tell the agent to wrap up.
+                err_payload = {
+                    "error": "max_hops_exceeded",
+                    "message": "Finalize your reply now without further tool calls.",
+                }
+                if tool_use_id:
+                    await send_custom_tool_result(
+                        session_id, tool_use_id, err_payload, is_error=True
+                    )
+                tool_calls.append({
+                    "tool": tool_name,
+                    "input": tool_input,
+                    "result_summary": "max_hops_exceeded",
+                })
+                continue
+
+            hops_used += 1
+            try:
+                payload, summary = await handler(tool_input)
+            except Exception as exc:  # noqa: BLE001 — surface to agent
+                payload = {"error": str(exc)[:300]}
+                summary = f"handler_error: {str(exc)[:120]}"
+                if tool_use_id:
+                    await send_custom_tool_result(
+                        session_id, tool_use_id, payload, is_error=True
+                    )
+                tool_calls.append({
+                    "tool": tool_name,
+                    "input": tool_input,
+                    "result_summary": summary,
+                })
+                continue
+
+            if tool_use_id:
+                await send_custom_tool_result(session_id, tool_use_id, payload)
+            tool_calls.append({
+                "tool": tool_name,
+                "input": tool_input,
+                "result_summary": summary,
+            })
+            print(
+                f"[moderator_client] hop {hops_used}/{max_hops} tool={tool_name} ok",
+                flush=True,
+            )
+
+        elif et in ("session.status_idle", "session.completed"):
+            seen_idle = True
+            break
+        elif et == "session.error":
+            raise ManagedAgentError(f"session error: {data}")
+
+    final_text = "".join(text_buf).strip()
+    print(
+        f"[moderator_client] stream end events={event_count} idle={seen_idle} "
+        f"hops={hops_used} text_len={len(final_text)} tools_called={len(tool_calls)}",
+        flush=True,
+    )
+    return {
+        "text": final_text,
+        "tool_calls": tool_calls,
+        "hops_used": hops_used,
+    }
+
+
 async def run_one_shot_with_custom_tool(
     title: str,
     user_message: str,
