@@ -2,6 +2,8 @@ import type { App } from "@slack/bolt";
 import { WebClient } from "@slack/web-api";
 import { waitUntil } from "@vercel/functions";
 import { config } from "../config.js";
+import { getVerdictConversationByThread } from "../db/queries.js";
+import { runArbiterChat } from "../services/arbiterChat.js";
 import { runBriefForUser } from "../services/brief.js";
 import { runNotionSync } from "../services/notionSync.js";
 import { runQaForUser } from "../services/qa.js";
@@ -45,6 +47,43 @@ export function registerMentions(app: App): void {
     if (!text) return;
     await ensureUserRow(userId, m.team || "", app);
     const slack = new WebClient(config.slack.botToken);
+
+    // Phase 4: thread reply on an Arbiter verdict card routes to the
+    // conversational Moderator. Detect BEFORE prefix routing so a thread
+    // reply like "red team push back" doesn't trigger a fresh evaluation.
+    const threadTs = m.thread_ts as string | undefined;
+    if (threadTs && threadTs !== m.ts) {
+      const work = (async () => {
+        try {
+          const conversation = await getVerdictConversationByThread(
+            channel,
+            threadTs
+          );
+          if (conversation) {
+            await runArbiterChat({
+              conversation,
+              slackUserId: userId,
+              channelId: channel,
+              threadTs,
+              userMessage: text,
+              slack,
+            });
+            return;
+          }
+        } catch (err) {
+          console.error("[mentions] arbiter chat lookup failed:", err);
+        }
+        // Not a verdict thread → fall through to normal dispatch
+        await dispatch(slack, userId, channel, text);
+      })();
+      waitUntil(
+        work.catch((err) =>
+          console.error("[mentions] thread dispatch failed:", err)
+        )
+      );
+      return;
+    }
+
     const work = dispatch(slack, userId, channel, text);
     waitUntil(work.catch((err) => console.error("[mentions] dispatch failed:", err)));
   });

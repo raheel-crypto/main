@@ -9,7 +9,12 @@ import { Connection } from "jsforce";
 import { WebClient } from "@slack/web-api";
 import { randomUUID } from "node:crypto";
 import { config } from "../config.js";
-import { appendAudit, getRedTeamMute, getUser } from "../db/queries.js";
+import {
+  appendAudit,
+  getRedTeamMute,
+  getUser,
+  insertVerdictConversation,
+} from "../db/queries.js";
 import { arbiterCard } from "../slack/arbiterCard.js";
 import { ArbiterClientError, evaluateArbiter } from "./arbiterClient.js";
 import { buildIntelPack } from "./redTeamIntelPack.js";
@@ -226,6 +231,27 @@ export async function runDealEvaluation(
       unfurl_media: false,
       ...card,
     });
+
+    // Seed the verdict_conversations row so subsequent thread replies in this
+    // DM can be matched to the verdict + intel pack by the Arbiter Moderator.
+    // Best-effort — a failure here shouldn't block the audit row below.
+    if (posted.ts && posted.channel) {
+      try {
+        await insertVerdictConversation({
+          slackUserId: recipientSlackUserId,
+          slackChannelId: posted.channel,
+          slackThreadTs: posted.ts,
+          opportunityId,
+          verdict,
+          intelPack: pack as unknown as Record<string, unknown>,
+        });
+      } catch (err: any) {
+        console.error(
+          "[deal_evaluation] verdict_conversation seed failed:",
+          err?.message ?? err
+        );
+      }
+    }
 
     await appendAudit({
       slackUserId,

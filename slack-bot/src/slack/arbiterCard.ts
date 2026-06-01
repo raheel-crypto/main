@@ -441,5 +441,19 @@ export function arbiterCard(args: ArbiterCardArgs): {
   const mechanics = debateMechanicsContext(verdict);
   if (mechanics) blocks.push(mechanics);
 
+  // Phase 4 footer: invite reps to keep talking in-thread. The mentions.ts
+  // dispatcher detects thread replies in a verdict_conversations row and
+  // routes them to the Arbiter Moderator.
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text:
+          "💬 Reply in thread to push back, ask for evidence, or test what-if scenarios.",
+      },
+    ],
+  });
+
   return { blocks, text };
 }
