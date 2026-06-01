@@ -151,7 +151,7 @@ public with sharing class PipeGenSharedController {
                    Target_Account__c, Target_Account__r.Name,
                    Committed_Count__c, Actual_Count__c,
                    Completion_Status__c, Notes__c, Motion_Type__c,
-                   Is_Shared__c, Shared_Partner__c, Rep__c
+                   Week_Start_Date__c, Is_Shared__c, Shared_Partner__c, Rep__c
             FROM Weekly_Commit__c WHERE Id = :commitRecord.Id
         ];
     }
@@ -168,7 +168,7 @@ public with sharing class PipeGenSharedController {
                    Target_Account__c, Target_Account__r.Name,
                    Committed_Count__c, Actual_Count__c,
                    Completion_Status__c, Notes__c, Motion_Type__c,
-                   Is_Shared__c, Shared_Partner__c, Rep__c
+                   Week_Start_Date__c, Is_Shared__c, Shared_Partner__c, Rep__c
             FROM Weekly_Commit__c WHERE Id = :commitRecord.Id
         ];
     }
