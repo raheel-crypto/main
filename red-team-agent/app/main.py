@@ -23,6 +23,7 @@ from . import triggers as triggers_mod
 from .arbiter import multi_turn, probability, scorer
 from .arbiter.synthesizer import synthesize_debate
 from .auth import verify_signature
+from .chat.conversation import run_arbiter_chat
 from .context import pack_to_context
 from .cooldowns import is_cooled_down, mark_evaluated
 from .personas.routing import route_personas
@@ -31,6 +32,8 @@ from .schemas import (
     ArbiterRequest,
     ArbiterSynthesis,
     ArbiterVerdict,
+    ChatRequest,
+    ChatResponse,
     Claim,
     Citation as AgentCitation,
     DealContext,
@@ -483,6 +486,58 @@ async def arbiter(
         probesFired=probes_fired,
         synthesis=synthesis,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /arbiter/chat — Conversational Moderator (Red Team Phase 4)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/arbiter/chat", response_model=ChatResponse)
+async def arbiter_chat(
+    raw_body: Annotated[bytes, Depends(verify_signature)],
+) -> ChatResponse:
+    """
+    Moderator follow-up turn. Body carries the verdict snapshot + intel pack
+    + prior turns + the rep's new message. The moderator decides whether to
+    answer from the verdict directly or summon a team / recompute /
+    look up a prior deal via tools.
+
+    Stateless on the Python side — Merlin owns the conversation row (in
+    `verdict_conversations` / `verdict_conversation_turns`) and passes
+    whatever snapshot the moderator needs in the body.
+    """
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"invalid JSON: {exc}",
+        ) from exc
+    try:
+        req = ChatRequest.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"invalid chat request: {exc}",
+        ) from exc
+
+    try:
+        return await run_arbiter_chat(req)
+    except Exception as exc:  # noqa: BLE001
+        # Surface as 200 with a graceful reply so Slack always renders something —
+        # mirrors Merlin's pattern for the webhook handlers.
+        print(f"[arbiter_chat] failed: {exc}", flush=True)
+        return ChatResponse(
+            reply=(
+                "Something went wrong handling that follow-up. Try again, or "
+                f"re-run the verdict (`arbiter {req.verdict.opportunityId}`). "
+                f"Error: {str(exc)[:200]}"
+            ),
+            toolCalls=[],
+            hopsUsed=0,
+            appendedTurns=[],
+        )
 
 
 def _parse_intel_pack(raw_body: bytes) -> IntelPackRequest:
