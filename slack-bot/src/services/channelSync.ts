@@ -273,12 +273,18 @@ function computeSinceIso(
  * Pulls channel history since `sinceIso`, including replies for threaded
  * messages, resolves @<userId> mentions to display names, returns a flat
  * transcript sorted oldest → newest. Bounded by MAX_MESSAGES + MAX_TRANSCRIPT_CHARS.
+ *
+ * Exported so the daily-standup runner can reuse the same fetcher to inject
+ * recent channel chatter into each bound opp's recommender context.
  */
-async function fetchChannelTranscript(
+export async function fetchChannelTranscript(
   slack: WebClient,
   channel: string,
-  sinceIso: string
+  sinceIso: string,
+  opts: { maxChars?: number; maxMessages?: number } = {}
 ): Promise<{ transcript: string; messageCount: number }> {
+  const maxChars = opts.maxChars ?? MAX_TRANSCRIPT_CHARS;
+  const maxMessages = opts.maxMessages ?? MAX_MESSAGES;
   const oldestTs = String(DateTime.fromISO(sinceIso).toSeconds());
   type Msg = {
     ts: string;
@@ -291,7 +297,7 @@ async function fetchChannelTranscript(
   };
   const collected: Msg[] = [];
   let cursor: string | undefined;
-  while (collected.length < MAX_MESSAGES) {
+  while (collected.length < maxMessages) {
     const page: any = await slack.conversations.history({
       channel,
       limit: 100,
@@ -373,7 +379,7 @@ async function fetchChannelTranscript(
     const isReply = !!m.thread_ts && m.thread_ts !== m.ts;
     const prefix = isReply ? "    ↳" : "•";
     const line = `${prefix} [${stamp}] ${author}: ${text}`;
-    if (charCount + line.length + 1 > MAX_TRANSCRIPT_CHARS) {
+    if (charCount + line.length + 1 > maxChars) {
       lines.push("[transcript truncated — exceeded recommender prompt cap]");
       truncated = true;
       break;

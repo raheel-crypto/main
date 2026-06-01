@@ -117,12 +117,25 @@ export interface UsageRow {
   asOf: string;
 }
 
+export interface OppChannelContext {
+  /** The bound Slack channel id (without `#`). */
+  slackChannelId: string;
+  /** Days of history we fetched (e.g., 7 for standup). */
+  lookbackDays: number;
+  /** Flat transcript, oldest → newest, with display names + threading. */
+  transcript: string;
+  /** Number of messages included (post-truncation). */
+  messageCount: number;
+}
+
 export interface OppContext {
   opp: SfOpportunity;
   activities: SfActivity[];
   calls: GongCall[];
   usage: UsageRow[];
   picklistOptions: { stage: string[] };
+  /** Optional: last-N-days transcript of any Slack channel bound to this opp. */
+  channelContext?: OppChannelContext;
 }
 
 const SF_WRITABLE_FIELDS = [

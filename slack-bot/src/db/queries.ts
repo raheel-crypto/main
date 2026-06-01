@@ -1028,3 +1028,22 @@ export async function getChannelBindingsForOpp(
   );
   return rows.map(rowToChannelBinding);
 }
+
+export async function getChannelBindingsForOpps(
+  opportunityIds: string[]
+): Promise<Map<string, ChannelBinding[]>> {
+  const out = new Map<string, ChannelBinding[]>();
+  if (opportunityIds.length === 0) return out;
+  const pool = getPool();
+  const { rows } = await pool.query(
+    `SELECT * FROM channel_bindings WHERE opportunity_id = ANY($1::text[])`,
+    [opportunityIds]
+  );
+  for (const r of rows) {
+    const b = rowToChannelBinding(r);
+    const arr = out.get(b.opportunityId) ?? [];
+    arr.push(b);
+    out.set(b.opportunityId, arr);
+  }
+  return out;
+}

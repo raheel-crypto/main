@@ -9,7 +9,7 @@ import {
 
 const client = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-const SYSTEM_PROMPT = `You are a senior Salesforce account executive's daily assistant. For each Opportunity, you read today's Gong call summaries, recent activities since the last stage change, and product usage data, then produce concrete recommendations to keep the opp record accurate and forward-moving.
+const SYSTEM_PROMPT = `You are a senior Salesforce account executive's daily assistant. For each Opportunity, you read today's Gong call summaries, recent activities since the last stage change, product usage data, and any Slack deal-channel chatter from the last 7 days, then produce concrete recommendations to keep the opp record accurate and forward-moving.
 
 Rules:
 - Only recommend changes for fields where you have evidence. Skip fields when uncertain.
@@ -17,9 +17,10 @@ Rules:
 - NextStep is a single sentence (<=120 chars) starting with a verb.
 - Amount is a number (no currency symbol). CloseDate is YYYY-MM-DD.
 - Recap is 2-3 sentences. Lead with what happened, then what to do.
+- Treat deal-channel chatter as first-person rep notes: if the rep wrote "CFO wants Jul 15 close", that's a real CloseDate signal even without a Gong call to back it up.
 
 Stalled-opp rule (important):
-- If the opp has been in its current stage for >=90 days AND there are no Gong calls today and no Activities since the last stage change, recommend moving StageName to the Closed Lost (or equivalent closed-lost) option from the allowed picklist. Do NOT just push CloseDate out.
+- If the opp has been in its current stage for >=90 days AND there are no Gong calls today and no Activities since the last stage change AND no deal-channel chatter in the last 7 days, recommend moving StageName to the Closed Lost (or equivalent closed-lost) option from the allowed picklist. Do NOT just push CloseDate out.
 - Never recommend a CloseDate in the past unless you are also moving StageName to a Closed stage in the same recommendation. If the deal is still open and the existing CloseDate is in the past, the right move is either a forward-looking CloseDate (with clear evidence of momentum) or Closed Lost.
 
 Output strict JSON ONLY in this shape (no prose, no markdown):
@@ -37,7 +38,7 @@ Output strict JSON ONLY in this shape (no prose, no markdown):
 }`;
 
 function buildUserMessage(ctx: OppContext): string {
-  const { opp, activities, calls, usage, picklistOptions } = ctx;
+  const { opp, activities, calls, usage, picklistOptions, channelContext } = ctx;
   const callBlock = calls.length
     ? calls
         .map(
@@ -64,6 +65,10 @@ function buildUserMessage(ctx: OppContext): string {
     ? `Allowed StageName values: ${picklistOptions.stage.join(" | ")}`
     : "";
 
+  const channelBlock = channelContext
+    ? `Deal channel (<#${channelContext.slackChannelId}>) — last ${channelContext.lookbackDays}d, ${channelContext.messageCount} messages:\n${channelContext.transcript}`
+    : "(no Slack deal channel bound — or no chatter in the last 7 days)";
+
   return `Opportunity: ${opp.name} (${opp.id})
 Account: ${opp.accountName} (${opp.accountId})
 Current Stage: ${opp.stageName}
@@ -81,6 +86,9 @@ ${activityBlock}
 
 Usage:
 ${usageBlock}
+
+Slack Deal Channel:
+${channelBlock}
 
 Generate recommendations now. JSON only.`;
 }
