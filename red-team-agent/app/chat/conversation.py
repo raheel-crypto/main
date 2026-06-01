@@ -1,47 +1,42 @@
 """
-Orchestrator for the Arbiter Moderator session.
+The conversational Arbiter — answers follow-up questions in-thread.
 
-Given a ChatRequest (verdict + intel pack + prior turns + rep's new message),
-this builds the moderator's user message, runs the multi-hop tool loop against
-the moderator managed agent, and returns the ChatResponse.
+Uses the Anthropic SDK directly (not a managed agent) so we can assemble the
+moderator's system prompt per-turn with the full verdict baked in. The
+moderator decides:
+  • Answer directly from the verdict / synthesis on record, OR
+  • Call one of the four tools (summon_red/blue, recompute_probability,
+    lookup_prior_deal).
 
-Key contracts:
-  • The moderator agent has four tools registered server-side (summon_red_team,
-    summon_blue_team, recompute_probability, lookup_prior_deal). Its system
-    prompt forbids first-person opinion — it routes the rep's question to one
-    of those tools and presents the result verbatim.
-  • `prior_turns` includes the original verdict (as a 'system' framing line),
-    any earlier rep questions, prior moderator replies, and verbatim Red/Blue
-    responses from earlier hops. We surface the recent ones in the user
-    message so the moderator has linear context.
-  • Tool handlers return verbatim Red/Blue text as `appendedTurns` so Merlin
-    can write them to verdict_conversation_turns alongside the moderator's
-    final reply.
+When it calls a tool we dispatch:
+  • summon_* re-invoke the existing Red/Blue managed agents.
+  • recompute/lookup run deterministically in-process.
+
+Result is a `ChatResponse` with the moderator's final reply plus structured
+`appendedTurns` (verbatim Red/Blue or system rows) that Merlin persists to
+`verdict_conversation_turns` alongside the moderator's reply.
 """
 from __future__ import annotations
 
+import json
 import os
-from typing import Any, List
+from typing import List, Optional
+
+from anthropic import AsyncAnthropic
 
 from ..context import pack_to_context
-from ..agent_client import run_tool_loop, ManagedAgentError
 from ..schemas import (
-    ArbiterChatRole,
     ChatConversationTurn,
     ChatRequest,
     ChatResponse,
     ChatToolCallTrace,
     IntelPackRequest,
 )
-from .tools import TOOL_HANDLERS, ToolCtx
+from . import tools as chat_tools
 
-
-def _moderator_env_triplet() -> tuple[str, str, str]:
-    return (
-        "ARBITER_MODERATOR_AGENT_ID",
-        "ARBITER_MODERATOR_ENVIRONMENT_ID",
-        "ARBITER_MODERATOR_VAULT_IDS",
-    )
+# Bumped together with `slack-bot/src/constants.ts:MODEL` and the other
+# arbiter-side model ids.
+MODEL = os.environ.get("ARBITER_CHAT_MODEL", "claude-sonnet-4-5-20250929")
 
 
 def _max_hops() -> int:
@@ -51,164 +46,300 @@ def _max_hops() -> int:
         return 4
 
 
-def _format_prior_turns(turns: List[ChatConversationTurn], n: int = 12) -> str:
+# ─────────────────────────────────────────────────────────────────────────────
+# System prompt — assembled fresh each turn with the verdict on record
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _build_system_prompt(req: ChatRequest) -> str:
+    v = req.verdict
+    syn = v.synthesis
+
+    red_claims = "\n".join(
+        f"  - {c.statement}" for c in (v.redArgument.claims if v.redArgument else [])
+    ) or "  (none)"
+    blue_claims = "\n".join(
+        f"  - {c.statement}" for c in (v.blueArgument.claims if v.blueArgument else [])
+    ) or "  (none)"
+
+    disc = ""
+    if syn and syn.discriminating_variable:
+        dv = syn.discriminating_variable
+        disc = (
+            f"\nDISCRIMINATING VARIABLE: \"{dv.variable}\" — "
+            f"won cohort {dv.won_cohort_pct}%, lost cohort {dv.lost_cohort_pct}%, "
+            f"this deal: {dv.this_deal_status}."
+        )
+
+    diagnostics = ""
+    if syn and syn.if_then_diagnostic:
+        diagnostics = "\nIF/THEN DIAGNOSTICS ALREADY ON RECORD:\n" + "\n".join(
+            f"  - IF {b.condition} -> ~{b.new_probability}% ({b.new_lean})"
+            for b in syn.if_then_diagnostic
+        )
+
+    concessions = ""
+    if syn and syn.resolved_contradictions:
+        concessions = "\nCONCESSIONS FROM THE DEBATE:\n" + "\n".join(
+            f"  - {c.conceding_team.upper()} conceded on {c.on_topic}: {c.summary}"
+            for c in syn.resolved_contradictions
+        )
+
+    # Surface basic deal context from the intel pack so the moderator can ground
+    # references without needing a tool call. Defensive: the intel_pack dict
+    # carries the same shape as IntelPackRequest, just JSON-stringified.
+    pack = req.intelPack or {}
+    opp = pack.get("opportunity") or {}
+    account = pack.get("account") or {}
+    opp_name = opp.get("name") or "(unknown)"
+    acct_name = account.get("name") or "(unknown)"
+    amount = opp.get("amount")
+    amount_str = f"${amount:,.0f}" if isinstance(amount, (int, float)) else "(amount unknown)"
+    stage = opp.get("stageName") or "(unknown stage)"
+
+    lean = "WIN" if v.probability >= 50 else "LOSS" if v.probability < 30 else "UNCERTAIN"
+
+    return f"""You are the Arbiter for a Red Team / Blue Team deal-review system, now in
+interactive mode answering a rep's follow-up in a Slack thread.
+
+CRITICAL ROLE BOUNDARY — you do NOT invent opinions:
+- You explain the verdict and the evidence already on record.
+- When the rep asks you to push back AS a team, or "what would Blue/Red say",
+  you MUST call summon_blue_team / summon_red_team. Do not impersonate a team
+  from memory.
+- When the rep asks a what-if ("would your view change if..."), you MUST call
+  recompute_probability. Do not guess a new number.
+- When the rep asks about a prior deal by name, call lookup_prior_deal.
+- You MAY answer directly ONLY for questions about what the verdict already
+  says (e.g. "why is the probability {v.probability}%", "what was the biggest
+  gap", "summarize the synthesis").
+- Ground every claim in the stored evidence or a tool result. Never fabricate
+  a citation.
+
+THE DEAL: {opp_name} — {acct_name}, {amount_str}, stage {stage}.
+
+THE VERDICT ON RECORD:
+- Win probability: {v.probability}% ({v.confidence} confidence)
+- Red Team total score: {v.redScoring.total_score if v.redScoring else 0:.0f}
+- Blue Team total score: {v.blueScoring.total_score if v.blueScoring else 0:.0f}
+- Lean: {lean}
+- Rounds completed: {v.roundsCompleted}
+- Disagreement: {v.disagreement:.2f}
+
+RED TEAM'S CLAIMS (loss case):
+{red_claims}
+
+BLUE TEAM'S CLAIMS (win case):
+{blue_claims}
+{concessions}{disc}{diagnostics}
+
+STYLE: concise, direct, Slack-ready (mrkdwn — *bold* not **bold**). Lead with
+the answer. Cite specific scores, deal names, and evidence. No preamble. When
+you summoned a team, attribute it ("Red's pushback:" / "Blue's response:").
+When recompute_probability returns, lead with the new % and lean, then the
+rationale. Keep replies under ~250 words unless the rep explicitly asks for
+more.
+"""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Prior-turn history → Anthropic SDK messages
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _history_to_messages(
+    prior_turns: List[ChatConversationTurn],
+    new_user_message: str,
+) -> list[dict]:
     """
-    Render the last N turns oldest→newest for the moderator's user message.
-    Skip the very last turn if it's the same as the rep's current message
-    (sometimes appended by the caller before sending).
+    Render the prior turns as alternating user/assistant messages. Tool roles
+    (red/blue/system) collapse into the assistant turn that surfaced them so
+    the SDK doesn't choke on an unknown role; the moderator's prompt already
+    instructs it to attribute team responses.
     """
-    if not turns:
-        return "(no prior turns)"
-    tail = turns[-n:]
-    lines: list[str] = []
-    for t in tail:
+    msgs: list[dict] = []
+    pending_assistant: list[str] = []
+    for t in prior_turns:
         role = t.role
-        # Indent multi-line content for readability
         body = (t.content or "").strip()
         if not body:
             continue
-        lines.append(f"[{role}] {body}")
-    return "\n\n".join(lines) if lines else "(no prior turns)"
+        if role == "user":
+            if pending_assistant:
+                msgs.append({"role": "assistant", "content": "\n\n".join(pending_assistant)})
+                pending_assistant = []
+            msgs.append({"role": "user", "content": body})
+        elif role == "moderator":
+            pending_assistant.append(body)
+        elif role in ("red", "blue", "system"):
+            # Surface verbatim team / system responses inside the preceding
+            # assistant turn so the moderator can quote them on follow-ups.
+            tag = {"red": "Red Team", "blue": "Blue Team", "system": "System"}[role]
+            pending_assistant.append(f"_{tag} response:_\n{body}")
+    if pending_assistant:
+        msgs.append({"role": "assistant", "content": "\n\n".join(pending_assistant)})
+    msgs.append({"role": "user", "content": new_user_message.strip() or "(empty)"})
+    return msgs
 
 
-def _build_moderator_user_message(req: ChatRequest) -> str:
-    v = req.verdict
-    opp_id = v.opportunityId
-    prob = v.probability
-    conf = v.confidence
-    base = v.baseRate
-    red_head = v.redArgument.headline if v.redArgument else "(none)"
-    blue_head = v.blueArgument.headline if v.blueArgument else "(none)"
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool dispatch
+# ─────────────────────────────────────────────────────────────────────────────
 
-    sections: list[str] = []
-    sections.append(f"# Verdict snapshot (opp {opp_id})")
-    sections.append(
-        f"- Probability: {prob}% (confidence {conf}, base rate {round(base * 100)}%)\n"
-        f"- Red Team headline: {red_head}\n"
-        f"- Blue Team headline: {blue_head}\n"
-        f"- Disagreement: {v.disagreement}\n"
-        f"- Rounds completed: {v.roundsCompleted}"
-    )
-    if v.synthesis and v.synthesis.narrative:
-        sections.append(f"## Arbiter narrative\n{v.synthesis.narrative[:1200]}")
-    sections.append("## Conversation so far")
-    sections.append(_format_prior_turns(req.priorTurns))
-    sections.append("## Rep's new message")
-    sections.append(req.userMessage.strip() or "(empty message)")
-    sections.append(
-        "## Your job\n"
-        "Route the rep's message to exactly one of your four tools "
-        "(summon_red_team / summon_blue_team / recompute_probability / lookup_prior_deal). "
-        "If the question is genuinely ambiguous you MAY ask one short clarifying "
-        "question instead. After receiving the tool result(s), reply with minimal framing — "
-        "present the team/system response verbatim with attribution. Do NOT add "
-        "your own opinion or analysis."
-    )
-    return "\n\n".join(sections)
+
+async def _dispatch_tool(
+    name: str,
+    args: dict,
+    *,
+    req: ChatRequest,
+    deal_context,
+    appended_turns: list[ChatConversationTurn],
+) -> tuple[dict, dict]:
+    """Run one tool. Returns (result_for_model, side_effects_for_response)."""
+    side: dict = {}
+
+    if name == "summon_red_team":
+        payload, appended = await chat_tools.summon_red_team(
+            deal_context, req.verdict, args.get("focused_question") or ""
+        )
+    elif name == "summon_blue_team":
+        payload, appended = await chat_tools.summon_blue_team(
+            deal_context, req.verdict, args.get("focused_question") or ""
+        )
+    elif name == "recompute_probability":
+        payload, appended = chat_tools.recompute_probability(
+            deal_context,
+            req.verdict,
+            args.get("hypothetical") or "",
+            args.get("meddpicc_changes") or {},
+        )
+        if payload.get("new_probability") is not None:
+            side = {
+                "recomputed_probability": payload["new_probability"],
+                "recomputed_lean": payload.get("new_lean"),
+                "scenario_rationale": payload.get("rationale"),
+            }
+    elif name == "lookup_prior_deal":
+        payload, appended = chat_tools.lookup_prior_deal(args.get("deal_name") or "")
+    else:
+        payload = {"error": f"unknown tool {name}"}
+        appended = None
+
+    if appended is not None:
+        appended_turns.append(appended)
+    return payload, side
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public entry point
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 async def run_arbiter_chat(req: ChatRequest) -> ChatResponse:
-    """
-    Drive one Moderator turn: build user message → run tool loop → collect
-    appended turns → return ChatResponse.
-
-    Raises ManagedAgentError if the managed-agent call fails outright.
-    """
-    # Build a DealContext so the tool handlers can reuse the same context the
-    # arbiter built at debate time. pack_to_context expects an IntelPackRequest.
-    pack = IntelPackRequest.model_validate(req.intelPack)
-    deal_context = pack_to_context(pack)
-
-    ctx = ToolCtx(verdict=req.verdict, intel_pack=req.intelPack, deal_context=deal_context)
-
-    # Wrap each handler so we can capture its appended turn cleanly.
-    appended_turns: list[ChatConversationTurn] = []
-
-    def make_handler(name: str):
-        async def _wrapped(tool_input: dict):
-            payload, summary, appended = await TOOL_HANDLERS[name](tool_input, ctx)
-            if appended is not None:
-                appended_turns.append(appended)
-            return payload, summary
-
-        return _wrapped
-
-    handlers = {name: make_handler(name) for name in TOOL_HANDLERS.keys()}
-
-    agent_env, env_env, vault_env = _moderator_env_triplet()
-    title = f"Arbiter Moderator — opp {req.verdict.opportunityId}"
-
-    user_message = _build_moderator_user_message(req)
-
-    try:
-        loop = await run_tool_loop(
-            title=title,
-            user_message=user_message,
-            tool_handlers=handlers,
-            agent_env_name=agent_env,
-            environment_env_name=env_env,
-            vault_env_name=vault_env,
-            max_hops=_max_hops(),
-        )
-    except ManagedAgentError as exc:
-        # Surface as a graceful fallback so Merlin can DM something useful.
+    """Drive one moderator turn end-to-end."""
+    if "ANTHROPIC_API_KEY" not in os.environ:
         return ChatResponse(
-            reply=(
-                "I couldn't reach the moderator agent for that follow-up "
-                f"({str(exc)[:160]}). Try again in a moment, or run `arbiter "
-                f"{req.verdict.opportunityId}` to re-evaluate the deal."
-            ),
+            reply="Moderator isn't configured (ANTHROPIC_API_KEY missing).",
             toolCalls=[],
             hopsUsed=0,
             appendedTurns=[],
         )
 
-    final_text = (loop["text"] or "").strip()
-    if not final_text:
-        # The moderator finished without text — fall back to the last
-        # appended-turn content so the rep sees *something* useful.
-        if appended_turns:
-            final_text = appended_turns[-1].content
-        else:
-            final_text = "I didn't have anything new to add. Try rephrasing the question."
+    pack = IntelPackRequest.model_validate(req.intelPack)
+    deal_context = pack_to_context(pack)
 
-    # If recompute_probability fired, pull the structured outputs onto the
-    # top-level fields so Merlin's Slack card can render the probability
-    # badge inline instead of digging through tool_calls.
-    recomputed_prob = None
-    recomputed_lean = None
-    scenario_rationale = None
-    for call in loop["tool_calls"]:
-        if call["tool"] == "recompute_probability":
-            # The summary embeds the new pct; the appended turn has the rationale.
-            # Find the matching appended turn by metadata.
-            for t in appended_turns:
-                meta = (t.metadata or {})
-                if meta.get("tool") == "recompute_probability":
-                    recomputed_prob = meta.get("new_probability")
-                    recomputed_lean = meta.get("new_lean")
-                    scenario_rationale = t.content
-                    break
-            break
+    client = AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    system = _build_system_prompt(req)
+    messages = _history_to_messages(req.priorTurns, req.userMessage)
 
-    tool_call_traces = [
-        ChatToolCallTrace(
-            tool=c["tool"],
-            input=c["input"],
-            resultSummary=c["result_summary"],
+    tool_traces: list[ChatToolCallTrace] = []
+    appended_turns: list[ChatConversationTurn] = []
+    side_effects: dict = {}
+    hops_used = 0
+    max_hops = _max_hops()
+
+    for _ in range(max_hops):
+        resp = await client.messages.create(
+            model=MODEL,
+            max_tokens=1500,
+            system=system,
+            tools=chat_tools.CHAT_TOOLS,
+            messages=messages,
         )
-        for c in loop["tool_calls"]
-        # only include known tools; unknown ones are still useful for audit
-        # but the wire schema constrains tool name to the four-tool literal.
-        if c["tool"] in TOOL_HANDLERS
-    ]
 
+        if resp.stop_reason == "tool_use":
+            messages.append({"role": "assistant", "content": resp.content})
+            tool_results: list[dict] = []
+            for block in resp.content:
+                if getattr(block, "type", None) != "tool_use":
+                    continue
+                hops_used += 1
+                result, side = await _dispatch_tool(
+                    block.name,
+                    block.input,
+                    req=req,
+                    deal_context=deal_context,
+                    appended_turns=appended_turns,
+                )
+                side_effects.update(side)
+                tool_traces.append(
+                    ChatToolCallTrace(
+                        tool=block.name,
+                        input=block.input or {},
+                        resultSummary=_summarize_tool_result(block.name, result),
+                    )
+                )
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        reply = "".join(
+            getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text"
+        ).strip()
+        return ChatResponse(
+            reply=reply or "(no reply)",
+            toolCalls=tool_traces,
+            recomputedProbability=side_effects.get("recomputed_probability"),
+            recomputedLean=side_effects.get("recomputed_lean"),
+            scenarioRationale=side_effects.get("scenario_rationale"),
+            hopsUsed=hops_used,
+            appendedTurns=appended_turns,
+        )
+
+    # Hop budget exhausted — best-effort fallback
+    fallback = (
+        "I gathered the inputs but need you to narrow the question — try "
+        "asking about one team or one what-if at a time."
+    )
     return ChatResponse(
-        reply=final_text,
-        toolCalls=tool_call_traces,
-        recomputedProbability=recomputed_prob,
-        recomputedLean=recomputed_lean,
-        scenarioRationale=scenario_rationale,
-        hopsUsed=loop["hops_used"],
+        reply=fallback,
+        toolCalls=tool_traces,
+        recomputedProbability=side_effects.get("recomputed_probability"),
+        recomputedLean=side_effects.get("recomputed_lean"),
+        scenarioRationale=side_effects.get("scenario_rationale"),
+        hopsUsed=hops_used,
         appendedTurns=appended_turns,
     )
+
+
+def _summarize_tool_result(name: str, result: dict) -> str:
+    if name in ("summon_red_team", "summon_blue_team"):
+        return f"{result.get('team', name)}: {(result.get('headline') or '')[:120]}"
+    if name == "recompute_probability":
+        base = result.get("baseline_probability")
+        new = result.get("new_probability")
+        lean = result.get("new_lean")
+        return f"{base}% → {new}% ({lean})"
+    if name == "lookup_prior_deal":
+        if result.get("found"):
+            return f"found: {result.get('name')}"
+        return f"not_found: {(result.get('searched_for') or '')[:80]}"
+    if "error" in result:
+        return f"error: {str(result['error'])[:120]}"
+    return ""
