@@ -311,6 +311,19 @@ export function buildStatusInThreadText(args: {
   return `${icon} ${verb} by <@${args.by_slack_user_id}> at ${args.at_iso}`;
 }
 
+/**
+ * Status note posted to the thread when a deal is marked Closed Won via the
+ * button. Same shape as buildStatusInThreadText so the activity log inside
+ * the approval thread reads consistently across approval + closed-won
+ * events: one line per state change with who and when.
+ */
+export function buildClosedWonStatusInThreadText(args: {
+  by_slack_user_id: string;
+  at_iso: string;
+}): string {
+  return `🏆 Marked *Closed Won* by <@${args.by_slack_user_id}> at ${args.at_iso}`;
+}
+
 function statusIcon(state: ApprovalState, routing: ApprovalRouting): string {
   if (state === "approved") return "✅";
   if (state === "rejected") return "❌";

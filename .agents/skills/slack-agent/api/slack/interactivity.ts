@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { getAuthorization } from "../../lib/approval.js";
 import {
   MARK_CLOSED_WON_ACTION_ID,
+  buildClosedWonStatusInThreadText,
   buildMarkClosedWonErrorBlocks,
   buildMarkClosedWonResultBlocks,
 } from "../../lib/blocks.js";
@@ -9,6 +10,7 @@ import { deliverOrderForm } from "../../lib/orderForm.js";
 import { postDecisionUpdate } from "../../lib/revops.js";
 import { drop, retrieve, stashAt } from "../../lib/state.js";
 import {
+  postMessage,
   updateMessage,
   updateViaResponseUrl,
   verifySlackSignature,
@@ -135,6 +137,7 @@ async function handleMarkClosedWon(
     return res.status(200).send("");
   }
 
+  const nowIso = new Date().toISOString();
   await updateMessage({
     channel,
     ts: messageTs,
@@ -142,9 +145,26 @@ async function handleMarkClosedWon(
     blocks: buildMarkClosedWonResultBlocks({
       accountName,
       byUserId: userId,
-      atIso: new Date().toISOString(),
+      atIso: nowIso,
     }),
   });
+
+  // Also drop a status note in the thread so the activity is visible in the
+  // channel timeline without expanding the message -- mirrors the approval
+  // flow (lib/revops.ts:postDecisionUpdate) where "Approved by @user at ..."
+  // lands in the same thread. Best-effort: if the prompt was a top-level
+  // message the post starts a new thread; if it was already in a thread,
+  // Slack collapses the reply into the parent thread.
+  try {
+    await postMessage({
+      channel,
+      thread_ts: messageTs,
+      text: buildClosedWonStatusInThreadText({ by_slack_user_id: userId, at_iso: nowIso }),
+    });
+  } catch (e) {
+    console.error("closed-won thread status post failed:", e);
+  }
+
   return res.status(200).send("");
 }
 
