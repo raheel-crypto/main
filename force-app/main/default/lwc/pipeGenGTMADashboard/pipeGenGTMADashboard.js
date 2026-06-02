@@ -58,6 +58,9 @@ export default class PipeGenGTMADashboard extends LightningElement {
     @track cardSearchTerm     = '';
     @track accountSortBy      = 'name';
 
+    // ─── Active tab tracking — prevents tab reset on re-render ──────────────
+    @track activeTab = 'dashboard';
+
     // ─── GTMA2 account search state ──────────────────────────────────────────
     @track gtma2SearchTerm    = '';
     @track gtma2SearchResults = [];
@@ -325,6 +328,10 @@ export default class PipeGenGTMADashboard extends LightningElement {
         await this.loadData();
     }
 
+    handleTabSelect(e) {
+        this.activeTab = e.detail.value;
+    }
+
     // ─── Commit Form Handlers ───────────────────────────────────────────────────
 
     openCommitForm()  { this.showCommitForm = true;  this.newCommit = EMPTY_COMMIT(); this.accountSearchResults = []; }
@@ -542,7 +549,6 @@ export default class PipeGenGTMADashboard extends LightningElement {
             }];
             this.gtma2SearchResults = this.gtma2SearchResults.filter(r => r.id !== id);
             this.toast('Added', `${result.name} added to your targets.`, 'success');
-            this.loadData();
         } catch (err) {
             this.toast('Error', 'Could not add account to targets.', 'error');
         }
@@ -556,7 +562,6 @@ export default class PipeGenGTMADashboard extends LightningElement {
             await removeGTMA2Target({ accountId: id });
             this.accountCards = this.accountCards.filter(c => c.id !== id);
             this.toast('Removed', `${card.name} removed from your targets.`, 'success');
-            this.loadData();
         } catch (err) {
             this.toast('Error', 'Could not remove account from targets.', 'error');
         }

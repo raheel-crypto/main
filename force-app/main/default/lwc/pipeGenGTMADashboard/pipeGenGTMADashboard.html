@@ -65,7 +65,7 @@
         </div>
 
         <!-- ── Tabset ── -->
-        <lightning-tabset class="slds-p-horizontal_medium" variant="scoped">
+        <lightning-tabset class="slds-p-horizontal_medium" variant="scoped" value={activeTab} onselect={handleTabSelect}>
 
             <!-- ════ TAB 1: WEEKLY DASHBOARD ════ -->
             <lightning-tab label="Weekly Dashboard" value="dashboard" icon-name="utility:metrics">
