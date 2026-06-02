@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Rep__c</fullName>
+    <externalId>false</externalId>
+    <label>Rep</label>
+    <referenceTo>User</referenceTo>
+    <relationshipLabel>GTM Coverage Records</relationshipLabel>
+    <relationshipName>GTM_Coverage_Records</relationshipName>
+    <required>true</required>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Lookup</type>
+</CustomField>

@@ -7,6 +7,9 @@ import toggleCommitComplete          from '@salesforce/apex/PipeGenGTMAControlle
 import getGTMAAccountsForSelection   from '@salesforce/apex/PipeGenGTMAController.getGTMAAccountsForSelection';
 import updateGTMATargetAccounts      from '@salesforce/apex/PipeGenGTMAController.updateGTMATargetAccounts';
 import carryForwardGTMACommits       from '@salesforce/apex/PipeGenGTMAController.carryForwardGTMACommits';
+import searchAllAccounts             from '@salesforce/apex/PipeGenGTMAController.searchAllAccounts';
+import addGTMA2Target                from '@salesforce/apex/PipeGenGTMAController.addGTMA2Target';
+import removeGTMA2Target             from '@salesforce/apex/PipeGenGTMAController.removeGTMA2Target';
 
 const CURRENCY   = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
@@ -44,13 +47,22 @@ export default class PipeGenGTMADashboard extends LightningElement {
     @track accountSearchResults = [];
     @track newCommit            = EMPTY_COMMIT();
 
-    // ─── Account card tab state ─────────────────────────────────────────────────
+    // ─── GTMA2 tier flag ────────────────────────────────────────────────────
+    @track isGTMA2 = false;
+
+    // ─── Account card tab state — GTMA1 ─────────────────────────────────────
     @track accountCards       = [];
     @track accountCardsLoaded = false;
     @track isLoadingCards     = false;
     @track isSavingTargets    = false;
     @track cardSearchTerm     = '';
     @track accountSortBy      = 'name';
+
+    // ─── GTMA2 account search state ──────────────────────────────────────────
+    @track gtma2SearchTerm    = '';
+    @track gtma2SearchResults = [];
+    @track isSearching        = false;
+    _searchTimer              = null;
 
     // ─── Lifecycle ──────────────────────────────────────────────────────────
 
@@ -64,8 +76,9 @@ export default class PipeGenGTMADashboard extends LightningElement {
         this.isLoading    = true;
         this.errorMessage = null;
         try {
-            const raw  = await getGTMADashboardData();
-            this.data  = this.processData(raw);
+            const raw    = await getGTMADashboardData();
+            this.isGTMA2 = raw.isGTMA2 || false;
+            this.data    = this.processData(raw);
         } catch (e) {
             this.errorMessage = e.body?.message || 'Failed to load dashboard data.';
         } finally {
@@ -205,7 +218,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         ];
     }
 
-    // ─── Computed — account segments ─────────────────────────────────────────────────
+    // ─── Computed — GTMA1 account segments ────────────────────────────────────────
 
     get sortedFilteredCards() {
         const term = this.cardSearchTerm.toLowerCase();
@@ -260,6 +273,17 @@ export default class PipeGenGTMADashboard extends LightningElement {
     get targetedCardCount() { return this.accountCards.filter(c => c.effectiveTargeted).length; }
     get totalCardCount()    { return this.accountCards.length; }
 
+    // ─── Computed — GTMA2 ────────────────────────────────────────────────────────
+
+    get gtma2Cards() {
+        return this.accountCards.map(c => this.applyCardClass(c));
+    }
+    get hasAccountCards()       { return this.accountCards.length > 0; }
+    get hasGTMA2SearchResults() { return this.gtma2SearchResults.length > 0; }
+    get showGTMA2NoResults() {
+        return !this.isSearching && this.gtma2SearchTerm.length >= 3 && this.gtma2SearchResults.length === 0;
+    }
+
     applyCardClass(c) {
         const isPending = c.effectiveTargeted !== c.isTargeted;
         let cls = 'acct-card';
@@ -297,6 +321,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
     // ─── Handlers — header ────────────────────────────────────────────────────
 
     async handleRefresh() {
+        this.accountCardsLoaded = false;
         await this.loadData();
     }
 
@@ -415,7 +440,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         }
     }
 
-    // ─── Account Cards Handlers ──────────────────────────────────────────────────
+    // ─── GTMA1 Account Cards Handlers ────────────────────────────────────────────
 
     async handleAccountsTabActive() {
         if (this.accountCardsLoaded) return;
@@ -461,6 +486,79 @@ export default class PipeGenGTMADashboard extends LightningElement {
             this.toast('Error', e.body?.message || 'Could not update accounts.', 'error');
         } finally {
             this.isSavingTargets = false;
+        }
+    }
+
+    // ─── GTMA2 Account Search Handlers ───────────────────────────────────────────
+
+    handleGTMA2Search(e) {
+        const term = e.detail.value || '';
+        this.gtma2SearchTerm = term;
+        clearTimeout(this._searchTimer);
+        if (term.length < 3) { this.gtma2SearchResults = []; return; }
+        this._searchTimer = setTimeout(async () => {
+            this.isSearching = true;
+            try {
+                const excludeIds = this.accountCards.map(c => c.id);
+                const results    = await searchAllAccounts({ searchTerm: term, excludeIds });
+                this.gtma2SearchResults = results.map(a => this.enrichSearchResult(a));
+            } catch (err) {
+                this.gtma2SearchResults = [];
+            } finally {
+                this.isSearching = false;
+            }
+        }, 300);
+    }
+
+    enrichSearchResult(a) {
+        const name    = a.Name || '';
+        const initial = (name || '?').charAt(0).toUpperCase();
+        let hashVal = 0;
+        for (let i = 0; i < name.length; i++) {
+            hashVal = (hashVal * 31 + name.charCodeAt(i)) & 0xffff;
+        }
+        return {
+            id:            a.Id,
+            name,
+            accountStatus: a.Account_Status__c,
+            type:          a.Type,
+            avatarInitial: initial,
+            avatarStyle:   `background-color:${AVATAR_COLORS[hashVal % AVATAR_COLORS.length]};`,
+            faviconUrl:    a.Website
+                ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(a.Website)}&sz=32`
+                : null
+        };
+    }
+
+    async handleAddGTMA2Target(e) {
+        const id     = e.currentTarget.dataset.id;
+        const result = this.gtma2SearchResults.find(r => r.id === id);
+        if (!result) return;
+        try {
+            await addGTMA2Target({ accountId: id });
+            this.accountCards = [...this.accountCards, {
+                ...result, isTargeted: true, effectiveTargeted: true,
+                openOppCount: 0, segment: 'Other'
+            }];
+            this.gtma2SearchResults = this.gtma2SearchResults.filter(r => r.id !== id);
+            this.toast('Added', `${result.name} added to your targets.`, 'success');
+            this.loadData();
+        } catch (err) {
+            this.toast('Error', 'Could not add account to targets.', 'error');
+        }
+    }
+
+    async handleRemoveGTMA2Target(e) {
+        const id   = e.currentTarget.dataset.id;
+        const card = this.accountCards.find(c => c.id === id);
+        if (!card) return;
+        try {
+            await removeGTMA2Target({ accountId: id });
+            this.accountCards = this.accountCards.filter(c => c.id !== id);
+            this.toast('Removed', `${card.name} removed from your targets.`, 'success');
+            this.loadData();
+        } catch (err) {
+            this.toast('Error', 'Could not remove account from targets.', 'error');
         }
     }
 

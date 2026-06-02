@@ -7,6 +7,7 @@ public with sharing class PipeGenGTMAController {
         @AuraEnabled public List<AccountRow>      targetAccounts;
         @AuraEnabled public List<Weekly_Commit__c> thisWeekCommits;
         @AuraEnabled public GTMAScorecardData     lastWeekScorecard;
+        @AuraEnabled public Boolean               isGTMA2;
     }
 
     public class GTMAWeeklyTarget {
@@ -75,26 +76,31 @@ public with sharing class PipeGenGTMAController {
     @AuraEnabled(cacheable=false)
     public static GTMADashboardData getGTMADashboardData() {
         Id userId = UserInfo.getUserId();
+
+        User u;
+        try {
+            u = [SELECT GTMA_Weekly_Target__c, GTM_Associate_Tier__c FROM User WHERE Id = :userId LIMIT 1];
+        } catch (Exception e) {
+            u = new User();
+        }
+        Boolean isGTMA2 = '2'.equals(u.GTM_Associate_Tier__c);
+
         GTMADashboardData d = new GTMADashboardData();
-        d.weeklyTarget     = buildWeeklyTarget(userId);
-        d.targetAccounts   = buildTargetAccounts(userId);
-        d.thisWeekCommits  = buildThisWeekCommits(userId);
-        d.lastWeekScorecard = buildLastWeekScorecard(userId);
+        d.isGTMA2           = isGTMA2;
+        d.weeklyTarget      = buildWeeklyTarget(userId, u.GTMA_Weekly_Target__c);
+        d.targetAccounts    = buildTargetAccounts(userId, isGTMA2);
+        d.thisWeekCommits   = buildThisWeekCommits(userId);
+        d.lastWeekScorecard = buildLastWeekScorecard(userId, isGTMA2);
         return d;
     }
 
     // ─── Weekly Target ───────────────────────────────────────────────────
 
-    private static GTMAWeeklyTarget buildWeeklyTarget(Id userId) {
+    private static GTMAWeeklyTarget buildWeeklyTarget(Id userId, Decimal weeklyTargetVal) {
         GTMAWeeklyTarget wt = new GTMAWeeklyTarget();
         Date weekStart = getWeekStart(Date.today());
 
-        Integer target = 0;
-        try {
-            User u = [SELECT GTMA_Weekly_Target__c FROM User WHERE Id = :userId LIMIT 1];
-            target = u.GTMA_Weekly_Target__c != null ? u.GTMA_Weekly_Target__c.intValue() : 0;
-        } catch (Exception e) { target = 0; }
-        wt.target = target;
+        wt.target = weeklyTargetVal != null ? weeklyTargetVal.intValue() : 0;
 
         List<Weekly_Commit__c> commits = [
             SELECT Id, Completion_Status__c
@@ -119,20 +125,37 @@ public with sharing class PipeGenGTMAController {
 
     // ─── Target Accounts ────────────────────────────────────────────────
 
-    private static List<AccountRow> buildTargetAccounts(Id userId) {
+    private static List<AccountRow> buildTargetAccounts(Id userId, Boolean isGTMA2) {
         List<AccountRow> rows = new List<AccountRow>();
+        List<Account> accounts;
 
-        List<Account> accounts = [
-            SELECT Id, Name, Type, Account_Status__c, ARR__c, Estimated_TAM__c, Website,
-                   Target_Account__c, LastActivityDate,
-                (SELECT Gong__Call_Start__c FROM Gong__Conversations__r
-                 ORDER BY Gong__Call_Start__c DESC LIMIT 1),
-                (SELECT Id FROM Contacts WHERE IsDeleted = false)
-            FROM Account
-            WHERE GTM_Associate__c = :userId AND GTMA_Target_Account__c = true
-            ORDER BY Name ASC
-            LIMIT 150
-        ];
+        if (isGTMA2) {
+            Set<Id> coveredIds = getCoverageAccountIds(userId);
+            if (coveredIds.isEmpty()) return rows;
+            accounts = [
+                SELECT Id, Name, Type, Account_Status__c, ARR__c, Estimated_TAM__c, Website,
+                       Target_Account__c, LastActivityDate,
+                    (SELECT Gong__Call_Start__c FROM Gong__Conversations__r
+                     ORDER BY Gong__Call_Start__c DESC LIMIT 1),
+                    (SELECT Id FROM Contacts WHERE IsDeleted = false)
+                FROM Account
+                WHERE Id IN :coveredIds
+                ORDER BY Name ASC
+                LIMIT 150
+            ];
+        } else {
+            accounts = [
+                SELECT Id, Name, Type, Account_Status__c, ARR__c, Estimated_TAM__c, Website,
+                       Target_Account__c, LastActivityDate,
+                    (SELECT Gong__Call_Start__c FROM Gong__Conversations__r
+                     ORDER BY Gong__Call_Start__c DESC LIMIT 1),
+                    (SELECT Id FROM Contacts WHERE IsDeleted = false)
+                FROM Account
+                WHERE GTM_Associate__c = :userId AND GTMA_Target_Account__c = true
+                ORDER BY Name ASC
+                LIMIT 150
+            ];
+        }
 
         for (Account a : accounts) {
             AccountRow row       = new AccountRow();
@@ -175,7 +198,7 @@ public with sharing class PipeGenGTMAController {
 
     // ─── Last Week's Scorecard ──────────────────────────────────────────────────
 
-    private static GTMAScorecardData buildLastWeekScorecard(Id userId) {
+    private static GTMAScorecardData buildLastWeekScorecard(Id userId, Boolean isGTMA2) {
         GTMAScorecardData sc = new GTMAScorecardData();
         Date lastWeekStart = getWeekStart(Date.today()).addDays(-7);
         Date lastWeekEnd   = lastWeekStart.addDays(6);
@@ -198,10 +221,15 @@ public with sharing class PipeGenGTMAController {
         }
         sc.accountsTouched = touchedAccounts.size();
 
-        // Pipeline influence: open opps on all accounts where GTM_Associate__c = userId
-        Set<Id> coveredIds = new Set<Id>();
-        for (Account a : [SELECT Id FROM Account WHERE GTM_Associate__c = :userId]) {
-            coveredIds.add(a.Id);
+        // Pipeline influence: for GTMA2 use coverage accounts; for GTMA1 use GTM_Associate__c
+        Set<Id> coveredIds;
+        if (isGTMA2) {
+            coveredIds = getCoverageAccountIds(userId);
+        } else {
+            coveredIds = new Set<Id>();
+            for (Account a : [SELECT Id FROM Account WHERE GTM_Associate__c = :userId]) {
+                coveredIds.add(a.Id);
+            }
         }
         if (!coveredIds.isEmpty()) {
             AggregateResult[] ar = [
@@ -217,11 +245,18 @@ public with sharing class PipeGenGTMAController {
         return sc;
     }
 
-    // ─── Account Selection ──────────────────────────────────────────────────
+    // ─── Account Selection — GTMA1 ─────────────────────────────────────────────
 
     @AuraEnabled(cacheable=false)
     public static List<AccountCard> getGTMAAccountsForSelection() {
-        Id   userId       = UserInfo.getUserId();
+        Id userId = UserInfo.getUserId();
+
+        // GTMA2: return only their junction-record accounts (already targeted)
+        if (isGTMA2User(userId)) {
+            return getGTMA2TargetCards(userId);
+        }
+
+        // GTMA1: return all accounts where GTM_Associate__c = userId
         Date today        = Date.today();
         Date thirtyAgo    = today.addDays(-30);
         Date sixMonthsAgo = today.addDays(-180);
@@ -286,6 +321,75 @@ public with sharing class PipeGenGTMAController {
         return cards;
     }
 
+    // Returns junction-record accounts for a GTMA2 user (all marked isTargeted=true)
+    private static List<AccountCard> getGTMA2TargetCards(Id userId) {
+        Date today        = Date.today();
+        Date thirtyAgo    = today.addDays(-30);
+        Date sixMonthsAgo = today.addDays(-180);
+
+        Set<Id> coveredIds = getCoverageAccountIds(userId);
+        if (coveredIds.isEmpty()) return new List<AccountCard>();
+
+        List<Account> accounts = [
+            SELECT Id, Name, Type, Industry, Website,
+                   Account_Status__c, ARR__c, Account_Tier__c,
+                   Estimated_TAM__c, Number_of_Bankers__c, LastActivityDate,
+                (SELECT Id, StageName, IsClosed, CloseDate
+                 FROM Opportunities WHERE IsDeleted = false
+                 ORDER BY CloseDate DESC LIMIT 10),
+                (SELECT Id FROM Contacts WHERE IsDeleted = false)
+            FROM Account
+            WHERE Id IN :coveredIds
+            ORDER BY Name ASC
+            LIMIT 300
+        ];
+
+        List<AccountCard> cards = new List<AccountCard>();
+        for (Account a : accounts) {
+            Integer openOppCount    = 0;
+            Integer earlyStageCount = 0;
+            Boolean hasRecentCL     = false;
+            Boolean hasOldCL        = false;
+            Boolean hasOnlyOldCL    = true;
+
+            for (Opportunity o : a.Opportunities) {
+                if (!o.IsClosed) {
+                    openOppCount++;
+                    hasOnlyOldCL = false;
+                    if (o.StageName == STAGE_DEMO || o.StageName == STAGE_DISCOVERY)
+                        earlyStageCount++;
+                } else if (o.StageName == STAGE_CLOSED_LOST && o.CloseDate != null) {
+                    if (o.CloseDate >= sixMonthsAgo) hasRecentCL = true;
+                    else hasOldCL = true;
+                }
+            }
+
+            AccountCard card        = new AccountCard();
+            card.id                 = a.Id;
+            card.name               = a.Name;
+            card.type               = a.Type;
+            card.industry           = a.Industry;
+            card.isTargeted         = true;
+            card.contactCount       = a.Contacts.size();
+            card.openOppCount       = openOppCount;
+            card.earlyStageOppCount = earlyStageCount;
+            card.accountStatus      = a.Account_Status__c;
+            card.arr                = a.ARR__c;
+            card.accountTier        = a.Account_Tier__c;
+            card.estimatedTam       = a.Estimated_TAM__c;
+            card.bankerCount        = a.Number_of_Bankers__c != null ? a.Number_of_Bankers__c.intValue() : 0;
+            card.website            = a.Website;
+            card.lastActivityDate   = a.LastActivityDate;
+            card.segment            = computeSegment(
+                a.Account_Status__c, a.ARR__c, openOppCount, earlyStageCount,
+                hasRecentCL, hasOldCL, hasOnlyOldCL,
+                a.LastActivityDate, thirtyAgo
+            );
+            cards.add(card);
+        }
+        return cards;
+    }
+
     @AuraEnabled
     public static void updateGTMATargetAccounts(List<Id> toTarget, List<Id> toUntarget) {
         List<Account> updates = new List<Account>();
@@ -294,6 +398,68 @@ public with sharing class PipeGenGTMAController {
         for (Id id : (toUntarget != null ? toUntarget : new List<Id>()))
             updates.add(new Account(Id = id, GTMA_Target_Account__c = false));
         if (!updates.isEmpty()) update updates;
+    }
+
+    // ─── GTMA2 Account Search & Coverage ──────────────────────────────────────
+
+    @AuraEnabled(cacheable=false)
+    public static List<Account> searchAllAccounts(String searchTerm, List<Id> excludeIds) {
+        if (String.isBlank(searchTerm) || searchTerm.trim().length() < 3) return new List<Account>();
+        String likeTerm  = '%' + String.escapeSingleQuotes(searchTerm.trim()) + '%';
+        Set<Id> excluded = excludeIds != null ? new Set<Id>(excludeIds) : new Set<Id>();
+        if (excluded.isEmpty()) {
+            return [
+                SELECT Id, Name, Type, Account_Status__c, Website
+                FROM Account
+                WHERE Name LIKE :likeTerm
+                ORDER BY Name ASC
+                LIMIT 20
+            ];
+        }
+        return [
+            SELECT Id, Name, Type, Account_Status__c, Website
+            FROM Account
+            WHERE Name LIKE :likeTerm
+              AND Id NOT IN :excluded
+            ORDER BY Name ASC
+            LIMIT 20
+        ];
+    }
+
+    @AuraEnabled
+    public static GTM_Coverage__c addGTMA2Target(Id accountId) {
+        Id userId = UserInfo.getUserId();
+        // Idempotent: return existing active record if present
+        List<GTM_Coverage__c> existing = [
+            SELECT Id FROM GTM_Coverage__c
+            WHERE Rep__c = :userId AND Account__c = :accountId AND Is_Active__c = true
+            LIMIT 1
+        ];
+        if (!existing.isEmpty()) return existing[0];
+
+        GTM_Coverage__c cov = new GTM_Coverage__c(
+            Account__c       = accountId,
+            Rep__c           = userId,
+            Coverage_Type__c = 'GTMA2 Target',
+            Is_Active__c     = true,
+            Date_Added__c    = Date.today()
+        );
+        insert cov;
+        return cov;
+    }
+
+    @AuraEnabled
+    public static void removeGTMA2Target(Id accountId) {
+        Id userId = UserInfo.getUserId();
+        List<GTM_Coverage__c> toUpdate = [
+            SELECT Id FROM GTM_Coverage__c
+            WHERE Rep__c = :userId AND Account__c = :accountId AND Is_Active__c = true
+        ];
+        for (GTM_Coverage__c cov : toUpdate) {
+            cov.Is_Active__c    = false;
+            cov.Date_Removed__c = Date.today();
+        }
+        if (!toUpdate.isEmpty()) update toUpdate;
     }
 
     // ─── Commit Mutations ──────────────────────────────────────────────────
@@ -484,7 +650,28 @@ public with sharing class PipeGenGTMAController {
         return commits;
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────
+    // ─── Private Helpers ──────────────────────────────────────────────────────
+
+    private static Boolean isGTMA2User(Id userId) {
+        try {
+            User u = [SELECT GTM_Associate_Tier__c FROM User WHERE Id = :userId LIMIT 1];
+            return '2'.equals(u.GTM_Associate_Tier__c);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    @TestVisible
+    private static Set<Id> getCoverageAccountIds(Id userId) {
+        Set<Id> ids = new Set<Id>();
+        for (GTM_Coverage__c cov : [
+            SELECT Account__c FROM GTM_Coverage__c
+            WHERE Rep__c = :userId AND Is_Active__c = true
+        ]) {
+            ids.add(cov.Account__c);
+        }
+        return ids;
+    }
 
     private static String deriveStatus(Integer actual, Decimal committed) {
         Integer target = committed != null ? committed.intValue() : 1;

@@ -462,4 +462,268 @@ private class PipeGenGTMAControllerTest {
         System.assertEquals(monday, PipeGenGTMAController.getWeekStart(monday),
             'Monday should return itself as week start');
     }
+
+    // ─── GTMA2 Tier — Helper ─────────────────────────────────────────────────────
+
+    private static User makeGTMA2User() {
+        UserRole r = [SELECT Id FROM UserRole WHERE Name = 'GTM Associate' LIMIT 1];
+        Profile  p = [SELECT Id FROM Profile WHERE Name = 'Standard User' LIMIT 1];
+        User u = new User(
+            FirstName              = 'GTMA2',
+            LastName               = 'Test',
+            Email                  = 'gtma2.test@example.com',
+            Username               = 'gtma2.test.' + System.currentTimeMillis() + '@example.com',
+            Alias                  = 'g2test',
+            UserRoleId             = r.Id,
+            ProfileId              = p.Id,
+            TimeZoneSidKey         = 'America/Los_Angeles',
+            LocaleSidKey           = 'en_US',
+            EmailEncodingKey       = 'UTF-8',
+            LanguageLocaleKey      = 'en_US',
+            GTM_Associate_Tier__c  = '2'
+        );
+        System.runAs(new User(Id = UserInfo.getUserId())) {
+            insert u;
+        }
+        return u;
+    }
+
+    // ─── GTMA2 isGTMA2 flag Tests ─────────────────────────────────────────────────
+
+    @IsTest
+    static void testGetDashboardData_isGTMA2FalseForTier1() {
+        User gtma1 = makeGTMAUser();
+        Test.startTest();
+        PipeGenGTMAController.GTMADashboardData d;
+        System.runAs(gtma1) {
+            d = PipeGenGTMAController.getGTMADashboardData();
+        }
+        Test.stopTest();
+        System.assertEquals(false, d.isGTMA2, 'Standard GTMA user should have isGTMA2=false');
+    }
+
+    @IsTest
+    static void testGetDashboardData_isGTMA2TrueForTier2() {
+        User gtma2 = makeGTMA2User();
+        Test.startTest();
+        PipeGenGTMAController.GTMADashboardData d;
+        System.runAs(gtma2) {
+            d = PipeGenGTMAController.getGTMADashboardData();
+        }
+        Test.stopTest();
+        System.assertEquals(true, d.isGTMA2, 'Tier 2 user should have isGTMA2=true');
+    }
+
+    // ─── GTMA2 buildTargetAccounts Tests ─────────────────────────────────────────
+
+    @IsTest
+    static void testGetDashboardData_gtma2TargetAccountsFromJunctionRecords() {
+        User gtma2 = makeGTMA2User();
+        Account a = new Account(Name = 'Coverage Acct');
+        insert a;
+        GTM_Coverage__c cov = new GTM_Coverage__c(
+            Account__c       = a.Id,
+            Rep__c           = gtma2.Id,
+            Coverage_Type__c = 'GTMA2 Target',
+            Is_Active__c     = true,
+            Date_Added__c    = Date.today()
+        );
+        insert cov;
+
+        Test.startTest();
+        PipeGenGTMAController.GTMADashboardData d;
+        System.runAs(gtma2) {
+            d = PipeGenGTMAController.getGTMADashboardData();
+        }
+        Test.stopTest();
+
+        System.assertEquals(1, d.targetAccounts.size(), 'GTMA2 target accounts should come from junction records');
+        System.assertEquals(a.Id, d.targetAccounts[0].id);
+    }
+
+    @IsTest
+    static void testGetDashboardData_gtma2IgnoresInactiveCoverageRecords() {
+        User gtma2 = makeGTMA2User();
+        Account a = new Account(Name = 'Inactive Coverage');
+        insert a;
+        GTM_Coverage__c cov = new GTM_Coverage__c(
+            Account__c       = a.Id,
+            Rep__c           = gtma2.Id,
+            Coverage_Type__c = 'GTMA2 Target',
+            Is_Active__c     = false,
+            Date_Added__c    = Date.today().addDays(-7),
+            Date_Removed__c  = Date.today().addDays(-1)
+        );
+        insert cov;
+
+        Test.startTest();
+        PipeGenGTMAController.GTMADashboardData d;
+        System.runAs(gtma2) {
+            d = PipeGenGTMAController.getGTMADashboardData();
+        }
+        Test.stopTest();
+
+        System.assertEquals(0, d.targetAccounts.size(), 'Inactive coverage records should not appear as targets');
+    }
+
+    // ─── searchAllAccounts Tests ──────────────────────────────────────────────────
+
+    @IsTest
+    static void testSearchAllAccounts_returnsMatchingAccounts() {
+        Account a1 = new Account(Name = 'Acme Corporation');
+        Account a2 = new Account(Name = 'Acme Widgets');
+        Account a3 = new Account(Name = 'Globex');
+        insert new List<Account>{ a1, a2, a3 };
+
+        User gtma2 = makeGTMA2User();
+        Test.startTest();
+        List<Account> results;
+        System.runAs(gtma2) {
+            results = PipeGenGTMAController.searchAllAccounts('Acme', new List<Id>());
+        }
+        Test.stopTest();
+
+        System.assertEquals(2, results.size(), 'Should return 2 accounts matching "Acme"');
+    }
+
+    @IsTest
+    static void testSearchAllAccounts_excludesSpecifiedIds() {
+        Account a1 = new Account(Name = 'Acme Corp');
+        Account a2 = new Account(Name = 'Acme Inc');
+        insert new List<Account>{ a1, a2 };
+
+        User gtma2 = makeGTMA2User();
+        Test.startTest();
+        List<Account> results;
+        System.runAs(gtma2) {
+            results = PipeGenGTMAController.searchAllAccounts('Acme', new List<Id>{ a1.Id });
+        }
+        Test.stopTest();
+
+        System.assertEquals(1, results.size(), 'Should exclude already-targeted account');
+        System.assertEquals(a2.Id, results[0].Id);
+    }
+
+    @IsTest
+    static void testSearchAllAccounts_emptyForShortTerms() {
+        User gtma2 = makeGTMA2User();
+        Test.startTest();
+        List<Account> results;
+        System.runAs(gtma2) {
+            results = PipeGenGTMAController.searchAllAccounts('Ac', new List<Id>());
+        }
+        Test.stopTest();
+        System.assertEquals(0, results.size(), 'Search term shorter than 3 chars should return empty');
+    }
+
+    // ─── addGTMA2Target Tests ─────────────────────────────────────────────────────
+
+    @IsTest
+    static void testAddGTMA2Target_createsJunctionRecord() {
+        User gtma2 = makeGTMA2User();
+        Account a = new Account(Name = 'Target Co');
+        insert a;
+
+        Test.startTest();
+        System.runAs(gtma2) {
+            PipeGenGTMAController.addGTMA2Target(a.Id);
+        }
+        Test.stopTest();
+
+        List<GTM_Coverage__c> records = [
+            SELECT Id, Is_Active__c, Coverage_Type__c, Date_Added__c
+            FROM GTM_Coverage__c
+            WHERE Rep__c = :gtma2.Id AND Account__c = :a.Id
+        ];
+        System.assertEquals(1, records.size(), 'Should create one junction record');
+        System.assertEquals(true,            records[0].Is_Active__c);
+        System.assertEquals('GTMA2 Target',  records[0].Coverage_Type__c);
+        System.assertNotEquals(null,          records[0].Date_Added__c);
+    }
+
+    @IsTest
+    static void testAddGTMA2Target_idempotentWhenAlreadyActive() {
+        User gtma2 = makeGTMA2User();
+        Account a = new Account(Name = 'Target Co');
+        insert a;
+        GTM_Coverage__c existing = new GTM_Coverage__c(
+            Account__c = a.Id, Rep__c = gtma2.Id,
+            Coverage_Type__c = 'GTMA2 Target', Is_Active__c = true, Date_Added__c = Date.today()
+        );
+        insert existing;
+
+        Test.startTest();
+        System.runAs(gtma2) {
+            PipeGenGTMAController.addGTMA2Target(a.Id);
+        }
+        Test.stopTest();
+
+        Integer count = [SELECT COUNT() FROM GTM_Coverage__c WHERE Rep__c = :gtma2.Id AND Account__c = :a.Id];
+        System.assertEquals(1, count, 'Should not create duplicate active record');
+    }
+
+    // ─── removeGTMA2Target Tests ──────────────────────────────────────────────────
+
+    @IsTest
+    static void testRemoveGTMA2Target_deactivatesJunctionRecord() {
+        User gtma2 = makeGTMA2User();
+        Account a = new Account(Name = 'To Remove');
+        insert a;
+        GTM_Coverage__c cov = new GTM_Coverage__c(
+            Account__c = a.Id, Rep__c = gtma2.Id,
+            Coverage_Type__c = 'GTMA2 Target', Is_Active__c = true, Date_Added__c = Date.today()
+        );
+        insert cov;
+
+        Test.startTest();
+        System.runAs(gtma2) {
+            PipeGenGTMAController.removeGTMA2Target(a.Id);
+        }
+        Test.stopTest();
+
+        GTM_Coverage__c updated = [SELECT Is_Active__c, Date_Removed__c FROM GTM_Coverage__c WHERE Id = :cov.Id];
+        System.assertEquals(false, updated.Is_Active__c,    'Record should be deactivated');
+        System.assertNotEquals(null, updated.Date_Removed__c, 'Date_Removed__c should be set');
+    }
+
+    // ─── getGTMAAccountsForSelection — GTMA2 branch Tests ─────────────────────────
+
+    @IsTest
+    static void testGetAccountsForSelection_gtma2ReturnsJunctionAccounts() {
+        User gtma2 = makeGTMA2User();
+        Account a1 = new Account(Name = 'Covered Acct');
+        Account a2 = new Account(Name = 'Not Covered');
+        insert new List<Account>{ a1, a2 };
+        GTM_Coverage__c cov = new GTM_Coverage__c(
+            Account__c = a1.Id, Rep__c = gtma2.Id,
+            Coverage_Type__c = 'GTMA2 Target', Is_Active__c = true, Date_Added__c = Date.today()
+        );
+        insert cov;
+
+        Test.startTest();
+        List<PipeGenGTMAController.AccountCard> cards;
+        System.runAs(gtma2) {
+            cards = PipeGenGTMAController.getGTMAAccountsForSelection();
+        }
+        Test.stopTest();
+
+        System.assertEquals(1, cards.size(), 'GTMA2 should only see their coverage accounts');
+        System.assertEquals(a1.Id, cards[0].id);
+        System.assertEquals(true, cards[0].isTargeted, 'Coverage accounts should be flagged as targeted');
+    }
+
+    @IsTest
+    static void testGetAccountsForSelection_gtma2EmptyWhenNoCoverage() {
+        User gtma2 = makeGTMA2User();
+        insert new Account(Name = 'Any Acct');
+
+        Test.startTest();
+        List<PipeGenGTMAController.AccountCard> cards;
+        System.runAs(gtma2) {
+            cards = PipeGenGTMAController.getGTMAAccountsForSelection();
+        }
+        Test.stopTest();
+
+        System.assertEquals(0, cards.size(), 'GTMA2 with no coverage records should get empty list');
+    }
 }
