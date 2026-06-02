@@ -1,0 +1,60 @@
+import { NextResponse } from "next/server";
+import { verifyHmac } from "@/lib/hmac";
+import { getAccountWithOpps } from "@/lib/salesforce/soql";
+import { diffVsStored } from "@/lib/arr/recompute";
+import { askHook } from "@/lib/claude/agent";
+import { slack, REVOPS_CHANNEL } from "@/lib/slack/client";
+import { issueBlocks } from "@/lib/slack/blocks";
+import { sql } from "@/lib/db/client";
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const sig = req.headers.get("x-hook-signature") ?? "";
+  const secret = process.env.SF_CALLOUT_HMAC_SECRET ?? "";
+
+  if (!verifyHmac(body, sig, secret)) {
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+  }
+
+  const { accountId } = JSON.parse(body) as { accountId: string };
+
+  const { account, opps } = await getAccountWithOpps(accountId);
+  const gap = diffVsStored(account, opps, Number(process.env.HOOK_GAP_THRESHOLD_USD ?? 1));
+
+  const runRows = await sql<{ id: number }[]>`
+    INSERT INTO runs (trigger_kind, account_id, accounts_checked, gaps_found, finished_at)
+    VALUES ('opp_changed', ${accountId}, 1, ${gap.matches ? 0 : 1}, NOW())
+    RETURNING id
+  `;
+  const runId = runRows[0]!.id;
+
+  if (gap.matches) {
+    return NextResponse.json({ ok: true, gap: 0 });
+  }
+
+  const { text } = await askHook(
+    `An opportunity on account ${account.Name} (${account.Id}) just changed. The recompute shows stored=${gap.storedArr}, expected=${gap.result.expectedArr}, gap=${gap.gap}. Use diff_vs_stored and last_audit to investigate, then explain the most likely cause (cite the §6.6 category) and suggest a PROPOSED FIX (dry-run only).`,
+  );
+
+  const post = await slack.chat.postMessage({
+    channel: REVOPS_CHANNEL,
+    blocks: issueBlocks(gap, text),
+    text: `ARR gap on ${account.Name}: ${gap.gap}`,
+  });
+
+  await sql`
+    INSERT INTO gaps (run_id, account_id, account_name, stored_arr, expected_arr, gap_usd, category, slack_message_ts)
+    VALUES (${runId}, ${account.Id}, ${account.Name}, ${gap.storedArr}, ${gap.result.expectedArr}, ${gap.gap}, NULL, ${post.ts ?? null})
+  `;
+
+  if (post.ts) {
+    await sql`
+      INSERT INTO slack_threads (thread_ts, channel_id, account_id, run_id, context)
+      VALUES (${post.ts}, ${REVOPS_CHANNEL}, ${account.Id}, ${runId}, ${JSON.stringify({ kind: "issue" })})
+    `;
+  }
+
+  return NextResponse.json({ ok: true, gap: gap.gap, threadTs: post.ts });
+}

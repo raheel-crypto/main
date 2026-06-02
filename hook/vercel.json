@@ -1,0 +1,26 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/weekly",
+      "schedule": "0 10 * * 1"
+    }
+  ],
+  "functions": {
+    "src/app/api/cron/weekly/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/recompute-account/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/sf/opp-changed/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/slack/events/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/slack/commands/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}
