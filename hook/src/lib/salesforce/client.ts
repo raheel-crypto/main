@@ -1,4 +1,4 @@
-import jsforce from "jsforce";
+import { Connection } from "jsforce";
 import jwt from "jsonwebtoken";
 import { sql } from "@/lib/db/client";
 
@@ -72,13 +72,13 @@ async function mintToken(): Promise<CachedToken> {
   };
 }
 
-export async function getSalesforceConnection(): Promise<jsforce.Connection> {
+export async function getSalesforceConnection(): Promise<Connection> {
   let token = await loadCachedToken();
   if (!token) {
     token = await mintToken();
     await persistToken(token);
   }
-  return new jsforce.Connection({
+  return new Connection({
     instanceUrl: token.instance_url,
     accessToken: token.access_token,
   });
