@@ -134,6 +134,44 @@ private class OrderFormExtractorTest {
     // ===== Extraction Queueable =====
 
     @isTest
+    static void extractionJob_multipleDocuments_singleRowOneCallout() {
+        Opportunity opp = insertOpp('Multi-Doc Extract', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__Order_Form');
+        attachSignedFile(opp.Id, 'signed__MSA');
+        attachSignedFile(opp.Id, 'signed__DPA');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Seat_Licenses' => 100,
+            'License_Fees' => 200000,
+            'Renewal_Terms' => 'Auto-renews unless 90 days written notice'
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        List<OrderFormExtractor.Result> results = OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals('Enqueued', results[0].status);
+        System.assertEquals(3, results[0].documentCount, 'Should have found 3 signed files');
+        System.assertEquals(1, mock.callCount, 'Single Anthropic call with multiple document blocks');
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(100, row.Seat_Licenses__c);
+        System.assertEquals(200000, row.License_Fees__c);
+        System.assertEquals('Auto-renew (90-day)', row.Renewal_Terms__c);
+        System.assert(row.Content_Document_Id__c != null && row.Content_Document_Id__c.contains(','),
+            'Content_Document_Id__c should contain comma-separated Ids: ' + row.Content_Document_Id__c);
+        System.assert(row.File_Name__c != null && row.File_Name__c.contains('Order_Form') && row.File_Name__c.contains('MSA'),
+            'File_Name__c should list both file titles: ' + row.File_Name__c);
+    }
+
+    @isTest
     static void extractionJob_writesSuccessRowWithAllFields() {
         Opportunity opp = insertOpp('Happy Extract', '4 - Proposal');
         attachSignedFile(opp.Id, 'signed__Customer_Agreement');

@@ -7,29 +7,37 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     @TestVisible private static final Integer RAW_RESPONSE_LIMIT = 131072;
     @TestVisible private static final Integer EXTRACTED_JSON_LIMIT = 32768;
     @TestVisible private static final Integer ERROR_MESSAGE_LIMIT = 32768;
+    @TestVisible private static final Integer FILE_NAME_LIMIT = 255;
+    @TestVisible private static final Integer DOC_ID_LIMIT = 255;
 
     private final Id opportunityId;
-    private final Id contentDocumentId;
+    private final List<Id> contentDocumentIds;
 
-    public OrderFormExtractionJob(Id opportunityId, Id contentDocumentId) {
+    public OrderFormExtractionJob(Id opportunityId, List<Id> contentDocumentIds) {
         this.opportunityId = opportunityId;
-        this.contentDocumentId = contentDocumentId;
+        this.contentDocumentIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
     }
 
     public void execute(QueueableContext ctx) {
+        Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(contentDocumentIds);
+
         Order_Form_Extraction__c row = new Order_Form_Extraction__c(
             Opportunity__c = opportunityId,
-            Content_Document_Id__c = contentDocumentId,
-            File_Name__c = lookupFileName(contentDocumentId),
+            Content_Document_Id__c = truncate(joinIds(contentDocumentIds), DOC_ID_LIMIT),
+            File_Name__c = truncate(joinFileNames(versionByDocId, contentDocumentIds), FILE_NAME_LIMIT),
             Extracted_At__c = System.now(),
             Model__c = MODEL
         );
 
         try {
-            Blob pdfBytes = loadLatestVersion(contentDocumentId);
-            if (pdfBytes == null) {
+            List<Blob> pdfBytes = new List<Blob>();
+            for (Id docId : contentDocumentIds) {
+                ContentVersion cv = versionByDocId.get(docId);
+                if (cv != null && cv.VersionData != null) pdfBytes.add(cv.VersionData);
+            }
+            if (pdfBytes.isEmpty()) {
                 row.Extraction_Status__c = 'No Document';
-                row.Error_Message__c = 'No ContentVersion data for ContentDocumentId ' + contentDocumentId;
+                row.Error_Message__c = 'No ContentVersion data found for the supplied ContentDocument Ids.';
                 insert row;
                 return;
             }
@@ -72,42 +80,57 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         }
     }
 
-    private static String lookupFileName(Id contentDocumentId) {
-        List<ContentDocument> docs = [SELECT Title FROM ContentDocument WHERE Id = :contentDocumentId LIMIT 1];
-        return docs.isEmpty() ? null : docs[0].Title;
-    }
-
     @TestVisible
-    private static Blob loadLatestVersion(Id contentDocumentId) {
-        List<ContentVersion> versions = [
-            SELECT VersionData
+    private static Map<Id, ContentVersion> loadLatestVersionsByDoc(List<Id> contentDocumentIds) {
+        Map<Id, ContentVersion> byDoc = new Map<Id, ContentVersion>();
+        if (contentDocumentIds == null || contentDocumentIds.isEmpty()) return byDoc;
+        for (ContentVersion cv : [
+            SELECT Id, ContentDocumentId, VersionData, Title, PathOnClient
             FROM ContentVersion
-            WHERE ContentDocumentId = :contentDocumentId AND IsLatest = true
-            LIMIT 1
-        ];
-        return versions.isEmpty() ? null : versions[0].VersionData;
+            WHERE ContentDocumentId IN :contentDocumentIds AND IsLatest = true
+        ]) {
+            byDoc.put(cv.ContentDocumentId, cv);
+        }
+        return byDoc;
+    }
+
+    private static String joinIds(List<Id> ids) {
+        if (ids == null || ids.isEmpty()) return null;
+        List<String> parts = new List<String>();
+        for (Id id : ids) parts.add(String.valueOf(id));
+        return String.join(parts, ',');
+    }
+
+    private static String joinFileNames(Map<Id, ContentVersion> versionByDocId, List<Id> contentDocumentIds) {
+        List<String> names = new List<String>();
+        for (Id docId : contentDocumentIds) {
+            ContentVersion cv = versionByDocId.get(docId);
+            if (cv != null && String.isNotBlank(cv.Title)) names.add(cv.Title);
+        }
+        return names.isEmpty() ? null : String.join(names, '; ');
     }
 
     @TestVisible
-    private static String buildRequestBody(Blob pdfBytes) {
+    private static String buildRequestBody(List<Blob> pdfBytes) {
         String systemPrompt = loadPrompt();
-        String base64Pdf = EncodingUtil.base64Encode(pdfBytes);
-
-        Map<String, Object> documentBlock = new Map<String, Object>{
-            'type' => 'document',
-            'source' => new Map<String, Object>{
-                'type' => 'base64',
-                'media_type' => 'application/pdf',
-                'data' => base64Pdf
-            }
-        };
-        Map<String, Object> textBlock = new Map<String, Object>{
+        List<Object> content = new List<Object>();
+        for (Blob bytes : pdfBytes) {
+            content.add(new Map<String, Object>{
+                'type' => 'document',
+                'source' => new Map<String, Object>{
+                    'type' => 'base64',
+                    'media_type' => 'application/pdf',
+                    'data' => EncodingUtil.base64Encode(bytes)
+                }
+            });
+        }
+        content.add(new Map<String, Object>{
             'type' => 'text',
-            'text' => 'Extract the order form per the schema. Return JSON only.'
-        };
+            'text' => 'Extract one unified order form per the schema from all attached PDFs. Return JSON only.'
+        });
         Map<String, Object> userMessage = new Map<String, Object>{
             'role' => 'user',
-            'content' => new List<Object>{ documentBlock, textBlock }
+            'content' => content
         };
         return JSON.serialize(new Map<String, Object>{
             'model' => MODEL,

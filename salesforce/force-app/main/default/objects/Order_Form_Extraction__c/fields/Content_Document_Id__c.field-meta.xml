@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Content_Document_Id__c</fullName>
-    <label>Content Document Id</label>
-    <length>18</length>
+    <description>Comma-separated ContentDocument Ids for every signed__* file used in this extraction. Multiple Ids when the extraction included an Order Form plus a Master SaaS Agreement, rider, DPA, etc.</description>
+    <label>Content Document Ids</label>
+    <length>255</length>
     <required>false</required>
     <type>Text</type>
     <unique>false</unique>

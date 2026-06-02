@@ -11,12 +11,13 @@ public with sharing class OrderFormExtractor {
     public class Result {
         @InvocableVariable(label='Status') public String status;
         @InvocableVariable(label='Message') public String message;
-        @InvocableVariable(label='Content Document Id') public Id contentDocumentId;
+        @InvocableVariable(label='Primary Content Document Id') public Id contentDocumentId;
+        @InvocableVariable(label='Document Count') public Integer documentCount;
     }
 
     @InvocableMethod(
         label='Extract Order Form Data'
-        description='Finds the signed__* file on each Opportunity and enqueues asynchronous extraction.'
+        description='Finds every signed__* file on the Opportunity and enqueues a single multi-document extraction.'
         category='Sales'
     )
     public static List<Result> run(List<Request> requests) {
@@ -25,7 +26,7 @@ public with sharing class OrderFormExtractor {
             if (r != null && r.opportunityId != null) oppIds.add(r.opportunityId);
         }
 
-        Map<Id, ContentDocumentLink> latestByOpp = findLatestSignedLink(oppIds);
+        Map<Id, List<Id>> docsByOpp = findAllSignedDocuments(oppIds);
 
         List<Result> results = new List<Result>();
         for (Request r : requests) {
@@ -33,27 +34,30 @@ public with sharing class OrderFormExtractor {
             if (r == null || r.opportunityId == null) {
                 res.status = 'NoDocumentFound';
                 res.message = 'Missing opportunityId in request.';
+                res.documentCount = 0;
                 results.add(res);
                 continue;
             }
-            ContentDocumentLink cdl = latestByOpp.get(r.opportunityId);
-            if (cdl == null) {
+            List<Id> docs = docsByOpp.get(r.opportunityId);
+            if (docs == null || docs.isEmpty()) {
                 res.status = 'NoDocumentFound';
                 res.message = 'No file with Title starting "' + SIGNED_PREFIX + '" found on Opportunity ' + r.opportunityId + '.';
+                res.documentCount = 0;
             } else {
-                System.enqueueJob(new OrderFormExtractionJob(r.opportunityId, cdl.ContentDocumentId));
+                System.enqueueJob(new OrderFormExtractionJob(r.opportunityId, docs));
                 res.status = 'Enqueued';
-                res.contentDocumentId = cdl.ContentDocumentId;
-                res.message = 'Queued extraction for ContentDocument ' + cdl.ContentDocumentId + '. A new Order_Form_Extraction__c row will be created; apply it via OrderFormApplier.';
+                res.contentDocumentId = docs[0];
+                res.documentCount = docs.size();
+                res.message = 'Queued extraction for ' + docs.size() + ' signed document(s).';
             }
             results.add(res);
         }
         return results;
     }
 
-    private static Map<Id, ContentDocumentLink> findLatestSignedLink(Set<Id> oppIds) {
-        Map<Id, ContentDocumentLink> latest = new Map<Id, ContentDocumentLink>();
-        if (oppIds.isEmpty()) return latest;
+    private static Map<Id, List<Id>> findAllSignedDocuments(Set<Id> oppIds) {
+        Map<Id, List<Id>> byOpp = new Map<Id, List<Id>>();
+        if (oppIds.isEmpty()) return byOpp;
 
         String titlePattern = SIGNED_PREFIX + '%';
         for (ContentDocumentLink cdl : [
@@ -63,10 +67,13 @@ public with sharing class OrderFormExtractor {
               AND ContentDocument.Title LIKE :titlePattern
             ORDER BY ContentDocument.LastModifiedDate DESC
         ]) {
-            if (!latest.containsKey(cdl.LinkedEntityId)) {
-                latest.put(cdl.LinkedEntityId, cdl);
+            List<Id> docs = byOpp.get(cdl.LinkedEntityId);
+            if (docs == null) {
+                docs = new List<Id>();
+                byOpp.put(cdl.LinkedEntityId, docs);
             }
+            docs.add(cdl.ContentDocumentId);
         }
-        return latest;
+        return byOpp;
     }
 }
