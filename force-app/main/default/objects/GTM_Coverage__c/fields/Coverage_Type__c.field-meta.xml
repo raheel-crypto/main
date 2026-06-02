@@ -11,9 +11,19 @@
         <valueSetDefinition>
             <sorted>false</sorted>
             <value>
+                <fullName>GTMA1 Target</fullName>
+                <default>false</default>
+                <label>GTMA1 Target</label>
+            </value>
+            <value>
                 <fullName>GTMA2 Target</fullName>
                 <default>true</default>
                 <label>GTMA2 Target</label>
+            </value>
+            <value>
+                <fullName>AE Target</fullName>
+                <default>false</default>
+                <label>AE Target</label>
             </value>
             <value>
                 <fullName>Post-Sales</fullName>

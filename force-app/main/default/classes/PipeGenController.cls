@@ -873,6 +873,7 @@ public with sharing class PipeGenController {
         for (Id id : (toTarget   != null ? toTarget   : new List<Id>())) updates.add(new Account(Id = id, Target_Account__c = true));
         for (Id id : (toUntarget != null ? toUntarget : new List<Id>())) updates.add(new Account(Id = id, Target_Account__c = false));
         if (!updates.isEmpty()) update updates;
+        GTMCoverageSync.sync(toTarget, toUntarget, UserInfo.getUserId(), 'AE Target');
     }
 
     // ─── Manager Dashboard ───────────────────────────────────────────────────────

@@ -398,6 +398,7 @@ public with sharing class PipeGenGTMAController {
         for (Id id : (toUntarget != null ? toUntarget : new List<Id>()))
             updates.add(new Account(Id = id, GTMA_Target_Account__c = false));
         if (!updates.isEmpty()) update updates;
+        GTMCoverageSync.sync(toTarget, toUntarget, UserInfo.getUserId(), 'GTMA1 Target');
     }
 
     // ─── GTMA2 Account Search & Coverage ──────────────────────────────────────
