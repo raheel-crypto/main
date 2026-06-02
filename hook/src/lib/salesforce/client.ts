@@ -12,12 +12,12 @@ let cached: CachedToken | null = null;
 
 async function loadCachedToken(): Promise<CachedToken | null> {
   if (cached && cached.expires_at > Date.now() + 60_000) return cached;
-  const rows = await sql<CachedToken[]>`
+  const rows = (await sql`
     SELECT access_token, instance_url, expires_at
     FROM sf_token_cache
     WHERE id = 'singleton' AND expires_at > NOW() + INTERVAL '1 minute'
     LIMIT 1
-  `;
+  `) as CachedToken[];
   if (rows.length > 0) {
     cached = rows[0]!;
     return cached;

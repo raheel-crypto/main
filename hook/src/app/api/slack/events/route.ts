@@ -49,9 +49,9 @@ async function handleMention(event: NonNullable<SlackEventEnvelope["event"]>) {
   const threadTs = event.thread_ts ?? event.ts;
   let priorAccountId: string | null = null;
   if (threadTs) {
-    const rows = await sql<{ account_id: string | null }[]>`
+    const rows = (await sql`
       SELECT account_id FROM slack_threads WHERE thread_ts = ${threadTs} LIMIT 1
-    `;
+    `) as { account_id: string | null }[];
     priorAccountId = rows[0]?.account_id ?? null;
   }
 

@@ -13,9 +13,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const runRows = await sql<{ id: number }[]>`
+  const runRows = (await sql`
     INSERT INTO runs (trigger_kind) VALUES ('weekly') RETURNING id
-  `;
+  `) as { id: number }[];
   const runId = runRows[0]!.id;
 
   const accountIds = await getAllCustomerAccountIds();
@@ -46,10 +46,10 @@ export async function GET(req: Request) {
     }
   }
 
-  const lastWeek = await sql<{ account_id: string }[]>`
+  const lastWeek = (await sql`
     SELECT DISTINCT account_id FROM gaps
     WHERE created_at > NOW() - INTERVAL '14 days' AND created_at < NOW() - INTERVAL '7 days'
-  `;
+  `) as { account_id: string }[];
   const lastWeekIds = new Set(lastWeek.map((r) => r.account_id));
   const currentIds = new Set(gaps.map((g) => g.account.Id));
   const newSinceLastWeek = [...currentIds].filter((id) => !lastWeekIds.has(id)).length;

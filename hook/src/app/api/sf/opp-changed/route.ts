@@ -23,11 +23,11 @@ export async function POST(req: Request) {
   const { account, opps } = await getAccountWithOpps(accountId);
   const gap = diffVsStored(account, opps, Number(process.env.HOOK_GAP_THRESHOLD_USD ?? 1));
 
-  const runRows = await sql<{ id: number }[]>`
+  const runRows = (await sql`
     INSERT INTO runs (trigger_kind, account_id, accounts_checked, gaps_found, finished_at)
     VALUES ('opp_changed', ${accountId}, 1, ${gap.matches ? 0 : 1}, NOW())
     RETURNING id
-  `;
+  `) as { id: number }[];
   const runId = runRows[0]!.id;
 
   if (gap.matches) {
