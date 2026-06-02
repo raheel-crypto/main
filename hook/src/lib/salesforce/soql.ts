@@ -31,7 +31,9 @@ export async function getAllCustomerAccountIds(): Promise<string[]> {
   return result.records.map((r) => r.Id);
 }
 
-export async function rawSoql<T = Record<string, unknown>>(query: string): Promise<T[]> {
+export async function rawSoql<T extends Record<string, any> = Record<string, any>>(
+  query: string,
+): Promise<T[]> {
   const conn = await getSalesforceConnection();
   const result = await conn.query<T>(query);
   return result.records;
