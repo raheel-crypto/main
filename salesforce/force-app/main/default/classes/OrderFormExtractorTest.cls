@@ -496,6 +496,72 @@ private class OrderFormExtractorTest {
         System.assertEquals(null, after.Seat_Licenses__c);
     }
 
+    // ===== Backfill Batch =====
+
+    @isTest
+    static void backfillBatch_processesEligibleOpps() {
+        Opportunity oppWithFile = insertOpp('Backfill With File', 'Closed Won');
+        Opportunity oppNoFile = insertOpp('Backfill No File', 'Closed Won');
+        Opportunity oppNotWon = insertOpp('Backfill Not Won', '4 - Proposal');
+        attachSignedFile(oppWithFile.Id, 'signed__OrderForm');
+        attachSignedFile(oppNotWon.Id, 'signed__OrderForm');
+
+        // Pre-existing extraction on a third Closed Won Opp -> must be skipped.
+        Opportunity oppAlready = insertOpp('Backfill Already Extracted', 'Closed Won');
+        attachSignedFile(oppAlready.Id, 'signed__OrderForm');
+        insert new Order_Form_Extraction__c(
+            Opportunity__c = oppAlready.Id,
+            Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now()
+        );
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Seat_Licenses' => 12
+        });
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        Id jobId = OrderFormBackfillBatch.run();
+        Test.stopTest();
+
+        System.assertNotEquals(null, jobId);
+
+        // Only oppWithFile should have a NEW extraction. oppNoFile is skipped (no file),
+        // oppNotWon is not Closed Won, oppAlready already has a row.
+        Integer rowsForWithFile = [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Opportunity__c = :oppWithFile.Id];
+        Integer rowsForNoFile = [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Opportunity__c = :oppNoFile.Id];
+        Integer rowsForNotWon = [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Opportunity__c = :oppNotWon.Id];
+        Integer rowsForAlready = [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Opportunity__c = :oppAlready.Id];
+
+        System.assertEquals(1, rowsForWithFile, 'Eligible Closed Won Opp should get an extraction');
+        System.assertEquals(0, rowsForNoFile, 'No signed file => no extraction');
+        System.assertEquals(0, rowsForNotWon, 'Not Closed Won => not picked up');
+        System.assertEquals(1, rowsForAlready, 'Already-extracted Opp keeps its single row');
+    }
+
+    @isTest
+    static void backfillBatch_respectsMaxOppsLimit() {
+        List<Opportunity> opps = new List<Opportunity>();
+        for (Integer i = 0; i < 5; i++) {
+            opps.add(new Opportunity(Name = 'Cap ' + i, StageName = 'Closed Won', CloseDate = Date.today()));
+        }
+        insert opps;
+        for (Opportunity o : opps) attachSignedFile(o.Id, 'signed__OrderForm_' + o.Name);
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business' });
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormBackfillBatch.run(2);
+        Test.stopTest();
+
+        Integer rows = [SELECT COUNT() FROM Order_Form_Extraction__c];
+        System.assertEquals(2, rows, 'maxOpps=2 should produce exactly 2 extraction rows');
+    }
+
     // ===== Picklist mapper =====
 
     @isTest
