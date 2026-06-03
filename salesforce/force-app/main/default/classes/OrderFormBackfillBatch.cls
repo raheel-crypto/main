@@ -33,21 +33,9 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
 
         Set<Id> oppIds = new Map<Id, Opportunity>(scope).keySet();
 
-        Map<Id, List<Id>> docsByOpp = new Map<Id, List<Id>>();
-        for (ContentDocumentLink cdl : [
-            SELECT LinkedEntityId, ContentDocumentId, ContentDocument.LastModifiedDate
-            FROM ContentDocumentLink
-            WHERE LinkedEntityId IN :oppIds
-              AND ContentDocument.Title LIKE 'signed__%'
-            ORDER BY ContentDocument.LastModifiedDate DESC
-        ]) {
-            List<Id> docs = docsByOpp.get(cdl.LinkedEntityId);
-            if (docs == null) {
-                docs = new List<Id>();
-                docsByOpp.put(cdl.LinkedEntityId, docs);
-            }
-            docs.add(cdl.ContentDocumentId);
-        }
+        // Reuse the same lookup as the live flow so backfilled rows include
+        // Base_Opportunity__c parent docs (rider + original Order Form + MSA).
+        Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllSignedDocuments(oppIds);
 
         for (Opportunity opp : scope) {
             List<Id> docs = docsByOpp.get(opp.Id);
@@ -55,9 +43,6 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
                 totalSkippedNoFile++;
                 continue;
             }
-            // Synchronous: insert one Order_Form_Extraction__c row per call.
-            // Avoids the "1 Queueable per async parent" limit that bit the
-            // earlier design.
             OrderFormExtractionJob.runOnce(opp.Id, docs);
             totalProcessed++;
         }

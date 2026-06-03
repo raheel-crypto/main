@@ -55,7 +55,7 @@ public with sharing class OrderFormExtractor {
         return results;
     }
 
-    private static Map<Id, List<Id>> findAllSignedDocuments(Set<Id> oppIds) {
+    public static Map<Id, List<Id>> findAllSignedDocuments(Set<Id> oppIds) {
         Map<Id, List<Id>> byOpp = new Map<Id, List<Id>>();
         if (oppIds.isEmpty()) return byOpp;
 
