@@ -113,6 +113,21 @@ async function respondInThread(opts: {
   threadTs: string;
   userText: string;
 }) {
+  // Post an immediate placeholder so the user knows Hook is working.
+  // We'll update this same message with the real reply when askHook returns,
+  // so there's only ever one message — no "Hoisting…" + answer pair.
+  let placeholderTs: string | undefined;
+  try {
+    const placeholder = await slack.chat.postMessage({
+      channel: opts.channel,
+      thread_ts: opts.threadTs,
+      text: "Squinting at the charts…",
+    });
+    placeholderTs = placeholder.ts ?? undefined;
+  } catch (err) {
+    console.error("placeholder post failed", err);
+  }
+
   let priorContext: ThreadContext | null = null;
   let priorAccountId: string | null = null;
 
@@ -139,13 +154,28 @@ async function respondInThread(opts: {
     });
   }
 
-  const { text } = await askHook(opts.userText, history);
+  let replyText: string;
+  try {
+    const { text } = await askHook(opts.userText, history);
+    replyText = text;
+  } catch (err) {
+    replyText = `Hook ran aground: ${err instanceof Error ? err.message : String(err)}`;
+  }
 
-  await slack.chat.postMessage({
-    channel: opts.channel,
-    thread_ts: opts.threadTs,
-    text,
-  });
+  if (placeholderTs) {
+    await slack.chat.update({
+      channel: opts.channel,
+      ts: placeholderTs,
+      text: replyText,
+    });
+  } else {
+    // Placeholder post failed earlier; fall back to a normal post.
+    await slack.chat.postMessage({
+      channel: opts.channel,
+      thread_ts: opts.threadTs,
+      text: replyText,
+    });
+  }
 
   // Persist this turn so future replies in the same thread can auto-listen
   // and load the prior Q&A as conversation history. ON CONFLICT keeps the
@@ -155,7 +185,7 @@ async function respondInThread(opts: {
     VALUES (${opts.threadTs}, ${opts.channel}, ${priorAccountId}, ${JSON.stringify({
       kind: "mention",
       prompt: opts.userText,
-      reply: text,
+      reply: replyText,
     })})
     ON CONFLICT (thread_ts) DO UPDATE SET
       context = EXCLUDED.context
