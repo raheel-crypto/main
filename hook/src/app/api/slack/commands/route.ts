@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { verifySlackSignature } from "@/lib/hmac";
 import { askHook } from "@/lib/claude/agent";
 import { slack } from "@/lib/slack/client";
@@ -21,13 +21,20 @@ export async function POST(req: Request) {
   const channelId = params.get("channel_id") ?? "";
   const userId = params.get("user_id") ?? "";
 
-  void runCommandAsync({ command, text, responseUrl, channelId, userId }).catch((err) => {
-    console.error("command handler", err);
-    void fetch(responseUrl, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: `Hook hit an error: ${String(err)}`, response_type: "ephemeral" }),
-    });
+  after(async () => {
+    try {
+      await runCommandAsync({ command, text, responseUrl, channelId, userId });
+    } catch (err) {
+      console.error("command handler", err);
+      await fetch(responseUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          text: `Hook hit an error: ${err instanceof Error ? err.message : String(err)}`,
+          response_type: "ephemeral",
+        }),
+      });
+    }
   });
 
   return NextResponse.json({ response_type: "ephemeral", text: "Checking…" });

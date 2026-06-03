@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { verifySlackSignature } from "@/lib/hmac";
 import { askHook } from "@/lib/claude/agent";
 import { slack } from "@/lib/slack/client";
@@ -35,7 +35,14 @@ export async function POST(req: Request) {
   }
 
   if (envelope.type === "event_callback" && envelope.event?.type === "app_mention") {
-    void handleMention(envelope.event).catch((err) => console.error("mention handler", err));
+    const event = envelope.event;
+    after(async () => {
+      try {
+        await handleMention(event);
+      } catch (err) {
+        console.error("mention handler", err);
+      }
+    });
     return NextResponse.json({ ok: true });
   }
 
