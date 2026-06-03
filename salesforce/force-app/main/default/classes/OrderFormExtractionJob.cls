@@ -19,19 +19,29 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     public void execute(QueueableContext ctx) {
-        Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(contentDocumentIds);
+        runOnce(opportunityId, contentDocumentIds);
+    }
+
+    /**
+     * Synchronous one-shot extraction: load PDFs, call Anthropic, insert a row.
+     * Callable from any callout-allowed context (Queueable, Batch execute, etc).
+     * Inserts exactly one Order_Form_Extraction__c row per call (Success or failure).
+     */
+    public static void runOnce(Id opportunityId, List<Id> contentDocumentIds) {
+        List<Id> docIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
+        Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(docIds);
 
         Order_Form_Extraction__c row = new Order_Form_Extraction__c(
             Opportunity__c = opportunityId,
-            Content_Document_Id__c = truncate(joinIds(contentDocumentIds), DOC_ID_LIMIT),
-            File_Name__c = truncate(joinFileNames(versionByDocId, contentDocumentIds), FILE_NAME_LIMIT),
+            Content_Document_Id__c = truncate(joinIds(docIds), DOC_ID_LIMIT),
+            File_Name__c = truncate(joinFileNames(versionByDocId, docIds), FILE_NAME_LIMIT),
             Extracted_At__c = System.now(),
             Model__c = MODEL
         );
 
         try {
             List<Blob> pdfBytes = new List<Blob>();
-            for (Id docId : contentDocumentIds) {
+            for (Id docId : docIds) {
                 ContentVersion cv = versionByDocId.get(docId);
                 if (cv != null && cv.VersionData != null) pdfBytes.add(cv.VersionData);
             }

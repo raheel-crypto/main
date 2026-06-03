@@ -1,9 +1,11 @@
-public with sharing class OrderFormBackfillBatch implements Database.Batchable<SObject>, Database.Stateful {
+public with sharing class OrderFormBackfillBatch implements Database.Batchable<SObject>, Database.Stateful, Database.AllowsCallouts {
 
-    @TestVisible private static final Integer SCOPE_SIZE = 50;
+    // Scope size must stay small because each Opp = one Anthropic callout (5-30 sec).
+    // Per-transaction callout-time limit is 120 sec; size of 2 leaves headroom.
+    @TestVisible private static final Integer SCOPE_SIZE = 2;
 
     private final Integer maxOpps;
-    private Integer totalEnqueued = 0;
+    private Integer totalProcessed = 0;
     private Integer totalSkippedNoFile = 0;
     private Integer totalSeen = 0;
 
@@ -53,8 +55,11 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
                 totalSkippedNoFile++;
                 continue;
             }
-            System.enqueueJob(new OrderFormExtractionJob(opp.Id, docs));
-            totalEnqueued++;
+            // Synchronous: insert one Order_Form_Extraction__c row per call.
+            // Avoids the "1 Queueable per async parent" limit that bit the
+            // earlier design.
+            OrderFormExtractionJob.runOnce(opp.Id, docs);
+            totalProcessed++;
         }
     }
 
@@ -62,7 +67,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         System.debug(LoggingLevel.INFO,
             'OrderFormBackfillBatch finished. ' +
             'Seen: ' + totalSeen + '; ' +
-            'Enqueued: ' + totalEnqueued + '; ' +
+            'Processed: ' + totalProcessed + '; ' +
             'Skipped (no signed__* file): ' + totalSkippedNoFile);
     }
 
