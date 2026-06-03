@@ -1,9 +1,17 @@
 import { getSalesforceConnection } from "./client";
-import type { AccountRecord, OpportunityRecord } from "@/lib/arr/types";
+import type {
+  AccountRecord,
+  OpportunityRecord,
+  OrderFormExtraction,
+} from "@/lib/arr/types";
 
 export async function getAccountWithOpps(
   accountId: string,
-): Promise<{ account: AccountRecord; opps: OpportunityRecord[] }> {
+): Promise<{
+  account: AccountRecord;
+  opps: OpportunityRecord[];
+  ofes: OrderFormExtraction[];
+}> {
   const conn = await getSalesforceConnection();
 
   const accountQuery = await conn.query<AccountRecord>(
@@ -20,7 +28,28 @@ export async function getAccountWithOpps(
      ORDER BY CloseDate ASC`,
   );
 
-  return { account, opps: oppsQuery.records };
+  const opps = oppsQuery.records;
+  const ofes = opps.length > 0 ? await getOfesForOpps(opps.map((o) => o.Id)) : [];
+
+  return { account, opps, ofes };
+}
+
+export async function getOfesForOpps(
+  oppIds: string[],
+): Promise<OrderFormExtraction[]> {
+  if (oppIds.length === 0) return [];
+  const conn = await getSalesforceConnection();
+  const inList = oppIds.map((id) => `'${id}'`).join(",");
+  const query = await conn.query<OrderFormExtraction>(
+    `SELECT Id, Opportunity__c, Annual_Recurring_Revenue__c, Type__c, Is_Amendment__c,
+            Total_Contract_Value__c, Contract_Start_Date__c, Contract_End_Date__c,
+            Seat_Licenses__c, Content_Document_Id__c, File_Name__c,
+            Extraction_Status__c, Extracted_At__c
+     FROM Order_Form_Extraction__c
+     WHERE Opportunity__c IN (${inList})
+     ORDER BY Extracted_At__c DESC`,
+  );
+  return query.records;
 }
 
 export async function getAllCustomerAccountIds(): Promise<string[]> {

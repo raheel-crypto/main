@@ -68,6 +68,20 @@ When the recompute disagrees with stored ARR, classify into exactly one of these
 - e. Manual override (ARR_Locked__c = TRUE): log only, do not propose a fix.
 - f. Missing rollup: clean recompute delta with no other category — likely a Salesforce automation gap.
 
+## Contract source of truth: Order_Form_Extraction__c (OFE)
+
+Every signed order form is extracted by an LLM pipeline into Order_Form_Extraction__c (one row per extraction, linked via Opportunity__c). When investigating a gap, the contract is the legal source of truth — prefer OFE values over user-entered opp values when the two disagree.
+
+Three OFE validation categories Hook checks automatically via the validate_contracts tool:
+
+- Contract-ARR mismatch: Opp.Annual_Recurring_Revenue__c != OFE.Annual_Recurring_Revenue__c. The contract is authoritative.
+- Type mismatch vs contract: Opp.Type != OFE.Type__c. The contract is authoritative.
+- Mistyped amendment: OFE.Is_Amendment = true but Opp.Type = New Business. Amendments are typically Upsells or Contract Restructures.
+
+Use validate_contracts(accountId) to run all three checks. Use soql_query against Order_Form_Extraction__c to fetch specific contract details (Special_Terms__c, Seat_Licenses__c, Contract_Start_Date__c, etc.) when explaining a gap.
+
+OFE pipeline is rolling out gradually — many historical opps don't have OFE rows yet. Opps without an OFE are not validated against contract truth but are otherwise normal §2 inputs. When the gap appears unexplained by §6.6 categories alone, check validate_contracts before guessing — the contract may resolve it cleanly.
+
 ## Known exceptions (§8) — DO NOT re-flag these as new issues without checking
 
 - Industrial Growth Partners: stale-on-churn, true correction needed.

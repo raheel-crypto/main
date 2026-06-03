@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { verifyHmac } from "@/lib/hmac";
 import { getAccountWithOpps } from "@/lib/salesforce/soql";
 import { diffVsStored } from "@/lib/arr/recompute";
+import { crossValidate, formatOfeGapsForPrompt } from "@/lib/arr/cross_validate";
 import { askHook } from "@/lib/claude/agent";
 import { slack, REVOPS_CHANNEL } from "@/lib/slack/client";
 import { issueBlocks } from "@/lib/slack/blocks";
@@ -21,8 +22,9 @@ export async function POST(req: Request) {
 
   const { accountId } = JSON.parse(body) as { accountId: string };
 
-  const { account, opps } = await getAccountWithOpps(accountId);
+  const { account, opps, ofes } = await getAccountWithOpps(accountId);
   const gap = diffVsStored(account, opps, Number(process.env.HOOK_GAP_THRESHOLD_USD ?? 1));
+  const ofeGaps = crossValidate(opps, ofes);
 
   const runRows = (await sql`
     INSERT INTO runs (trigger_kind, account_id, accounts_checked, gaps_found, finished_at)
@@ -39,12 +41,15 @@ export async function POST(req: Request) {
     console.error(`ledger sync failed for ${accountId}`, err);
   }
 
+  // For v1, only post when §2 says there's a gap. OFE-only gaps (where §2
+  // reconciles but contract disagrees with opp) are still computed and
+  // available to Hook via tools, but don't auto-trigger a Slack post.
   if (gap.matches) {
-    return NextResponse.json({ ok: true, gap: 0 });
+    return NextResponse.json({ ok: true, gap: 0, ofeGaps: ofeGaps.length });
   }
 
   const { text } = await askHook(
-    `An opportunity on account ${account.Name} (${account.Id}) just changed. The recompute shows stored=${gap.storedArr}, expected=${gap.result.expectedArr}, gap=${gap.gap}. Use diff_vs_stored and last_audit to investigate, then explain the most likely cause (cite the §6.6 category) and suggest a PROPOSED FIX (dry-run only).`,
+    `An opportunity on account ${account.Name} (${account.Id}) just changed. The recompute shows stored=${gap.storedArr}, expected=${gap.result.expectedArr}, gap=${gap.gap}. Use diff_vs_stored and last_audit to investigate, then explain the most likely cause (cite the §6.6 category) and suggest a PROPOSED FIX (dry-run only).${formatOfeGapsForPrompt(ofeGaps)}`,
   );
 
   const post = await slack.chat.postMessage({

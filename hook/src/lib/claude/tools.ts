@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { getAccountWithOpps, rawSoql } from "@/lib/salesforce/soql";
 import { recomputeAccount, diffVsStored } from "@/lib/arr/recompute";
+import { crossValidate } from "@/lib/arr/cross_validate";
 import { sql } from "@/lib/db/client";
 
 export type ToolExecutor = (input: Record<string, unknown>) => Promise<string>;
@@ -52,6 +53,18 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       properties: {
         accountId: { type: "string" },
         limit: { type: "number", description: "Max rows; default 10" },
+      },
+      required: ["accountId"],
+    },
+  },
+  {
+    name: "validate_contracts",
+    description:
+      "Cross-validate every won opp for an account against its Order Form Extraction (OFE) row. Returns the list of contract-vs-opp disagreements across three categories: Contract-ARR mismatch, Type mismatch vs contract, Mistyped amendment. Use this whenever a §2 gap is unexplained or when investigating Type/ARR data quality on a specific account.",
+    input_schema: {
+      type: "object",
+      properties: {
+        accountId: { type: "string", description: "Salesforce 18-character Account ID" },
       },
       required: ["accountId"],
     },
@@ -125,6 +138,27 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
         LIMIT ${limit}
       `;
       return JSON.stringify({ accountId, history: rows });
+    } catch (err) {
+      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async validate_contracts(input) {
+    const accountId = String(input.accountId ?? "");
+    try {
+      const { opps, ofes } = await getAccountWithOpps(accountId);
+      const gaps = crossValidate(opps, ofes);
+      const oppsWithoutOfe = opps
+        .filter((o) => !ofes.some((f) => f.Opportunity__c === o.Id))
+        .map((o) => ({ id: o.Id, name: o.Name, type: o.Type, closeDate: o.CloseDate }));
+      return JSON.stringify({
+        accountId,
+        oppsChecked: opps.length,
+        ofeRowsFound: ofes.length,
+        gapCount: gaps.length,
+        gaps,
+        oppsWithoutOfe,
+      });
     } catch (err) {
       return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
     }

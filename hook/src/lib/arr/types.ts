@@ -20,6 +20,22 @@ export interface OpportunityRecord {
   ARR_Locked__c?: boolean;
 }
 
+export interface OrderFormExtraction {
+  Id: string;
+  Opportunity__c: string;
+  Annual_Recurring_Revenue__c: number | null;
+  Type__c: string | null;
+  Is_Amendment__c: boolean | null;
+  Total_Contract_Value__c: number | null;
+  Contract_Start_Date__c: string | null;
+  Contract_End_Date__c: string | null;
+  Seat_Licenses__c: number | null;
+  Content_Document_Id__c: string | null;
+  File_Name__c: string | null;
+  Extraction_Status__c: string | null;
+  Extracted_At__c: string | null;
+}
+
 export interface AccountRecord {
   Id: string;
   Name: string;
