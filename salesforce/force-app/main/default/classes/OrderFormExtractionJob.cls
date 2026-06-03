@@ -46,6 +46,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     public static Order_Form_Extraction__c buildExtraction(Id opportunityId, List<Id> contentDocumentIds) {
         List<Id> docIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
         Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(docIds);
+        Opportunity parentOpp = loadParentOpp(opportunityId);
 
         Order_Form_Extraction__c row = new Order_Form_Extraction__c(
             Opportunity__c = opportunityId,
@@ -89,6 +90,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
             row.Extracted_JSON__c = truncate(JSON.serializePretty(extracted), EXTRACTED_JSON_LIMIT);
             populateExtractedFields(row, extracted);
+            overrideTypeFromOpp(row, parentOpp);
+            computeIncrementalARR(row, parentOpp);
             row.Extraction_Status__c = 'Success';
             return row;
 
@@ -96,6 +99,27 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             row.Extraction_Status__c = 'API Failed';
             row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
             return row;
+        }
+    }
+
+    @TestVisible
+    private static Opportunity loadParentOpp(Id opportunityId) {
+        if (opportunityId == null) return null;
+        List<Opportunity> opps = [
+            SELECT Id, Type, Base_Opportunity__c, Base_Opportunity__r.Annual_Recurring_Revenue__c
+            FROM Opportunity WHERE Id = :opportunityId LIMIT 1
+        ];
+        return opps.isEmpty() ? null : opps[0];
+    }
+
+    @TestVisible
+    private static void overrideTypeFromOpp(Order_Form_Extraction__c row, Opportunity parentOpp) {
+        // The Opp's Type is the authoritative classification (Rogo Opp flows
+        // populate it deliberately). Claude's PDF-derived guess can misfire on
+        // renewals-with-seat-adds vs. true upsells, so prefer Opp.Type.
+        // Claude's original value remains in Extracted_JSON__c for audit.
+        if (parentOpp != null && String.isNotBlank(parentOpp.Type)) {
+            row.Type__c = parentOpp.Type;
         }
     }
 
@@ -250,13 +274,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
 
         deriveEndDate(row);
-        computeIncrementalARR(row, row.Opportunity__c);
     }
 
     @TestVisible
-    private static void computeIncrementalARR(Order_Form_Extraction__c row, Id opportunityId) {
+    private static void computeIncrementalARR(Order_Form_Extraction__c row, Opportunity parentOpp) {
         Decimal totalARR = row.Annual_Recurring_Revenue__c;
-        if (totalARR == null || opportunityId == null) return;
+        if (totalARR == null) return;
 
         // For New Business / Pilot / null Type, Incremental = full extracted ARR.
         Set<String> expansionTypes = new Set<String>{'Upsell','Renewal','Downsell','Contract Restructure'};
@@ -265,14 +288,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             return;
         }
 
-        // For expansion-style deals, find the base Opp's ARR.
-        List<Opportunity> opps = [
-            SELECT Base_Opportunity__c, Base_Opportunity__r.Annual_Recurring_Revenue__c
-            FROM Opportunity WHERE Id = :opportunityId LIMIT 1
-        ];
-        if (opps.isEmpty() || opps[0].Base_Opportunity__c == null) return;
-
-        Id baseOppId = opps[0].Base_Opportunity__c;
+        if (parentOpp == null || parentOpp.Base_Opportunity__c == null) return;
+        Id baseOppId = parentOpp.Base_Opportunity__c;
 
         // Preferred source: the base Opp's most recent successful OFE row.
         Decimal baseARR = null;
@@ -287,10 +304,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         ];
         if (!baseRows.isEmpty()) {
             baseARR = baseRows[0].Annual_Recurring_Revenue__c;
-        } else if (opps[0].Base_Opportunity__r != null) {
+        } else if (parentOpp.Base_Opportunity__r != null) {
             // Fallback: the base Opp's own Annual_Recurring_Revenue__c field.
             // Useful for legacy bases that predate the signed__* convention.
-            baseARR = opps[0].Base_Opportunity__r.Annual_Recurring_Revenue__c;
+            baseARR = parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c;
         }
         if (baseARR == null) return;
 

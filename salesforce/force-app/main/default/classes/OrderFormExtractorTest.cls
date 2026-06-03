@@ -134,6 +134,41 @@ private class OrderFormExtractorTest {
     // ===== Extraction Queueable =====
 
     @isTest
+    static void extractionJob_overridesTypeWithOppType() {
+        Opportunity opp = new Opportunity(
+            Name = 'Renewal-with-seats',
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Type = 'Renewal'
+        );
+        insert opp;
+        attachSignedFile(opp.Id, 'signed__Renewal_Order_Form');
+
+        // Claude misclassifies as Upsell (because the renewal adds seats).
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Upsell',
+            'Annual_Recurring_Revenue' => 100000
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Type__c, Extracted_JSON__c FROM Order_Form_Extraction__c
+            WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals('Renewal', row.Type__c, 'Opp.Type should override Claude classification');
+        System.assert(row.Extracted_JSON__c.contains('Upsell'),
+            'Claude original classification should still be preserved in Extracted_JSON__c');
+    }
+
+    @isTest
     static void extractionJob_computesIncrementalARRForUpsell() {
         // Base Opp has a prior Success extraction with ARR=$118k.
         Opportunity baseOpp = insertOpp('Arma Land', 'Closed Won');
