@@ -146,4 +146,18 @@ async function respondInThread(opts: {
     thread_ts: opts.threadTs,
     text,
   });
+
+  // Persist this turn so future replies in the same thread can auto-listen
+  // and load the prior Q&A as conversation history. ON CONFLICT keeps the
+  // row keyed by thread_ts and updates the context with the most recent turn.
+  await sql`
+    INSERT INTO slack_threads (thread_ts, channel_id, account_id, context)
+    VALUES (${opts.threadTs}, ${opts.channel}, ${priorAccountId}, ${JSON.stringify({
+      kind: "mention",
+      prompt: opts.userText,
+      reply: text,
+    })})
+    ON CONFLICT (thread_ts) DO UPDATE SET
+      context = EXCLUDED.context
+  `;
 }
