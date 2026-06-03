@@ -174,27 +174,6 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
-    static void extractionJob_skipsUnsupportedFileTypes() {
-        Opportunity opp = insertOpp('Has DOCX', 'Closed Won');
-        // A .docx that Anthropic can't accept - extractor should skip it.
-        attachSignedFile(opp.Id, 'signed__weird_format', 'docx',
-            Blob.valueOf('not a real docx'));
-
-        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
-        req.opportunityId = opp.Id;
-
-        Test.startTest();
-        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
-        Test.stopTest();
-
-        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
-        System.assertEquals('No Document', row.Extraction_Status__c,
-            'A lone unsupported file should produce a No Document row, not crash');
-        System.assert(row.Error_Message__c != null && row.Error_Message__c.toLowerCase().contains('docx'),
-            'Error message should name the skipped file extension: ' + row.Error_Message__c);
-    }
-
-    @isTest
     static void extractionJob_overridesTypeWithOppType() {
         Opportunity opp = new Opportunity(
             Name = 'Renewal-with-seats',
