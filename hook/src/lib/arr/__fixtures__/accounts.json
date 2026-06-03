@@ -1,0 +1,2340 @@
+[
+  {
+    "Id": "001Hr00001n0d8rIAA",
+    "Name": "MIG Capital",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": "2025-04-07"
+  },
+  {
+    "Id": "001Hr00001n0dLhIAI",
+    "Name": "Wells Fargo",
+    "ARR__c": 4814610,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001qYfQ6IAK",
+    "Name": "Guggenheim Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": "2025-06-13"
+  },
+  {
+    "Id": "001Hr00001vAs3EIAS",
+    "Name": "Studio Management",
+    "ARR__c": 16000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vBIgkIAG",
+    "Name": "LionTree",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vBIgxIAG",
+    "Name": "Gilder, Gagnon, Howe & Co.",
+    "ARR__c": 21000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vBIjYIAW",
+    "Name": "Palm Tree",
+    "ARR__c": 60000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vBImzIAG",
+    "Name": "Siris Capital",
+    "ARR__c": 45000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vBIsaIAG",
+    "Name": "Moelis & Company",
+    "ARR__c": 500000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vCjShIAK",
+    "Name": "Polar Asset Management",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vCo5yIAC",
+    "Name": "Lazard",
+    "ARR__c": 460000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vCo7uIAC",
+    "Name": "Cyrus Capital Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vDFogIAG",
+    "Name": "Prof. G Media",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vDFtSIAW",
+    "Name": "Veris Insights",
+    "ARR__c": 6600,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vDGysIAG",
+    "Name": "Princeton Equity",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vDg7MIAS",
+    "Name": "A&M Capital",
+    "ARR__c": 66000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vDgIMIA0",
+    "Name": "Morgan Stanley (Parent)",
+    "ARR__c": null,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001vDgJWIA0",
+    "Name": "Bank of America",
+    "ARR__c": 4401250,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001y9A0mIAE",
+    "Name": "William Blair",
+    "ARR__c": 500000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001y9AAcIAM",
+    "Name": "Palestra",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001y9AAmIAM",
+    "Name": "Jefferies",
+    "ARR__c": 1218747,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001y9omTIAQ",
+    "Name": "Abdul Latif Jameel",
+    "ARR__c": 42000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001y9sYpIAI",
+    "Name": "TXV Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001y9yXDIAY",
+    "Name": "Alua Capital Management",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yAYzyIAG",
+    "Name": "UBS (IB)",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yAZ1aIAG",
+    "Name": "J.P. Morgan (IB)",
+    "ARR__c": 2462500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yAe2oIAC",
+    "Name": "Cordis Asset Management",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yAiu3IAC",
+    "Name": "Tiger Global",
+    "ARR__c": 78000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yAlyJIAS",
+    "Name": "Pechanga Resort & Casino",
+    "ARR__c": 48000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yBEWwIAO",
+    "Name": "Northborne Partners",
+    "ARR__c": 50000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yBEX6IAO",
+    "Name": "Insight Partners",
+    "ARR__c": null,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yBEXLIA4",
+    "Name": "CSP Associates",
+    "ARR__c": 37200,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yBMECIA4",
+    "Name": "Societe Generale",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yBY4uIAG",
+    "Name": "Raymond James",
+    "ARR__c": 120000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr00001yCtsMIAS",
+    "Name": "VRA Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr000020ZmQBIA0",
+    "Name": "Apollo Global Management",
+    "ARR__c": 30000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr000020ZmaXIAS",
+    "Name": "Nomura",
+    "ARR__c": 1918010,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr000020aEsgIAE",
+    "Name": "Osbon Capital Management, LLC",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr000020aM25IAE",
+    "Name": "GTCR",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr000020aM2KIAU",
+    "Name": "Polar Capital Partners",
+    "ARR__c": 37500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001Hr000020aM2VIAU",
+    "Name": "Investidor Profissional (IP) Capital Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": "2025-05-07"
+  },
+  {
+    "Id": "001Hr000020aM2yIAE",
+    "Name": "NextEra Energy Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": "2025-08-21"
+  },
+  {
+    "Id": "001V4000004FhqLIAS",
+    "Name": "Clear Street",
+    "ARR__c": 24000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000005843ZIAQ",
+    "Name": "Kinetic Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000005XqRZIA0",
+    "Name": "Harris Williams",
+    "ARR__c": 493500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000005dHhGIAU",
+    "Name": "Leerink Partners",
+    "ARR__c": 492000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000005omYBIAY",
+    "Name": "Barclays",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000005p3gxIAA",
+    "Name": "Citibank",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000005rp1aIAA",
+    "Name": "GIC",
+    "ARR__c": 995900,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000006MnmeIAC",
+    "Name": "Robert W. Baird",
+    "ARR__c": 930000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000788pCIAQ",
+    "Name": "Truist",
+    "ARR__c": 1236000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000007NsYNIA0",
+    "Name": "12 West Capital",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": "2025-08-01"
+  },
+  {
+    "Id": "001V4000008rRNHIA2",
+    "Name": "Solomon Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009oerXIAQ",
+    "Name": "Stifel Financial",
+    "ARR__c": 1155000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009onYFIAY",
+    "Name": "BNP Paribas",
+    "ARR__c": 2412000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009oo4UIAQ",
+    "Name": "Goldman Sachs",
+    "ARR__c": 490791,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009orNJIAY",
+    "Name": "Citizens",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009osb7IAA",
+    "Name": "Cantor Fitzgerald",
+    "ARR__c": null,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009p2YrIAI",
+    "Name": "Macquarie",
+    "ARR__c": 680000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009pUiEIAU",
+    "Name": "DC Advisory",
+    "ARR__c": 294000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009pnMTIAY",
+    "Name": "Allen & Company",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009pnsnIAA",
+    "Name": "Evercore",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009q53GIAQ",
+    "Name": "Centerview Partners",
+    "ARR__c": 75000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009qDATIA2",
+    "Name": "TD Cowen",
+    "ARR__c": 310000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V4000009qM7OIAU",
+    "Name": "Canaccord Genuity",
+    "ARR__c": 537373,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000A4MaYIAV",
+    "Name": "Rothschild & Co",
+    "ARR__c": 1201510,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000AFShOIAX",
+    "Name": "Attestor Capital",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000C5BIVIA3",
+    "Name": "Industrial Growth Partners (IGP)",
+    "ARR__c": 23000,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000EER1uIAH",
+    "Name": "Sequoia Capital Heritage Fund (SCHF)",
+    "ARR__c": 50000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000GiBOMIA3",
+    "Name": "Arma Partners",
+    "ARR__c": 174000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000H7me3IAB",
+    "Name": "ROTH Capital Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000JCXF4IAP",
+    "Name": "Hg Capital",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000JDcPYIA1",
+    "Name": "MidCap Financial",
+    "ARR__c": 120000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000JX8IRIA1",
+    "Name": "Ribbit Capital",
+    "ARR__c": 13500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Jmar4IAB",
+    "Name": "Monomoy Capital Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000K02ZOIAZ",
+    "Name": "BTG Pactual",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000KCkd3IAD",
+    "Name": "PMCF Investment Banking",
+    "ARR__c": 120000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000KvAggIAF",
+    "Name": "Environmental Commodity Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Lil7BIAR",
+    "Name": "Reddit, Inc.",
+    "ARR__c": 0,
+    "Account_Status__c": "Former Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000LrXGIIA3",
+    "Name": "Tidal Partners",
+    "ARR__c": 100000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000LxjOUIAZ",
+    "Name": "TSG Consumer",
+    "ARR__c": 54923,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000M10sXIAR",
+    "Name": "Oberweis Asset Management",
+    "ARR__c": 44000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000MU76YIAT",
+    "Name": "Battle Investment Group",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000MVh0rIAD",
+    "Name": "MILFAM",
+    "ARR__c": 4000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000McJoBIAV",
+    "Name": "AXOM Partners",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000MyTIcIAN",
+    "Name": "MTS Partners",
+    "ARR__c": 299000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Mz7b0IAB",
+    "Name": "Osprey Investors",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000N0fCQIAZ",
+    "Name": "Galaxy Digital",
+    "ARR__c": 53000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000N5kY3IAJ",
+    "Name": "Dowling & Partners",
+    "ARR__c": 40000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000NP6xtIAD",
+    "Name": "Hamilton Lane",
+    "ARR__c": null,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000NXQXxIAP",
+    "Name": "Hellman & Friedman",
+    "ARR__c": 134000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000NarJuIAJ",
+    "Name": "Lodge Quai",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Ng4RqIAJ",
+    "Name": "Dutchess Management",
+    "ARR__c": 6500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000NgtECIAZ",
+    "Name": "Waycrosse, Inc",
+    "ARR__c": 18000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000NpY41IAF",
+    "Name": "Avid Capital Advisors",
+    "ARR__c": 8000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000OyLBpIAN",
+    "Name": "SFI (Société Familiale d'Investissements)",
+    "ARR__c": 9000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000PAkKvIAL",
+    "Name": "BlackRock",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000PWvjOIAT",
+    "Name": "Milton Street Capital",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Q4tq9IAB",
+    "Name": "Boxwood Partners",
+    "ARR__c": 40000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Q6YssIAF",
+    "Name": "Greenoaks",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Q7q4YIAR",
+    "Name": "SRS Investment Management",
+    "ARR__c": 8000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QANqqIAH",
+    "Name": "Lepercq Group",
+    "ARR__c": 9500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QDQIiIAP",
+    "Name": "TDM Growth Partners",
+    "ARR__c": 9000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QE75wIAD",
+    "Name": "ecap ventures",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QGyFlIAL",
+    "Name": "CriticalPoint",
+    "ARR__c": 42000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QMbDJIA1",
+    "Name": "Banacore",
+    "ARR__c": 3000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QTSMvIAP",
+    "Name": "Free Castle Capital Ltd",
+    "ARR__c": 4000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QUl49IAD",
+    "Name": "Areta",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QZ7xMIAT",
+    "Name": "EVP Strategic Advisors",
+    "ARR__c": 9000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QZBw6IAH",
+    "Name": "ElevenYellow Pte. Ltd.",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QbBOvIAN",
+    "Name": "Sheth - Family Office",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Qf8U8IAJ",
+    "Name": "Blueprint Technology Partners",
+    "ARR__c": 3500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QgQX3IAN",
+    "Name": "Ardara Cap",
+    "ARR__c": 8000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000QqubrIAB",
+    "Name": "Badwa Capital",
+    "ARR__c": 3000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000R4VNXIA3",
+    "Name": "Arcano Partners",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000R5QC3IAN",
+    "Name": "Whitebox Advisors",
+    "ARR__c": 42000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000R8XP5IAN",
+    "Name": "Royal Park Partners",
+    "ARR__c": 55000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000R9G7gIAF",
+    "Name": "Frist Capital",
+    "ARR__c": 5500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000RlDByIAN",
+    "Name": "TCW Group",
+    "ARR__c": 122400,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000RnaVpIAJ",
+    "Name": "National Business Brokers, Inc.",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000RpsJlIAJ",
+    "Name": "XMS Capital",
+    "ARR__c": 95000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000S4qWAIAZ",
+    "Name": "Alliance Consumer Growth (ACG)",
+    "ARR__c": 14000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000S8rTdIAJ",
+    "Name": "G9 Ventures",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000S9jKMIAZ",
+    "Name": "Value Line",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000SF9CXIA1",
+    "Name": "Dragoneer",
+    "ARR__c": 80000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000SQnzTIAT",
+    "Name": "BaseRock Partners",
+    "ARR__c": 28500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000SRhvFIAT",
+    "Name": "Ace Global Equity",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000SVHHNIA5",
+    "Name": "Nolan & Associates",
+    "ARR__c": 46650,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000SZPWTIA5",
+    "Name": "Cap91",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000T1rpaIAB",
+    "Name": "Metric Capital Partners",
+    "ARR__c": 72000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000TJN0HIAX",
+    "Name": "Cadma Capital Partners",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000TT7lQIAT",
+    "Name": "ECP (Energy Capital Partners)",
+    "ARR__c": null,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000TxzrZIAR",
+    "Name": "Starboard Value LP",
+    "ARR__c": 24000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000U2luPIAR",
+    "Name": "Hudson Murray",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000UDH8FIAX",
+    "Name": "Qube Research & Technologies",
+    "ARR__c": 24000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000UIOp3IAH",
+    "Name": "ParkView Partners",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000UStQ7IAL",
+    "Name": "Harbor View Advisors",
+    "ARR__c": 55000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000UphePIAR",
+    "Name": "Officium Advisory LLC",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000V0r0rIAB",
+    "Name": "Reade Street (RDST)",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000V6cGsIAJ",
+    "Name": "VerisFi Capital",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000V7gGnIAJ",
+    "Name": "Taureau Group",
+    "ARR__c": 50000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000V8k5TIAR",
+    "Name": "Daiwa Securities Group",
+    "ARR__c": 1550000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000VP0z3IAD",
+    "Name": "Nova Partners",
+    "ARR__c": 4000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Vbjh3IAB",
+    "Name": "North Peak Capital",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Vf93uIAB",
+    "Name": "Marex",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000VrhzUIAR",
+    "Name": "Market Street Capital, Inc.",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000W3v91IAB",
+    "Name": "M37 Management LP",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000W7GNPIA3",
+    "Name": "Arlington Capital Advisors",
+    "ARR__c": 47500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WEFuRIAX",
+    "Name": "Profuturo AFP",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WFJj3IAH",
+    "Name": "Starhouse Capital (SMMA)",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WFzqLIAT",
+    "Name": "Pacific International",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WYPUbIAP",
+    "Name": "Quantuma",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WcRpdIAF",
+    "Name": "Deer Capital",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WdX4wIAF",
+    "Name": "Lionhead Capital Partners",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WeKNRIA3",
+    "Name": "RLH Equity",
+    "ARR__c": 22000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Wf4tHIAR",
+    "Name": "Indeed",
+    "ARR__c": 2000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000WikHiIAJ",
+    "Name": "Acacia Research",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000X6rrTIAR",
+    "Name": "Summit Capital Companies",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000X6xgkIAB",
+    "Name": "Decade Partners",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000XAqFFIA1",
+    "Name": "H7 Capital Management",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000XGylBIAT",
+    "Name": "Crisil Limited",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000XIsQLIA1",
+    "Name": "H.C. Wainwright & Co.",
+    "ARR__c": 225000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000XcDMDIA3",
+    "Name": "Grafine Partners",
+    "ARR__c": 22500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000XcoQbIAJ",
+    "Name": "WestView Capital Partners",
+    "ARR__c": 67600,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000XogInIAJ",
+    "Name": "Sandfox Advisors",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000XqfSIIAZ",
+    "Name": "Cypress Forest",
+    "ARR__c": 16500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Xyv3RIAR",
+    "Name": "Creuza Advisors",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000YKvxpIAD",
+    "Name": "Berenson",
+    "ARR__c": 75000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000YUyclIAD",
+    "Name": "Gordon Dyal & Co.",
+    "ARR__c": 110000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000YllccIAB",
+    "Name": "ITE Management",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Z5xPuIAJ",
+    "Name": "Querco",
+    "ARR__c": 3000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000ZAgmbIAD",
+    "Name": "JD Ford",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Zfq05IAB",
+    "Name": "Edmond de Rothschild",
+    "ARR__c": 150000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000Zy4kaIAB",
+    "Name": "Peryton Advisory",
+    "ARR__c": 20000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000a1F1uIAE",
+    "Name": "Fluential Partners, LLC",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000a3EPtIAM",
+    "Name": "22C Capital",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000a6VZ6IAM",
+    "Name": "Continental General",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000aErxOIAS",
+    "Name": "Bailey & Company",
+    "ARR__c": 138000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000aQV1sIAG",
+    "Name": "Multiples Alternate Asset Management",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000aYe9ZIAS",
+    "Name": "Ferghana Investment Partners LP",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000ayfgKIAQ",
+    "Name": "Saxenhammer",
+    "ARR__c": 14000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000azZTzIAM",
+    "Name": "Viorum Capital, LLC",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000b1sAkIAI",
+    "Name": "Oryon Partners",
+    "ARR__c": 4000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000b30W1IAI",
+    "Name": "Otro Capital",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000bTttSIAS",
+    "Name": "Atika Capital Management LLC",
+    "ARR__c": 4500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000byszWIAQ",
+    "Name": "SSW Partners",
+    "ARR__c": 11000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000cCHjyIAG",
+    "Name": "Group 10 Holdings LLC",
+    "ARR__c": 3000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000cLxs2IAC",
+    "Name": "Faithstone Capital Partners",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000cXg4HIAS",
+    "Name": "Core Advisors",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000ccLtZIAU",
+    "Name": "Advance",
+    "ARR__c": 30000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000dQV1hIAG",
+    "Name": "American DeepTech",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000eKydkIAC",
+    "Name": "Foundation Partners",
+    "ARR__c": 30000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000eqWb7IAE",
+    "Name": "Velocity Capital Limited",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000esB2fIAE",
+    "Name": "PRIMEPULSE",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000etAHRIA2",
+    "Name": "Coutts Holdings",
+    "ARR__c": 8000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000f0TwsIAE",
+    "Name": "Ranch Creek Partners, LLC",
+    "ARR__c": 8000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000f6oTxIAI",
+    "Name": "Threeaxis Solutions Pte Ltd",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000fdWtKIAU",
+    "Name": "Post Capital Partners",
+    "ARR__c": 28000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000gAqWhIAK",
+    "Name": "TKO Miller",
+    "ARR__c": 20000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000gfLZoIAM",
+    "Name": "Mavenhead",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000ghwerIAA",
+    "Name": "NYDIG",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000go91YIAQ",
+    "Name": "Latimer Partners",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000goATuIAM",
+    "Name": "Evenlode Investment",
+    "ARR__c": 16000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000goNyyIAE",
+    "Name": "Vor Capital",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000gqbxlIAA",
+    "Name": "Wisam Azzam Accounting Firm",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hAb5ZIAS",
+    "Name": "Indonesia Investment Authority (INA)",
+    "ARR__c": 21000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hGl74IAC",
+    "Name": "DoubleDigit Group",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hOejaIAC",
+    "Name": "Steinbeis M&A Partners GmbH",
+    "ARR__c": 16500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hR2JVIA0",
+    "Name": "WoodRock & Co.",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hRBjSIAW",
+    "Name": "Palazzo",
+    "ARR__c": 20000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hXlx9IAC",
+    "Name": "Marsh McLennan",
+    "ARR__c": 50000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hdr3hIAA",
+    "Name": "Altivis Partners",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000hqmr0IAA",
+    "Name": "Applied Aerospace",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000i0QJmIAM",
+    "Name": "Avicene Investment Management",
+    "ARR__c": 32000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000i1jWPIAY",
+    "Name": "Broadwalk Advisory Ltd",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000iDAcvIAG",
+    "Name": "Magnolia Bridge Capital LLC",
+    "ARR__c": 3500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000iI0UrIAK",
+    "Name": "Jones Trading",
+    "ARR__c": 42000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000iX5KXIA0",
+    "Name": "Kuok Group",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000iX9snIAC",
+    "Name": "Seabury Capital",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000iYBsZIAW",
+    "Name": "Velaris Capital",
+    "ARR__c": 3500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000iizPsIAI",
+    "Name": "Bourne Partners",
+    "ARR__c": 118400,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000ipngYIAQ",
+    "Name": "Lango Real Estate Limited",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000j8OrFIAU",
+    "Name": "Bird & Bee",
+    "ARR__c": 5500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000jMOHvIAO",
+    "Name": "DBG Global Enterprises",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000jZCMAIA4",
+    "Name": "Nosara Capital",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000jbZUkIAM",
+    "Name": "Fanatics",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000jhOErIAM",
+    "Name": "MBX Group",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000kJYLFIA4",
+    "Name": "ATLAS SP Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001V400000ka39lIAA",
+    "Name": "Wingman Growth Partners",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000RQ4I9AAL",
+    "Name": "Caris Life Sciences",
+    "ARR__c": 42000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000SFzzDAAT",
+    "Name": "Dawn & Dusk Advisors",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000SIGUPAA5",
+    "Name": "Octopus Competitive Intelligence",
+    "ARR__c": 6500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000ScZ9ZAAV",
+    "Name": "Enable Partners",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000Sxc2jAAB",
+    "Name": "Viboda Capital",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000SyzANAAZ",
+    "Name": "Permanent Capital Partners",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000TyyAYAAZ",
+    "Name": "Paradaim Capital",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000U0RwhAAF",
+    "Name": "Keyrock Capital Management Limited",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000UtS41AAF",
+    "Name": "Marubeni Corporation",
+    "ARR__c": 7000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000VAXFOAA5",
+    "Name": "Glenview Capital",
+    "ARR__c": 12500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000VJw6UAAT",
+    "Name": "Skyview Capital",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000VQRM7AAP",
+    "Name": "Enverus",
+    "ARR__c": 9000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000VTk2RAAT",
+    "Name": "Ascend Capital Group",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000Vgfg2AAB",
+    "Name": "Klaris Capital",
+    "ARR__c": 4000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000VjcvOAAR",
+    "Name": "Regal Funds Management",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000VlA0UAAV",
+    "Name": "Saratoga Partners",
+    "ARR__c": 87500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000W1trJAAR",
+    "Name": "Thirdbase Capital",
+    "ARR__c": 4000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000W3lzFAAR",
+    "Name": "Texas Capital Securities",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000W6FJmAAN",
+    "Name": "Chasm Partners",
+    "ARR__c": 4500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000WK0HbAAL",
+    "Name": "LiveBean Partners",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000WLlEaAAL",
+    "Name": "Naia Capital",
+    "ARR__c": 9000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000WPRxBAAX",
+    "Name": "Honeywell",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000WSmnSAAT",
+    "Name": "Pallas Capital",
+    "ARR__c": 16500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000X4fRQAAZ",
+    "Name": "Paradigm",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000X8RXtAAN",
+    "Name": "Argo",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000XhGMmAAN",
+    "Name": "FINNEA Group",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000XiPfiAAF",
+    "Name": "Blue River Financial Group",
+    "ARR__c": 36000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000XrvYEAAZ",
+    "Name": "Luxcore Inc.",
+    "ARR__c": 7000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000YNURdAAP",
+    "Name": "ONEtoONE CF",
+    "ARR__c": 24000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000YP7VlAAL",
+    "Name": "Stripes",
+    "ARR__c": 8000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000YQvqIAAT",
+    "Name": "Burggraben Holding AG",
+    "ARR__c": 7000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000YXWYfAAP",
+    "Name": "Entrepreneur Equity Partners",
+    "ARR__c": 7000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000YYX4PAAX",
+    "Name": "Maxwell Street Capital Partners",
+    "ARR__c": 30000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000YdQNLAA3",
+    "Name": "Raven Partners LLP",
+    "ARR__c": 32500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000Yen85AAB",
+    "Name": "Syntera Advisors",
+    "ARR__c": 4000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000ZJgDtAAL",
+    "Name": "Travel Perk (PERK)",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000ZMzK6AAL",
+    "Name": "Imaginary Ventures",
+    "ARR__c": 24000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000ZVZ5eAAH",
+    "Name": "Argon Management",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000Zu8uuAAB",
+    "Name": "Mango Loop",
+    "ARR__c": 6500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000ZuW9BAAV",
+    "Name": "Mitsui Investments (Mobility Investment Team)",
+    "ARR__c": 16500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000ZvtVzAAJ",
+    "Name": "Univest Securities",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000a3VFXAA2",
+    "Name": "Adorna London Limited",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000a8nutAAA",
+    "Name": "Sazun GmbH - m&a PLUS®",
+    "ARR__c": 4250,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000aNqArAAK",
+    "Name": "FRAMALI GmbH",
+    "ARR__c": 6500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000aWD2GAAW",
+    "Name": "Tenet Consulting",
+    "ARR__c": 6500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000apFI3AAM",
+    "Name": "Anchor Peabody",
+    "ARR__c": 15000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000awUVfAAM",
+    "Name": "FalkensteinAsia",
+    "ARR__c": 6500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000bFsShAAK",
+    "Name": "Ohman",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000bHjWUAA0",
+    "Name": "Stonelake Capital Partners",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000bQMsZAAW",
+    "Name": "جياد المالية | Jyad Capital",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000bYLoBAAW",
+    "Name": "LadderStone",
+    "ARR__c": 5000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000bjaBpAAI",
+    "Name": "Access Wealth",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000buwQgAAI",
+    "Name": "GBA Group",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000cJ94wAAC",
+    "Name": "Nustate Capital",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000d5nWHAAY",
+    "Name": "Annaly Capital Management",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000dJ7U4AAK",
+    "Name": "Odyssey Investment Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000dXYUIAA4",
+    "Name": "Partners Capital",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000de7QvAAI",
+    "Name": "Spruce Brook Partners",
+    "ARR__c": 5500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000dp7aXAAQ",
+    "Name": "One Strategy Group Inc",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000dqUZuAAM",
+    "Name": "The Fortia Group",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000e0UrvAAE",
+    "Name": "Meridian Compensation Partners",
+    "ARR__c": 20000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000e2nldAAA",
+    "Name": "Cloudsky",
+    "ARR__c": 14000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000eQhFIAA0",
+    "Name": "Avernys Advisors",
+    "ARR__c": 5500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000etKbvAAE",
+    "Name": "Drive by Draftkings",
+    "ARR__c": 16000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000f2m2ZAAQ",
+    "Name": "Cinven",
+    "ARR__c": 0,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000fHc9JAAS",
+    "Name": "PMT Management AG",
+    "ARR__c": 32500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000fl1MAAAY",
+    "Name": "Amberjack Capital Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000flFQjAAM",
+    "Name": "Abrams Capital",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000fm6A8AAI",
+    "Name": "Pfingsten Partners",
+    "ARR__c": 5500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000fmH8iAAE",
+    "Name": "Alyeska Investment Group",
+    "ARR__c": 18000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000fmYJ7AAM",
+    "Name": "Audere Capital",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000fwYcuAAE",
+    "Name": "Santa Clara University Endowment",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000g5ymaAAA",
+    "Name": "Mertz Taggart",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000gQVckAAG",
+    "Name": "Foundational Industries",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000gUtgPAAS",
+    "Name": "Kidder Williams",
+    "ARR__c": 54000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000gf7roAAA",
+    "Name": "Kennedy Capital",
+    "ARR__c": 70000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000hshwwAAA",
+    "Name": "Sweetspot Investment Limited",
+    "ARR__c": 7000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000i7VFSAA2",
+    "Name": "Navia",
+    "ARR__c": 5250,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000iFJ16AAG",
+    "Name": "The Tie",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000iFpthAAC",
+    "Name": "Signers National",
+    "ARR__c": 18000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000iZEWgAAO",
+    "Name": "Imagine Capital",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000jPzjBAAS",
+    "Name": "Space Capital",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000jlFD3AAM",
+    "Name": "QED Investors",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000joAOuAAM",
+    "Name": "Nustate Private Equity",
+    "ARR__c": 12000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000joZezAAE",
+    "Name": "Quarme Investments",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000kEdobAAC",
+    "Name": "Isara Laboratories",
+    "ARR__c": 35000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000kRqT4AAK",
+    "Name": "Denison Partners",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000kYKLCAA4",
+    "Name": "Tamarix Capital Partners",
+    "ARR__c": 45000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000klIdKAAU",
+    "Name": "Northwestern Capital Partners LLC",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000knv2kAAA",
+    "Name": "ZINK Solutions",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000ky6HoAAI",
+    "Name": "Hermeus",
+    "ARR__c": 11000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000kyTceAAE",
+    "Name": "Timoneer Strategic Partners",
+    "ARR__c": 14000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000l7ImlAAE",
+    "Name": "lodgyslife",
+    "ARR__c": 18000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000lfxQsAAI",
+    "Name": "Helix",
+    "ARR__c": 7000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000mXS6kAAG",
+    "Name": "Corsair Capital Management, LP",
+    "ARR__c": 7500,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000mZNitAAG",
+    "Name": "Postlane",
+    "ARR__c": 16000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000n2TEiAAM",
+    "Name": "VDA",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000nKD1kAAG",
+    "Name": "Flowserve Corporation",
+    "ARR__c": 75000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000nX5BNAA0",
+    "Name": "Metalmark",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000nnrbnAAA",
+    "Name": "Lane Four Capital Partners",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000noWnPAAU",
+    "Name": "Agile Growth",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000np9t3AAA",
+    "Name": "Legacy Capital Fund",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000npEG2AAM",
+    "Name": "Hawkshaw Capital",
+    "ARR__c": 0,
+    "Account_Status__c": "Prospect",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000oFXRxAAO",
+    "Name": "Cardiff Advisory",
+    "ARR__c": 6000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  },
+  {
+    "Id": "001cv00000oRlndAAC",
+    "Name": "Principia Growth",
+    "ARR__c": 10000,
+    "Account_Status__c": "Customer",
+    "Churn_Date__c": null
+  }
+]

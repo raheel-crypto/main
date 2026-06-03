@@ -1,0 +1,4457 @@
+[
+  {
+    "Id": "006Hr00001L7pWFIAZ",
+    "AccountId": "001Hr00001n0d8rIAA",
+    "Annual_Recurring_Revenue__c": 36000,
+    "Type": "New Business",
+    "CloseDate": "2024-06-03",
+    "IsWon": true,
+    "Name": "MIG Capital | 2 Seats"
+  },
+  {
+    "Id": "006Hr00001L7pdVIAR",
+    "AccountId": "001Hr00001n0dLhIAI",
+    "Annual_Recurring_Revenue__c": 1860000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-26",
+    "IsWon": true,
+    "Name": "Wells Fargo | IB Land | 2000 Users"
+  },
+  {
+    "Id": "006V400000B9lxRIAR",
+    "AccountId": "001Hr00001n0dLhIAI",
+    "Annual_Recurring_Revenue__c": 1023000,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-24",
+    "IsWon": true,
+    "Name": "Wells Fargo // Commercial Bank // $1.023M // 1,100 users"
+  },
+  {
+    "Id": "006cv00000YySXJAA3",
+    "AccountId": "001Hr00001n0dLhIAI",
+    "Annual_Recurring_Revenue__c": 744000,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-18",
+    "IsWon": true,
+    "Name": "Wells Fargo Commercial Banking - tranche 2 - Q2 2026"
+  },
+  {
+    "Id": "006cv00000L1QnaAAF",
+    "AccountId": "001Hr00001n0dLhIAI",
+    "Annual_Recurring_Revenue__c": 1183890,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-27",
+    "IsWon": true,
+    "Name": "Wells Fargo - Inv Bank Int'l & additional USA seats - q2 2026"
+  },
+  {
+    "Id": "006cv00000bQ3ctAAC",
+    "AccountId": "001Hr00001n0dLhIAI",
+    "Annual_Recurring_Revenue__c": 3720,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-28",
+    "IsWon": true,
+    "Name": "Wells Fargo - corp finance - 4 seats"
+  },
+  {
+    "Id": "006Hr00001OK1iWIAT",
+    "AccountId": "001Hr00001qYfQ6IAK",
+    "Annual_Recurring_Revenue__c": 156000,
+    "Type": "New Business",
+    "CloseDate": "2024-06-13",
+    "IsWon": true,
+    "Name": "Guggenheim | Partnership | ELA"
+  },
+  {
+    "Id": "006Hr00001OJxXUIA1",
+    "AccountId": "001Hr00001vAs3EIAS",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2024-05-13",
+    "IsWon": true,
+    "Name": "Studio Management | Silver | 6 Seats"
+  },
+  {
+    "Id": "006V4000004GqLKIA0",
+    "AccountId": "001Hr00001vAs3EIAS",
+    "Annual_Recurring_Revenue__c": 16000,
+    "Type": "Renewal",
+    "CloseDate": "2025-12-18",
+    "IsWon": true,
+    "Name": "Renewal: Studio Management - 6 Licenses"
+  },
+  {
+    "Id": "006V400000GPpxNIAT",
+    "AccountId": "001Hr00001vBIgkIAG",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-04-14",
+    "IsWon": true,
+    "Name": "LionTree | Pilot | 12 Users"
+  },
+  {
+    "Id": "006cv00000QMMirAAH",
+    "AccountId": "001Hr00001vBIgkIAG",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-14",
+    "IsWon": true,
+    "Name": "LionTree | Pilot"
+  },
+  {
+    "Id": "006V400000KQdGjIAL",
+    "AccountId": "001Hr00001vBIgxIAG",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Gilder, Gagnon, Howe, & Co. | Land | 4 seats"
+  },
+  {
+    "Id": "006V400000NCwHVIA1",
+    "AccountId": "001Hr00001vBIgxIAG",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-12",
+    "IsWon": true,
+    "Name": "GGHC | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000OEzAjIAL",
+    "AccountId": "001Hr00001vBIgxIAG",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-01",
+    "IsWon": true,
+    "Name": "GGHC | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006cv00000SakozAAB",
+    "AccountId": "001Hr00001vBIgxIAG",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-17",
+    "IsWon": true,
+    "Name": "GGHC | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006Hr00001OK1iMIAT",
+    "AccountId": "001Hr00001vBIjYIAW",
+    "Annual_Recurring_Revenue__c": 60000,
+    "Type": "New Business",
+    "CloseDate": "2024-01-25",
+    "IsWon": true,
+    "Name": "Palm Tree | Gold | X Seats"
+  },
+  {
+    "Id": "006Hr00001OKMkJIAX",
+    "AccountId": "001Hr00001vBIjYIAW",
+    "Annual_Recurring_Revenue__c": 60000,
+    "Type": "Renewal",
+    "CloseDate": "2025-08-12",
+    "IsWon": true,
+    "Name": "Renewal: Palm Tree - 50 Licenses"
+  },
+  {
+    "Id": "006V400000IDik1IAD",
+    "AccountId": "001Hr00001vBIjYIAW",
+    "Annual_Recurring_Revenue__c": 60000,
+    "Type": "Renewal",
+    "CloseDate": "2026-03-20",
+    "IsWon": true,
+    "Name": "Renewal: Palm Tree - ELA"
+  },
+  {
+    "Id": "006Hr00001OK1r2IAD",
+    "AccountId": "001Hr00001vBImzIAG",
+    "Annual_Recurring_Revenue__c": 45000,
+    "Type": "New Business",
+    "CloseDate": "2024-09-30",
+    "IsWon": true,
+    "Name": "Siris Capital | Land | ELA"
+  },
+  {
+    "Id": "006V4000007pxZtIAI",
+    "AccountId": "001Hr00001vBImzIAG",
+    "Annual_Recurring_Revenue__c": 45000,
+    "Type": "Renewal",
+    "CloseDate": "2025-09-09",
+    "IsWon": true,
+    "Name": "Renewal: Siris Capital - ELA"
+  },
+  {
+    "Id": "006Hr00001OL7yaIAD",
+    "AccountId": "001Hr00001vBIsaIAG",
+    "Annual_Recurring_Revenue__c": 60000,
+    "Type": "New Business",
+    "CloseDate": "2024-06-03",
+    "IsWon": true,
+    "Name": "Moelis | Pilot | 30 seats"
+  },
+  {
+    "Id": "006Hr00001OK5TPIA1",
+    "AccountId": "001Hr00001vBIsaIAG",
+    "Annual_Recurring_Revenue__c": 570000,
+    "Type": "Upsell",
+    "CloseDate": "2024-12-20",
+    "IsWon": true,
+    "Name": "Moelis | Partnership | ELA"
+  },
+  {
+    "Id": "006V400000B9lRBIAZ",
+    "AccountId": "001Hr00001vBIsaIAG",
+    "Annual_Recurring_Revenue__c": 608625,
+    "Type": "Upsell",
+    "CloseDate": "2025-02-11",
+    "IsWon": true,
+    "Name": "Moelis | Expansion | CloudPrem"
+  },
+  {
+    "Id": "006cv00000X25OnAAJ",
+    "AccountId": "001Hr00001vBIsaIAG",
+    "Annual_Recurring_Revenue__c": -570000,
+    "Type": "Contract Restructure",
+    "CloseDate": "2026-04-23",
+    "IsWon": true,
+    "Name": "Moelis | Contract Re-Structure"
+  },
+  {
+    "Id": "006V4000004ksr7IAA",
+    "AccountId": "001Hr00001vBIsaIAG",
+    "Annual_Recurring_Revenue__c": 500000,
+    "Type": "Renewal",
+    "CloseDate": "2026-04-23",
+    "IsWon": true,
+    "Name": "Renewal: Moelis (Y3)"
+  },
+  {
+    "Id": "006V400000Do98fIAB",
+    "AccountId": "001Hr00001vCjShIAK",
+    "Annual_Recurring_Revenue__c": 60000,
+    "Type": "New Business",
+    "CloseDate": "2025-04-04",
+    "IsWon": true,
+    "Name": "Polar Asset Management Partners Inc. | 20 Seats"
+  },
+  {
+    "Id": "006Hr00001OK6NJIA1",
+    "AccountId": "001Hr00001vCo5yIAC",
+    "Annual_Recurring_Revenue__c": 460000,
+    "Type": "New Business",
+    "CloseDate": "2023-11-29",
+    "IsWon": true,
+    "Name": "Lazard Partnership"
+  },
+  {
+    "Id": "006V400000BDNYMIA5",
+    "AccountId": "001Hr00001vCo5yIAC",
+    "Annual_Recurring_Revenue__c": 460000,
+    "Type": "Renewal",
+    "CloseDate": "2024-11-05",
+    "IsWon": true,
+    "Name": "Renewal: Lazard - $460k"
+  },
+  {
+    "Id": "006Hr00001OK6PKIA1",
+    "AccountId": "001Hr00001vCo7uIAC",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2024-01-01",
+    "IsWon": true,
+    "Name": "Cyrus Capital | Gold | Firmwide"
+  },
+  {
+    "Id": "006V400000BDNN3IAP",
+    "AccountId": "001Hr00001vCo7uIAC",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "Renewal",
+    "CloseDate": "2025-05-09",
+    "IsWon": true,
+    "Name": "Renewal: Cyrus Capital - $10k"
+  },
+  {
+    "Id": "006Hr00001OK95jIAD",
+    "AccountId": "001Hr00001vDFogIAG",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2023-09-14",
+    "IsWon": true,
+    "Name": "Prof G | Silver | 1 Seat"
+  },
+  {
+    "Id": "006Hr00001OK963IAD",
+    "AccountId": "001Hr00001vDFtSIAW",
+    "Annual_Recurring_Revenue__c": 6600,
+    "Type": "New Business",
+    "CloseDate": "2023-08-01",
+    "IsWon": true,
+    "Name": "Veris Insights | Silver | 40 Seats"
+  },
+  {
+    "Id": "006V400000NOuJxIAL",
+    "AccountId": "001Hr00001vDGysIAG",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-16",
+    "IsWon": true,
+    "Name": "Princeton Equity | HV | 1 seat"
+  },
+  {
+    "Id": "006Hr00001OKGrdIAH",
+    "AccountId": "001Hr00001vDg7MIAS",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2024-07-01",
+    "IsWon": true,
+    "Name": "A&M | Pilot | 10 Seats"
+  },
+  {
+    "Id": "006V40000081e21IAA",
+    "AccountId": "001Hr00001vDg7MIAS",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "Upsell",
+    "CloseDate": "2024-10-30",
+    "IsWon": true,
+    "Name": "A&M Capital (10 Seats)"
+  },
+  {
+    "Id": "006V4000005Nc6eIAC",
+    "AccountId": "001Hr00001vDg7MIAS",
+    "Annual_Recurring_Revenue__c": 60000,
+    "Type": "Renewal",
+    "CloseDate": "2025-08-12",
+    "IsWon": true,
+    "Name": "Renewal: A&M Capital - 20 Licenses"
+  },
+  {
+    "Id": "006V400000LwPy1IAF",
+    "AccountId": "001Hr00001vDg7MIAS",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-10-24",
+    "IsWon": true,
+    "Name": "A&M Capital | Upsell | 1 seat"
+  },
+  {
+    "Id": "006V400000NSGKjIAP",
+    "AccountId": "001Hr00001vDg7MIAS",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-14",
+    "IsWon": true,
+    "Name": "A&M Capital | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000IyVWPIA3",
+    "AccountId": "001Hr00001vDgIMIA0",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-09-08",
+    "IsWon": true,
+    "Name": "Morgan Stanley | Pilot | 80 Users"
+  },
+  {
+    "Id": "006V400000FlO7tIAF",
+    "AccountId": "001Hr00001vDgJWIA0",
+    "Annual_Recurring_Revenue__c": 150000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-24",
+    "IsWon": true,
+    "Name": "BofA | Land | Pilot"
+  },
+  {
+    "Id": "006V400000BQl6bIAD",
+    "AccountId": "001Hr00001vDgJWIA0",
+    "Annual_Recurring_Revenue__c": 4251250,
+    "Type": "Upsell",
+    "CloseDate": "2026-01-07",
+    "IsWon": true,
+    "Name": "BofA | Prod Rollout | 3500 Seats"
+  },
+  {
+    "Id": "006Hr00001OKmVuIAL",
+    "AccountId": "001Hr00001y9A0mIAE",
+    "Annual_Recurring_Revenue__c": 270000,
+    "Type": "New Business",
+    "CloseDate": "2024-12-24",
+    "IsWon": true,
+    "Name": "William Blair | Land | 100 Seats"
+  },
+  {
+    "Id": "006V400000AWRc3IAH",
+    "AccountId": "001Hr00001y9A0mIAE",
+    "Annual_Recurring_Revenue__c": 270000,
+    "Type": "Renewal",
+    "CloseDate": "2025-12-19",
+    "IsWon": true,
+    "Name": "Renewal: William Blair (Full Renewal)"
+  },
+  {
+    "Id": "006V400000KW7KbIAL",
+    "AccountId": "001Hr00001y9A0mIAE",
+    "Annual_Recurring_Revenue__c": 230000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-19",
+    "IsWon": true,
+    "Name": "William Blair | Expand | IB ELA"
+  },
+  {
+    "Id": "006V400000Hyg93IAB",
+    "AccountId": "001Hr00001y9AAcIAM",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-06",
+    "IsWon": true,
+    "Name": "Palestra | Land | 1 Seat"
+  },
+  {
+    "Id": "006Hr00001OKzBhIAL",
+    "AccountId": "001Hr00001y9AAmIAM",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2025-06-20",
+    "IsWon": true,
+    "Name": "Jefferies | Pilot | 40 Users"
+  },
+  {
+    "Id": "006V400000GjcZNIAZ",
+    "AccountId": "001Hr00001y9AAmIAM",
+    "Annual_Recurring_Revenue__c": 830000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-26",
+    "IsWon": true,
+    "Name": "Jefferies | Land | 400 Analysts & Associates"
+  },
+  {
+    "Id": "006V400000KdGqzIAF",
+    "AccountId": "001Hr00001y9AAmIAM",
+    "Annual_Recurring_Revenue__c": 388747,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "Jefferies | FY'26 Expand (oppty 1 of 2) | 2nd tranche licenses | 200 seats | Q1 2026"
+  },
+  {
+    "Id": "006Hr00001OKxqtIAD",
+    "AccountId": "001Hr00001y9omTIAQ",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2024-04-23",
+    "IsWon": true,
+    "Name": "Abdul Latif Jameel | Platinum | 5 seats"
+  },
+  {
+    "Id": "006V4000007RJLtIAO",
+    "AccountId": "001Hr00001y9omTIAQ",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Upsell",
+    "CloseDate": "2024-09-19",
+    "IsWon": true,
+    "Name": "ALJ | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V4000003mdq9IAA",
+    "AccountId": "001Hr00001y9omTIAQ",
+    "Annual_Recurring_Revenue__c": 48000,
+    "Type": "Renewal",
+    "CloseDate": "2025-06-04",
+    "IsWon": true,
+    "Name": "Renewal: Abdul Latif Jameel - 7 Licenses"
+  },
+  {
+    "Id": "006V400000Fpd8LIAR",
+    "AccountId": "001Hr00001y9omTIAQ",
+    "Annual_Recurring_Revenue__c": 42000,
+    "Type": "Renewal",
+    "CloseDate": "2026-04-01",
+    "IsWon": true,
+    "Name": "Renewal: Abdul Latif Jameel - 7 Licenses"
+  },
+  {
+    "Id": "006Hr00001OKzC6IAL",
+    "AccountId": "001Hr00001y9sYpIAI",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2024-03-05",
+    "IsWon": true,
+    "Name": "TXV Partners | Silver | 1-3 Seats"
+  },
+  {
+    "Id": "006Hr00001OLAXNIA5",
+    "AccountId": "001Hr00001y9sYpIAI",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "Renewal",
+    "CloseDate": "2025-08-27",
+    "IsWon": true,
+    "Name": "Renewal: TXV Partners - ELA"
+  },
+  {
+    "Id": "006Hr00001OL0LrIAL",
+    "AccountId": "001Hr00001y9yXDIAY",
+    "Annual_Recurring_Revenue__c": 54000,
+    "Type": "New Business",
+    "CloseDate": "2024-03-12",
+    "IsWon": true,
+    "Name": "Alua | Gold | 7 seats"
+  },
+  {
+    "Id": "006Hr00001OLHZpIAP",
+    "AccountId": "001Hr00001y9yXDIAY",
+    "Annual_Recurring_Revenue__c": 54000,
+    "Type": "Renewal",
+    "CloseDate": "2025-04-01",
+    "IsWon": true,
+    "Name": "Renewal: Alua Capital Management - 8 Licenses"
+  },
+  {
+    "Id": "006V400000DeSJ6IAN",
+    "AccountId": "001Hr00001y9yXDIAY",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "Renewal",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Renewal: Alua Capital Management - 8 Licenses"
+  },
+  {
+    "Id": "006V400000GoA7pIAF",
+    "AccountId": "001Hr00001yAYzyIAG",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "UBS | Pilot | 50 bankers"
+  },
+  {
+    "Id": "006Hr00001OL9tpIAD",
+    "AccountId": "001Hr00001yAZ1aIAG",
+    "Annual_Recurring_Revenue__c": 240000,
+    "Type": "New Business",
+    "CloseDate": "2025-05-20",
+    "IsWon": true,
+    "Name": "JPM | 150 seats"
+  },
+  {
+    "Id": "006V400000BCZIDIA5",
+    "AccountId": "001Hr00001yAZ1aIAG",
+    "Annual_Recurring_Revenue__c": 1510000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-10",
+    "IsWon": true,
+    "Name": "JPM | Expand | 1750 seats"
+  },
+  {
+    "Id": "006V400000KdCFVIA3",
+    "AccountId": "001Hr00001yAZ1aIAG",
+    "Annual_Recurring_Revenue__c": 712500,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "JPM | Expand | 750 Seat Adds (2,500 Updated Total)"
+  },
+  {
+    "Id": "006Hr00001OLDHFIA5",
+    "AccountId": "001Hr00001yAe2oIAC",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2024-04-04",
+    "IsWon": true,
+    "Name": "Cordis | Gold | 2 Seats"
+  },
+  {
+    "Id": "006Hr00001L7JVDIA3",
+    "AccountId": "001Hr00001yAe2oIAC",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Renewal",
+    "CloseDate": "2025-08-26",
+    "IsWon": true,
+    "Name": "Renewal: Cordis Asset Management - ELA"
+  },
+  {
+    "Id": "006V400000InMkzIAF",
+    "AccountId": "001Hr00001yAe2oIAC",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Renewal",
+    "CloseDate": "2026-03-26",
+    "IsWon": true,
+    "Name": "Renewal: Cordis Asset Management - ELA"
+  },
+  {
+    "Id": "006Hr00001OLERAIA5",
+    "AccountId": "001Hr00001yAiu3IAC",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2024-04-30",
+    "IsWon": true,
+    "Name": "Tiger Global | Gold | 2 seats"
+  },
+  {
+    "Id": "006V4000007q3SPIAY",
+    "AccountId": "001Hr00001yAiu3IAC",
+    "Annual_Recurring_Revenue__c": 24000,
+    "Type": "Upsell",
+    "CloseDate": "2024-10-28",
+    "IsWon": true,
+    "Name": "Tiger | Upsell | 4 Seats"
+  },
+  {
+    "Id": "006V4000009jc7BIAQ",
+    "AccountId": "001Hr00001yAiu3IAC",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Upsell",
+    "CloseDate": "2024-11-27",
+    "IsWon": true,
+    "Name": "Tiger Global | Upsell: 1 Seat"
+  },
+  {
+    "Id": "006V400000BefuUIAR",
+    "AccountId": "001Hr00001yAiu3IAC",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Upsell",
+    "CloseDate": "2025-01-31",
+    "IsWon": true,
+    "Name": "Tiger Global | Upsell | 1 Seat (Will WInkenwerder)"
+  },
+  {
+    "Id": "006V4000003wEyYIAU",
+    "AccountId": "001Hr00001yAiu3IAC",
+    "Annual_Recurring_Revenue__c": 78000,
+    "Type": "Renewal",
+    "CloseDate": "2025-06-04",
+    "IsWon": true,
+    "Name": "Renewal: Tiger Global - 13 Licenses"
+  },
+  {
+    "Id": "006Hr00001OLFFvIAP",
+    "AccountId": "001Hr00001yAlyJIAS",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2024-05-07",
+    "IsWon": true,
+    "Name": "Pechanga | Silver | 5 Seats"
+  },
+  {
+    "Id": "006V40000047ZOXIA2",
+    "AccountId": "001Hr00001yAlyJIAS",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "Renewal",
+    "CloseDate": "2025-08-12",
+    "IsWon": true,
+    "Name": "Renewal: Pechanga Resort & Casino - 5 Licenses"
+  },
+  {
+    "Id": "006V400000IDifBIAT",
+    "AccountId": "001Hr00001yAlyJIAS",
+    "Annual_Recurring_Revenue__c": 48000,
+    "Type": "Renewal",
+    "CloseDate": "2026-04-26",
+    "IsWon": true,
+    "Name": "Renewal: Pechanga Resort & Casino - 0 Licenses"
+  },
+  {
+    "Id": "006V400000H2koAIAR",
+    "AccountId": "001Hr00001yBEWwIAO",
+    "Annual_Recurring_Revenue__c": 50000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Northborne Partners | Land | ELA"
+  },
+  {
+    "Id": "006cv00000MxoQlAAJ",
+    "AccountId": "001Hr00001yBEX6IAO",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2026-01-13",
+    "IsWon": true,
+    "Name": "Insight Partners | Pilot | 25 Users"
+  },
+  {
+    "Id": "006Hr00001OLLqdIAH",
+    "AccountId": "001Hr00001yBEXLIA4",
+    "Annual_Recurring_Revenue__c": 37200,
+    "Type": "New Business",
+    "CloseDate": "2024-08-23",
+    "IsWon": true,
+    "Name": "CSP Associates | 8 Users"
+  },
+  {
+    "Id": "006V4000006aeBZIAY",
+    "AccountId": "001Hr00001yBEXLIA4",
+    "Annual_Recurring_Revenue__c": 37200,
+    "Type": "Renewal",
+    "CloseDate": "2025-09-11",
+    "IsWon": true,
+    "Name": "Renewal: CSP Associates - ELA"
+  },
+  {
+    "Id": "006V400000BCAN3IAP",
+    "AccountId": "001Hr00001yBMECIA4",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2025-12-31",
+    "IsWon": true,
+    "Name": "Societe Generale | Paid POC | Research + Banking"
+  },
+  {
+    "Id": "006Hr00001OLQw2IAH",
+    "AccountId": "001Hr00001yBY4uIAG",
+    "Annual_Recurring_Revenue__c": 120000,
+    "Type": "New Business",
+    "CloseDate": "2025-02-20",
+    "IsWon": true,
+    "Name": "Raymond James | Land | 60 Seats"
+  },
+  {
+    "Id": "006V400000CKE7xIAH",
+    "AccountId": "001Hr00001yBY4uIAG",
+    "Annual_Recurring_Revenue__c": 120000,
+    "Type": "Renewal",
+    "CloseDate": "2026-03-27",
+    "IsWon": true,
+    "Name": "Raymond James | Renewal | 6 Months"
+  },
+  {
+    "Id": "006cv00000aEfD4AAK",
+    "AccountId": "001Hr00001yCtsMIAS",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-19",
+    "IsWon": true,
+    "Name": "VRA Partners | Paid Trial"
+  },
+  {
+    "Id": "006V4000004B9SHIA0",
+    "AccountId": "001Hr000020ZmQBIA0",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2024-12-20",
+    "IsWon": true,
+    "Name": "Apollo | Land | 10 seats"
+  },
+  {
+    "Id": "006V400000BDe2vIAD",
+    "AccountId": "001Hr000020ZmQBIA0",
+    "Annual_Recurring_Revenue__c": 80000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-19",
+    "IsWon": true,
+    "Name": "Apollo | Expand | 40 seats"
+  },
+  {
+    "Id": "006V400000ARDQ1IAP",
+    "AccountId": "001Hr000020ZmQBIA0",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "Renewal",
+    "CloseDate": "2026-02-03",
+    "IsWon": true,
+    "Name": "Renewal: Apollo Global Management - 0 Licenses"
+  },
+  {
+    "Id": "006Hr00001OLV9gIAH",
+    "AccountId": "001Hr000020ZmaXIAS",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2024-11-27",
+    "IsWon": true,
+    "Name": "Nomura | Pilot | 15 Users"
+  },
+  {
+    "Id": "006V400000BZbnxIAD",
+    "AccountId": "001Hr000020ZmaXIAS",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-01-29",
+    "IsWon": true,
+    "Name": "Nomura | Pilot Extension | 20 Users"
+  },
+  {
+    "Id": "006V400000A7MMDIA3",
+    "AccountId": "001Hr000020ZmaXIAS",
+    "Annual_Recurring_Revenue__c": 676000,
+    "Type": "New Business",
+    "CloseDate": "2025-03-28",
+    "IsWon": true,
+    "Name": "Nomura | Expand | 500 seats"
+  },
+  {
+    "Id": "006V400000DdiHpIAJ",
+    "AccountId": "001Hr000020ZmaXIAS",
+    "Annual_Recurring_Revenue__c": 23560,
+    "Type": "Upsell",
+    "CloseDate": "2025-03-31",
+    "IsWon": true,
+    "Name": "Nomura | SRM Expansion | 19 Seats"
+  },
+  {
+    "Id": "006V400000E5lhNIAR",
+    "AccountId": "001Hr000020ZmaXIAS",
+    "Annual_Recurring_Revenue__c": 227500,
+    "Type": "Upsell",
+    "CloseDate": "2025-04-25",
+    "IsWon": true,
+    "Name": "Nomura | Expansion | 175 Seats"
+  },
+  {
+    "Id": "006V400000GkT0zIAF",
+    "AccountId": "001Hr000020ZmaXIAS",
+    "Annual_Recurring_Revenue__c": 990950,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-07",
+    "IsWon": true,
+    "Name": "Nomura | Japan | 1100 Users"
+  },
+  {
+    "Id": "006Hr00001OLZuNIAX",
+    "AccountId": "001Hr000020aEsgIAE",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2024-03-29",
+    "IsWon": true,
+    "Name": "Osbon Capital Management | 1 User"
+  },
+  {
+    "Id": "006Hr00001OLZvuIAH",
+    "AccountId": "001Hr000020aEsgIAE",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "Renewal",
+    "CloseDate": "2025-04-01",
+    "IsWon": true,
+    "Name": "Renewal: Osbon Capital Management, LLC - 1 Licenses"
+  },
+  {
+    "Id": "006V400000Det7xIAB",
+    "AccountId": "001Hr000020aEsgIAE",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "Renewal",
+    "CloseDate": "2026-03-26",
+    "IsWon": true,
+    "Name": "Renewal: Osbon Capital Management, LLC - 1 Licenses"
+  },
+  {
+    "Id": "006Hr00001OLbmRIAT",
+    "AccountId": "001Hr000020aM25IAE",
+    "Annual_Recurring_Revenue__c": 240000,
+    "Type": "New Business",
+    "CloseDate": "2024-08-27",
+    "IsWon": true,
+    "Name": "GTCR | TBD Seats"
+  },
+  {
+    "Id": "006Hr00001OLbmbIAD",
+    "AccountId": "001Hr000020aM2KIAU",
+    "Annual_Recurring_Revenue__c": 50000,
+    "Type": "New Business",
+    "CloseDate": "2024-10-30",
+    "IsWon": true,
+    "Name": "Polar Capital Partners | ~12 Users (Global Tech Team)"
+  },
+  {
+    "Id": "006V4000008liLyIAI",
+    "AccountId": "001Hr000020aM2KIAU",
+    "Annual_Recurring_Revenue__c": 37500,
+    "Type": "Renewal",
+    "CloseDate": "2025-10-31",
+    "IsWon": true,
+    "Name": "Renewal: Polar Capital Partners - 12 Licenses"
+  },
+  {
+    "Id": "006Hr00001OLbmmIAD",
+    "AccountId": "001Hr000020aM2VIAU",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2024-05-07",
+    "IsWon": true,
+    "Name": "IPCP | 1 Seat"
+  },
+  {
+    "Id": "006Hr00001OLbn5IAD",
+    "AccountId": "001Hr000020aM2yIAE",
+    "Annual_Recurring_Revenue__c": 25000,
+    "Type": "New Business",
+    "CloseDate": "2024-08-23",
+    "IsWon": true,
+    "Name": "NextEra | 5 Seats"
+  },
+  {
+    "Id": "006cv00000QI0c5AAD",
+    "AccountId": "001V4000004FhqLIAS",
+    "Annual_Recurring_Revenue__c": 24000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-19",
+    "IsWon": true,
+    "Name": "Clear Street | Land | 4 users"
+  },
+  {
+    "Id": "006V4000004S5s5IAC",
+    "AccountId": "001V4000005843ZIAQ",
+    "Annual_Recurring_Revenue__c": 22000,
+    "Type": "New Business",
+    "CloseDate": "2025-01-27",
+    "IsWon": true,
+    "Name": "Kinetic | Land | ELA"
+  },
+  {
+    "Id": "006V4000004kEIbIAM",
+    "AccountId": "001V4000005XqRZIA0",
+    "Annual_Recurring_Revenue__c": 493500,
+    "Type": "New Business",
+    "CloseDate": "2025-02-21",
+    "IsWon": true,
+    "Name": "Harris Williams | 2-Year ELA"
+  },
+  {
+    "Id": "006V4000004nfsXIAQ",
+    "AccountId": "001V4000005dHhGIAU",
+    "Annual_Recurring_Revenue__c": 120000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-20",
+    "IsWon": true,
+    "Name": "Leerink Partners | Land | 40 seat"
+  },
+  {
+    "Id": "006V400000BE5SwIAL",
+    "AccountId": "001V4000005dHhGIAU",
+    "Annual_Recurring_Revenue__c": 372000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-20",
+    "IsWon": true,
+    "Name": "Leerink | Expand | ELA"
+  },
+  {
+    "Id": "006V4000009xzqHIAQ",
+    "AccountId": "001V4000005omYBIAY",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-09-12",
+    "IsWon": true,
+    "Name": "Barclays | POC | 40 seats"
+  },
+  {
+    "Id": "006V400000BE4YTIA1",
+    "AccountId": "001V4000005p3gxIAA",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-03-12",
+    "IsWon": true,
+    "Name": "Citi | Pilot |  50 Seats"
+  },
+  {
+    "Id": "006V4000004xT6xIAE",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 90000,
+    "Type": "New Business",
+    "CloseDate": "2025-02-20",
+    "IsWon": true,
+    "Name": "GIC | Land | 30 seats"
+  },
+  {
+    "Id": "006V400000FYBRpIAP",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "Upsell",
+    "CloseDate": "2025-06-20",
+    "IsWon": true,
+    "Name": "GIC | Expand | AWS ST"
+  },
+  {
+    "Id": "006V400000FOocXIAT",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 472302,
+    "Type": "Upsell",
+    "CloseDate": "2025-07-29",
+    "IsWon": true,
+    "Name": "GIC | Expand | 213 seats (243 Total)"
+  },
+  {
+    "Id": "006V400000IjwVJIAZ",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 178198,
+    "Type": "Upsell",
+    "CloseDate": "2025-09-02",
+    "IsWon": true,
+    "Name": "GIC | Expand | 111 Seats (354 Total)"
+  },
+  {
+    "Id": "006V400000L1cn8IAB",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 26760,
+    "Type": "Upsell",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "GIC | Expand | 20 Seats (374 Total)"
+  },
+  {
+    "Id": "006cv00000LsL53AAF",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 4200,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-31",
+    "IsWon": true,
+    "Name": "GIC | Upsell | 2 Licenses (ISPM)"
+  },
+  {
+    "Id": "006cv00000LsWuuAAF",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 1671,
+    "Type": "New Business",
+    "CloseDate": "2025-12-31",
+    "IsWon": true,
+    "Name": "GIC | Upsell | 1 License (TPS)"
+  },
+  {
+    "Id": "006V400000CK5npIAD",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 803131,
+    "Type": "Renewal",
+    "CloseDate": "2026-03-27",
+    "IsWon": true,
+    "Name": "Renewal: GIC - Full Renewal (376 Users) + VPC"
+  },
+  {
+    "Id": "006cv00000R25IcAAJ",
+    "AccountId": "001V4000005rp1aIAA",
+    "Annual_Recurring_Revenue__c": 192769,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-27",
+    "IsWon": true,
+    "Name": "GIC | Upsell | 42 License Upsell & Price Increase (418 total)"
+  },
+  {
+    "Id": "006V4000005FBgDIAW",
+    "AccountId": "001V4000006MnmeIAC",
+    "Annual_Recurring_Revenue__c": 120000,
+    "Type": "New Business",
+    "CloseDate": "2025-03-19",
+    "IsWon": true,
+    "Name": "Baird | Land | 40 Users"
+  },
+  {
+    "Id": "006V400000BMKY1IAP",
+    "AccountId": "001V4000006MnmeIAC",
+    "Annual_Recurring_Revenue__c": 585000,
+    "Type": "Upsell",
+    "CloseDate": "2025-06-06",
+    "IsWon": true,
+    "Name": "Baird | Expand | Unlimited Licenses in Investment Banking"
+  },
+  {
+    "Id": "006V400000OOvvNIAT",
+    "AccountId": "001V4000006MnmeIAC",
+    "Annual_Recurring_Revenue__c": 165000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-03",
+    "IsWon": true,
+    "Name": "Baird | Research Division ELA"
+  },
+  {
+    "Id": "006V400000OQD5RIAX",
+    "AccountId": "001V4000006MnmeIAC",
+    "Annual_Recurring_Revenue__c": 60000,
+    "Type": "Upsell",
+    "CloseDate": "2026-01-22",
+    "IsWon": true,
+    "Name": "Baird Capital | Expand | $60k | Q1 2026"
+  },
+  {
+    "Id": "006V4000007CkFyIAK",
+    "AccountId": "001V400000788pCIAQ",
+    "Annual_Recurring_Revenue__c": 120000,
+    "Type": "New Business",
+    "CloseDate": "2025-03-27",
+    "IsWon": true,
+    "Name": "Truist | Land | 40 Seats"
+  },
+  {
+    "Id": "006V400000DWQzBIAX",
+    "AccountId": "001V400000788pCIAQ",
+    "Annual_Recurring_Revenue__c": 1116000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-19",
+    "IsWon": true,
+    "Name": "Truist | Expansion | 630 Seats"
+  },
+  {
+    "Id": "006V4000005snthIAA",
+    "AccountId": "001V4000007NsYNIA0",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2024-07-23",
+    "IsWon": true,
+    "Name": "12 West Capital"
+  },
+  {
+    "Id": "006V4000007fmmDIAQ",
+    "AccountId": "001V4000008rRNHIA2",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-06-20",
+    "IsWon": true,
+    "Name": "Solomon | Land | 60 seats"
+  },
+  {
+    "Id": "006V4000007l7jaIAA",
+    "AccountId": "001V4000009oerXIAQ",
+    "Annual_Recurring_Revenue__c": 100000,
+    "Type": "Pilot",
+    "CloseDate": "2025-01-06",
+    "IsWon": true,
+    "Name": "Stifel | Land | 130 seats"
+  },
+  {
+    "Id": "006V400000Ad461IAB",
+    "AccountId": "001V4000009oerXIAQ",
+    "Annual_Recurring_Revenue__c": 980000,
+    "Type": "Upsell",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Stifel | Expansion | IB + ER + FI Division-Wide"
+  },
+  {
+    "Id": "006V400000OQru5IAD",
+    "AccountId": "001V4000009oerXIAQ",
+    "Annual_Recurring_Revenue__c": 75000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Stifel Bank | Expansion | Venture Banking"
+  },
+  {
+    "Id": "006V400000HN1zJIAT",
+    "AccountId": "001V4000009onYFIAY",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-07-30",
+    "IsWon": true,
+    "Name": "BNPP - Pilot"
+  },
+  {
+    "Id": "006V400000O0Kk5IAF",
+    "AccountId": "001V4000009onYFIAY",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2025-12-01",
+    "IsWon": true,
+    "Name": "BNPP | Pilot Extension | 30 Seats"
+  },
+  {
+    "Id": "006V400000D4kUbIAJ",
+    "AccountId": "001V4000009onYFIAY",
+    "Annual_Recurring_Revenue__c": 2412000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "BNPP | Global Banking Land | 1086 Seats"
+  },
+  {
+    "Id": "006V400000FlNgTIAV",
+    "AccountId": "001V4000009oo4UIAQ",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-06-09",
+    "IsWon": true,
+    "Name": "GS | Pilot | 30 Bankers"
+  },
+  {
+    "Id": "006V400000EwrGoIAJ",
+    "AccountId": "001V4000009oo4UIAQ",
+    "Annual_Recurring_Revenue__c": 490791,
+    "Type": "New Business",
+    "CloseDate": "2026-05-29",
+    "IsWon": true,
+    "Name": "GS | Land | 500 Seats"
+  },
+  {
+    "Id": "006V400000Hyh9xIAB",
+    "AccountId": "001V4000009orNJIAY",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-01-14",
+    "IsWon": true,
+    "Name": "Citizens - Pilot"
+  },
+  {
+    "Id": "006cv00000bXS3SAAW",
+    "AccountId": "001V4000009osb7IAA",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-05-29",
+    "IsWon": true,
+    "Name": "Cantor | Pilot | 86 Users"
+  },
+  {
+    "Id": "006V400000BWgQnIAL",
+    "AccountId": "001V4000009p2YrIAI",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-04-25",
+    "IsWon": true,
+    "Name": "MacCap | Land | 48 Users"
+  },
+  {
+    "Id": "006V400000C6a3VIAR",
+    "AccountId": "001V4000009p2YrIAI",
+    "Annual_Recurring_Revenue__c": 488590,
+    "Type": "New Business",
+    "CloseDate": "2025-08-25",
+    "IsWon": true,
+    "Name": "Macquarie | Land | 242 Users"
+  },
+  {
+    "Id": "006V400000OFNMgIAP",
+    "AccountId": "001V4000009p2YrIAI",
+    "Annual_Recurring_Revenue__c": 73253,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-02",
+    "IsWon": true,
+    "Name": "Macquarie | Expand | IBD VP Upsell"
+  },
+  {
+    "Id": "006V400000OJAHCIA5",
+    "AccountId": "001V4000009p2YrIAI",
+    "Annual_Recurring_Revenue__c": 20157,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-02",
+    "IsWon": true,
+    "Name": "Macquarie | Expand | Equities (ANZ Research Analysts, 15-Licenses)"
+  },
+  {
+    "Id": "006cv00000Oc8RlAAJ",
+    "AccountId": "001V4000009p2YrIAI",
+    "Annual_Recurring_Revenue__c": 32344,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-04",
+    "IsWon": true,
+    "Name": "Macquarie | IBD Top-Up (25 Licenses)"
+  },
+  {
+    "Id": "006cv00000QLzcbAAD",
+    "AccountId": "001V4000009p2YrIAI",
+    "Annual_Recurring_Revenue__c": 65656,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-16",
+    "IsWon": true,
+    "Name": "Macquarie | 55 Licenses | Equities Top Up"
+  },
+  {
+    "Id": "006V4000008pEYzIAM",
+    "AccountId": "001V4000009pUiEIAU",
+    "Annual_Recurring_Revenue__c": 120000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-04",
+    "IsWon": true,
+    "Name": "DCA | Land | 30 Seats"
+  },
+  {
+    "Id": "006V400000MbIFqIAN",
+    "AccountId": "001V4000009pUiEIAU",
+    "Annual_Recurring_Revenue__c": 81000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-11",
+    "IsWon": true,
+    "Name": "DC | Expand | 27 Seats"
+  },
+  {
+    "Id": "006V400000NGWczIAH",
+    "AccountId": "001V4000009pUiEIAU",
+    "Annual_Recurring_Revenue__c": 66000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-17",
+    "IsWon": true,
+    "Name": "DC | Expand | 22 Seats"
+  },
+  {
+    "Id": "006V400000NpgeHIAR",
+    "AccountId": "001V4000009pUiEIAU",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-21",
+    "IsWon": true,
+    "Name": "DC | Expand | 2 Seats"
+  },
+  {
+    "Id": "006V400000ONcZpIAL",
+    "AccountId": "001V4000009pUiEIAU",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-03",
+    "IsWon": true,
+    "Name": "DC | Expand | 3 Seats"
+  },
+  {
+    "Id": "006cv00000P15P4AAJ",
+    "AccountId": "001V4000009pUiEIAU",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-18",
+    "IsWon": true,
+    "Name": "DC | Expand | 4 Seats"
+  },
+  {
+    "Id": "006cv00000SuTnBAAV",
+    "AccountId": "001V4000009pnMTIAY",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-04-13",
+    "IsWon": true,
+    "Name": "Allen & Company | Pilot | 40 Users"
+  },
+  {
+    "Id": "006V40000087OQnIAM",
+    "AccountId": "001V4000009pnsnIAA",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-01-07",
+    "IsWon": true,
+    "Name": "Evercore | Pilot | 9 Seats"
+  },
+  {
+    "Id": "006cv00000R8s0TAAR",
+    "AccountId": "001V4000009pnsnIAA",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-03-26",
+    "IsWon": true,
+    "Name": "Evercore ISI | Equity Research Pilot | 85 users"
+  },
+  {
+    "Id": "006cv00000LH15FAAT",
+    "AccountId": "001V4000009pnsnIAA",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-04-17",
+    "IsWon": true,
+    "Name": "Evercore | Advisory Pilot | 100 Seats"
+  },
+  {
+    "Id": "006V400000BDcabIAD",
+    "AccountId": "001V4000009q53GIAQ",
+    "Annual_Recurring_Revenue__c": 75000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Centerview | Land | 20 Seats"
+  },
+  {
+    "Id": "006V400000BeoCfIAJ",
+    "AccountId": "001V4000009qDATIA2",
+    "Annual_Recurring_Revenue__c": 310000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-30",
+    "IsWon": true,
+    "Name": "TD | Land | 100 Seats"
+  },
+  {
+    "Id": "006V400000GPcVWIA1",
+    "AccountId": "001V4000009qM7OIAU",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "Pilot",
+    "CloseDate": "2025-06-05",
+    "IsWon": true,
+    "Name": "Canaccord | Pilot | 10 Seats"
+  },
+  {
+    "Id": "006V4000007S7QjIAK",
+    "AccountId": "001V4000009qM7OIAU",
+    "Annual_Recurring_Revenue__c": 442500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-17",
+    "IsWon": true,
+    "Name": "Canaccord | Land | 150 Seats"
+  },
+  {
+    "Id": "006V400000KdF6wIAF",
+    "AccountId": "001V4000009qM7OIAU",
+    "Annual_Recurring_Revenue__c": 38173,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-30",
+    "IsWon": true,
+    "Name": "Canaccord | Australia IB"
+  },
+  {
+    "Id": "006cv00000aEuIXAA0",
+    "AccountId": "001V4000009qM7OIAU",
+    "Annual_Recurring_Revenue__c": 2700,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-22",
+    "IsWon": true,
+    "Name": "Canaccord UK | Add'l Seat"
+  },
+  {
+    "Id": "006cv00000OKfduAAD",
+    "AccountId": "001V4000009qM7OIAU",
+    "Annual_Recurring_Revenue__c": 54000,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-25",
+    "IsWon": true,
+    "Name": "Canaccord | UK"
+  },
+  {
+    "Id": "006V4000007OZgYIAW",
+    "AccountId": "001V400000A4MaYIAV",
+    "Annual_Recurring_Revenue__c": 142500,
+    "Type": "New Business",
+    "CloseDate": "2025-05-15",
+    "IsWon": true,
+    "Name": "Rothschild | Land | 50 Users"
+  },
+  {
+    "Id": "006V400000Ad0ooIAB",
+    "AccountId": "001V400000A4MaYIAV",
+    "Annual_Recurring_Revenue__c": 1059010,
+    "Type": "Upsell",
+    "CloseDate": "2025-10-21",
+    "IsWon": true,
+    "Name": "Rothschild | Global Advisory ELA"
+  },
+  {
+    "Id": "006V4000007OA74IAG",
+    "AccountId": "001V400000AFShOIAX",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-16",
+    "IsWon": true,
+    "Name": "Attestor | Land | 2 seats"
+  },
+  {
+    "Id": "006V4000008MpC9IAK",
+    "AccountId": "001V400000C5BIVIA3",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2024-12-24",
+    "IsWon": true,
+    "Name": "IGP | Land | 10 Users"
+  },
+  {
+    "Id": "006V400000KQIk9IAH",
+    "AccountId": "001V400000C5BIVIA3",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-09-23",
+    "IsWon": true,
+    "Name": "IGP - Upsell (1 User)"
+  },
+  {
+    "Id": "006V400000MYHD3IAP",
+    "AccountId": "001V400000EER1uIAH",
+    "Annual_Recurring_Revenue__c": 50000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-08",
+    "IsWon": true,
+    "Name": "SCHF | HV | 10 seats"
+  },
+  {
+    "Id": "006V400000A9XdLIAV",
+    "AccountId": "001V400000GiBOMIA3",
+    "Annual_Recurring_Revenue__c": 118000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-06",
+    "IsWon": true,
+    "Name": "Arma Partners | Land | 40 Seats"
+  },
+  {
+    "Id": "006V400000FO7kUIAT",
+    "AccountId": "001V400000GiBOMIA3",
+    "Annual_Recurring_Revenue__c": 174000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-11",
+    "IsWon": true,
+    "Name": "Arma | Expansion | 40 Seats"
+  },
+  {
+    "Id": "006cv00000Oe7BRAAZ",
+    "AccountId": "001V400000GiBOMIA3",
+    "Annual_Recurring_Revenue__c": 49777,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-02",
+    "IsWon": true,
+    "Name": "Arma | Upsell | 40 seats"
+  },
+  {
+    "Id": "006cv00000N4ENLAA3",
+    "AccountId": "001V400000H7me3IAB",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-05-12",
+    "IsWon": true,
+    "Name": "Roth Capital | Pilot | 20 Seats"
+  },
+  {
+    "Id": "006cv00000WJPUvAAP",
+    "AccountId": "001V400000JCXF4IAP",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-05-11",
+    "IsWon": true,
+    "Name": "Hg | Pilot | 10 users"
+  },
+  {
+    "Id": "006V400000BERzhIAH",
+    "AccountId": "001V400000JDcPYIA1",
+    "Annual_Recurring_Revenue__c": 120000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-25",
+    "IsWon": true,
+    "Name": "MidCap | Land | 30 Seats"
+  },
+  {
+    "Id": "006V400000BNi8TIAT",
+    "AccountId": "001V400000JX8IRIA1",
+    "Annual_Recurring_Revenue__c": 40000,
+    "Type": "New Business",
+    "CloseDate": "2025-01-31",
+    "IsWon": true,
+    "Name": "Ribbit Capital | New Business | ELA"
+  },
+  {
+    "Id": "006V400000Bep5VIAR",
+    "AccountId": "001V400000JX8IRIA1",
+    "Annual_Recurring_Revenue__c": 13500,
+    "Type": "Renewal",
+    "CloseDate": "2026-02-02",
+    "IsWon": true,
+    "Name": "Renewal: Ribbit Capital - 3 Licenses"
+  },
+  {
+    "Id": "006V400000BVGmvIAH",
+    "AccountId": "001V400000Jmar4IAB",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2025-01-28",
+    "IsWon": true,
+    "Name": "Monomoy | Land | $4k"
+  },
+  {
+    "Id": "006cv00000R9diXAAR",
+    "AccountId": "001V400000K02ZOIAZ",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "BTG Pactual | Pilot | 20 Users"
+  },
+  {
+    "Id": "006V400000Bi7gzIAB",
+    "AccountId": "001V400000KCkd3IAD",
+    "Annual_Recurring_Revenue__c": 112500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-30",
+    "IsWon": true,
+    "Name": "PMCF | MM | 30 Seats"
+  },
+  {
+    "Id": "006cv00000UimhDAAR",
+    "AccountId": "001V400000KCkd3IAD",
+    "Annual_Recurring_Revenue__c": 3750,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-03",
+    "IsWon": true,
+    "Name": "PMCF | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006cv00000Zr7X3AAJ",
+    "AccountId": "001V400000KCkd3IAD",
+    "Annual_Recurring_Revenue__c": 3750,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-14",
+    "IsWon": true,
+    "Name": "PMCF | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000C61KJIAZ",
+    "AccountId": "001V400000KvAggIAF",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "New Business",
+    "CloseDate": "2025-03-03",
+    "IsWon": true,
+    "Name": "ECP | HV | 1 Seat"
+  },
+  {
+    "Id": "006V400000CW9ajIAD",
+    "AccountId": "001V400000Lil7BIAR",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "New Business",
+    "CloseDate": "2025-04-21",
+    "IsWon": true,
+    "Name": "Reddit | HV | 3 seats"
+  },
+  {
+    "Id": "006V400000NeCBhIAN",
+    "AccountId": "001V400000LrXGIIA3",
+    "Annual_Recurring_Revenue__c": 100000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-04",
+    "IsWon": true,
+    "Name": "Tidal | Land | 25 Users"
+  },
+  {
+    "Id": "006V400000CeQT8IAN",
+    "AccountId": "001V400000LxjOUIAZ",
+    "Annual_Recurring_Revenue__c": 48846,
+    "Type": "New Business",
+    "CloseDate": "2025-05-19",
+    "IsWon": true,
+    "Name": "TSG | Land | 23 Users"
+  },
+  {
+    "Id": "006V400000GiVjdIAF",
+    "AccountId": "001V400000LxjOUIAZ",
+    "Annual_Recurring_Revenue__c": 6077,
+    "Type": "Upsell",
+    "CloseDate": "2025-06-19",
+    "IsWon": true,
+    "Name": "TSG | Upsell | 4 Seats"
+  },
+  {
+    "Id": "006cv00000TJCb5AAH",
+    "AccountId": "001V400000M10sXIAR",
+    "Annual_Recurring_Revenue__c": 44000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-14",
+    "IsWon": true,
+    "Name": "Oberweis | Land | 8 Users"
+  },
+  {
+    "Id": "006V400000CthjlIAB",
+    "AccountId": "001V400000MU76YIAT",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2025-04-11",
+    "IsWon": true,
+    "Name": "Battle | HV | 4 seats"
+  },
+  {
+    "Id": "006V400000E2Q82IAF",
+    "AccountId": "001V400000MU76YIAT",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "Renewal",
+    "CloseDate": "2026-05-01",
+    "IsWon": true,
+    "Name": "Renewal: Battle Investment Group - 4 Licenses"
+  },
+  {
+    "Id": "006V400000DrgWpIAJ",
+    "AccountId": "001V400000MVh0rIAD",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-06",
+    "IsWon": true,
+    "Name": "MILFAM | Land | 1 User"
+  },
+  {
+    "Id": "006V400000CxcaDIAR",
+    "AccountId": "001V400000McJoBIAV",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-26",
+    "IsWon": true,
+    "Name": "AXOM | HV | 5 seats"
+  },
+  {
+    "Id": "006V400000KPUCIIA5",
+    "AccountId": "001V400000MyTIcIAN",
+    "Annual_Recurring_Revenue__c": 150480,
+    "Type": "New Business",
+    "CloseDate": "2025-12-31",
+    "IsWon": true,
+    "Name": "MTS | Land | 44 Users"
+  },
+  {
+    "Id": "006cv00000Wle4RAAR",
+    "AccountId": "001V400000MyTIcIAN",
+    "Annual_Recurring_Revenue__c": 148520,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-27",
+    "IsWon": true,
+    "Name": "MTS | Upsell | ELA"
+  },
+  {
+    "Id": "006V400000D8hbNIAR",
+    "AccountId": "001V400000Mz7b0IAB",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-18",
+    "IsWon": true,
+    "Name": "Osprey Investors | Land | 6 Users"
+  },
+  {
+    "Id": "006V400000D9hJBIAZ",
+    "AccountId": "001V400000N0fCQIAZ",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-22",
+    "IsWon": true,
+    "Name": "Galaxy | HV | 6 seats"
+  },
+  {
+    "Id": "006V400000IbI5FIAV",
+    "AccountId": "001V400000N0fCQIAZ",
+    "Annual_Recurring_Revenue__c": 3300,
+    "Type": "Upsell",
+    "CloseDate": "2025-08-26",
+    "IsWon": true,
+    "Name": "Galaxy | Upsell | 1 seat"
+  },
+  {
+    "Id": "006V400000InDUnIAN",
+    "AccountId": "001V400000N0fCQIAZ",
+    "Annual_Recurring_Revenue__c": 26400,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-11",
+    "IsWon": true,
+    "Name": "Galaxy [Corp Dev/Finance] | Upsell #1 | 8 seats"
+  },
+  {
+    "Id": "006cv00000MwuwQAAR",
+    "AccountId": "001V400000N0fCQIAZ",
+    "Annual_Recurring_Revenue__c": 3300,
+    "Type": "Upsell",
+    "CloseDate": "2026-01-13",
+    "IsWon": true,
+    "Name": "Galaxy [Corp Dev/Finance] | Upsell | 1 seat"
+  },
+  {
+    "Id": "006V400000DC8vBIAT",
+    "AccountId": "001V400000N5kY3IAJ",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2025-05-19",
+    "IsWon": true,
+    "Name": "Dowling | HV | 10 seats"
+  },
+  {
+    "Id": "006V400000FFsfNIAT",
+    "AccountId": "001V400000N5kY3IAJ",
+    "Annual_Recurring_Revenue__c": 40000,
+    "Type": "Renewal",
+    "CloseDate": "2026-04-26",
+    "IsWon": true,
+    "Name": "Renewal: Dowling & Partners - 10 Licenses"
+  },
+  {
+    "Id": "006V400000DLlqsIAD",
+    "AccountId": "001V400000NP6xtIAD",
+    "Annual_Recurring_Revenue__c": 4500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-22",
+    "IsWon": true,
+    "Name": "Hamilton Lane | Pilot | 15 Users"
+  },
+  {
+    "Id": "006V400000DOvSHIA1",
+    "AccountId": "001V400000NXQXxIAP",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2025-10-30",
+    "IsWon": true,
+    "Name": "Hellman & Friedman | Land | POC"
+  },
+  {
+    "Id": "006V400000MczXFIAZ",
+    "AccountId": "001V400000NXQXxIAP",
+    "Annual_Recurring_Revenue__c": 134000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-06",
+    "IsWon": true,
+    "Name": "Hellman & Friedman | Land | 32 Users"
+  },
+  {
+    "Id": "006cv00000ZXabdAAD",
+    "AccountId": "001V400000NarJuIAJ",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-21",
+    "IsWon": true,
+    "Name": "Lodge Quai | Paid Pilot"
+  },
+  {
+    "Id": "006V400000DSp4wIAD",
+    "AccountId": "001V400000Ng4RqIAJ",
+    "Annual_Recurring_Revenue__c": 6500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-10",
+    "IsWon": true,
+    "Name": "Dutchess Management | Land | 1 User"
+  },
+  {
+    "Id": "006V400000DTBmzIAH",
+    "AccountId": "001V400000NgtECIAZ",
+    "Annual_Recurring_Revenue__c": 18000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-20",
+    "IsWon": true,
+    "Name": "Waycrosse | HV | 6 seats"
+  },
+  {
+    "Id": "006V400000DWo0bIAD",
+    "AccountId": "001V400000NpY41IAF",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "New Business",
+    "CloseDate": "2025-05-09",
+    "IsWon": true,
+    "Name": "Avid Capital Advisors | Land | 2 Users"
+  },
+  {
+    "Id": "006V400000ExlqrIAB",
+    "AccountId": "001V400000NpY41IAF",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "Renewal",
+    "CloseDate": "2026-04-22",
+    "IsWon": true,
+    "Name": "Renewal: Avid Capital Advisors - 2 Licenses"
+  },
+  {
+    "Id": "006V400000E3KjhIAF",
+    "AccountId": "001V400000OyLBpIAN",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "New Business",
+    "CloseDate": "2025-05-26",
+    "IsWon": true,
+    "Name": "SFI | HV | 3 seats"
+  },
+  {
+    "Id": "006cv00000ZaPF3AAN",
+    "AccountId": "001V400000PAkKvIAL",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-05-12",
+    "IsWon": true,
+    "Name": "BlackRock | POC (70 users)"
+  },
+  {
+    "Id": "006V400000Juky5IAB",
+    "AccountId": "001V400000PWvjOIAT",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Milton Street Capital | 1 Seat"
+  },
+  {
+    "Id": "006cv00000P6UD8AAN",
+    "AccountId": "001V400000Q4tq9IAB",
+    "Annual_Recurring_Revenue__c": 40000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Boxwood | Land | 10 Users"
+  },
+  {
+    "Id": "006V400000EbOBOIA3",
+    "AccountId": "001V400000Q6YssIAF",
+    "Annual_Recurring_Revenue__c": 22000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-27",
+    "IsWon": true,
+    "Name": "Greenoaks | Land | 11 users"
+  },
+  {
+    "Id": "006V400000GfI4bIAF",
+    "AccountId": "001V400000Q6YssIAF",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "Renewal",
+    "CloseDate": "2026-05-31",
+    "IsWon": true,
+    "Name": "Renewal: Greenoaks - 11 Licenses"
+  },
+  {
+    "Id": "006V400000Ec4tlIAB",
+    "AccountId": "001V400000Q7q4YIAR",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-02",
+    "IsWon": true,
+    "Name": "SRS Investment Management | Land | 2-15 Seats"
+  },
+  {
+    "Id": "006V400000KKWEjIAP",
+    "AccountId": "001V400000QANqqIAH",
+    "Annual_Recurring_Revenue__c": 9500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Lepercq | Land | 2 Users"
+  },
+  {
+    "Id": "006V400000Ef02PIAR",
+    "AccountId": "001V400000QDQIiIAP",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-16",
+    "IsWon": true,
+    "Name": "TDM | HV | 3 seats"
+  },
+  {
+    "Id": "006cv00000TYMzxAAH",
+    "AccountId": "001V400000QE75wIAD",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "ecap Ventures | 1 seat"
+  },
+  {
+    "Id": "006V400000Jb3dWIAR",
+    "AccountId": "001V400000QGyFlIAL",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-31",
+    "IsWon": true,
+    "Name": "Critical Point | HV | 5 seats"
+  },
+  {
+    "Id": "006cv00000S0etSAAR",
+    "AccountId": "001V400000QGyFlIAL",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-11",
+    "IsWon": true,
+    "Name": "CriticalPoint | Upsell | 2 Seats"
+  },
+  {
+    "Id": "006V400000KQW2LIAX",
+    "AccountId": "001V400000QMbDJIA1",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-08",
+    "IsWon": true,
+    "Name": "Banacore | HV | 1 seat"
+  },
+  {
+    "Id": "006V400000EmaVlIAJ",
+    "AccountId": "001V400000QTSMvIAP",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-09",
+    "IsWon": true,
+    "Name": "Free Castle Capital Ltd"
+  },
+  {
+    "Id": "006V400000KrhmTIAR",
+    "AccountId": "001V400000QUl49IAD",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-01-12",
+    "IsWon": true,
+    "Name": "Areta | Land | 1 Seat + Trial"
+  },
+  {
+    "Id": "006V400000Ep373IAB",
+    "AccountId": "001V400000QZ7xMIAT",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-18",
+    "IsWon": true,
+    "Name": "EVP | HV | 3 seats"
+  },
+  {
+    "Id": "006cv00000QfqA9AAJ",
+    "AccountId": "001V400000QZBw6IAH",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-26",
+    "IsWon": true,
+    "Name": "Eleven Yellow | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000Eq2X7IAJ",
+    "AccountId": "001V400000QbBOvIAN",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-01",
+    "IsWon": true,
+    "Name": "Sheth FO | HV | 1 seat"
+  },
+  {
+    "Id": "006V400000ErpCQIAZ",
+    "AccountId": "001V400000Qf8U8IAJ",
+    "Annual_Recurring_Revenue__c": 3500,
+    "Type": "New Business",
+    "CloseDate": "2025-06-26",
+    "IsWon": true,
+    "Name": "Blueprint | HV | 1 seat"
+  },
+  {
+    "Id": "006V400000EsyiHIAR",
+    "AccountId": "001V400000QgQX3IAN",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-08",
+    "IsWon": true,
+    "Name": "Ardara Cap | HV | 2 seats"
+  },
+  {
+    "Id": "006V400000Ey2LRIAZ",
+    "AccountId": "001V400000QqubrIAB",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-23",
+    "IsWon": true,
+    "Name": "Badwa | HV | 1 seat"
+  },
+  {
+    "Id": "006cv00000Q5wysAAB",
+    "AccountId": "001V400000R4VNXIA3",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-22",
+    "IsWon": true,
+    "Name": "Arcano | Land | Paid POC"
+  },
+  {
+    "Id": "006V400000F4B5tIAF",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-30",
+    "IsWon": true,
+    "Name": "Whitebox | HV | 4 seats"
+  },
+  {
+    "Id": "006V400000IAjfpIAD",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "Upsell",
+    "CloseDate": "2025-08-13",
+    "IsWon": true,
+    "Name": "Whitebox | Upsell | 3 Seats"
+  },
+  {
+    "Id": "006V400000K9YuzIAF",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-09-18",
+    "IsWon": true,
+    "Name": "Whitebox Advisors | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000LAnUnIAL",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Whitebox Advisors | 1 License"
+  },
+  {
+    "Id": "006V400000MyEHyIAN",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-06",
+    "IsWon": true,
+    "Name": "Whitebox Advisors | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000NCkxtIAD",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-10",
+    "IsWon": true,
+    "Name": "Whitebox | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000NK2bVIAT",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-12",
+    "IsWon": true,
+    "Name": "Whitebox | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006cv00000RUJk2AAH",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-06",
+    "IsWon": true,
+    "Name": "Whitebox | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006cv00000VEpQcAAL",
+    "AccountId": "001V400000R5QC3IAN",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-08",
+    "IsWon": true,
+    "Name": "Whitebox | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000NjRZvIAN",
+    "AccountId": "001V400000R8XP5IAN",
+    "Annual_Recurring_Revenue__c": 55000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-19",
+    "IsWon": true,
+    "Name": "Royal Park | MM | 11 seats"
+  },
+  {
+    "Id": "006V400000F5TITIA3",
+    "AccountId": "001V400000R9G7gIAF",
+    "Annual_Recurring_Revenue__c": 5500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-10",
+    "IsWon": true,
+    "Name": "Frist Capital | Land | 1 User"
+  },
+  {
+    "Id": "006V400000FO9MTIA1",
+    "AccountId": "001V400000RlDByIAN",
+    "Annual_Recurring_Revenue__c": 68000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-27",
+    "IsWon": true,
+    "Name": "TCW Public Credit | Land | 20 seats"
+  },
+  {
+    "Id": "006cv00000KNgvtAAD",
+    "AccountId": "001V400000RlDByIAN",
+    "Annual_Recurring_Revenue__c": 13600,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-08",
+    "IsWon": true,
+    "Name": "TCW Public Credit | Upsell | 4 seats"
+  },
+  {
+    "Id": "006cv00000KfxDWAAZ",
+    "AccountId": "001V400000RlDByIAN",
+    "Annual_Recurring_Revenue__c": 20400,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-12",
+    "IsWon": true,
+    "Name": "TCW Cross Asset | Upsell | 6 seats"
+  },
+  {
+    "Id": "006cv00000L4Z4jAAF",
+    "AccountId": "001V400000RlDByIAN",
+    "Annual_Recurring_Revenue__c": 13600,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-17",
+    "IsWon": true,
+    "Name": "TCW Emerging Markets Fixed Income | Upsell | 4 seats"
+  },
+  {
+    "Id": "006cv00000L8hTkAAJ",
+    "AccountId": "001V400000RlDByIAN",
+    "Annual_Recurring_Revenue__c": 3400,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-18",
+    "IsWon": true,
+    "Name": "TCW Emerging Markets Fixed Income | Upsell | 1 seat"
+  },
+  {
+    "Id": "006cv00000ZRdAoAAL",
+    "AccountId": "001V400000RlDByIAN",
+    "Annual_Recurring_Revenue__c": 3400,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-11",
+    "IsWon": true,
+    "Name": "TCW Public Credit | Upsell | 1 seat"
+  },
+  {
+    "Id": "006cv00000RNoMMAA1",
+    "AccountId": "001V400000RnaVpIAJ",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-21",
+    "IsWon": true,
+    "Name": "National Business Brokers"
+  },
+  {
+    "Id": "006V400000IAmDvIAL",
+    "AccountId": "001V400000RpsJlIAJ",
+    "Annual_Recurring_Revenue__c": 95000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-07",
+    "IsWon": true,
+    "Name": "XMS | MM | ELA"
+  },
+  {
+    "Id": "006V400000FWkiDIAT",
+    "AccountId": "001V400000S4qWAIAZ",
+    "Annual_Recurring_Revenue__c": 14000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-30",
+    "IsWon": true,
+    "Name": "ACG | Land | ELA (4 Users)"
+  },
+  {
+    "Id": "006V400000FYRjVIAX",
+    "AccountId": "001V400000S8rTdIAJ",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-06",
+    "IsWon": true,
+    "Name": "G9 | Land | 3 Users"
+  },
+  {
+    "Id": "006cv00000UJxG5AAL",
+    "AccountId": "001V400000S9jKMIAZ",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-04-01",
+    "IsWon": true,
+    "Name": "Value Line"
+  },
+  {
+    "Id": "006V400000FbDNRIA3",
+    "AccountId": "001V400000SF9CXIA1",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-22",
+    "IsWon": true,
+    "Name": "Dragoneer | Pilot | 10 Users"
+  },
+  {
+    "Id": "006V400000KKQpFIAX",
+    "AccountId": "001V400000SF9CXIA1",
+    "Annual_Recurring_Revenue__c": 54000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-19",
+    "IsWon": true,
+    "Name": "Dragoneer | Upsell | 12 Seats"
+  },
+  {
+    "Id": "006cv00000Kcvt1AAB",
+    "AccountId": "001V400000SF9CXIA1",
+    "Annual_Recurring_Revenue__c": 18500,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-11",
+    "IsWon": true,
+    "Name": "Dragoneer | Upsell | ELA"
+  },
+  {
+    "Id": "006V400000FggJyIAJ",
+    "AccountId": "001V400000SQnzTIAT",
+    "Annual_Recurring_Revenue__c": 24000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-08",
+    "IsWon": true,
+    "Name": "BaseRock | Land | 6 Users"
+  },
+  {
+    "Id": "006cv00000P4jhhAAB",
+    "AccountId": "001V400000SQnzTIAT",
+    "Annual_Recurring_Revenue__c": 4500,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-09",
+    "IsWon": true,
+    "Name": "Baserock | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000FhIU8IAN",
+    "AccountId": "001V400000SRhvFIAT",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-12",
+    "IsWon": true,
+    "Name": "LTS | HV | 1 seat"
+  },
+  {
+    "Id": "006V400000FjPsrIAF",
+    "AccountId": "001V400000SVHHNIA5",
+    "Annual_Recurring_Revenue__c": 45650,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Nolan & Associates | Land | 11 users"
+  },
+  {
+    "Id": "006V400000Flac5IAB",
+    "AccountId": "001V400000SZPWTIA5",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-16",
+    "IsWon": true,
+    "Name": "Cap91 | Land | Firmwide"
+  },
+  {
+    "Id": "006V400000G0VYrIAN",
+    "AccountId": "001V400000T1rpaIAB",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Metric CP | HV | 2 seats"
+  },
+  {
+    "Id": "006V400000KjFqcIAF",
+    "AccountId": "001V400000T1rpaIAB",
+    "Annual_Recurring_Revenue__c": 64000,
+    "Type": "Upsell",
+    "CloseDate": "2025-11-24",
+    "IsWon": true,
+    "Name": "Metric | Upsell | 16 seats"
+  },
+  {
+    "Id": "006V400000G9yDRIAZ",
+    "AccountId": "001V400000TJN0HIAX",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-30",
+    "IsWon": true,
+    "Name": "Cadma | HV | ELA"
+  },
+  {
+    "Id": "006cv00000bKHKLAA4",
+    "AccountId": "001V400000TT7lQIAT",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-06-01",
+    "IsWon": true,
+    "Name": "ECP | Land | POC"
+  },
+  {
+    "Id": "006V400000GUh9aIAD",
+    "AccountId": "001V400000TxzrZIAR",
+    "Annual_Recurring_Revenue__c": 24000,
+    "Type": "New Business",
+    "CloseDate": "2025-06-30",
+    "IsWon": true,
+    "Name": "Starboard Value | New Business | 8 Seats"
+  },
+  {
+    "Id": "006V400000GWvl7IAD",
+    "AccountId": "001V400000U2luPIAR",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-29",
+    "IsWon": true,
+    "Name": "Hudson Murray | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000Gbv7lIAB",
+    "AccountId": "001V400000UDH8FIAX",
+    "Annual_Recurring_Revenue__c": 24000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-07",
+    "IsWon": true,
+    "Name": "Qube RT | HV | 12 seats"
+  },
+  {
+    "Id": "006V400000GePjFIAV",
+    "AccountId": "001V400000UIOp3IAH",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-06",
+    "IsWon": true,
+    "Name": "ParkView Partners | Land | Paid Trial"
+  },
+  {
+    "Id": "006V400000GiszZIAR",
+    "AccountId": "001V400000UStQ7IAL",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-07",
+    "IsWon": true,
+    "Name": "HVA | Land | 6 Users"
+  },
+  {
+    "Id": "006V400000JuY2TIAV",
+    "AccountId": "001V400000UStQ7IAL",
+    "Annual_Recurring_Revenue__c": 35000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-30",
+    "IsWon": true,
+    "Name": "HVA | Upsell | ELA"
+  },
+  {
+    "Id": "006V400000GtrQfIAJ",
+    "AccountId": "001V400000UphePIAR",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-01",
+    "IsWon": true,
+    "Name": "Officium Advisory LLC | Land | 1-3 Seats"
+  },
+  {
+    "Id": "006V400000GykoLIAR",
+    "AccountId": "001V400000V0r0rIAB",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-20",
+    "IsWon": true,
+    "Name": "Reade Street | Land | 2 Seats"
+  },
+  {
+    "Id": "006V400000H21SrIAJ",
+    "AccountId": "001V400000V6cGsIAJ",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-17",
+    "IsWon": true,
+    "Name": "VerisFi Capital | Land | 3 Seats"
+  },
+  {
+    "Id": "006V400000H2VU9IAN",
+    "AccountId": "001V400000V7gGnIAJ",
+    "Annual_Recurring_Revenue__c": 50000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-10",
+    "IsWon": true,
+    "Name": "Taureau Group | Land | ELA"
+  },
+  {
+    "Id": "006cv00000OLzcAAAT",
+    "AccountId": "001V400000V8k5TIAR",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-01-29",
+    "IsWon": true,
+    "Name": "Daiwa | 1 month pilot | 10 seats"
+  },
+  {
+    "Id": "006V400000KqZz3IAF",
+    "AccountId": "001V400000V8k5TIAR",
+    "Annual_Recurring_Revenue__c": 1550000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-14",
+    "IsWon": true,
+    "Name": "Daiwa | Land | 500 seats"
+  },
+  {
+    "Id": "006V400000HAZCPIA5",
+    "AccountId": "001V400000VP0z3IAD",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-31",
+    "IsWon": true,
+    "Name": "Nova Partners | Land | 1-3 Seats"
+  },
+  {
+    "Id": "006V400000HFgoLIAT",
+    "AccountId": "001V400000Vbjh3IAB",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "North Peak Capital | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000Ml4bSIAR",
+    "AccountId": "001V400000Vf93uIAB",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-23",
+    "IsWon": true,
+    "Name": "Marex | HV | 2 seats"
+  },
+  {
+    "Id": "006V400000HNBiYIAX",
+    "AccountId": "001V400000VrhzUIAR",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Market Street Capital | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000HSyHBIA1",
+    "AccountId": "001V400000W3v91IAB",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-23",
+    "IsWon": true,
+    "Name": "M37 Management LP"
+  },
+  {
+    "Id": "006V400000HUIk5IAH",
+    "AccountId": "001V400000W7GNPIA3",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-09",
+    "IsWon": true,
+    "Name": "Arlington | HV | 1 user"
+  },
+  {
+    "Id": "006V400000JZX6DIAX",
+    "AccountId": "001V400000W7GNPIA3",
+    "Annual_Recurring_Revenue__c": 40000,
+    "Type": "Upsell",
+    "CloseDate": "2025-09-24",
+    "IsWon": true,
+    "Name": "Arlington | Upsell | ELA"
+  },
+  {
+    "Id": "006V400000HXccbIAD",
+    "AccountId": "001V400000WEFuRIAX",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-25",
+    "IsWon": true,
+    "Name": "Profuturo | HV | 1 seat"
+  },
+  {
+    "Id": "006V400000HY3uXIAT",
+    "AccountId": "001V400000WFJj3IAH",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-21",
+    "IsWon": true,
+    "Name": "Starhouse Capital (SMMA) | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000HYFUIIA5",
+    "AccountId": "001V400000WFzqLIAT",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2025-07-28",
+    "IsWon": true,
+    "Name": "Pacific International | Land | 2 Seats"
+  },
+  {
+    "Id": "006V400000MmhijIAB",
+    "AccountId": "001V400000WYPUbIAP",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-11-03",
+    "IsWon": true,
+    "Name": "Quantuma | Re-Engage | 1 Seat"
+  },
+  {
+    "Id": "006V400000HijNpIAJ",
+    "AccountId": "001V400000WcRpdIAF",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-22",
+    "IsWon": true,
+    "Name": "Deer Capital"
+  },
+  {
+    "Id": "006V400000Hj7YEIAZ",
+    "AccountId": "001V400000WdX4wIAF",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-15",
+    "IsWon": true,
+    "Name": "Lionhead Capital Partners"
+  },
+  {
+    "Id": "006V400000HjpqzIAB",
+    "AccountId": "001V400000WeKNRIA3",
+    "Annual_Recurring_Revenue__c": 22000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-22",
+    "IsWon": true,
+    "Name": "RLH Equity | Land | 4 Users"
+  },
+  {
+    "Id": "006V400000Hjjp1IAB",
+    "AccountId": "001V400000Wf4tHIAR",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-16",
+    "IsWon": true,
+    "Name": "Indeed | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000Jz6wnIAB",
+    "AccountId": "001V400000Wf4tHIAR",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-10",
+    "IsWon": true,
+    "Name": "Indeed | Upsell | 2 Seats"
+  },
+  {
+    "Id": "006cv00000XJQQmAAP",
+    "AccountId": "001V400000Wf4tHIAR",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Indeed | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000Hm3t3IAB",
+    "AccountId": "001V400000WikHiIAJ",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-20",
+    "IsWon": true,
+    "Name": "Acacia Research | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000HwE0nIAF",
+    "AccountId": "001V400000X6rrTIAR",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-23",
+    "IsWon": true,
+    "Name": "Summit Capital Companies"
+  },
+  {
+    "Id": "006V400000HwEdVIAV",
+    "AccountId": "001V400000X6xgkIAB",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-24",
+    "IsWon": true,
+    "Name": "Decade Partners | Land | 1 user"
+  },
+  {
+    "Id": "006cv00000NUcYtAAL",
+    "AccountId": "001V400000XAqFFIA1",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-19",
+    "IsWon": true,
+    "Name": "H7 Capital | Paid Pilot"
+  },
+  {
+    "Id": "006V400000HztdhIAB",
+    "AccountId": "001V400000XGylBIAT",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-08-12",
+    "IsWon": true,
+    "Name": "Crisil | HV | 1 seat"
+  },
+  {
+    "Id": "006V400000I0oKFIAZ",
+    "AccountId": "001V400000XIsQLIA1",
+    "Annual_Recurring_Revenue__c": 225000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-21",
+    "IsWon": true,
+    "Name": "HC Wainwright | MM | 65 seats"
+  },
+  {
+    "Id": "006V400000I9FyLIAV",
+    "AccountId": "001V400000XcDMDIA3",
+    "Annual_Recurring_Revenue__c": 22500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-18",
+    "IsWon": true,
+    "Name": "Grafine Partners | Land | 1 seat"
+  },
+  {
+    "Id": "006V400000I9TmnIAF",
+    "AccountId": "001V400000XcoQbIAJ",
+    "Annual_Recurring_Revenue__c": 37800,
+    "Type": "New Business",
+    "CloseDate": "2025-10-24",
+    "IsWon": true,
+    "Name": "WestView Capital Partners | Land | 6 Seats"
+  },
+  {
+    "Id": "006V400000MKkRpIAL",
+    "AccountId": "001V400000XcoQbIAJ",
+    "Annual_Recurring_Revenue__c": 29800,
+    "Type": "Upsell",
+    "CloseDate": "2026-01-09",
+    "IsWon": true,
+    "Name": "WestView Capital | Trial Upsell | 7 Seats"
+  },
+  {
+    "Id": "006V400000IF029IAD",
+    "AccountId": "001V400000XogInIAJ",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-11",
+    "IsWon": true,
+    "Name": "Sandfox Advisors | Land | 1-3 Seats"
+  },
+  {
+    "Id": "006V400000IGAU5IAP",
+    "AccountId": "001V400000XqfSIIAZ",
+    "Annual_Recurring_Revenue__c": 16500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Cypress Forest | Land | 3 Seats"
+  },
+  {
+    "Id": "006V400000IKdKbIAL",
+    "AccountId": "001V400000Xyv3RIAR",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-25",
+    "IsWon": true,
+    "Name": "Creuza Advisors | Land | 2 Seats"
+  },
+  {
+    "Id": "006V400000IUunBIAT",
+    "AccountId": "001V400000YKvxpIAD",
+    "Annual_Recurring_Revenue__c": 75000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Berenson | MM | 15 seats"
+  },
+  {
+    "Id": "006cv00000UPeXFAA1",
+    "AccountId": "001V400000YUyclIAD",
+    "Annual_Recurring_Revenue__c": 54000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Gordon Dyal | Upsell | ELA"
+  },
+  {
+    "Id": "006V400000Iaee5IAB",
+    "AccountId": "001V400000YUyclIAD",
+    "Annual_Recurring_Revenue__c": 56000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Gordon Dyal & Co | Land | 8 Users"
+  },
+  {
+    "Id": "006V400000IijYXIAZ",
+    "AccountId": "001V400000YllccIAB",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-15",
+    "IsWon": true,
+    "Name": "ITE Management | Land | 1 Seat + Trial"
+  },
+  {
+    "Id": "006V400000IsjQoIAJ",
+    "AccountId": "001V400000Z5xPuIAJ",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-22",
+    "IsWon": true,
+    "Name": "Querco | Land | 1 User"
+  },
+  {
+    "Id": "006V400000Iv7buIAB",
+    "AccountId": "001V400000ZAgmbIAD",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-01-01",
+    "IsWon": true,
+    "Name": "JD Ford | Land | 1 user"
+  },
+  {
+    "Id": "006V400000JAv6vIAD",
+    "AccountId": "001V400000Zfq05IAB",
+    "Annual_Recurring_Revenue__c": 150000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Edmond de Rothschild | Land | 40 seats"
+  },
+  {
+    "Id": "006V400000JKUlNIAX",
+    "AccountId": "001V400000Zy4kaIAB",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Peryton Advisory | Land | 4 Seats"
+  },
+  {
+    "Id": "006V400000JLndtIAD",
+    "AccountId": "001V400000a1F1uIAE",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-25",
+    "IsWon": true,
+    "Name": "Fluential Partners | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000JMrUAIA1",
+    "AccountId": "001V400000a3EPtIAM",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-27",
+    "IsWon": true,
+    "Name": "22C Capital | ELA"
+  },
+  {
+    "Id": "006V400000JOQ3FIAX",
+    "AccountId": "001V400000a6VZ6IAM",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-21",
+    "IsWon": true,
+    "Name": "CGIC | HV | 2 seats"
+  },
+  {
+    "Id": "006V400000JSRC1IAP",
+    "AccountId": "001V400000aErxOIAS",
+    "Annual_Recurring_Revenue__c": 70000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "Bailey & Company | Land | 14 users"
+  },
+  {
+    "Id": "006cv00000Wlk3QAAR",
+    "AccountId": "001V400000aErxOIAS",
+    "Annual_Recurring_Revenue__c": 68000,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-23",
+    "IsWon": true,
+    "Name": "Bailey | Upsell | ELA"
+  },
+  {
+    "Id": "006V400000JY2pFIAT",
+    "AccountId": "001V400000aQV1sIAG",
+    "Annual_Recurring_Revenue__c": 50000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-27",
+    "IsWon": true,
+    "Name": "Multiples | MM | 10 seats"
+  },
+  {
+    "Id": "006V400000Mo2oLIAR",
+    "AccountId": "001V400000aQV1sIAG",
+    "Annual_Recurring_Revenue__c": 40000,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-09",
+    "IsWon": true,
+    "Name": "Multiples | Upsell #1 | 8 seats"
+  },
+  {
+    "Id": "006cv00000TlFZCAA3",
+    "AccountId": "001V400000aQV1sIAG",
+    "Annual_Recurring_Revenue__c": 35000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-26",
+    "IsWon": true,
+    "Name": "Multiples | Upsell #2 | 7 seats"
+  },
+  {
+    "Id": "006cv00000ZPoVKAA1",
+    "AccountId": "001V400000aQV1sIAG",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-11",
+    "IsWon": true,
+    "Name": "Multiples | Upsell #3 | 1 seat"
+  },
+  {
+    "Id": "006cv00000c04YnAAI",
+    "AccountId": "001V400000aQV1sIAG",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-02",
+    "IsWon": true,
+    "Name": "Multiples | Upsell #4 | 2 seats"
+  },
+  {
+    "Id": "006V400000JbgrmIAB",
+    "AccountId": "001V400000aYe9ZIAS",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Ferghana Investment Partners LP | 1 seat"
+  },
+  {
+    "Id": "006V400000MHW5FIAX",
+    "AccountId": "001V400000aYe9ZIAS",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-04",
+    "IsWon": true,
+    "Name": "Ferghana Investment Partners LP | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000KHJQvIAP",
+    "AccountId": "001V400000ayfgKIAQ",
+    "Annual_Recurring_Revenue__c": 14000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-26",
+    "IsWon": true,
+    "Name": "Saxenhammer | HV | 3 seats"
+  },
+  {
+    "Id": "006V400000JqX3NIAV",
+    "AccountId": "001V400000azZTzIAM",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-26",
+    "IsWon": true,
+    "Name": "Viorum Capital, LLC"
+  },
+  {
+    "Id": "006V400000Js06XIAR",
+    "AccountId": "001V400000b1sAkIAI",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Oryon Partners | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000JsXfBIAV",
+    "AccountId": "001V400000b30W1IAI",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-09",
+    "IsWon": true,
+    "Name": "Otro Capital | 2 seats"
+  },
+  {
+    "Id": "006V400000K8V9ZIAV",
+    "AccountId": "001V400000bTttSIAS",
+    "Annual_Recurring_Revenue__c": 4500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-22",
+    "IsWon": true,
+    "Name": "Atika Capital Management LLC | 1 seat"
+  },
+  {
+    "Id": "006cv00000XbTPpAAN",
+    "AccountId": "001V400000byszWIAQ",
+    "Annual_Recurring_Revenue__c": 11000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-20",
+    "IsWon": true,
+    "Name": "SSW | Land | 2 Seats"
+  },
+  {
+    "Id": "006V400000KXaUDIA1",
+    "AccountId": "001V400000cCHjyIAG",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-22",
+    "IsWon": true,
+    "Name": "Group 10 Holdings LLC"
+  },
+  {
+    "Id": "006V400000KceCDIAZ",
+    "AccountId": "001V400000cLxs2IAC",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-09-30",
+    "IsWon": true,
+    "Name": "Faithstone Capital Partners"
+  },
+  {
+    "Id": "006V400000Ki56wIAB",
+    "AccountId": "001V400000cXg4HIAS",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-03",
+    "IsWon": true,
+    "Name": "Core Adv | HV | 1 user"
+  },
+  {
+    "Id": "006V400000KkSaTIAV",
+    "AccountId": "001V400000ccLtZIAU",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-20",
+    "IsWon": true,
+    "Name": "Advance | Land | 4"
+  },
+  {
+    "Id": "006cv00000SldqbAAB",
+    "AccountId": "001V400000ccLtZIAU",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-23",
+    "IsWon": true,
+    "Name": "Advance | Upsell | 1"
+  },
+  {
+    "Id": "006cv00000TMdi0AAD",
+    "AccountId": "001V400000ccLtZIAU",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-26",
+    "IsWon": true,
+    "Name": "Advance | Upsell | 1"
+  },
+  {
+    "Id": "006V400000L6TEXIA3",
+    "AccountId": "001V400000dQV1hIAG",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-07",
+    "IsWon": true,
+    "Name": "American DeepTech | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000LRgOsIAL",
+    "AccountId": "001V400000eKydkIAC",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-10",
+    "IsWon": true,
+    "Name": "Foundation Partners | Land | 4 Seats"
+  },
+  {
+    "Id": "006V400000LokOXIAZ",
+    "AccountId": "001V400000eKydkIAC",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2025-10-16",
+    "IsWon": true,
+    "Name": "Foundation Partners | Upsell | 2 Seats"
+  },
+  {
+    "Id": "006V400000LdyeXIAR",
+    "AccountId": "001V400000eqWb7IAE",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-05",
+    "IsWon": true,
+    "Name": "Velocity Capital Limited | 1 seat"
+  },
+  {
+    "Id": "006V400000LeScbIAF",
+    "AccountId": "001V400000esB2fIAE",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-03",
+    "IsWon": true,
+    "Name": "PRIMEPULSE | 1 seat"
+  },
+  {
+    "Id": "006V400000ONL5zIAH",
+    "AccountId": "001V400000esB2fIAE",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "Upsell",
+    "CloseDate": "2025-12-23",
+    "IsWon": true,
+    "Name": "Primepulse | Pilot Upsell | 1 seat"
+  },
+  {
+    "Id": "006cv00000b59BxAAI",
+    "AccountId": "001V400000etAHRIA2",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-29",
+    "IsWon": true,
+    "Name": "Coutts Holdings | 1 seat"
+  },
+  {
+    "Id": "006V400000Lh34zIAB",
+    "AccountId": "001V400000f0TwsIAE",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-07",
+    "IsWon": true,
+    "Name": "Ranch Creek Partners, LLC | 2 seats"
+  },
+  {
+    "Id": "006V400000LjUInIAN",
+    "AccountId": "001V400000f6oTxIAI",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-05",
+    "IsWon": true,
+    "Name": "Threeaxis Solutions | Land | 1 seat + Trial"
+  },
+  {
+    "Id": "006V400000Lu8rdIAB",
+    "AccountId": "001V400000fdWtKIAU",
+    "Annual_Recurring_Revenue__c": 28000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-10",
+    "IsWon": true,
+    "Name": "Post Capital Partners | 7 seats"
+  },
+  {
+    "Id": "006V400000MACPqIAP",
+    "AccountId": "001V400000gAqWhIAK",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-11",
+    "IsWon": true,
+    "Name": "TKO Miller | Land | 4 Users"
+  },
+  {
+    "Id": "006V400000MQlt4IAD",
+    "AccountId": "001V400000gfLZoIAM",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-18",
+    "IsWon": true,
+    "Name": "Mavenhead | Land | 1"
+  },
+  {
+    "Id": "006V400000MSVSuIAP",
+    "AccountId": "001V400000ghwerIAA",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-11-04",
+    "IsWon": true,
+    "Name": "Stone Ridge Operations | Land | 1"
+  },
+  {
+    "Id": "006V400000MVehoIAD",
+    "AccountId": "001V400000go91YIAQ",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-03",
+    "IsWon": true,
+    "Name": "Latimer Partners | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000MoEuLIAV",
+    "AccountId": "001V400000go91YIAQ",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-09",
+    "IsWon": true,
+    "Name": "Latimer Partners | Trial Upsell | 3 Seats"
+  },
+  {
+    "Id": "006V400000MVcjDIAT",
+    "AccountId": "001V400000goATuIAM",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-18",
+    "IsWon": true,
+    "Name": "Evenlode Investment | Land | 3"
+  },
+  {
+    "Id": "006cv00000Os1CbAAJ",
+    "AccountId": "001V400000goATuIAM",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-04",
+    "IsWon": true,
+    "Name": "Evenlode Investment | Upsell | 1 Seat"
+  },
+  {
+    "Id": "006V400000MW9RhIAL",
+    "AccountId": "001V400000goNyyIAE",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-31",
+    "IsWon": true,
+    "Name": "Vor Capital | Land | 1"
+  },
+  {
+    "Id": "006V400000O64sjIAB",
+    "AccountId": "001V400000goNyyIAE",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "Upsell",
+    "CloseDate": "2026-01-05",
+    "IsWon": true,
+    "Name": "Vor Capital | Upsell | 2"
+  },
+  {
+    "Id": "006V400000MX8mvIAD",
+    "AccountId": "001V400000gqbxlIAA",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-11-04",
+    "IsWon": true,
+    "Name": "Wissam Azzam Accounting Firm | 1 seat"
+  },
+  {
+    "Id": "006V400000Mh68jIAB",
+    "AccountId": "001V400000hAb5ZIAS",
+    "Annual_Recurring_Revenue__c": 21000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-29",
+    "IsWon": true,
+    "Name": "Indonesia Investment Authority (INA) | Land | 7"
+  },
+  {
+    "Id": "006V400000MlI4rIAF",
+    "AccountId": "001V400000hGl74IAC",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "DoubleDigit Group | Land | 1"
+  },
+  {
+    "Id": "006V400000Mp4MfIAJ",
+    "AccountId": "001V400000hOejaIAC",
+    "Annual_Recurring_Revenue__c": 6500,
+    "Type": "New Business",
+    "CloseDate": "2026-02-17",
+    "IsWon": true,
+    "Name": "Dune Global Advisors GmbH | Land | 1 seat"
+  },
+  {
+    "Id": "006cv00000Q332QAAR",
+    "AccountId": "001V400000hOejaIAC",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-29",
+    "IsWon": true,
+    "Name": "Steinbeis M&A | Upsell | 2 seats"
+  },
+  {
+    "Id": "006V400000MpxkXIAR",
+    "AccountId": "001V400000hR2JVIA0",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-22",
+    "IsWon": true,
+    "Name": "WoodRock | Land | 2 users"
+  },
+  {
+    "Id": "006V400000MqvvBIAR",
+    "AccountId": "001V400000hRBjSIAW",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-30",
+    "IsWon": true,
+    "Name": "Palazzo | Land | 4 Seats"
+  },
+  {
+    "Id": "006V400000MtgMvIAJ",
+    "AccountId": "001V400000hXlx9IAC",
+    "Annual_Recurring_Revenue__c": 50000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Marsh McLennan | HV | 8 seats"
+  },
+  {
+    "Id": "006cv00000OdQ1fAAF",
+    "AccountId": "001V400000hdr3hIAA",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-02-10",
+    "IsWon": true,
+    "Name": "Altivis | HV | 1 seat"
+  },
+  {
+    "Id": "006V400000N4rtKIAR",
+    "AccountId": "001V400000hqmr0IAA",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-24",
+    "IsWon": true,
+    "Name": "Applied Aerospace | 1 seat"
+  },
+  {
+    "Id": "006V400000NAHDdIAP",
+    "AccountId": "001V400000i0QJmIAM",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-05",
+    "IsWon": true,
+    "Name": "Avicene Investment Management | 5 users"
+  },
+  {
+    "Id": "006V400000OW7OjIAL",
+    "AccountId": "001V400000i0QJmIAM",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-23",
+    "IsWon": true,
+    "Name": "Avicene Investment Management | Upsell | 1 seat"
+  },
+  {
+    "Id": "006cv00000ZQivkAAD",
+    "AccountId": "001V400000i0QJmIAM",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-11",
+    "IsWon": true,
+    "Name": "Avicene Investment Management - 2 Seat Upsell"
+  },
+  {
+    "Id": "006V400000NAGO2IAP",
+    "AccountId": "001V400000i1jWPIAY",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-27",
+    "IsWon": true,
+    "Name": "Broadwalk Advisory Ltd | 1 seat"
+  },
+  {
+    "Id": "006V400000NGiO1IAL",
+    "AccountId": "001V400000iDAcvIAG",
+    "Annual_Recurring_Revenue__c": 3500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-16",
+    "IsWon": true,
+    "Name": "Magnolia Bridge Capital LLC | 1 user"
+  },
+  {
+    "Id": "006V400000NIziwIAD",
+    "AccountId": "001V400000iI0UrIAK",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-29",
+    "IsWon": true,
+    "Name": "JonesTrading | Land | 1"
+  },
+  {
+    "Id": "006cv00000MESatAAH",
+    "AccountId": "001V400000iI0UrIAK",
+    "Annual_Recurring_Revenue__c": 36000,
+    "Type": "Upsell",
+    "CloseDate": "2026-02-27",
+    "IsWon": true,
+    "Name": "JonesTrading | Upsell | 6"
+  },
+  {
+    "Id": "006V400000NRDqLIAX",
+    "AccountId": "001V400000iX5KXIA0",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-01",
+    "IsWon": true,
+    "Name": "Kuok Group | Land | 2 seats"
+  },
+  {
+    "Id": "006V400000NRGeXIAX",
+    "AccountId": "001V400000iX9snIAC",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-22",
+    "IsWon": true,
+    "Name": "Seabury Capital | Land | 1 seat + Trial"
+  },
+  {
+    "Id": "006V400000NRzyDIAT",
+    "AccountId": "001V400000iYBsZIAW",
+    "Annual_Recurring_Revenue__c": 3500,
+    "Type": "New Business",
+    "CloseDate": "2026-01-23",
+    "IsWon": true,
+    "Name": "Velaris Capital | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000NX9vKIAT",
+    "AccountId": "001V400000iizPsIAI",
+    "Annual_Recurring_Revenue__c": 88800,
+    "Type": "New Business",
+    "CloseDate": "2026-03-03",
+    "IsWon": true,
+    "Name": "Bourne Partners"
+  },
+  {
+    "Id": "006cv00000Srf3JAAR",
+    "AccountId": "001V400000iizPsIAI",
+    "Annual_Recurring_Revenue__c": 7400,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-19",
+    "IsWon": true,
+    "Name": "Bourne Partners - Upsell"
+  },
+  {
+    "Id": "006cv00000UXIEbAAP",
+    "AccountId": "001V400000iizPsIAI",
+    "Annual_Recurring_Revenue__c": 14800,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-01",
+    "IsWon": true,
+    "Name": "Bourne Partners - 2 User Upsell"
+  },
+  {
+    "Id": "006cv00000VcLKyAAN",
+    "AccountId": "001V400000iizPsIAI",
+    "Annual_Recurring_Revenue__c": 7400,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-12",
+    "IsWon": true,
+    "Name": "Bourne Partners - 1 User Upsell"
+  },
+  {
+    "Id": "006V400000NawmcIAB",
+    "AccountId": "001V400000ipngYIAQ",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-01",
+    "IsWon": true,
+    "Name": "Lango Real Estate Limited | Land | 1 Seat"
+  },
+  {
+    "Id": "006V400000NkNduIAF",
+    "AccountId": "001V400000j8OrFIAU",
+    "Annual_Recurring_Revenue__c": 5500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "Bird & Bee | Land | 1 User"
+  },
+  {
+    "Id": "006V400000NsEGNIA3",
+    "AccountId": "001V400000jMOHvIAO",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-03",
+    "IsWon": true,
+    "Name": "DBG Global Enterprises | 1 seat"
+  },
+  {
+    "Id": "006cv00000MMY4nAAH",
+    "AccountId": "001V400000jZCMAIA4",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-16",
+    "IsWon": true,
+    "Name": "Nosara | Land | 2 Seats"
+  },
+  {
+    "Id": "006V400000NzgUvIAJ",
+    "AccountId": "001V400000jbZUkIAM",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Fanatics | Land | 3"
+  },
+  {
+    "Id": "006V400000O2kVZIAZ",
+    "AccountId": "001V400000jhOErIAM",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2025-12-17",
+    "IsWon": true,
+    "Name": "MBX Group | Land | 1 Seat"
+  },
+  {
+    "Id": "006cv00000P3ol5AAB",
+    "AccountId": "001V400000kJYLFIA4",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-03-18",
+    "IsWon": true,
+    "Name": "ATLAS SP Partners | Pilot | 15 Users"
+  },
+  {
+    "Id": "006V400000OUSU5IAP",
+    "AccountId": "001V400000ka39lIAA",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-05",
+    "IsWon": true,
+    "Name": "Wingman Growth Partners | Land | 1 Seat + Trial"
+  },
+  {
+    "Id": "006cv00000KWsBTAA1",
+    "AccountId": "001cv00000RQ4I9AAL",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-27",
+    "IsWon": true,
+    "Name": "Caris Life Sciences | Land | 1"
+  },
+  {
+    "Id": "006cv00000Tz95jAAB",
+    "AccountId": "001cv00000RQ4I9AAL",
+    "Annual_Recurring_Revenue__c": 36000,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-19",
+    "IsWon": true,
+    "Name": "Caris life Science | Upsell | 6"
+  },
+  {
+    "Id": "006cv00000KuegnAAB",
+    "AccountId": "001cv00000SFzzDAAT",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-17",
+    "IsWon": true,
+    "Name": "Dawn & Dusk Advisors | 1 seat"
+  },
+  {
+    "Id": "006cv00000KvHQPAA3",
+    "AccountId": "001cv00000SIGUPAA5",
+    "Annual_Recurring_Revenue__c": 6500,
+    "Type": "New Business",
+    "CloseDate": "2026-02-02",
+    "IsWon": true,
+    "Name": "Octopus Competitive Intelligence | 1 seat"
+  },
+  {
+    "Id": "006cv00000L91ooAAB",
+    "AccountId": "001cv00000ScZ9ZAAV",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-14",
+    "IsWon": true,
+    "Name": "Enable Partners | 1 seat"
+  },
+  {
+    "Id": "006cv00000LLjVtAAL",
+    "AccountId": "001cv00000Sxc2jAAB",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2025-12-22",
+    "IsWon": true,
+    "Name": "Viboda Capital | Land | 1 Seat"
+  },
+  {
+    "Id": "006cv00000LN2ReAAL",
+    "AccountId": "001cv00000SyzANAAZ",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-08",
+    "IsWon": true,
+    "Name": "Permanent Capital Partners | Land | 1 seat + trial"
+  },
+  {
+    "Id": "006cv00000U8n8jAAB",
+    "AccountId": "001cv00000TyyAYAAZ",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-30",
+    "IsWon": true,
+    "Name": "Paradaim Capital | Land | 1 seat"
+  },
+  {
+    "Id": "006cv00000P1PyuAAF",
+    "AccountId": "001cv00000U0RwhAAF",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-22",
+    "IsWon": true,
+    "Name": "Keyrock Capital Management Limited | Land | 1 Seat"
+  },
+  {
+    "Id": "006cv00000Mpx32AAB",
+    "AccountId": "001cv00000UtS41AAF",
+    "Annual_Recurring_Revenue__c": 7000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "Marubeni Corporation | Land | 1 seat"
+  },
+  {
+    "Id": "006cv00000N37KfAAJ",
+    "AccountId": "001cv00000VAXFOAA5",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-02-27",
+    "IsWon": true,
+    "Name": "Glenview Capital | Land | 1"
+  },
+  {
+    "Id": "006cv00000QnlBiAAJ",
+    "AccountId": "001cv00000VAXFOAA5",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Glenview Capital | Upsell | 1"
+  },
+  {
+    "Id": "006cv00000NAWvpAAH",
+    "AccountId": "001cv00000VJw6UAAT",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-01-23",
+    "IsWon": true,
+    "Name": "Skyview Capital | Land | 1"
+  },
+  {
+    "Id": "006cv00000NF4sUAAT",
+    "AccountId": "001cv00000VQRM7AAP",
+    "Annual_Recurring_Revenue__c": 9000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-22",
+    "IsWon": true,
+    "Name": "Enverus | 1 seat"
+  },
+  {
+    "Id": "006cv00000NHdkWAAT",
+    "AccountId": "001cv00000VTk2RAAT",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-01-27",
+    "IsWon": true,
+    "Name": "Ascend Capital Group | Land | 1"
+  },
+  {
+    "Id": "006cv00000NQeuEAAT",
+    "AccountId": "001cv00000Vgfg2AAB",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-23",
+    "IsWon": true,
+    "Name": "Klaris Capital | Land | 1"
+  },
+  {
+    "Id": "006cv00000NTlUXAA1",
+    "AccountId": "001cv00000VjcvOAAR",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-02",
+    "IsWon": true,
+    "Name": "Regal Funds Management | Land | 1"
+  },
+  {
+    "Id": "006cv00000NUhblAAD",
+    "AccountId": "001cv00000VlA0UAAV",
+    "Annual_Recurring_Revenue__c": 87500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-12",
+    "IsWon": true,
+    "Name": "Saratoga Partners | Land |  ELA"
+  },
+  {
+    "Id": "006cv00000SsWScAAN",
+    "AccountId": "001cv00000W1trJAAR",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-19",
+    "IsWon": true,
+    "Name": "Thirdbase Capital | Land | 1"
+  },
+  {
+    "Id": "006cv00000SitYZAAZ",
+    "AccountId": "001cv00000W3lzFAAR",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Texas Capital Securities | Paid Trial"
+  },
+  {
+    "Id": "006cv00000NkPr0AAF",
+    "AccountId": "001cv00000W6FJmAAN",
+    "Annual_Recurring_Revenue__c": 4500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "Chasm | Land | 1 User"
+  },
+  {
+    "Id": "006cv00000NuOFKAA3",
+    "AccountId": "001cv00000WK0HbAAL",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "LiveBean Partners"
+  },
+  {
+    "Id": "006cv00000NvoqrAAB",
+    "AccountId": "001cv00000WLlEaAAL",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-20",
+    "IsWon": true,
+    "Name": "Naia Capital | Land | 1"
+  },
+  {
+    "Id": "006cv00000QCWZrAAP",
+    "AccountId": "001cv00000WLlEaAAL",
+    "Annual_Recurring_Revenue__c": 3000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Naia Capital | Upsell | 1"
+  },
+  {
+    "Id": "006cv00000NxtT3AAJ",
+    "AccountId": "001cv00000WPRxBAAX",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "Honeywell"
+  },
+  {
+    "Id": "006cv00000Nzg8NAAR",
+    "AccountId": "001cv00000WSmnSAAT",
+    "Annual_Recurring_Revenue__c": 16500,
+    "Type": "New Business",
+    "CloseDate": "2026-02-26",
+    "IsWon": true,
+    "Name": "Pallas | HV | 3 seats"
+  },
+  {
+    "Id": "006cv00000OP6nZAAT",
+    "AccountId": "001cv00000X4fRQAAZ",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-10",
+    "IsWon": true,
+    "Name": "Paradigm | Land | 1"
+  },
+  {
+    "Id": "006cv00000ORk5lAAD",
+    "AccountId": "001cv00000X8RXtAAN",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-10",
+    "IsWon": true,
+    "Name": "Argo | Land | 1 seat"
+  },
+  {
+    "Id": "006cv00000Or2QzAAJ",
+    "AccountId": "001cv00000XhGMmAAN",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-02",
+    "IsWon": true,
+    "Name": "FINNEA Group | Land | 2 seats"
+  },
+  {
+    "Id": "006cv00000SUeMTAA1",
+    "AccountId": "001cv00000XiPfiAAF",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-29",
+    "IsWon": true,
+    "Name": "Blue River"
+  },
+  {
+    "Id": "006cv00000UG6JXAA1",
+    "AccountId": "001cv00000XiPfiAAF",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "Upsell",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Blue River | Pilot Upsell | 5 seats"
+  },
+  {
+    "Id": "006cv00000Oz5ubAAB",
+    "AccountId": "001cv00000XrvYEAAZ",
+    "Annual_Recurring_Revenue__c": 7000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-06",
+    "IsWon": true,
+    "Name": "Luxcore Inc. | 1 seat"
+  },
+  {
+    "Id": "006cv00000PIKmiAAH",
+    "AccountId": "001cv00000YNURdAAP",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-19",
+    "IsWon": true,
+    "Name": "ONEtoONE CF | Land | 1 seat"
+  },
+  {
+    "Id": "006cv00000Q71LRAAZ",
+    "AccountId": "001cv00000YNURdAAP",
+    "Annual_Recurring_Revenue__c": 18000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "ONEtoONE CR | Upsell | 3"
+  },
+  {
+    "Id": "006cv00000PKlVqAAL",
+    "AccountId": "001cv00000YP7VlAAL",
+    "Annual_Recurring_Revenue__c": 8000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-13",
+    "IsWon": true,
+    "Name": "Stripes | Land | 2"
+  },
+  {
+    "Id": "006cv00000PM6unAAD",
+    "AccountId": "001cv00000YQvqIAAT",
+    "Annual_Recurring_Revenue__c": 7000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-04",
+    "IsWon": true,
+    "Name": "Burggraben Holding AG"
+  },
+  {
+    "Id": "006cv00000PQcJNAA1",
+    "AccountId": "001cv00000YXWYfAAP",
+    "Annual_Recurring_Revenue__c": 7000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-18",
+    "IsWon": true,
+    "Name": "Entrepreneur Equity Partners | 1 seat"
+  },
+  {
+    "Id": "006cv00000QNvhoAAD",
+    "AccountId": "001cv00000YXWYfAAP",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Entrepreneur Equity Partners | Upsell | 2 seats"
+  },
+  {
+    "Id": "006cv00000PQwejAAD",
+    "AccountId": "001cv00000YYX4PAAX",
+    "Annual_Recurring_Revenue__c": 30000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Maxwell Street | Land | 5 Users"
+  },
+  {
+    "Id": "006cv00000PUH1qAAH",
+    "AccountId": "001cv00000YdQNLAA3",
+    "Annual_Recurring_Revenue__c": 32500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "Raven Partners | ELAfela"
+  },
+  {
+    "Id": "006cv00000PUs4cAAD",
+    "AccountId": "001cv00000Yen85AAB",
+    "Annual_Recurring_Revenue__c": 4000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-06",
+    "IsWon": true,
+    "Name": "Syntera Advisors | Land | 1"
+  },
+  {
+    "Id": "006cv00000TxgsAAAR",
+    "AccountId": "001cv00000ZJgDtAAL",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-01",
+    "IsWon": true,
+    "Name": "Perk"
+  },
+  {
+    "Id": "006cv00000Q1dy2AAB",
+    "AccountId": "001cv00000ZMzK6AAL",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-16",
+    "IsWon": true,
+    "Name": "Imaginary Ventures"
+  },
+  {
+    "Id": "006cv00000SW7xWAAT",
+    "AccountId": "001cv00000ZMzK6AAL",
+    "Annual_Recurring_Revenue__c": 18000,
+    "Type": "Upsell",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Imaginary Ventures - Upsell"
+  },
+  {
+    "Id": "006cv00000Q7npqAAB",
+    "AccountId": "001cv00000ZVZ5eAAH",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "Argon Management"
+  },
+  {
+    "Id": "006cv00000QOaUoAAL",
+    "AccountId": "001cv00000Zu8uuAAB",
+    "Annual_Recurring_Revenue__c": 6500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-27",
+    "IsWon": true,
+    "Name": "Mango Loop"
+  },
+  {
+    "Id": "006cv00000QOEanAAH",
+    "AccountId": "001cv00000ZuW9BAAV",
+    "Annual_Recurring_Revenue__c": 16500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-13",
+    "IsWon": true,
+    "Name": "Mitsui Investments (Mobility Investment Team) | Land | 3 Seats"
+  },
+  {
+    "Id": "006cv00000S5Ly9AAF",
+    "AccountId": "001cv00000ZvtVzAAJ",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "Univest Securities"
+  },
+  {
+    "Id": "006cv00000QUmbJAAT",
+    "AccountId": "001cv00000a3VFXAA2",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2026-02-24",
+    "IsWon": true,
+    "Name": "Adorna London Ltd. | 2 seats"
+  },
+  {
+    "Id": "006cv00000QXBPDAA5",
+    "AccountId": "001cv00000a8nutAAA",
+    "Annual_Recurring_Revenue__c": 4750,
+    "Type": "New Business",
+    "CloseDate": "2026-03-26",
+    "IsWon": true,
+    "Name": "Sazun GmbH | Land | 1 seat"
+  },
+  {
+    "Id": "006cv00000Ut2sjAAB",
+    "AccountId": "001cv00000a8nutAAA",
+    "Annual_Recurring_Revenue__c": 4250,
+    "Type": "New Business",
+    "CloseDate": "2026-05-11",
+    "IsWon": true,
+    "Name": "Sazun | Upsell | 1 seat"
+  },
+  {
+    "Id": "006cv00000QhFfyAAF",
+    "AccountId": "001cv00000aNqArAAK",
+    "Annual_Recurring_Revenue__c": 6500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-02",
+    "IsWon": true,
+    "Name": "FRAMALI GmbH | 1 seat"
+  },
+  {
+    "Id": "006cv00000Qmrz7AAB",
+    "AccountId": "001cv00000aWD2GAAW",
+    "Annual_Recurring_Revenue__c": 6500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-07",
+    "IsWon": true,
+    "Name": "Tenet Consulting | Land"
+  },
+  {
+    "Id": "006cv00000V5UziAAF",
+    "AccountId": "001cv00000apFI3AAM",
+    "Annual_Recurring_Revenue__c": 15000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Anchor Peabody"
+  },
+  {
+    "Id": "006cv00000R6renAAB",
+    "AccountId": "001cv00000awUVfAAM",
+    "Annual_Recurring_Revenue__c": 6500,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "FalkensteinAsia"
+  },
+  {
+    "Id": "006cv00000RLGGjAAP",
+    "AccountId": "001cv00000bFsShAAK",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-13",
+    "IsWon": true,
+    "Name": "Ohman"
+  },
+  {
+    "Id": "006cv00000RLqIcAAL",
+    "AccountId": "001cv00000bHjWUAA0",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Stonelake Capital Partners"
+  },
+  {
+    "Id": "006cv00000RT3ivAAD",
+    "AccountId": "001cv00000bQMsZAAW",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "جياد المالية | Jyad Capital"
+  },
+  {
+    "Id": "006cv00000RYp5NAAT",
+    "AccountId": "001cv00000bYLoBAAW",
+    "Annual_Recurring_Revenue__c": 5000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-01",
+    "IsWon": true,
+    "Name": "LadderStone | Land | 1 Seat"
+  },
+  {
+    "Id": "006cv00000RerdxAAB",
+    "AccountId": "001cv00000bjaBpAAI",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-26",
+    "IsWon": true,
+    "Name": "Access Wealth"
+  },
+  {
+    "Id": "006cv00000RnATJAA3",
+    "AccountId": "001cv00000buwQgAAI",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-15",
+    "IsWon": true,
+    "Name": "GBA Group"
+  },
+  {
+    "Id": "006cv00000S6j3yAAB",
+    "AccountId": "001cv00000cJ94wAAC",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-27",
+    "IsWon": true,
+    "Name": "Nustate Capital | Land | 2 users"
+  },
+  {
+    "Id": "006cv00000SdkAwAAJ",
+    "AccountId": "001cv00000d5nWHAAY",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-19",
+    "IsWon": true,
+    "Name": "Annaly Capital Management | Paid Pilot"
+  },
+  {
+    "Id": "006cv00000ZyNC5AAN",
+    "AccountId": "001cv00000dJ7U4AAK",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Odyssey | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000UQgGrAAL",
+    "AccountId": "001cv00000dXYUIAA4",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-04-16",
+    "IsWon": true,
+    "Name": "Partners Capital | Land | 1"
+  },
+  {
+    "Id": "006cv00000T4YlZAAV",
+    "AccountId": "001cv00000de7QvAAI",
+    "Annual_Recurring_Revenue__c": 5500,
+    "Type": "New Business",
+    "CloseDate": "2026-04-06",
+    "IsWon": true,
+    "Name": "Spruce Brook Partners"
+  },
+  {
+    "Id": "006cv00000TEHd5AAH",
+    "AccountId": "001cv00000dp7aXAAQ",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-25",
+    "IsWon": true,
+    "Name": "One Strategy Group Inc"
+  },
+  {
+    "Id": "006cv00000TFMKTAA5",
+    "AccountId": "001cv00000dqUZuAAM",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-27",
+    "IsWon": true,
+    "Name": "The Fortia Group | Land | 1"
+  },
+  {
+    "Id": "006cv00000TO2ftAAD",
+    "AccountId": "001cv00000e0UrvAAE",
+    "Annual_Recurring_Revenue__c": 20000,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "Meridian Compensation Partners | 5 users"
+  },
+  {
+    "Id": "006cv00000TPq2jAAD",
+    "AccountId": "001cv00000e2nldAAA",
+    "Annual_Recurring_Revenue__c": 14000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-20",
+    "IsWon": true,
+    "Name": "Cloudsky | Land | 2 seats"
+  },
+  {
+    "Id": "006cv00000WsuScAAJ",
+    "AccountId": "001cv00000eQhFIAA0",
+    "Annual_Recurring_Revenue__c": 5500,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Avernys Advisors | 1 Seat"
+  },
+  {
+    "Id": "006cv00000U6gL6AAJ",
+    "AccountId": "001cv00000etKbvAAE",
+    "Annual_Recurring_Revenue__c": 16000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-26",
+    "IsWon": true,
+    "Name": "Drive by Draftkings"
+  },
+  {
+    "Id": "006cv00000WHMUlAAP",
+    "AccountId": "001cv00000f2m2ZAAQ",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "Pilot",
+    "CloseDate": "2026-05-11",
+    "IsWon": true,
+    "Name": "Cinven | Pilot | 10 Users"
+  },
+  {
+    "Id": "006cv00000UJczaAAD",
+    "AccountId": "001cv00000fHc9JAAS",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-03-31",
+    "IsWon": true,
+    "Name": "PMT Management AG"
+  },
+  {
+    "Id": "006cv00000VkGeDAAV",
+    "AccountId": "001cv00000fHc9JAAS",
+    "Annual_Recurring_Revenue__c": 25000,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-22",
+    "IsWon": true,
+    "Name": "PMT Management AG | Upsell | 4"
+  },
+  {
+    "Id": "006cv00000ZxxmJAAR",
+    "AccountId": "001cv00000fl1MAAAY",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Amberjack | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000ZyaajAAB",
+    "AccountId": "001cv00000flFQjAAM",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Abrams Capital | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000ZnSiQAAV",
+    "AccountId": "001cv00000fm6A8AAI",
+    "Annual_Recurring_Revenue__c": 5500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-21",
+    "IsWon": true,
+    "Name": "Pfingsten | Trial"
+  },
+  {
+    "Id": "006cv00000UxbYYAAZ",
+    "AccountId": "001cv00000fmH8iAAE",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-13",
+    "IsWon": true,
+    "Name": "Alyeska | Land | 1"
+  },
+  {
+    "Id": "006cv00000VkAFRAA3",
+    "AccountId": "001cv00000fmH8iAAE",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "Upsell",
+    "CloseDate": "2026-05-17",
+    "IsWon": true,
+    "Name": "Alyeska | Upsell | 1"
+  },
+  {
+    "Id": "006cv00000W3ejGAAR",
+    "AccountId": "001cv00000fmYJ7AAM",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-20",
+    "IsWon": true,
+    "Name": "Audere Capital | Land | 1"
+  },
+  {
+    "Id": "006cv00000UfINvAAN",
+    "AccountId": "001cv00000fwYcuAAE",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-25",
+    "IsWon": true,
+    "Name": "Santa Clara University Endowment | Land | 1"
+  },
+  {
+    "Id": "006cv00000bJynzAAC",
+    "AccountId": "001cv00000g5ymaAAA",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-01",
+    "IsWon": true,
+    "Name": "Mertz Taggart | Trial"
+  },
+  {
+    "Id": "006cv00000VJhk9AAD",
+    "AccountId": "001cv00000gQVckAAG",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-09",
+    "IsWon": true,
+    "Name": "Foundational Industries"
+  },
+  {
+    "Id": "006cv00000V1ywLAAR",
+    "AccountId": "001cv00000gUtgPAAS",
+    "Annual_Recurring_Revenue__c": 54000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-02",
+    "IsWon": true,
+    "Name": "Kidder Williams"
+  },
+  {
+    "Id": "006cv00000V98HRAAZ",
+    "AccountId": "001cv00000gf7roAAA",
+    "Annual_Recurring_Revenue__c": 70000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-01",
+    "IsWon": true,
+    "Name": "Kennedy Capital | 20 Seats"
+  },
+  {
+    "Id": "006cv00000Vv3grAAB",
+    "AccountId": "001cv00000hshwwAAA",
+    "Annual_Recurring_Revenue__c": 7000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-23",
+    "IsWon": true,
+    "Name": "Sweetspot Investment Limited - new business (1)"
+  },
+  {
+    "Id": "006cv00000W58nJAAR",
+    "AccountId": "001cv00000i7VFSAA2",
+    "Annual_Recurring_Revenue__c": 5250,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Navia"
+  },
+  {
+    "Id": "006cv00000W78UiAAJ",
+    "AccountId": "001cv00000iFJ16AAG",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "The Tie"
+  },
+  {
+    "Id": "006cv00000W7GdVAAV",
+    "AccountId": "001cv00000iFpthAAC",
+    "Annual_Recurring_Revenue__c": 18000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-05",
+    "IsWon": true,
+    "Name": "Signers National | Land | 3"
+  },
+  {
+    "Id": "006cv00000WDRuPAAX",
+    "AccountId": "001cv00000iZEWgAAO",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-11",
+    "IsWon": true,
+    "Name": "Imagine Capital"
+  },
+  {
+    "Id": "006cv00000Wns01AAB",
+    "AccountId": "001cv00000jPzjBAAS",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-29",
+    "IsWon": true,
+    "Name": "Space Capital"
+  },
+  {
+    "Id": "006cv00000X2i5CAAR",
+    "AccountId": "001cv00000jlFD3AAM",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "QED Investors"
+  },
+  {
+    "Id": "006cv00000X474jAAB",
+    "AccountId": "001cv00000joAOuAAM",
+    "Annual_Recurring_Revenue__c": 12000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Nustate Private Equity"
+  },
+  {
+    "Id": "006cv00000X3nMAAAZ",
+    "AccountId": "001cv00000joZezAAE",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Quarme Investments"
+  },
+  {
+    "Id": "006cv00000XQLPCAA5",
+    "AccountId": "001cv00000kEdobAAC",
+    "Annual_Recurring_Revenue__c": 35000,
+    "Type": "New Business",
+    "CloseDate": "2026-04-30",
+    "IsWon": true,
+    "Name": "Isara Laboratories | Land | 5"
+  },
+  {
+    "Id": "006cv00000Xb0E9AAJ",
+    "AccountId": "001cv00000kRqT4AAK",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-27",
+    "IsWon": true,
+    "Name": "Denison Partners - Inbound"
+  },
+  {
+    "Id": "006cv00000XghtaAAB",
+    "AccountId": "001cv00000kYKLCAA4",
+    "Annual_Recurring_Revenue__c": 45000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-01",
+    "IsWon": true,
+    "Name": "Tamarix Capital Partners"
+  },
+  {
+    "Id": "006cv00000XtIuAAAV",
+    "AccountId": "001cv00000klIdKAAU",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-27",
+    "IsWon": true,
+    "Name": "Northwestern Capital Partners LLC | Land | 1"
+  },
+  {
+    "Id": "006cv00000XxDawAAF",
+    "AccountId": "001cv00000knv2kAAA",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-08",
+    "IsWon": true,
+    "Name": "ZINK Solutions"
+  },
+  {
+    "Id": "006cv00000Y5KVZAA3",
+    "AccountId": "001cv00000ky6HoAAI",
+    "Annual_Recurring_Revenue__c": 11000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-27",
+    "IsWon": true,
+    "Name": "Hermeus"
+  },
+  {
+    "Id": "006cv00000Y5sLxAAJ",
+    "AccountId": "001cv00000kyTceAAE",
+    "Annual_Recurring_Revenue__c": 14000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-01",
+    "IsWon": true,
+    "Name": "Timoneer Strategic Partners"
+  },
+  {
+    "Id": "006cv00000YCXCjAAP",
+    "AccountId": "001cv00000l7ImlAAE",
+    "Annual_Recurring_Revenue__c": 18000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-27",
+    "IsWon": true,
+    "Name": "lodgyslife | Land | 3"
+  },
+  {
+    "Id": "006cv00000YdGxNAAV",
+    "AccountId": "001cv00000lfxQsAAI",
+    "Annual_Recurring_Revenue__c": 7000,
+    "Type": "New Business",
+    "CloseDate": "2026-06-01",
+    "IsWon": true,
+    "Name": "Helix"
+  },
+  {
+    "Id": "006cv00000Zg5yPAAR",
+    "AccountId": "001cv00000mXS6kAAG",
+    "Annual_Recurring_Revenue__c": 7500,
+    "Type": "New Business",
+    "CloseDate": "2026-05-13",
+    "IsWon": true,
+    "Name": "Corsair | Trial"
+  },
+  {
+    "Id": "006cv00000Z5qUsAAJ",
+    "AccountId": "001cv00000mZNitAAG",
+    "Annual_Recurring_Revenue__c": 16000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-18",
+    "IsWon": true,
+    "Name": "Postlane"
+  },
+  {
+    "Id": "006cv00000ZyTSnAAN",
+    "AccountId": "001cv00000n2TEiAAM",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "VDA | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000ZeobRAAR",
+    "AccountId": "001cv00000nKD1kAAG",
+    "Annual_Recurring_Revenue__c": 75000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-28",
+    "IsWon": true,
+    "Name": "Flowserve Corporation"
+  },
+  {
+    "Id": "006cv00000ZyAq1AAF",
+    "AccountId": "001cv00000nX5BNAA0",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "MetalMark | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000ZyEn8AAF",
+    "AccountId": "001cv00000nnrbnAAA",
+    "Annual_Recurring_Revenue__c": null,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Lane Four Capital Partners | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000ZxnOkAAJ",
+    "AccountId": "001cv00000noWnPAAU",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Agile Growth | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000ZxAGzAAN",
+    "AccountId": "001cv00000np9t3AAA",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Legacy Capital Fund | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000ZybTZAAZ",
+    "AccountId": "001cv00000npEG2AAM",
+    "Annual_Recurring_Revenue__c": 0,
+    "Type": "New Business",
+    "CloseDate": "2026-05-15",
+    "IsWon": true,
+    "Name": "Hawkshaw Capital | Rivanna | Grandfathered Contract"
+  },
+  {
+    "Id": "006cv00000aDBLuAAO",
+    "AccountId": "001cv00000oFXRxAAO",
+    "Annual_Recurring_Revenue__c": 6000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-18",
+    "IsWon": true,
+    "Name": "Cardiff Advisory | Land | 1"
+  },
+  {
+    "Id": "006cv00000aIvj4AAC",
+    "AccountId": "001cv00000oRlndAAC",
+    "Annual_Recurring_Revenue__c": 10000,
+    "Type": "New Business",
+    "CloseDate": "2026-05-19",
+    "IsWon": true,
+    "Name": "Principia Growth | Land | 2"
+  }
+]
