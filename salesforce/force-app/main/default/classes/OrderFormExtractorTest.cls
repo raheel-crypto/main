@@ -52,10 +52,14 @@ private class OrderFormExtractorTest {
     }
 
     private static void attachSignedFile(Id parentId, String title) {
+        attachSignedFile(parentId, title, 'pdf', Blob.valueOf('%PDF-1.4 fake pdf bytes for unit test'));
+    }
+
+    private static void attachSignedFile(Id parentId, String title, String extension, Blob data) {
         ContentVersion cv = new ContentVersion(
             Title = title,
-            PathOnClient = title + '.pdf',
-            VersionData = Blob.valueOf('%PDF-1.4 fake pdf bytes for unit test'),
+            PathOnClient = title + '.' + extension,
+            VersionData = data,
             FirstPublishLocationId = parentId
         );
         insert cv;
@@ -132,6 +136,63 @@ private class OrderFormExtractorTest {
     }
 
     // ===== Extraction Queueable =====
+
+    @isTest
+    static void extractionJob_includesPngImagesAlongsidePdfs() {
+        // A PNG screenshot of a confirmation email lives alongside the PDF
+        // order form. Both should be sent to Anthropic in one callout.
+        Opportunity opp = insertOpp('Arcano Mixed', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+        // Fake PNG bytes - real signature isn't required for the mock path.
+        attachSignedFile(opp.Id, 'signed__email_confirmation', 'png',
+            Blob.valueOf('fake png bytes for unit test'));
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Seat_Licenses' => 35,
+            'License_Fees' => 100000
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        List<OrderFormExtractor.Result> results = OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals('Enqueued', results[0].status);
+        System.assertEquals(2, results[0].documentCount, 'PDF + PNG should both be picked up');
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(35, row.Seat_Licenses__c);
+        System.assertEquals(1, mock.callCount, 'Single Anthropic call carries PDF + image blocks');
+        System.assert(row.File_Name__c.contains('OrderForm') && row.File_Name__c.contains('confirmation'),
+            'Both file titles should appear in File_Name__c: ' + row.File_Name__c);
+    }
+
+    @isTest
+    static void extractionJob_skipsUnsupportedFileTypes() {
+        Opportunity opp = insertOpp('Has DOCX', 'Closed Won');
+        // A .docx that Anthropic can't accept - extractor should skip it.
+        attachSignedFile(opp.Id, 'signed__weird_format', 'docx',
+            Blob.valueOf('not a real docx'));
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertEquals('No Document', row.Extraction_Status__c,
+            'A lone unsupported file should produce a No Document row, not crash');
+        System.assert(row.Error_Message__c != null && row.Error_Message__c.toLowerCase().contains('docx'),
+            'Error message should name the skipped file extension: ' + row.Error_Message__c);
+    }
 
     @isTest
     static void extractionJob_overridesTypeWithOppType() {

@@ -1,160 +1,74 @@
 // =============================================================================
-// Order Form Extraction Dry-Run (multi-document)
+// Order Form Extraction Dry-Run
 // =============================================================================
-// Runs the full extraction synchronously against EVERY signed__* file on the
-// target Opportunity, prints the raw outputs, and does NOT update anything.
+// Runs the production extraction code path against every signed__* attachment
+// on the target Opportunity (including parent-Opp files and images) and prints
+// the raw response + parsed JSON. Returns the would-be Order_Form_Extraction__c
+// row WITHOUT inserting it.
 //
 // Edit OPPORTUNITY_ID below then execute via:
-//   sf apex run --target-org rogo-dev --file salesforce/scripts/apex/dryRunExtraction.apex
-// Or paste into Developer Console > Debug > Execute Anonymous.
+//   sf apex run --target-org rogo --file scripts/apex/dryRunExtraction.apex
+// (run from inside the salesforce/ directory, or prefix with salesforce/scripts/...
+//  if running from the repo root)
 //
 // View output: Setup -> Debug Logs -> open the newest log -> filter USER_DEBUG.
 // =============================================================================
 
-Id OPPORTUNITY_ID = '006XXXXXXXXXXXXXXX';   // <-- replace with target Opp Id
+Id OPPORTUNITY_ID = '006XXXXXXXXXXXXXXX';   // <-- replace
 
 Integer CHUNK = 3000;
 
-// --- 1. Find every signed__* file linked to the Opp ---
-List<ContentDocumentLink> links = [
-    SELECT ContentDocumentId, ContentDocument.Title, ContentDocument.LastModifiedDate
-    FROM ContentDocumentLink
-    WHERE LinkedEntityId = :OPPORTUNITY_ID
-      AND ContentDocument.Title LIKE 'signed__%'
-    ORDER BY ContentDocument.LastModifiedDate DESC
-];
-if (links.isEmpty()) {
-    System.debug('--- NO FILES: no signed__* attachments on Opportunity ' + OPPORTUNITY_ID);
+// 1. Find signed__* files (current Opp + Base_Opportunity__c parent)
+Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllSignedDocuments(new Set<Id>{ OPPORTUNITY_ID });
+List<Id> docs = docsByOpp.get(OPPORTUNITY_ID);
+
+if (docs == null || docs.isEmpty()) {
+    System.debug('--- NO FILES: no signed__* attachments on Opportunity ' + OPPORTUNITY_ID + ' (or its base Opp)');
     return;
 }
-System.debug('--- FILES (' + links.size() + '):');
-List<Id> docIds = new List<Id>();
-for (ContentDocumentLink cdl : links) {
-    System.debug('     ' + cdl.ContentDocument.Title + ' (' + cdl.ContentDocumentId + ')');
-    docIds.add(cdl.ContentDocumentId);
-}
+System.debug('--- ContentDocumentIds (' + docs.size() + '): ' + docs);
 
-// --- 2. Load PDF bytes for each ---
-Map<Id, ContentVersion> versionByDoc = new Map<Id, ContentVersion>();
-for (ContentVersion cv : [
-    SELECT Id, ContentDocumentId, VersionData, ContentSize, Title
-    FROM ContentVersion
-    WHERE ContentDocumentId IN :docIds AND IsLatest = true
-]) {
-    versionByDoc.put(cv.ContentDocumentId, cv);
-}
+// 2. Run the same code the live flow uses. Returns the populated row WITHOUT
+//    inserting it. This makes the callout for real - costs Anthropic API spend.
+Order_Form_Extraction__c row = OrderFormExtractionJob.buildExtraction(OPPORTUNITY_ID, docs);
 
-List<Blob> pdfBytesList = new List<Blob>();
-Integer totalSize = 0;
-for (Id docId : docIds) {
-    ContentVersion cv = versionByDoc.get(docId);
-    if (cv != null && cv.VersionData != null) {
-        pdfBytesList.add(cv.VersionData);
-        totalSize += cv.ContentSize == null ? 0 : Integer.valueOf(cv.ContentSize);
-    }
-}
-System.debug('--- TOTAL PDF SIZE: ' + totalSize + ' bytes across ' + pdfBytesList.size() + ' file(s)');
+System.debug('--- Status: ' + row.Extraction_Status__c);
+System.debug('--- HTTP Code: ' + row.HTTP_Status_Code__c);
+System.debug('--- File Names: ' + row.File_Name__c);
+System.debug('--- Type__c: ' + row.Type__c);
+System.debug('--- Annual_Recurring_Revenue__c: ' + row.Annual_Recurring_Revenue__c);
+System.debug('--- Incremental_ARR__c: ' + row.Incremental_ARR__c);
+System.debug('--- Base_ARR__c: ' + row.Base_ARR__c);
+System.debug('--- Seat_Licenses__c: ' + row.Seat_Licenses__c);
+System.debug('--- License_Fees__c: ' + row.License_Fees__c);
+System.debug('--- Contract_Start_Date__c: ' + row.Contract_Start_Date__c);
+System.debug('--- Contract_End_Date__c: ' + row.Contract_End_Date__c);
 
-// --- 3. Load system prompt from static resource ---
-StaticResource prompt = [SELECT Body FROM StaticResource WHERE Name = 'OrderFormPrompt' LIMIT 1];
-String systemPrompt = prompt.Body.toString();
-
-// --- 4. Build the Anthropic request body with multiple document blocks ---
-List<Object> content = new List<Object>();
-for (Blob bytes : pdfBytesList) {
-    content.add(new Map<String, Object>{
-        'type' => 'document',
-        'source' => new Map<String, Object>{
-            'type' => 'base64',
-            'media_type' => 'application/pdf',
-            'data' => EncodingUtil.base64Encode(bytes)
-        }
-    });
-}
-content.add(new Map<String, Object>{
-    'type' => 'text',
-    'text' => 'Extract one unified order form per the schema from all attached PDFs. Return JSON only.'
-});
-
-Map<String, Object> payload = new Map<String, Object>{
-    'model' => 'claude-sonnet-4-6',
-    'max_tokens' => 4096,
-    'system' => systemPrompt,
-    'messages' => new List<Object>{
-        new Map<String, Object>{ 'role' => 'user', 'content' => content }
-    }
-};
-
-// --- 5. Callout ---
-HttpRequest req = new HttpRequest();
-req.setEndpoint('callout:Anthropic_Claude/v1/messages');
-req.setMethod('POST');
-req.setHeader('Content-Type', 'application/json');
-req.setHeader('anthropic-beta', 'pdfs-2024-09-25');
-req.setTimeout(120000);
-req.setBody(JSON.serialize(payload));
-
-HttpResponse resp;
-try {
-    resp = new Http().send(req);
-} catch (Exception e) {
-    System.debug('--- CALLOUT EXCEPTION: ' + e.getMessage());
-    return;
-}
-
-System.debug('--- HTTP STATUS: ' + resp.getStatusCode());
-System.debug('--- RAW RESPONSE BODY (chunked):');
-String rawBody = resp.getBody();
-for (Integer i = 0; i < rawBody.length(); i += CHUNK) {
-    Integer endIdx = Math.min(i + CHUNK, rawBody.length());
-    System.debug('[' + i + '..' + endIdx + '] ' + rawBody.substring(i, endIdx));
-}
-
-if (resp.getStatusCode() < 200 || resp.getStatusCode() >= 300) {
-    System.debug('--- NON-2XX RESPONSE; stopping.');
-    return;
-}
-
-// --- 6. Pull out the assistant text content ---
-Map<String, Object> envelope = (Map<String, Object>) JSON.deserializeUntyped(rawBody);
-List<Object> respContent = (List<Object>) envelope.get('content');
-String assistantText = null;
-for (Object block : respContent) {
-    Map<String, Object> b = (Map<String, Object>) block;
-    if ('text'.equals(b.get('type'))) {
-        assistantText = (String) b.get('text');
-        break;
+if (String.isNotBlank(row.Error_Message__c)) {
+    System.debug('--- Error_Message__c (chunked):');
+    String em = row.Error_Message__c;
+    for (Integer i = 0; i < em.length(); i += CHUNK) {
+        Integer endIdx = Math.min(i + CHUNK, em.length());
+        System.debug('[' + i + '..' + endIdx + '] ' + em.substring(i, endIdx));
     }
 }
 
-System.debug('--- ASSISTANT TEXT (chunked):');
-for (Integer i = 0; i < assistantText.length(); i += CHUNK) {
-    Integer endIdx = Math.min(i + CHUNK, assistantText.length());
-    System.debug('[' + i + '..' + endIdx + '] ' + assistantText.substring(i, endIdx));
-}
-
-// Strip optional ``` code fences before parsing
-String jsonText = assistantText.trim();
-if (jsonText.startsWith('```')) {
-    Integer firstNl = jsonText.indexOf('\n');
-    Integer lastFence = jsonText.lastIndexOf('```');
-    if (firstNl > 0 && lastFence > firstNl) {
-        jsonText = jsonText.substring(firstNl + 1, lastFence).trim();
+if (String.isNotBlank(row.Raw_Response__c)) {
+    System.debug('--- Raw_Response__c (chunked):');
+    String rb = row.Raw_Response__c;
+    for (Integer i = 0; i < rb.length(); i += CHUNK) {
+        Integer endIdx = Math.min(i + CHUNK, rb.length());
+        System.debug('[' + i + '..' + endIdx + '] ' + rb.substring(i, endIdx));
     }
 }
 
-Map<String, Object> extracted;
-try {
-    extracted = (Map<String, Object>) JSON.deserializeUntyped(jsonText);
-} catch (Exception e) {
-    System.debug('--- JSON PARSE ERROR: ' + e.getMessage());
-    return;
-}
-System.debug('--- EXTRACTED JSON (pretty):');
-String pretty = JSON.serializePretty(extracted);
-for (Integer i = 0; i < pretty.length(); i += CHUNK) {
-    Integer endIdx = Math.min(i + CHUNK, pretty.length());
-    System.debug('[' + i + '..' + endIdx + '] ' + pretty.substring(i, endIdx));
+if (String.isNotBlank(row.Extracted_JSON__c)) {
+    System.debug('--- Extracted_JSON__c:');
+    String ej = row.Extracted_JSON__c;
+    for (Integer i = 0; i < ej.length(); i += CHUNK) {
+        Integer endIdx = Math.min(i + CHUNK, ej.length());
+        System.debug('[' + i + '..' + endIdx + '] ' + ej.substring(i, endIdx));
+    }
 }
 
-System.debug('--- DONE (no DML performed). ---');
+System.debug('--- DONE (no DML performed; row was built but not inserted). ---');

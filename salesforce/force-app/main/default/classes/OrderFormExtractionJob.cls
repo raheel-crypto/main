@@ -57,18 +57,26 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         );
 
         try {
-            List<Blob> pdfBytes = new List<Blob>();
+            List<ContentVersion> filesForCallout = new List<ContentVersion>();
+            List<String> skipped = new List<String>();
             for (Id docId : docIds) {
                 ContentVersion cv = versionByDocId.get(docId);
-                if (cv != null && cv.VersionData != null) pdfBytes.add(cv.VersionData);
+                if (cv == null || cv.VersionData == null) continue;
+                if (getMediaType(cv) == null) {
+                    skipped.add((cv.Title == null ? cv.Id : cv.Title) + ' (' + cv.FileExtension + ')');
+                    continue;
+                }
+                filesForCallout.add(cv);
             }
-            if (pdfBytes.isEmpty()) {
+            if (filesForCallout.isEmpty()) {
                 row.Extraction_Status__c = 'No Document';
-                row.Error_Message__c = 'No ContentVersion data found for the supplied ContentDocument Ids.';
+                row.Error_Message__c = skipped.isEmpty()
+                    ? 'No ContentVersion data found for the supplied ContentDocument Ids.'
+                    : 'No usable files. Skipped unsupported types: ' + String.join(skipped, ', ');
                 return row;
             }
 
-            String body = buildRequestBody(pdfBytes);
+            String body = buildRequestBody(filesForCallout);
             HttpResponse resp = callAnthropic(body);
             row.HTTP_Status_Code__c = resp.getStatusCode();
             row.Raw_Response__c = truncate(resp.getBody(), RAW_RESPONSE_LIMIT);
@@ -128,13 +136,30 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         Map<Id, ContentVersion> byDoc = new Map<Id, ContentVersion>();
         if (contentDocumentIds == null || contentDocumentIds.isEmpty()) return byDoc;
         for (ContentVersion cv : [
-            SELECT Id, ContentDocumentId, VersionData, Title, PathOnClient
+            SELECT Id, ContentDocumentId, VersionData, Title, PathOnClient, FileType, FileExtension
             FROM ContentVersion
             WHERE ContentDocumentId IN :contentDocumentIds AND IsLatest = true
         ]) {
             byDoc.put(cv.ContentDocumentId, cv);
         }
         return byDoc;
+    }
+
+    @TestVisible
+    private static String getMediaType(ContentVersion cv) {
+        String ext = cv.FileExtension;
+        if (String.isBlank(ext) && cv.FileType != null) ext = cv.FileType;
+        if (String.isBlank(ext) && String.isNotBlank(cv.PathOnClient) && cv.PathOnClient.contains('.')) {
+            ext = cv.PathOnClient.substringAfterLast('.');
+        }
+        if (String.isBlank(ext)) return null;
+        String e = ext.toLowerCase();
+        if (e == 'pdf') return 'application/pdf';
+        if (e == 'png') return 'image/png';
+        if (e == 'jpg' || e == 'jpeg') return 'image/jpeg';
+        if (e == 'gif') return 'image/gif';
+        if (e == 'webp') return 'image/webp';
+        return null;
     }
 
     private static String joinIds(List<Id> ids) {
@@ -154,22 +179,25 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     @TestVisible
-    private static String buildRequestBody(List<Blob> pdfBytes) {
+    private static String buildRequestBody(List<ContentVersion> files) {
         String systemPrompt = loadPrompt();
         List<Object> content = new List<Object>();
-        for (Blob bytes : pdfBytes) {
+        for (ContentVersion cv : files) {
+            String mediaType = getMediaType(cv);
+            if (mediaType == null) continue;
+            String blockType = mediaType.startsWith('image/') ? 'image' : 'document';
             content.add(new Map<String, Object>{
-                'type' => 'document',
+                'type' => blockType,
                 'source' => new Map<String, Object>{
                     'type' => 'base64',
-                    'media_type' => 'application/pdf',
-                    'data' => EncodingUtil.base64Encode(bytes)
+                    'media_type' => mediaType,
+                    'data' => EncodingUtil.base64Encode(cv.VersionData)
                 }
             });
         }
         content.add(new Map<String, Object>{
             'type' => 'text',
-            'text' => 'Extract one unified order form per the schema from all attached PDFs. Return JSON only.'
+            'text' => 'Extract one unified order form per the schema from all attached PDFs and images. Return JSON only.'
         });
         Map<String, Object> userMessage = new Map<String, Object>{
             'role' => 'user',
