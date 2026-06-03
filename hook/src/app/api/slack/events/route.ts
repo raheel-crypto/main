@@ -17,6 +17,8 @@ interface SlackEventEnvelope {
     channel?: string;
     ts?: string;
     thread_ts?: string;
+    bot_id?: string;
+    subtype?: string;
   };
 }
 
@@ -44,16 +46,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ challenge: envelope.challenge });
   }
 
-  if (envelope.type === "event_callback" && envelope.event?.type === "app_mention") {
+  if (envelope.type === "event_callback") {
     const event = envelope.event;
-    after(async () => {
-      try {
-        await handleMention(event);
-      } catch (err) {
-        console.error("mention handler", err);
-      }
-    });
-    return NextResponse.json({ ok: true });
+
+    if (event?.type === "app_mention") {
+      after(async () => {
+        try {
+          await handleMention(event);
+        } catch (err) {
+          console.error("mention handler", err);
+        }
+      });
+    } else if (event?.type === "message") {
+      after(async () => {
+        try {
+          await handleThreadMessage(event);
+        } catch (err) {
+          console.error("thread message handler", err);
+        }
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });
@@ -63,20 +75,55 @@ async function handleMention(event: NonNullable<SlackEventEnvelope["event"]>) {
   if (!event.channel || !event.text) return;
   const userText = event.text.replace(/<@[^>]+>/g, "").trim();
   const threadTs = event.thread_ts ?? event.ts;
+  if (!threadTs) return;
+  await respondInThread({ channel: event.channel, threadTs, userText });
+}
 
+async function handleThreadMessage(event: NonNullable<SlackEventEnvelope["event"]>) {
+  // Skip bot-authored messages (this is how we avoid responding to ourselves).
+  if (event.bot_id) return;
+
+  // Skip system / edited / deleted events.
+  if (event.subtype) return;
+
+  // Must be a reply in a thread (top-level messages are not auto-watched).
+  if (!event.thread_ts) return;
+
+  // Skip messages that contain any @-mention — those are handled by the
+  // app_mention event, which Slack delivers for the same message.
+  if (event.text?.includes("<@")) return;
+
+  if (!event.channel || !event.text) return;
+
+  // Only respond in threads Hook has participated in.
+  const rows = (await sql`
+    SELECT 1 AS hit FROM slack_threads WHERE thread_ts = ${event.thread_ts} LIMIT 1
+  `) as { hit: number }[];
+  if (rows.length === 0) return;
+
+  await respondInThread({
+    channel: event.channel,
+    threadTs: event.thread_ts,
+    userText: event.text.trim(),
+  });
+}
+
+async function respondInThread(opts: {
+  channel: string;
+  threadTs: string;
+  userText: string;
+}) {
   let priorContext: ThreadContext | null = null;
   let priorAccountId: string | null = null;
-  if (threadTs) {
-    const rows = (await sql`
-      SELECT account_id, context FROM slack_threads WHERE thread_ts = ${threadTs} LIMIT 1
-    `) as { account_id: string | null; context: ThreadContext | null }[];
-    if (rows[0]) {
-      priorAccountId = rows[0].account_id;
-      priorContext = rows[0].context;
-    }
+
+  const rows = (await sql`
+    SELECT account_id, context FROM slack_threads WHERE thread_ts = ${opts.threadTs} LIMIT 1
+  `) as { account_id: string | null; context: ThreadContext | null }[];
+  if (rows[0]) {
+    priorAccountId = rows[0].account_id;
+    priorContext = rows[0].context;
   }
 
-  // Build conversation history from prior turn if we have it.
   const history: Anthropic.MessageParam[] = [];
   if (priorContext?.prompt && priorContext?.reply) {
     history.push({ role: "user", content: priorContext.prompt });
@@ -92,11 +139,11 @@ async function handleMention(event: NonNullable<SlackEventEnvelope["event"]>) {
     });
   }
 
-  const { text } = await askHook(userText, history);
+  const { text } = await askHook(opts.userText, history);
 
   await slack.chat.postMessage({
-    channel: event.channel,
-    thread_ts: threadTs,
+    channel: opts.channel,
+    thread_ts: opts.threadTs,
     text,
   });
 }
