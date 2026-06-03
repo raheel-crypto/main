@@ -22,15 +22,34 @@
 
 Integer CHUNK_SIZE = 50;   // hard cap = 50 (System.enqueueJob limit)
 
+// Step 1: collect every entity Id that has a signed__* file. ContentDocumentLink
+// can't be used in a semi-join inner select, so we query it directly and filter
+// down to Opportunity Ids (006...) in memory.
+Set<Id> oppIdsWithSignedFiles = new Set<Id>();
+for (ContentDocumentLink cdl : [
+    SELECT LinkedEntityId
+    FROM ContentDocumentLink
+    WHERE ContentDocument.Title LIKE 'signed__%'
+]) {
+    Id eid = cdl.LinkedEntityId;
+    if (eid != null && String.valueOf(eid).startsWith('006')) {
+        oppIdsWithSignedFiles.add(eid);
+    }
+}
+System.debug('--- Opps anywhere with a signed__* file: ' + oppIdsWithSignedFiles.size());
+
+if (oppIdsWithSignedFiles.isEmpty()) {
+    System.debug('--- No signed__* files anywhere in the org. Nothing to do.');
+    return;
+}
+
+// Step 2: from those, pick Closed Won Opps that don't yet have an extraction.
 List<Opportunity> opps = [
     SELECT Id, Name
     FROM Opportunity
-    WHERE StageName = 'Closed Won'
+    WHERE Id IN :oppIdsWithSignedFiles
+      AND StageName = 'Closed Won'
       AND Id NOT IN (SELECT Opportunity__c FROM Order_Form_Extraction__c)
-      AND Id IN (
-          SELECT LinkedEntityId FROM ContentDocumentLink
-          WHERE ContentDocument.Title LIKE 'signed__%'
-      )
     ORDER BY CloseDate DESC
     LIMIT :CHUNK_SIZE
 ];
@@ -58,16 +77,13 @@ for (OrderFormExtractor.Result res : results) {
 }
 System.debug('--- Summary: ' + counts);
 
-// Quick remaining-count
+// Quick remaining-count using the same Set
 Integer remaining = [
     SELECT COUNT()
     FROM Opportunity
-    WHERE StageName = 'Closed Won'
+    WHERE Id IN :oppIdsWithSignedFiles
+      AND StageName = 'Closed Won'
       AND Id NOT IN (SELECT Opportunity__c FROM Order_Form_Extraction__c)
-      AND Id IN (
-          SELECT LinkedEntityId FROM ContentDocumentLink
-          WHERE ContentDocument.Title LIKE 'signed__%'
-      )
 ];
 System.debug('--- ' + remaining + ' Opp(s) remaining for the next run.');
 System.debug('--- Monitor progress: Setup -> Apex Jobs (look for OrderFormExtractionJob)');
