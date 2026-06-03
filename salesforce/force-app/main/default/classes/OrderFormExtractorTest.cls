@@ -172,6 +172,35 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_derivesEndDateFromStartPlusMonths() {
+        Opportunity opp = insertOpp('End Date Derive', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Contract_Start_Date' => '2026-05-29',
+            'Contract_Length_Months' => 12,
+            'Seat_Licenses' => 500,
+            'License_Fees' => 490791
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(Date.newInstance(2026, 5, 29), row.Contract_Start_Date__c);
+        System.assertEquals(Date.newInstance(2027, 5, 28), row.Contract_End_Date__c,
+            'End date should be start + 12 months - 1 day (inclusive end)');
+    }
+
+    @isTest
     static void extractionJob_writesSuccessRowWithAllFields() {
         Opportunity opp = insertOpp('Happy Extract', '4 - Proposal');
         attachSignedFile(opp.Id, 'signed__Customer_Agreement');

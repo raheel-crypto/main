@@ -229,6 +229,20 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credits_Purchased__c = toDecimal(extracted.get('Credits_Purchased'));
         row.Credits_Period__c = mapCreditsPeriod((String) extracted.get('Credits_Period'));
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
+
+        deriveEndDate(row);
+    }
+
+    @TestVisible
+    private static void deriveEndDate(Order_Form_Extraction__c row) {
+        if (row.Contract_End_Date__c != null || row.Contract_Start_Date__c == null) return;
+        if (row.Contract_Length_Months__c != null) {
+            Integer months = Integer.valueOf(row.Contract_Length_Months__c);
+            row.Contract_End_Date__c = row.Contract_Start_Date__c.addMonths(months).addDays(-1);
+        } else if (row.Contract_Length_Days__c != null) {
+            Integer days = Integer.valueOf(row.Contract_Length_Days__c);
+            row.Contract_End_Date__c = row.Contract_Start_Date__c.addDays(days - 1);
+        }
     }
 
     private static String mapCreditsPeriod(String raw) {
