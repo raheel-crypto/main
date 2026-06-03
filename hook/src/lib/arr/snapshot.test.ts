@@ -12,19 +12,18 @@ const opps = oppsRaw as unknown as OpportunityRecord[];
 // Any new mismatch is either a logic bug or a data-quality issue worth investigating.
 
 const KNOWN_EXCEPTIONS: Record<string, { name: string; expectedGap: number; reason: string }> = {
-  "001V400000GiBOMIA3": { name: "Arma Partners", expectedGap: -167777, reason: "Duplicate '40 Seats' New Business opps (§8)" },
-  "001V400000aQV1sIAG": { name: "Multiples Alternate Asset Management", expectedGap: -130000, reason: "New since audit — investigate" },
+  "001V400000aQV1sIAG": { name: "Multiples Alternate Asset Management", expectedGap: -130000, reason: "Investigate with revops" },
   "001V400000C5BIVIA3": { name: "Industrial Growth Partners", expectedGap: 23000, reason: "Stale-on-churn — true error (§8)" },
   "001V400000Wf4tHIAR": { name: "Indeed", expectedGap: -18000, reason: "Type hygiene — Upsells typed as New Business (§8)" },
   "001cv00000YXWYfAAP": { name: "Entrepreneur Equity Partners", expectedGap: -12000, reason: "Type hygiene (§8)" },
-  "001cv00000fmH8iAAE": { name: "Alyeska Investment Group", expectedGap: 6000, reason: "New since audit — investigate" },
+  "001cv00000fmH8iAAE": { name: "Alyeska Investment Group", expectedGap: 6000, reason: "Investigate with revops" },
   "001cv00000a8nutAAA": { name: "Sazun GmbH", expectedGap: -4750, reason: "Restatement (§8)" },
   "001V400000go91YIAQ": { name: "Latimer Partners", expectedGap: -3000, reason: "Trial restated (§8)" },
   "001V400000SVHHNIA5": { name: "Nolan & Associates", expectedGap: 1000, reason: "Immaterial $1k delta (§8)" },
 };
 
 describe("§2 regression against production snapshot", () => {
-  it("reconciles 325 of 334 accounts exactly", () => {
+  it("reconciles 326 of 334 accounts exactly", () => {
     let matches = 0;
     const mismatches: { id: string; name: string; gap: number }[] = [];
 

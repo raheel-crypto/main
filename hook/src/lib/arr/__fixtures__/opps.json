@@ -207,15 +207,6 @@
     "Name": "Moelis | Expansion | CloudPrem"
   },
   {
-    "Id": "006cv00000X25OnAAJ",
-    "AccountId": "001Hr00001vBIsaIAG",
-    "Annual_Recurring_Revenue__c": -570000,
-    "Type": "Contract Restructure",
-    "CloseDate": "2026-04-23",
-    "IsWon": true,
-    "Name": "Moelis | Contract Re-Structure"
-  },
-  {
     "Id": "006V4000004ksr7IAA",
     "AccountId": "001Hr00001vBIsaIAG",
     "Annual_Recurring_Revenue__c": 500000,
@@ -223,6 +214,15 @@
     "CloseDate": "2026-04-23",
     "IsWon": true,
     "Name": "Renewal: Moelis (Y3)"
+  },
+  {
+    "Id": "006cv00000X25OnAAJ",
+    "AccountId": "001Hr00001vBIsaIAG",
+    "Annual_Recurring_Revenue__c": -570000,
+    "Type": "Contract Restructure",
+    "CloseDate": "2026-04-23",
+    "IsWon": true,
+    "Name": "Moelis | Contract Re-Structure"
   },
   {
     "Id": "006V400000Do98fIAB",
@@ -1451,20 +1451,11 @@
   {
     "Id": "006V400000FO7kUIAT",
     "AccountId": "001V400000GiBOMIA3",
-    "Annual_Recurring_Revenue__c": 174000,
-    "Type": "New Business",
+    "Annual_Recurring_Revenue__c": 56000,
+    "Type": "Upsell",
     "CloseDate": "2025-10-11",
     "IsWon": true,
     "Name": "Arma | Expansion | 40 Seats"
-  },
-  {
-    "Id": "006cv00000Oe7BRAAZ",
-    "AccountId": "001V400000GiBOMIA3",
-    "Annual_Recurring_Revenue__c": 49777,
-    "Type": "Upsell",
-    "CloseDate": "2026-02-02",
-    "IsWon": true,
-    "Name": "Arma | Upsell | 40 seats"
   },
   {
     "Id": "006cv00000N4ENLAA3",
