@@ -17,6 +17,15 @@ MULTI-DOCUMENT GUIDANCE:
 - When an Order Form references the MSA ("subject to renewal in accordance with Section 7.2 of the Agreement") and the MSA is attached, extract those terms from the MSA.
 - When the Order Form references the MSA but the MSA is NOT attached, leave those referenced fields null.
 - When values conflict between documents (e.g. an amendment overriding the MSA), prefer the more recent / more specific document and note the override in Special_Terms.
+- For Riders / Upsells / Renewals: you may receive the Rider/Upsell PDF alongside the original Order Form and MSA from the parent contract. The Rider amends some terms; unchanged terms (Platform/Connection fees, recurring annual fees beyond seats, ELA structure) carry over from the parent Order Form. Synthesize across documents to produce a complete picture - do NOT just transcribe a single doc's narrowly-stated figures.
+
+FEE / ARR COMPOSITION (important):
+- License_Fees = annual recurring fee for seat licenses ONLY (seats x per-seat price). Excludes platform fees, connection fees, support, services.
+- Platform_Connection_Fee = annual recurring fee for platform access, connection, integration, or data access - any RECURRING annual charge that is NOT seat-based and NOT one-time.
+- Professional_Service_Fees = ONE-TIME implementation, integration, onboarding, or services fees. NEVER include in ARR.
+- Total_Contract_Value = total amount due over the entire contract term (all recurring + one-time).
+- Annual_Recurring_Revenue (ARR) = License_Fees + Platform_Connection_Fee + any other recurring annual charge. Do NOT include one-time professional service or implementation fees.
+- If a document quotes an ARR figure that excludes a recurring component you can see in a sibling document (e.g. a Rider says "ARR = seats x price" but the parent Order Form has a $30k annual platform fee), compute the corrected total ARR yourself and note the calculation in Special_Terms.
 
 JSON SCHEMA (return exactly these keys):
 

@@ -59,20 +59,49 @@ public with sharing class OrderFormExtractor {
         Map<Id, List<Id>> byOpp = new Map<Id, List<Id>>();
         if (oppIds.isEmpty()) return byOpp;
 
+        // Pull Base_Opportunity__c so we can also reach files on the parent
+        // (e.g. an Upsell rider's original New Business Order Form + MSA).
+        Map<Id, Id> baseByOpp = new Map<Id, Id>();
+        for (Opportunity o : [SELECT Id, Base_Opportunity__c FROM Opportunity WHERE Id IN :oppIds]) {
+            if (o.Base_Opportunity__c != null) baseByOpp.put(o.Id, o.Base_Opportunity__c);
+        }
+
+        Set<Id> entityIds = new Set<Id>(oppIds);
+        entityIds.addAll(baseByOpp.values());
+
         String titlePattern = SIGNED_PREFIX + '%';
+        Map<Id, List<Id>> docsByEntity = new Map<Id, List<Id>>();
         for (ContentDocumentLink cdl : [
             SELECT LinkedEntityId, ContentDocumentId, ContentDocument.Title, ContentDocument.LastModifiedDate
             FROM ContentDocumentLink
-            WHERE LinkedEntityId IN :oppIds
+            WHERE LinkedEntityId IN :entityIds
               AND ContentDocument.Title LIKE :titlePattern
             ORDER BY ContentDocument.LastModifiedDate DESC
         ]) {
-            List<Id> docs = byOpp.get(cdl.LinkedEntityId);
+            List<Id> docs = docsByEntity.get(cdl.LinkedEntityId);
             if (docs == null) {
                 docs = new List<Id>();
-                byOpp.put(cdl.LinkedEntityId, docs);
+                docsByEntity.put(cdl.LinkedEntityId, docs);
             }
             docs.add(cdl.ContentDocumentId);
+        }
+
+        // Combine current-Opp files + base-Opp files (dedup, preserve order).
+        for (Id oppId : oppIds) {
+            List<Id> ordered = new List<Id>();
+            Set<Id> seen = new Set<Id>();
+            if (docsByEntity.containsKey(oppId)) {
+                for (Id d : docsByEntity.get(oppId)) {
+                    if (seen.add(d)) ordered.add(d);
+                }
+            }
+            Id baseId = baseByOpp.get(oppId);
+            if (baseId != null && docsByEntity.containsKey(baseId)) {
+                for (Id d : docsByEntity.get(baseId)) {
+                    if (seen.add(d)) ordered.add(d);
+                }
+            }
+            if (!ordered.isEmpty()) byOpp.put(oppId, ordered);
         }
         return byOpp;
     }

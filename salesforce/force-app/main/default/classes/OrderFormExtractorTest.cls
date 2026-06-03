@@ -134,6 +134,51 @@ private class OrderFormExtractorTest {
     // ===== Extraction Queueable =====
 
     @isTest
+    static void extractionJob_includesFilesFromBaseOpportunity() {
+        Opportunity baseOpp = insertOpp('Arma Land', 'Closed Won');
+        attachSignedFile(baseOpp.Id, 'signed__OrderForm_Land');
+        attachSignedFile(baseOpp.Id, 'signed__MSA');
+
+        Opportunity upsellOpp = new Opportunity(
+            Name = 'Arma Expansion',
+            StageName = '5 - Contracting',
+            CloseDate = Date.today(),
+            Base_Opportunity__c = baseOpp.Id
+        );
+        insert upsellOpp;
+        attachSignedFile(upsellOpp.Id, 'signed__Rider');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Upsell',
+            'Seat_Licenses' => 100,
+            'License_Fees' => 144000,
+            'Platform_Connection_Fee' => 30000,
+            'Annual_Recurring_Revenue' => 174000
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = upsellOpp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        List<OrderFormExtractor.Result> results = OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        System.assertEquals('Enqueued', results[0].status);
+        System.assertEquals(3, results[0].documentCount,
+            'Should pull Rider from current Opp + OF + MSA from Base_Opportunity__c');
+
+        Order_Form_Extraction__c row = latestExtractionFor(upsellOpp.Id);
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(144000, row.License_Fees__c);
+        System.assertEquals(30000, row.Platform_Connection_Fee__c);
+        System.assertEquals(174000, row.Annual_Recurring_Revenue__c);
+        System.assert(row.File_Name__c.contains('Rider') && row.File_Name__c.contains('OrderForm_Land'),
+            'File_Name__c should include both Rider and parent OF: ' + row.File_Name__c);
+    }
+
+    @isTest
     static void extractionJob_multipleDocuments_singleRowOneCallout() {
         Opportunity opp = insertOpp('Multi-Doc Extract', '4 - Proposal');
         attachSignedFile(opp.Id, 'signed__Order_Form');
