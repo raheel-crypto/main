@@ -183,6 +183,7 @@ private class OrderFormExtractorTest {
             Name = 'Arma Expansion',
             StageName = '5 - Contracting',
             CloseDate = Date.today(),
+            Type = 'Upsell',
             Base_Opportunity__c = baseOpp.Id
         );
         insert upsellOpp;
