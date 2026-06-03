@@ -23,11 +23,27 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     /**
-     * Synchronous one-shot extraction: load PDFs, call Anthropic, insert a row.
-     * Callable from any callout-allowed context (Queueable, Batch execute, etc).
-     * Inserts exactly one Order_Form_Extraction__c row per call (Success or failure).
+     * Insert one extraction row for this Opp + docs. Use when caller only
+     * needs to extract one Opp in the current transaction. For multi-Opp
+     * paths (batch backfill), call buildExtraction(...) per Opp first, then
+     * bulk-insert at the end to keep callouts and DML in separate phases.
      */
     public static void runOnce(Id opportunityId, List<Id> contentDocumentIds) {
+        Order_Form_Extraction__c row = buildExtraction(opportunityId, contentDocumentIds);
+        try {
+            insert row;
+        } catch (Exception e) {
+            System.debug(LoggingLevel.ERROR, 'Failed to insert extraction row: ' + e.getMessage());
+        }
+    }
+
+    /**
+     * Build a populated Order_Form_Extraction__c row in memory by doing the
+     * Anthropic callout and parsing the result. NO DML - caller is
+     * responsible for inserting the returned row. Required for batch paths
+     * that process multiple Opps per transaction (no DML between callouts).
+     */
+    public static Order_Form_Extraction__c buildExtraction(Id opportunityId, List<Id> contentDocumentIds) {
         List<Id> docIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
         Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(docIds);
 
@@ -48,8 +64,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             if (pdfBytes.isEmpty()) {
                 row.Extraction_Status__c = 'No Document';
                 row.Error_Message__c = 'No ContentVersion data found for the supplied ContentDocument Ids.';
-                insert row;
-                return;
+                return row;
             }
 
             String body = buildRequestBody(pdfBytes);
@@ -60,8 +75,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             if (resp.getStatusCode() < 200 || resp.getStatusCode() >= 300) {
                 row.Extraction_Status__c = 'API Failed';
                 row.Error_Message__c = truncate('HTTP ' + resp.getStatusCode() + ': ' + resp.getBody(), ERROR_MESSAGE_LIMIT);
-                insert row;
-                return;
+                return row;
             }
 
             Map<String, Object> extracted;
@@ -70,23 +84,18 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             } catch (Exception e) {
                 row.Extraction_Status__c = 'Parse Failed';
                 row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
-                insert row;
-                return;
+                return row;
             }
 
             row.Extracted_JSON__c = truncate(JSON.serializePretty(extracted), EXTRACTED_JSON_LIMIT);
             populateExtractedFields(row, extracted);
             row.Extraction_Status__c = 'Success';
-            insert row;
+            return row;
 
         } catch (Exception e) {
             row.Extraction_Status__c = 'API Failed';
             row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
-            try {
-                insert row;
-            } catch (Exception e2) {
-                System.debug(LoggingLevel.ERROR, 'Failed to record extraction error row: ' + e2.getMessage());
-            }
+            return row;
         }
     }
 

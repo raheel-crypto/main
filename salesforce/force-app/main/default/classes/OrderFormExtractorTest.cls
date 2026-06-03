@@ -587,6 +587,39 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void backfillBatch_multipleOppsAllSucceed() {
+        // Verifies the callouts-first / DML-after-loop ordering. With the old
+        // design (insert after each callout), the 2nd Opp's callout would
+        // fail with "uncommitted work pending" and the row would be marked
+        // API Failed. With the new design, both succeed.
+        Opportunity oppA = insertOpp('Multi A', 'Closed Won');
+        Opportunity oppB = insertOpp('Multi B', 'Closed Won');
+        attachSignedFile(oppA.Id, 'signed__OF_A');
+        attachSignedFile(oppB.Id, 'signed__OF_B');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Seat_Licenses' => 10
+        });
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormBackfillBatch.run();
+        Test.stopTest();
+
+        List<Order_Form_Extraction__c> rows = [
+            SELECT Opportunity__c, Extraction_Status__c FROM Order_Form_Extraction__c
+        ];
+        System.assertEquals(2, rows.size(), 'Both Opps should have rows');
+        for (Order_Form_Extraction__c r : rows) {
+            System.assertEquals('Success', r.Extraction_Status__c,
+                'Both extractions should succeed - no DML-before-callout error. Got ' +
+                r.Extraction_Status__c + ' for ' + r.Opportunity__c);
+        }
+    }
+
+    @isTest
     static void backfillBatch_respectsMaxOppsLimit() {
         List<Opportunity> opps = new List<Opportunity>();
         for (Integer i = 0; i < 5; i++) {

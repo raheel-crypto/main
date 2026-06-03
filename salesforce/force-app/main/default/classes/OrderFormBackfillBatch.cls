@@ -32,20 +32,23 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         totalSeen += scope.size();
 
         Set<Id> oppIds = new Map<Id, Opportunity>(scope).keySet();
-
-        // Reuse the same lookup as the live flow so backfilled rows include
-        // Base_Opportunity__c parent docs (rider + original Order Form + MSA).
         Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllSignedDocuments(oppIds);
 
+        // Phase 1: callouts only. Build all rows in memory. NO DML yet -
+        // otherwise the next callout fails with "uncommitted work pending".
+        List<Order_Form_Extraction__c> rowsToInsert = new List<Order_Form_Extraction__c>();
         for (Opportunity opp : scope) {
             List<Id> docs = docsByOpp.get(opp.Id);
             if (docs == null || docs.isEmpty()) {
                 totalSkippedNoFile++;
                 continue;
             }
-            OrderFormExtractionJob.runOnce(opp.Id, docs);
+            rowsToInsert.add(OrderFormExtractionJob.buildExtraction(opp.Id, docs));
             totalProcessed++;
         }
+
+        // Phase 2: bulk DML after all callouts.
+        if (!rowsToInsert.isEmpty()) insert rowsToInsert;
     }
 
     public void finish(Database.BatchableContext bc) {
