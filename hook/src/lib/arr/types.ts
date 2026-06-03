@@ -28,6 +28,8 @@ export interface AccountRecord {
   Churn_Date__c: string | null;
 }
 
+// Note: "Restructure (delta/absorbed)" is one combined picklist value in
+// Salesforce; the delta vs absorbed distinction is preserved in the event note.
 export type EventType =
   | "New Business"
   | "Upsell"
@@ -35,8 +37,7 @@ export type EventType =
   | "Downsell"
   | "Debooking"
   | "Renewal (rebase)"
-  | "Restructure (delta)"
-  | "Restructure (absorbed)"
+  | "Restructure (delta/absorbed)"
   | "Churn";
 
 export interface ArrEvent {

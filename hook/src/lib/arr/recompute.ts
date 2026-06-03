@@ -43,46 +43,40 @@ export function recomputeAccount(
     const arr = opp.Annual_Recurring_Revenue__c ?? 0;
     let delta = 0;
     let eventType: EventType;
-    let note = "";
+    // Match the existing backfill convention: the opp Name is the most useful
+    // human-readable note. The §2 rule is implicit in eventType + delta.
+    const note = opp.Name ?? "";
 
     switch (opp.Type) {
       case "New Business":
         delta = arr;
         eventType = "New Business";
-        note = "New land";
         break;
       case "Upsell":
         delta = arr;
         eventType = "Upsell";
-        note = "Expansion";
         break;
       case "Pilot":
         delta = arr;
         eventType = "Pilot";
-        note = arr === 0 ? "Pilot (unpaid trial)" : "Pilot (paid land)";
         break;
       case "Downsell":
       case "Debooking":
         delta = arr;
         eventType = opp.Type;
-        note = `${opp.Type} (value already signed)`;
         break;
       case "Renewal":
         delta = arr - running;
         eventType = "Renewal (rebase)";
-        note = `Renewal rebase from ${running} to ${arr}`;
         lastRenewalDate = opp.CloseDate;
         break;
       case "Contract Restructure":
         if (lastRenewalDate !== null && opp.CloseDate === lastRenewalDate) {
           delta = 0;
-          eventType = "Restructure (absorbed)";
-          note = "Same-day as renewal — absorbed";
         } else {
           delta = arr;
-          eventType = "Restructure (delta)";
-          note = "Mid-cycle restructure";
         }
+        eventType = "Restructure (delta/absorbed)";
         break;
     }
 
@@ -110,7 +104,7 @@ export function recomputeAccount(
       delta: -running,
       running: 0,
       sequence,
-      note: "Synthetic churn event — zeroes ARR",
+      note: "(Account churned)",
       isSynthetic: true,
     });
     running = 0;

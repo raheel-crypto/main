@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAccountWithOpps } from "@/lib/salesforce/soql";
 import { diffVsStored } from "@/lib/arr/recompute";
 import { sql } from "@/lib/db/client";
+import { syncAccountEvents } from "@/lib/salesforce/ledger";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,12 @@ export async function POST(req: Request) {
         INSERT INTO gaps (run_id, account_id, account_name, stored_arr, expected_arr, gap_usd)
         VALUES (${runId}, ${account.Id}, ${account.Name}, ${gap.storedArr}, ${gap.result.expectedArr}, ${gap.gap})
       `;
+    }
+
+    try {
+      await syncAccountEvents(accountId, gap.result);
+    } catch (err) {
+      console.error(`ledger sync failed for ${accountId}`, err);
     }
 
     return NextResponse.json({ matches: gap.matches, gap });

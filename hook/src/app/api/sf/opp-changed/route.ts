@@ -6,6 +6,7 @@ import { askHook } from "@/lib/claude/agent";
 import { slack, REVOPS_CHANNEL } from "@/lib/slack/client";
 import { issueBlocks } from "@/lib/slack/blocks";
 import { sql } from "@/lib/db/client";
+import { syncAccountEvents } from "@/lib/salesforce/ledger";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,14 @@ export async function POST(req: Request) {
     RETURNING id
   `) as { id: number }[];
   const runId = runRows[0]!.id;
+
+  // Maintain the ARR_Event__c ledger. Logged but non-fatal: gap detection +
+  // Slack post are higher priority. Next weekly run reconciles on failure.
+  try {
+    await syncAccountEvents(accountId, gap.result);
+  } catch (err) {
+    console.error(`ledger sync failed for ${accountId}`, err);
+  }
 
   if (gap.matches) {
     return NextResponse.json({ ok: true, gap: 0 });
