@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Base_ARR__c</fullName>
+    <description>The ARR value pulled from the base Opportunity's most recent successful extraction. Used as the subtrahend when computing Incremental_ARR__c for upsells / renewals / downsells. Null when no Base_Opportunity__c is set or the base has not been extracted yet.</description>
+    <label>Base ARR</label>
+    <precision>16</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <type>Currency</type>
+</CustomField>

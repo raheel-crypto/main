@@ -134,6 +134,114 @@ private class OrderFormExtractorTest {
     // ===== Extraction Queueable =====
 
     @isTest
+    static void extractionJob_computesIncrementalARRForUpsell() {
+        // Base Opp has a prior Success extraction with ARR=$118k.
+        Opportunity baseOpp = insertOpp('Arma Land', 'Closed Won');
+        insert new Order_Form_Extraction__c(
+            Opportunity__c = baseOpp.Id,
+            Extraction_Status__c = 'Success',
+            Annual_Recurring_Revenue__c = 118000,
+            Extracted_At__c = System.now()
+        );
+
+        Opportunity upsellOpp = new Opportunity(
+            Name = 'Arma Expansion',
+            StageName = '5 - Contracting',
+            CloseDate = Date.today(),
+            Base_Opportunity__c = baseOpp.Id
+        );
+        insert upsellOpp;
+        attachSignedFile(upsellOpp.Id, 'signed__Rider');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Upsell',
+            'Annual_Recurring_Revenue' => 174000,
+            'Seat_Licenses' => 100
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = upsellOpp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Annual_Recurring_Revenue__c, Incremental_ARR__c, Base_ARR__c, Type__c
+            FROM Order_Form_Extraction__c
+            WHERE Opportunity__c = :upsellOpp.Id
+            LIMIT 1
+        ];
+        System.assertEquals('Upsell', row.Type__c);
+        System.assertEquals(174000, row.Annual_Recurring_Revenue__c, 'Extracted total stays as $174k');
+        System.assertEquals(118000, row.Base_ARR__c, 'Base ARR snapshot from parent OFE');
+        System.assertEquals(56000, row.Incremental_ARR__c, '174k - 118k = 56k incremental');
+    }
+
+    @isTest
+    static void extractionJob_incrementalEqualsTotalForNewBusiness() {
+        Opportunity opp = insertOpp('Net New', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OF');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Annual_Recurring_Revenue' => 490000
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Annual_Recurring_Revenue__c, Incremental_ARR__c, Base_ARR__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(490000, row.Incremental_ARR__c, 'New Business: incremental = total');
+        System.assertEquals(null, row.Base_ARR__c);
+    }
+
+    @isTest
+    static void applier_upsellWritesIncrementalARR() {
+        Opportunity baseOpp = insertOpp('Base for Apply', 'Closed Won');
+        Opportunity upsellOpp = new Opportunity(
+            Name = 'Upsell for Apply',
+            StageName = '5 - Contracting',
+            CloseDate = Date.today(),
+            Base_Opportunity__c = baseOpp.Id
+        );
+        insert upsellOpp;
+
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(
+            Opportunity__c = upsellOpp.Id,
+            Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now(),
+            Type__c = 'Upsell',
+            Annual_Recurring_Revenue__c = 174000,
+            Incremental_ARR__c = 56000,
+            Base_ARR__c = 118000,
+            Applied_To_Opportunity__c = false
+        );
+        insert row;
+
+        OrderFormApplier.Request req = new OrderFormApplier.Request();
+        req.extractionId = row.Id;
+        Test.startTest();
+        OrderFormApplier.apply(new List<OrderFormApplier.Request>{ req });
+        Test.stopTest();
+
+        Opportunity after = [SELECT Annual_Recurring_Revenue__c FROM Opportunity WHERE Id = :upsellOpp.Id];
+        System.assertEquals(56000, after.Annual_Recurring_Revenue__c,
+            'Upsell should write Incremental_ARR__c (56k), not the gross $174k');
+    }
+
+    @isTest
     static void extractionJob_includesFilesFromBaseOpportunity() {
         Opportunity baseOpp = insertOpp('Arma Land', 'Closed Won');
         attachSignedFile(baseOpp.Id, 'signed__OrderForm_Land');

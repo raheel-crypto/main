@@ -25,7 +25,7 @@ public with sharing class OrderFormApplier {
             SELECT Id, Opportunity__c, Extraction_Status__c, Applied_To_Opportunity__c, Is_Amendment__c,
                    Type__c, Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Months__c,
                    Seat_Licenses__c, License_Fees__c, Platform_Connection_Fee__c, Professional_Service_Fees__c,
-                   Total_Contract_Value__c, Annual_Recurring_Revenue__c,
+                   Total_Contract_Value__c, Annual_Recurring_Revenue__c, Incremental_ARR__c, Base_ARR__c,
                    Renewal_Terms__c, Subscription_Schedule__c, Payment_Terms__c, Credit_Terms__c,
                    Billing_Contact_Email__c, ELA__c, Paid_Trial__c, Trial_Price__c, Pilot_Success_Criteria__c,
                    Credits_Purchased__c, Credits_Period__c, Special_Terms__c
@@ -180,7 +180,17 @@ public with sharing class OrderFormApplier {
             log.add('Wrote Amount=' + row.Total_Contract_Value__c);
             anyChange = true;
         }
-        anyChange = trySetDecimal('Annual_Recurring_Revenue__c', opp.Annual_Recurring_Revenue__c, row.Annual_Recurring_Revenue__c, changes, log) || anyChange;
+        // For upsell-style deals the Opp's ARR should reflect THIS deal's
+        // contribution, not the post-deal account total. Use Incremental_ARR__c
+        // when populated and the deal type is an expansion.
+        Decimal arrToApply = row.Annual_Recurring_Revenue__c;
+        if (row.Incremental_ARR__c != null
+                && ('Upsell'.equals(row.Type__c)
+                    || 'Downsell'.equals(row.Type__c)
+                    || 'Contract Restructure'.equals(row.Type__c))) {
+            arrToApply = row.Incremental_ARR__c;
+        }
+        anyChange = trySetDecimal('Annual_Recurring_Revenue__c', opp.Annual_Recurring_Revenue__c, arrToApply, changes, log) || anyChange;
         anyChange = trySetPicklist('Renewal_Terms__c', opp.Renewal_Terms__c, row.Renewal_Terms__c, changes, log) || anyChange;
         anyChange = trySetPicklist('Subscription_Schedule__c', opp.Subscription_Schedule__c, row.Subscription_Schedule__c, changes, log) || anyChange;
         anyChange = trySetPicklist('Payment_Terms__c', opp.Payment_Terms__c, row.Payment_Terms__c, changes, log) || anyChange;

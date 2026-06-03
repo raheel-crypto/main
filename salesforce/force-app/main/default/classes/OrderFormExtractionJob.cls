@@ -250,6 +250,41 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
 
         deriveEndDate(row);
+        computeIncrementalARR(row, row.Opportunity__c);
+    }
+
+    @TestVisible
+    private static void computeIncrementalARR(Order_Form_Extraction__c row, Id opportunityId) {
+        Decimal totalARR = row.Annual_Recurring_Revenue__c;
+        if (totalARR == null || opportunityId == null) return;
+
+        // For New Business / Pilot / null Type, Incremental = full extracted ARR.
+        Set<String> expansionTypes = new Set<String>{'Upsell','Renewal','Downsell','Contract Restructure'};
+        if (!expansionTypes.contains(row.Type__c)) {
+            row.Incremental_ARR__c = totalARR;
+            return;
+        }
+
+        // For expansion-style deals, look up the base Opp's most recent
+        // successful extraction and subtract its ARR.
+        List<Opportunity> opps = [SELECT Base_Opportunity__c FROM Opportunity WHERE Id = :opportunityId LIMIT 1];
+        if (opps.isEmpty() || opps[0].Base_Opportunity__c == null) return;
+
+        Id baseOppId = opps[0].Base_Opportunity__c;
+        List<Order_Form_Extraction__c> baseRows = [
+            SELECT Annual_Recurring_Revenue__c
+            FROM Order_Form_Extraction__c
+            WHERE Opportunity__c = :baseOppId
+              AND Extraction_Status__c = 'Success'
+              AND Annual_Recurring_Revenue__c != null
+            ORDER BY CreatedDate DESC
+            LIMIT 1
+        ];
+        if (baseRows.isEmpty()) return;
+
+        Decimal baseARR = baseRows[0].Annual_Recurring_Revenue__c;
+        row.Base_ARR__c = baseARR;
+        row.Incremental_ARR__c = totalARR - baseARR;
     }
 
     @TestVisible

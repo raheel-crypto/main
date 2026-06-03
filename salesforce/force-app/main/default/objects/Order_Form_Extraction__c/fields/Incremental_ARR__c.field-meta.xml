@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Incremental_ARR__c</fullName>
+    <description>ARR contributed by this specific deal. For New Business / Pilot equals Annual_Recurring_Revenue__c (the full extracted amount). For Upsell / Downsell / Contract Restructure / Renewal equals Annual_Recurring_Revenue__c minus the base Opportunity's prior ARR. Null when Base_Opportunity__c is not set or the base has no successful extraction yet.</description>
+    <label>Incremental ARR</label>
+    <precision>16</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <type>Currency</type>
+</CustomField>
