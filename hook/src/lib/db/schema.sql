@@ -45,3 +45,33 @@ CREATE TABLE IF NOT EXISTS slack_threads (
 );
 
 CREATE INDEX IF NOT EXISTS slack_threads_account_idx ON slack_threads(account_id);
+
+-- Human-in-the-loop write proposals. Hook proposes an action by inserting a row;
+-- a button in Slack carries the row's ID; clicking the button executes the write
+-- and stamps the audit fields.
+CREATE TABLE IF NOT EXISTS pending_actions (
+  id BIGSERIAL PRIMARY KEY,
+  kind TEXT NOT NULL,
+  account_id TEXT,
+  opportunity_id TEXT,
+  target_object TEXT NOT NULL,
+  target_field TEXT NOT NULL,
+  current_value TEXT,
+  proposed_value TEXT NOT NULL,
+  button_text TEXT NOT NULL,
+  button_style TEXT,
+  confirm_text TEXT NOT NULL,
+  reason TEXT,
+  gap_id BIGINT REFERENCES gaps(id) ON DELETE SET NULL,
+  slack_channel_id TEXT,
+  slack_message_ts TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  applied_at TIMESTAMPTZ,
+  applied_by_slack_user_id TEXT,
+  applied_by_slack_user_name TEXT,
+  result TEXT,
+  error_message TEXT
+);
+
+CREATE INDEX IF NOT EXISTS pending_actions_account_idx ON pending_actions(account_id);
+CREATE INDEX IF NOT EXISTS pending_actions_message_idx ON pending_actions(slack_message_ts);

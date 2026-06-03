@@ -8,6 +8,7 @@ import { slack, REVOPS_CHANNEL } from "@/lib/slack/client";
 import { issueBlocks } from "@/lib/slack/blocks";
 import { sql } from "@/lib/db/client";
 import { syncAccountEvents } from "@/lib/salesforce/ledger";
+import { proposeActions } from "@/lib/actions/propose";
 
 export const runtime = "nodejs";
 
@@ -52,11 +53,49 @@ export async function POST(req: Request) {
     `An opportunity on account ${account.Name} (${account.Id}) just changed. The recompute shows stored=${gap.storedArr}, expected=${gap.result.expectedArr}, gap=${gap.gap}. Use diff_vs_stored and last_audit to investigate, then explain the most likely cause (cite the §6.6 category) and suggest a PROPOSED FIX (dry-run only).${formatOfeGapsForPrompt(ofeGaps)}`,
   );
 
+  // Propose human-in-the-loop actions and persist them so the Slack buttons
+  // can carry the row IDs. Each click → look up the row → execute the SF write.
+  const proposed = proposeActions(gap, account, opps);
+  const buttons = [] as { actionId: number; buttonText: string; buttonStyle?: "primary" | "danger"; confirmText: string }[];
+
+  for (const action of proposed) {
+    const rows = (await sql`
+      INSERT INTO pending_actions (
+        kind, account_id, opportunity_id, target_object, target_field,
+        current_value, proposed_value, button_text, button_style, confirm_text, reason
+      )
+      VALUES (
+        ${action.kind}, ${action.accountId}, ${action.opportunityId},
+        ${action.targetObject}, ${action.targetField},
+        ${action.currentValue}, ${action.proposedValue},
+        ${action.buttonText}, ${action.buttonStyle ?? null}, ${action.confirmText}, ${action.reason}
+      )
+      RETURNING id
+    `) as { id: number }[];
+    const actionId = rows[0]!.id;
+    buttons.push({
+      actionId,
+      buttonText: action.buttonText,
+      buttonStyle: action.buttonStyle,
+      confirmText: action.confirmText,
+    });
+  }
+
   const post = await slack.chat.postMessage({
     channel: REVOPS_CHANNEL,
-    blocks: issueBlocks(gap, text),
+    blocks: issueBlocks(gap, text, buttons),
     text: `ARR gap on ${account.Name}: ${gap.gap}`,
   });
+
+  // Stamp the action rows with the Slack message they were posted on, for audit.
+  if (post.ts && buttons.length > 0) {
+    const buttonIds = buttons.map((b) => b.actionId);
+    await sql`
+      UPDATE pending_actions
+      SET slack_channel_id = ${REVOPS_CHANNEL}, slack_message_ts = ${post.ts}
+      WHERE id = ANY(${buttonIds})
+    `;
+  }
 
   await sql`
     INSERT INTO gaps (run_id, account_id, account_name, stored_arr, expected_arr, gap_usd, category, slack_message_ts)
@@ -70,5 +109,5 @@ export async function POST(req: Request) {
     `;
   }
 
-  return NextResponse.json({ ok: true, gap: gap.gap, threadTs: post.ts });
+  return NextResponse.json({ ok: true, gap: gap.gap, threadTs: post.ts, buttons: buttons.length });
 }

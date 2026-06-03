@@ -21,6 +21,9 @@
     },
     "src/app/api/slack/commands/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/slack/interactions/route.ts": {
+      "maxDuration": 60
     }
   }
 }

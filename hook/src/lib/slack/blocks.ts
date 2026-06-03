@@ -1,4 +1,4 @@
-import type { KnownBlock } from "@slack/web-api";
+import type { KnownBlock, ActionsBlock, Button } from "@slack/web-api";
 import type { GapResult } from "@/lib/arr/recompute";
 
 function usd(n: number): string {
@@ -6,8 +6,19 @@ function usd(n: number): string {
   return `${sign}$${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 }
 
-export function issueBlocks(gap: GapResult, narrative: string): KnownBlock[] {
-  return [
+export interface IssueButton {
+  actionId: number;
+  buttonText: string;
+  buttonStyle?: "primary" | "danger";
+  confirmText: string;
+}
+
+export function issueBlocks(
+  gap: GapResult,
+  narrative: string,
+  buttons: IssueButton[] = [],
+): KnownBlock[] {
+  const blocks: KnownBlock[] = [
     {
       type: "header",
       text: { type: "plain_text", text: `ARR gap: ${gap.account.Name}` },
@@ -22,13 +33,72 @@ export function issueBlocks(gap: GapResult, narrative: string): KnownBlock[] {
       ],
     },
     { type: "section", text: { type: "mrkdwn", text: narrative } },
-    {
-      type: "context",
-      elements: [
-        { type: "mrkdwn", text: `Account: \`${gap.account.Id}\` • @Hook in-thread for detail` },
-      ],
-    },
   ];
+
+  if (buttons.length > 0) {
+    const actionsBlock: ActionsBlock = {
+      type: "actions",
+      block_id: "hook_actions",
+      elements: buttons.map<Button>((b) => ({
+        type: "button",
+        action_id: `apply_action:${b.actionId}`,
+        text: { type: "plain_text", text: b.buttonText },
+        ...(b.buttonStyle ? { style: b.buttonStyle } : {}),
+        value: String(b.actionId),
+        confirm: {
+          title: { type: "plain_text", text: "Confirm" },
+          text: { type: "mrkdwn", text: b.confirmText },
+          confirm: { type: "plain_text", text: "Apply" },
+          deny: { type: "plain_text", text: "Cancel" },
+        },
+      })),
+    };
+    blocks.push(actionsBlock);
+  }
+
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `Account: \`${gap.account.Id}\` • @Hook in-thread for detail`,
+      },
+    ],
+  });
+
+  return blocks;
+}
+
+export function appliedActionBlocks(
+  originalBlocks: KnownBlock[],
+  appliedBy: string,
+  buttonText: string,
+  actionId: number,
+  result: { ok: boolean; error?: string },
+): KnownBlock[] {
+  // Strip the actions block and replace with a context line.
+  const withoutActions = originalBlocks.filter(
+    (b) => b.type !== "actions",
+  ) as KnownBlock[];
+
+  const stamp = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    day: "numeric",
+  });
+
+  const summary = result.ok
+    ? `✓ *${buttonText}* applied by ${appliedBy} at ${stamp} ET (action #${actionId})`
+    : `⚠ *${buttonText}* attempted by ${appliedBy} at ${stamp} ET — failed: ${result.error ?? "unknown error"} (action #${actionId})`;
+
+  withoutActions.push({
+    type: "section",
+    text: { type: "mrkdwn", text: summary },
+  });
+
+  return withoutActions;
 }
 
 export interface WeeklyDigestInput {
