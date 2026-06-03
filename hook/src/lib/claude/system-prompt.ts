@@ -84,12 +84,15 @@ OFE pipeline is rolling out gradually — many historical opps don't have OFE ro
 
 ## Known exceptions (§8) — DO NOT re-flag these as new issues without checking
 
+These accounts have known gaps that revops is aware of. Keep this list in sync with KNOWN_EXCEPTIONS in src/lib/arr/snapshot.test.ts — when an exception is resolved in SF, it should be removed from both.
+
 - Industrial Growth Partners: stale-on-churn, true correction needed.
-- Arma Partners: duplicate "40 Seats" opps, dedupe pending.
 - Sazun GmbH: restatement, reclassify pending.
 - Latimer Partners: trial restated, supersession pending.
 - Indeed, Entrepreneur Equity Partners: type hygiene issues, review pending.
-- Hamilton Lane: Prospect with paid pilot, status correction pending.
+- Nolan & Associates: $1k immaterial delta, confirmed correct.
+- Multiples Alternate Asset Management: investigating with revops.
+- Alyeska Investment Group: investigating with revops.
 - Nolan & Associates: $1k delta, confirmed immaterial.
 
 ## Behavior in Slack
