@@ -553,13 +553,15 @@ private class OrderFormExtractorTest {
         MockAnthropic mock = new MockAnthropic();
         mock.responseBody = makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business' });
 
+        // Apex test context allows only 1 enqueued Queueable per async parent (batch).
+        // Production batches happily enqueue up to 50 per chunk.
         Test.setMock(HttpCalloutMock.class, mock);
         Test.startTest();
-        OrderFormBackfillBatch.run(2);
+        OrderFormBackfillBatch.run(1);
         Test.stopTest();
 
         Integer rows = [SELECT COUNT() FROM Order_Form_Extraction__c];
-        System.assertEquals(2, rows, 'maxOpps=2 should produce exactly 2 extraction rows');
+        System.assertEquals(1, rows, 'maxOpps=1 should produce exactly 1 extraction row');
     }
 
     // ===== Picklist mapper =====
