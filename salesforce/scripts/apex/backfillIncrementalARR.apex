@@ -47,7 +47,7 @@ for (Order_Form_Extraction__c r : rows) {
     if (opp != null && opp.Base_Opportunity__c != null) baseOppIds.add(opp.Base_Opportunity__c);
 }
 
-// Bulk load the latest successful ARR for each base Opp
+// Bulk load preferred source: latest successful OFE ARR per base Opp.
 Map<Id, Decimal> baseARRByOpp = new Map<Id, Decimal>();
 if (!baseOppIds.isEmpty()) {
     for (Order_Form_Extraction__c base : [
@@ -60,6 +60,18 @@ if (!baseOppIds.isEmpty()) {
     ]) {
         if (!baseARRByOpp.containsKey(base.Opportunity__c)) {
             baseARRByOpp.put(base.Opportunity__c, base.Annual_Recurring_Revenue__c);
+        }
+    }
+    // Fallback source: the base Opp's own Annual_Recurring_Revenue__c field
+    // for bases that predate the signed__* convention.
+    for (Opportunity base : [
+        SELECT Id, Annual_Recurring_Revenue__c
+        FROM Opportunity
+        WHERE Id IN :baseOppIds
+          AND Annual_Recurring_Revenue__c != null
+    ]) {
+        if (!baseARRByOpp.containsKey(base.Id)) {
+            baseARRByOpp.put(base.Id, base.Annual_Recurring_Revenue__c);
         }
     }
 }

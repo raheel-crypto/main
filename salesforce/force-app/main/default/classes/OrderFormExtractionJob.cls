@@ -265,12 +265,17 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             return;
         }
 
-        // For expansion-style deals, look up the base Opp's most recent
-        // successful extraction and subtract its ARR.
-        List<Opportunity> opps = [SELECT Base_Opportunity__c FROM Opportunity WHERE Id = :opportunityId LIMIT 1];
+        // For expansion-style deals, find the base Opp's ARR.
+        List<Opportunity> opps = [
+            SELECT Base_Opportunity__c, Base_Opportunity__r.Annual_Recurring_Revenue__c
+            FROM Opportunity WHERE Id = :opportunityId LIMIT 1
+        ];
         if (opps.isEmpty() || opps[0].Base_Opportunity__c == null) return;
 
         Id baseOppId = opps[0].Base_Opportunity__c;
+
+        // Preferred source: the base Opp's most recent successful OFE row.
+        Decimal baseARR = null;
         List<Order_Form_Extraction__c> baseRows = [
             SELECT Annual_Recurring_Revenue__c
             FROM Order_Form_Extraction__c
@@ -280,9 +285,15 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             ORDER BY CreatedDate DESC
             LIMIT 1
         ];
-        if (baseRows.isEmpty()) return;
+        if (!baseRows.isEmpty()) {
+            baseARR = baseRows[0].Annual_Recurring_Revenue__c;
+        } else if (opps[0].Base_Opportunity__r != null) {
+            // Fallback: the base Opp's own Annual_Recurring_Revenue__c field.
+            // Useful for legacy bases that predate the signed__* convention.
+            baseARR = opps[0].Base_Opportunity__r.Annual_Recurring_Revenue__c;
+        }
+        if (baseARR == null) return;
 
-        Decimal baseARR = baseRows[0].Annual_Recurring_Revenue__c;
         row.Base_ARR__c = baseARR;
         row.Incremental_ARR__c = totalARR - baseARR;
     }
