@@ -36,7 +36,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
             SELECT LinkedEntityId, ContentDocumentId, ContentDocument.LastModifiedDate
             FROM ContentDocumentLink
             WHERE LinkedEntityId IN :oppIds
-              AND ContentDocument.Title LIKE 'signed\\_\\_%' ESCAPE '\\'
+              AND ContentDocument.Title LIKE 'signed__%'
             ORDER BY ContentDocument.LastModifiedDate DESC
         ]) {
             List<Id> docs = docsByOpp.get(cdl.LinkedEntityId);
