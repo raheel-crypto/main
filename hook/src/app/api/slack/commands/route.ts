@@ -2,6 +2,7 @@ import { NextResponse, after } from "next/server";
 import { verifySlackSignature } from "@/lib/hmac";
 import { askHook } from "@/lib/claude/agent";
 import { slack } from "@/lib/slack/client";
+import { sql } from "@/lib/db/client";
 
 export const runtime = "nodejs";
 
@@ -11,7 +12,7 @@ const HELP_TEXT = `Hook commands — ARR for ye crew:
 • \`/hook audit\` — summary of this week's reconciliation
 • \`/hook help\` — this message
 
-Or @Hook in any thread for color, context, or follow-up questions.`;
+Follow-ups: start a thread off any Hook reply and \`@Hook\` your question — Hook loads the original context automatically.`;
 
 interface ParsedCommand {
   sub: string;
@@ -78,14 +79,30 @@ export async function POST(req: Request) {
   const responseUrl = params.get("response_url") ?? "";
   const channelId = params.get("channel_id") ?? "";
 
-  const ack = buildAck(parseCommand(text));
+  const parsed = parseCommand(text);
+  const ack = buildAck(parsed);
 
   if (ack.prompt) {
     const prompt = ack.prompt;
     after(async () => {
       try {
         const { text: reply } = await askHook(prompt);
-        await slack.chat.postMessage({ channel: channelId, text: reply });
+        const post = await slack.chat.postMessage({ channel: channelId, text: reply });
+
+        // Persist thread context so @Hook follow-ups can load the prior turn.
+        if (post.ts) {
+          await sql`
+            INSERT INTO slack_threads (thread_ts, channel_id, account_id, context)
+            VALUES (${post.ts}, ${channelId}, NULL, ${JSON.stringify({
+              kind: "slash_command",
+              sub: parsed.sub,
+              arg: parsed.arg,
+              prompt,
+              reply,
+            })})
+            ON CONFLICT (thread_ts) DO UPDATE SET context = EXCLUDED.context
+          `;
+        }
       } catch (err) {
         console.error("command handler", err);
         await fetch(responseUrl, {
