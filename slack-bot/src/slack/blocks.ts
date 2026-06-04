@@ -2560,6 +2560,12 @@ export function nextMovesCard(
   instanceUrl: string
 ): { blocks: KnownBlock[]; text: string } {
   const oppUrl = `${instanceUrl.replace(/\/+$/, "")}/${payload.opportunityId}`;
+
+  // Header + account + (optional) headline / rationale stay vertically
+  // compact at the top of the message. Actions move into a Slack-native
+  // `carousel` block below — one card per next move, swipeable on mobile,
+  // horizontally scrollable on desktop. Reps see the framing, then browse
+  // actions without scrolling past a wall of stacked sections.
   const blocks: KnownBlock[] = [
     {
       type: "header",
@@ -2590,35 +2596,47 @@ export function nextMovesCard(
   if (payload.rationale) {
     blocks.push({
       type: "context",
-      elements: [{ type: "mrkdwn", text: `_${payload.rationale.slice(0, 600)}_` }],
+      elements: [{ type: "mrkdwn", text: `_${payload.rationale.slice(0, 500)}_` }],
     });
   }
 
-  payload.actions.forEach((a, i) => {
-    const state = payload.actionStates[i] ?? "open";
-    blocks.push({ type: "divider" });
-    const stateLabel =
-      state === "accepted"
-        ? " :white_check_mark: _accepted_"
-        : state === "skipped"
-        ? " :black_square_for_stop: _skipped_"
-        : "";
-    const meta: string[] = [];
-    if (a.ownerRole) meta.push(`*Owner:* ${a.ownerRole}`);
-    if (a.byDate) meta.push(`*By:* ${a.byDate}`);
-    if (a.expectedSignal) meta.push(`*Signal:* ${a.expectedSignal}`);
-    blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*${i + 1}. ${a.action}*${stateLabel}\n${meta.join(" · ")}`,
-      },
-    });
-    if (state === "open") {
-      blocks.push({
-        type: "actions",
-        block_id: `next_move:${i}`,
-        elements: [
+  // Build the carousel cards. Each action gets its own card with title /
+  // subtitle / body / actions. State markers (✅ Done / ⏭ Skipped) inline
+  // into the title and the action buttons disappear once resolved.
+  if (payload.actions.length > 0) {
+    const cards = payload.actions.slice(0, 10).map((a, i) => {
+      const state = payload.actionStates[i] ?? "open";
+      const stateMarker =
+        state === "accepted"
+          ? "✅ "
+          : state === "skipped"
+          ? "⏭ "
+          : "";
+      const titleText = `${stateMarker}*${i + 1}.* ${(a.action || "").slice(0, 150)}`;
+
+      const subtitleParts: string[] = [];
+      if (a.ownerRole) subtitleParts.push(`*Owner:* ${a.ownerRole}`);
+      if (a.byDate) subtitleParts.push(`*By:* ${a.byDate}`);
+
+      const card: Record<string, unknown> = {
+        type: "card",
+        block_id: `next_move_card:${i}`,
+        title: { type: "mrkdwn", text: titleText },
+      };
+      if (subtitleParts.length > 0) {
+        card.subtitle = {
+          type: "mrkdwn",
+          text: subtitleParts.join(" · "),
+        };
+      }
+      if (a.expectedSignal) {
+        card.body = {
+          type: "mrkdwn",
+          text: `*Signal:* ${a.expectedSignal.slice(0, 600)}`,
+        };
+      }
+      if (state === "open") {
+        card.actions = [
           {
             type: "button",
             style: "primary",
@@ -2632,10 +2650,19 @@ export function nextMovesCard(
             action_id: `next_moves_skip:${cardId}:${i}`,
             value: String(i),
           },
-        ],
-      });
-    }
-  });
+        ];
+      }
+      return card;
+    });
+
+    // The carousel block (shipped April 2026) isn't yet in @slack/types' KnownBlock
+    // union, so cast through. Block Kit Builder confirmed it renders cleanly on
+    // desktop + iOS + Android in our workspace test.
+    blocks.push({
+      type: "carousel",
+      elements: cards,
+    } as unknown as KnownBlock);
+  }
 
   blocks.push({ type: "divider" });
   blocks.push({

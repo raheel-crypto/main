@@ -4,7 +4,7 @@
  * one-paragraph explanation. Buttons: Open in Salesforce + Mute 7 days
  * (reuses the existing red_team_mute action verb).
  */
-import type { KnownBlock } from "@slack/types";
+import type { KnownBlock, MessageAttachment } from "@slack/types";
 import { feedbackButtonsRow } from "./blocks.js";
 import type {
   ArbiterClaim,
@@ -335,8 +335,15 @@ export interface ArbiterCardArgs {
   instanceUrl: string;
 }
 
+// Brand palette — see CLAUDE.md for the semantic mapping
+const BRAND_BLACK = "#191919"; // Arbiter system voice (synthesis, concessions)
+const BRAND_RASPBERRY = "#C2275F"; // Red Team — Why this loses
+const BRAND_OCEAN = "#0C71CF"; // Blue Team — Why this wins
+const BRAND_FOREST = "#19BA20"; // Action zone — what to do next
+
 export function arbiterCard(args: ArbiterCardArgs): {
   blocks: KnownBlock[];
+  attachments: MessageAttachment[];
   text: string;
 } {
   const { opportunity, ownerSlackUserId, triggerEvent, verdict, cardId, instanceUrl } = args;
@@ -345,7 +352,8 @@ export function arbiterCard(args: ArbiterCardArgs): {
 
   const synthesis: ArbiterSynthesis | null = verdict.synthesis ?? null;
 
-  const blocks: KnownBlock[] = [
+  // ─── Top-level (no color): header + context + probability headline ─────
+  const topBlocks: KnownBlock[] = [
     {
       type: "header",
       text: {
@@ -376,48 +384,63 @@ export function arbiterCard(args: ArbiterCardArgs): {
     },
   ];
 
-  // Synthesizer narrative — italicized blockquote right under the probability
-  // so the rep sees the "what did the debate reveal" line before any team
-  // arguments. Falls back to the deterministic explanation if synthesis is
-  // unavailable.
-  if (synthesis?.narrative) {
-    blocks.push(...synthesisNarrativeBlock(synthesis.narrative));
-  } else if (verdict.explanation) {
-    blocks.push(...synthesisNarrativeBlock(verdict.explanation));
-  }
+  const attachments: MessageAttachment[] = [];
 
-  // Discriminating variable — the single most predictive factor. Skipped if
-  // the synthesizer didn't identify one.
+  // ─── BLACK · Arbiter system voice: synthesis + discriminating variable ──
+  const arbiterVoiceBlocks: KnownBlock[] = [];
+  if (synthesis?.narrative) {
+    arbiterVoiceBlocks.push(...synthesisNarrativeBlock(synthesis.narrative));
+  } else if (verdict.explanation) {
+    arbiterVoiceBlocks.push(...synthesisNarrativeBlock(verdict.explanation));
+  }
   if (synthesis?.discriminating_variable) {
-    blocks.push(
+    arbiterVoiceBlocks.push(
       ...discriminatingVariableBlocks(synthesis.discriminating_variable)
     );
   }
+  if (arbiterVoiceBlocks.length > 0) {
+    attachments.push({ color: BRAND_BLACK, blocks: arbiterVoiceBlocks });
+  }
 
+  // ─── RASPBERRY · Red Team — Why this loses ─────────────────────────────
   if (verdict.redArgument) {
-    blocks.push(...teamBlocks(verdict.redArgument, "🔴 Red Team — Why this loses"));
+    attachments.push({
+      color: BRAND_RASPBERRY,
+      blocks: teamBlocks(verdict.redArgument, "🔴 Red Team — Why this loses"),
+    });
   }
+
+  // ─── OCEAN · Blue Team — Why this wins ─────────────────────────────────
   if (verdict.blueArgument) {
-    blocks.push(...teamBlocks(verdict.blueArgument, "🔵 Blue Team — Why this wins"));
+    attachments.push({
+      color: BRAND_OCEAN,
+      blocks: teamBlocks(verdict.blueArgument, "🔵 Blue Team — Why this wins"),
+    });
   }
 
-  // Resolved contradictions (Round 2 concessions). Surfaces what each side
-  // gave up under probing — the most evidence-of-rigor signal on the card.
+  // ─── BLACK · Concessions (Round 2) — Arbiter neutral voice again ───────
   if (synthesis?.resolved_contradictions?.length) {
-    blocks.push(...resolvedContradictionsBlocks(synthesis.resolved_contradictions));
+    attachments.push({
+      color: BRAND_BLACK,
+      blocks: resolvedContradictionsBlocks(synthesis.resolved_contradictions),
+    });
   }
 
-  // If/then diagnostic block REPLACES the old topActions when synthesis is
-  // available. Without synthesis, fall back to topActions so we don't ship
-  // an empty action area.
+  // ─── FOREST · Action zone — what to do next ───────────────────────────
+  const actionBlocks: KnownBlock[] = [];
   if (synthesis?.if_then_diagnostic?.length) {
-    blocks.push(...ifThenDiagnosticBlocks(synthesis.if_then_diagnostic));
-  } else {
-    blocks.push(...topActionsBlocks(verdict.topActions));
+    actionBlocks.push(...ifThenDiagnosticBlocks(synthesis.if_then_diagnostic));
+  } else if (verdict.topActions.length > 0) {
+    actionBlocks.push(...topActionsBlocks(verdict.topActions));
+  }
+  if (actionBlocks.length > 0) {
+    attachments.push({ color: BRAND_FOREST, blocks: actionBlocks });
   }
 
+  // ─── Bottom-of-message blocks (no color): system buttons + footer ──────
+  const bottomBlocks: KnownBlock[] = [];
   const sfUrl = `${instanceUrl.replace(/\/+$/, "")}/${opportunity.id}`;
-  blocks.push({
+  bottomBlocks.push({
     type: "actions",
     elements: [
       {
@@ -436,12 +459,10 @@ export function arbiterCard(args: ArbiterCardArgs): {
   });
 
   const mechanics = debateMechanicsContext(verdict);
-  if (mechanics) blocks.push(mechanics);
+  if (mechanics) bottomBlocks.push(mechanics);
 
-  // Phase 4 footer: invite reps to keep talking in-thread. The mentions.ts
-  // dispatcher detects thread replies in a verdict_conversations row and
-  // routes them to the Arbiter Moderator.
-  blocks.push({
+  // Phase 4 footer: invite reps to keep talking in-thread.
+  bottomBlocks.push({
     type: "context",
     elements: [
       {
@@ -452,15 +473,18 @@ export function arbiterCard(args: ArbiterCardArgs): {
     ],
   });
 
-  // Feedback row — captures whether reps actually find the verdict useful.
-  blocks.push(feedbackButtonsRow("arbiter", cardId));
+  // Feedback row.
+  bottomBlocks.push(feedbackButtonsRow("arbiter", cardId));
 
-  // Slack hard caps chat.postMessage at 50 blocks. With v2.1 synthesis +
-  // R2 claims + diagnostics + feedback, a rich verdict can tip over even
-  // after per-section caps. Final safety net: trim from the *middle*
-  // (high-density team-claim region) so we always keep header + probability
-  // + final actions + footer visible.
-  return { blocks: clampBlocks(blocks, 50), text };
+  // Top-level blocks always stay small (~6 blocks now that the dense content
+  // moved into attachments). The clampBlocks safety net still protects against
+  // future drift on the top-level array.
+  const allTopLevel = [...topBlocks, ...bottomBlocks];
+  return {
+    blocks: clampBlocks(allTopLevel, 50),
+    attachments,
+    text,
+  };
 }
 
 const KEEP_HEAD_BLOCKS = 4;
