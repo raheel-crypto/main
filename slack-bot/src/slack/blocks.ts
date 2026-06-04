@@ -129,7 +129,10 @@ export function oppCard(
       elements: [{ type: "mrkdwn", text: opp.accountName }],
     },
     { type: "section", text: { type: "mrkdwn", text: rec.recap } },
-    {
+  ];
+
+  if (rec.fields.length === 0) {
+    blocks.push({
       type: "actions",
       elements: [
         {
@@ -139,10 +142,7 @@ export function oppCard(
           url: oppUrl,
         },
       ],
-    },
-  ];
-
-  if (rec.fields.length === 0) {
+    });
     blocks.push({
       type: "context",
       elements: [{ type: "mrkdwn", text: "_No field changes recommended._" }],
@@ -150,41 +150,25 @@ export function oppCard(
     return { blocks, text: `${opp.name} — ${rec.recap}` };
   }
 
-  for (const f of rec.fields) {
-    blocks.push({ type: "divider" });
+  // Each field becomes one card in a horizontally-scrollable carousel.
+  // block_id `field_card:<field>` is how `cardWithFieldResolved` finds the
+  // matching card to update on Accept / Edit / Skip clicks.
+  const cards = rec.fields.slice(0, 10).map((f) =>
+    buildFieldCard(cardId, f)
+  );
+
+  blocks.push({
+    type: "carousel",
+    elements: cards,
+  } as unknown as KnownBlock);
+
+  if (rec.fields.length > 10) {
     blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text:
-          `*${f.field}*\n` +
-          `Current: \`${formatValue(f.currentValue)}\`\n` +
-          `Recommended: \`${formatValue(f.recommendedValue)}\`\n` +
-          `_${f.rationale}_`,
-      },
-    });
-    blocks.push({
-      type: "actions",
-      block_id: `field:${f.field}`,
+      type: "context",
       elements: [
         {
-          type: "button",
-          style: "primary",
-          text: { type: "plain_text", text: "Accept" },
-          action_id: actionId("accept", cardId, f.field),
-          value: f.field,
-        },
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Edit" },
-          action_id: actionId("edit", cardId, f.field),
-          value: f.field,
-        },
-        {
-          type: "button",
-          text: { type: "plain_text", text: "Skip" },
-          action_id: actionId("skip", cardId, f.field),
-          value: f.field,
+          type: "mrkdwn",
+          text: `_+${rec.fields.length - 10} more recommendations — Apply all to action them in bulk._`,
         },
       ],
     });
@@ -196,6 +180,12 @@ export function oppCard(
     elements: [
       {
         type: "button",
+        action_id: `linkout:open_in_sf:${rec.opportunityId}`,
+        text: { type: "plain_text", text: "Open in Salesforce" },
+        url: oppUrl,
+      },
+      {
+        type: "button",
         style: "primary",
         text: { type: "plain_text", text: "Apply all recommended" },
         action_id: actionId("apply_all", cardId),
@@ -204,6 +194,46 @@ export function oppCard(
   });
 
   return { blocks, text: `${opp.name} — ${rec.recap}` };
+}
+
+function buildFieldCard(cardId: string, f: RecommendedField): Record<string, unknown> {
+  return {
+    type: "card",
+    block_id: `field_card:${f.field}`,
+    title: {
+      type: "mrkdwn",
+      text: `*${f.field}*`.slice(0, 149),
+    },
+    subtitle: {
+      type: "mrkdwn",
+      text: `\`${formatValue(f.currentValue)}\` → \`${formatValue(f.recommendedValue)}\``.slice(0, 149),
+    },
+    body: {
+      type: "mrkdwn",
+      text: `_${f.rationale}_`.slice(0, 1500),
+    },
+    actions: [
+      {
+        type: "button",
+        style: "primary",
+        text: { type: "plain_text", text: "Accept" },
+        action_id: actionId("accept", cardId, f.field),
+        value: f.field,
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Edit" },
+        action_id: actionId("edit", cardId, f.field),
+        value: f.field,
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "Skip" },
+        action_id: actionId("skip", cardId, f.field),
+        value: f.field,
+      },
+    ],
+  };
 }
 
 function formatProposedValue(f: ProposedField, side: "current" | "recommended"): string {
@@ -729,24 +759,59 @@ export function cardWithFieldResolved(
   status: "accepted" | "skipped" | "edited",
   appliedValue?: unknown
 ): KnownBlock[] {
+  const statusEmoji =
+    status === "accepted" ? ":white_check_mark:" : status === "edited" ? ":pencil2:" : ":no_entry_sign:";
+  const statusVerb =
+    status === "accepted" ? "accepted" : status === "edited" ? "edited" : "skipped";
+  const valueSuffix =
+    appliedValue !== undefined && status !== "skipped"
+      ? ` → \`${formatValue(appliedValue)}\``
+      : "";
+
   return prevBlocks.map((block) => {
-    if (block.type !== "actions") return block;
-    if ((block as any).block_id !== `field:${field}`) return block;
-    return {
-      type: "context",
-      block_id: (block as any).block_id,
-      elements: [
-        {
-          type: "mrkdwn",
-          text:
-            status === "accepted"
-              ? `:white_check_mark: *${field}* accepted${appliedValue !== undefined ? ` → \`${formatValue(appliedValue)}\`` : ""}`
-              : status === "edited"
-                ? `:pencil2: *${field}* edited → \`${formatValue(appliedValue)}\``
-                : `:no_entry_sign: *${field}* skipped`,
-        },
-      ],
-    } as KnownBlock;
+    // Legacy (pre-carousel) layout: an `actions` block with block_id `field:<f>`.
+    // Replace with a context block summarizing the resolution.
+    if (block.type === "actions" && (block as any).block_id === `field:${field}`) {
+      return {
+        type: "context",
+        block_id: (block as any).block_id,
+        elements: [
+          {
+            type: "mrkdwn",
+            text: `${statusEmoji} *${field}* ${statusVerb}${valueSuffix}`,
+          },
+        ],
+      } as KnownBlock;
+    }
+
+    // Carousel layout: walk into elements and update the card matching the
+    // field. Replace its title with the status line and strip its action
+    // buttons so the rep sees the resolution and can't re-click.
+    if ((block as any).type === "carousel" && Array.isArray((block as any).elements)) {
+      const updatedElements = (block as any).elements.map((el: any) => {
+        if (el?.type !== "card") return el;
+        if (el.block_id !== `field_card:${field}`) return el;
+        const newCard: Record<string, unknown> = {
+          ...el,
+          title: {
+            type: "mrkdwn",
+            text: `${statusEmoji} *${field}* ${statusVerb}`.slice(0, 149),
+          },
+        };
+        if (valueSuffix) {
+          newCard.subtitle = {
+            type: "mrkdwn",
+            text: valueSuffix.replace(/^ → /, "").slice(0, 149),
+          };
+        }
+        // Strip actions — resolved cards aren't re-clickable.
+        delete newCard.actions;
+        return newCard;
+      });
+      return { ...(block as any), elements: updatedElements } as KnownBlock;
+    }
+
+    return block;
   });
 }
 
