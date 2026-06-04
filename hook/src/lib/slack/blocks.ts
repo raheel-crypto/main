@@ -1,5 +1,6 @@
 import type { KnownBlock, ActionsBlock, Button } from "@slack/web-api";
 import type { GapResult } from "@/lib/arr/recompute";
+import type { Recommendation } from "@/lib/actions/propose";
 
 function usd(n: number): string {
   const sign = n < 0 ? "-" : "";
@@ -13,10 +14,27 @@ export interface IssueButton {
   confirmText: string;
 }
 
+function recommendationsBlock(recs: Recommendation[]): KnownBlock | null {
+  if (recs.length === 0) return null;
+  const lines = recs.map(
+    (r) =>
+      `• \`${r.field}\` on *${r.recordName}*: ${r.currentValue} → *${r.proposedValue}*`,
+  );
+  return {
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*Proposed changes*\n${lines.join("\n")}`,
+    },
+  };
+}
+
 export function issueBlocks(
   gap: GapResult,
   narrative: string,
   buttons: IssueButton[] = [],
+  recommendations: Recommendation[] = [],
+  tierReason?: string,
 ): KnownBlock[] {
   const blocks: KnownBlock[] = [
     {
@@ -34,6 +52,9 @@ export function issueBlocks(
     },
     { type: "section", text: { type: "mrkdwn", text: narrative } },
   ];
+
+  const recBlock = recommendationsBlock(recommendations);
+  if (recBlock) blocks.push(recBlock);
 
   if (buttons.length > 0) {
     const actionsBlock: ActionsBlock = {
@@ -56,17 +77,91 @@ export function issueBlocks(
     blocks.push(actionsBlock);
   }
 
+  const contextElements: { type: "mrkdwn"; text: string }[] = [
+    { type: "mrkdwn", text: `Account: \`${gap.account.Id}\` • @Hook in-thread for detail` },
+  ];
+  if (tierReason) {
+    contextElements.push({ type: "mrkdwn", text: `Tier: human approval required — ${tierReason}` });
+  }
+  blocks.push({ type: "context", elements: contextElements });
+
+  return blocks;
+}
+
+// Variant used when Hook auto-applies a write without a button. No actions
+// block; a green check line at the bottom shows what changed and why.
+export function autoAppliedBlocks(
+  gap: GapResult,
+  recommendations: Recommendation[],
+  reason: string,
+  actionId: number,
+): KnownBlock[] {
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `Hook auto-corrected: ${gap.account.Name}` },
+    },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Was*\n${usd(gap.storedArr)}` },
+        { type: "mrkdwn", text: `*Now*\n${usd(gap.result.expectedArr)}` },
+        { type: "mrkdwn", text: `*Status*\n${gap.account.Account_Status__c}` },
+        { type: "mrkdwn", text: `*Audit*\naction #${actionId}` },
+      ],
+    },
+  ];
+
+  const recBlock = recommendationsBlock(recommendations);
+  if (recBlock) blocks.push(recBlock);
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `:white_check_mark: *Applied by Hook (auto)* — ${reason}`,
+    },
+  });
+
   blocks.push({
     type: "context",
     elements: [
-      {
-        type: "mrkdwn",
-        text: `Account: \`${gap.account.Id}\` • @Hook in-thread for detail`,
-      },
+      { type: "mrkdwn", text: `Account: \`${gap.account.Id}\` • @Hook in-thread to discuss or revert` },
     ],
   });
 
   return blocks;
+}
+
+export function appliedActionBlocks(
+  originalBlocks: KnownBlock[],
+  appliedBy: string,
+  buttonText: string,
+  actionId: number,
+  result: { ok: boolean; error?: string },
+): KnownBlock[] {
+  const withoutActions = originalBlocks.filter(
+    (b) => b.type !== "actions",
+  ) as KnownBlock[];
+
+  const stamp = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    hour: "numeric",
+    minute: "2-digit",
+    month: "short",
+    day: "numeric",
+  });
+
+  const summary = result.ok
+    ? `✓ *${buttonText}* applied by ${appliedBy} at ${stamp} ET (action #${actionId})`
+    : `⚠ *${buttonText}* attempted by ${appliedBy} at ${stamp} ET — failed: ${result.error ?? "unknown error"} (action #${actionId})`;
+
+  withoutActions.push({
+    type: "section",
+    text: { type: "mrkdwn", text: summary },
+  });
+
+  return withoutActions;
 }
 
 export function appliedActionBlocks(
