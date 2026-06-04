@@ -164,38 +164,6 @@ export function appliedActionBlocks(
   return withoutActions;
 }
 
-export function appliedActionBlocks(
-  originalBlocks: KnownBlock[],
-  appliedBy: string,
-  buttonText: string,
-  actionId: number,
-  result: { ok: boolean; error?: string },
-): KnownBlock[] {
-  // Strip the actions block and replace with a context line.
-  const withoutActions = originalBlocks.filter(
-    (b) => b.type !== "actions",
-  ) as KnownBlock[];
-
-  const stamp = new Date().toLocaleString("en-US", {
-    timeZone: "America/New_York",
-    hour: "numeric",
-    minute: "2-digit",
-    month: "short",
-    day: "numeric",
-  });
-
-  const summary = result.ok
-    ? `✓ *${buttonText}* applied by ${appliedBy} at ${stamp} ET (action #${actionId})`
-    : `⚠ *${buttonText}* attempted by ${appliedBy} at ${stamp} ET — failed: ${result.error ?? "unknown error"} (action #${actionId})`;
-
-  withoutActions.push({
-    type: "section",
-    text: { type: "mrkdwn", text: summary },
-  });
-
-  return withoutActions;
-}
-
 export interface WeeklyDigestInput {
   totalAccounts: number;
   matchCount: number;
