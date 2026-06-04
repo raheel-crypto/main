@@ -1202,6 +1202,7 @@ export interface VerdictConversation {
 
 export const NextMovesActionSchema = z.object({
   action: z.string(),
+  why: z.string().default(""),
   ownerRole: z.string().default(""),
   byDate: z.string().default(""),
   expectedSignal: z.string().default(""),

@@ -2677,28 +2677,32 @@ export function nextMovesCard(
           : state === "skipped"
           ? "⏭ "
           : "";
+      // Title = the action (imperative verb phrase). Stays inside Slack's
+      // 150-char title cap.
       const titleText = `${stateMarker}*${i + 1}.* ${a.action || ""}`.slice(0, 149);
 
-      const subtitleParts: string[] = [];
-      if (a.ownerRole) subtitleParts.push(`*Owner:* ${a.ownerRole}`);
-      if (a.byDate) subtitleParts.push(`*By:* ${a.byDate}`);
+      // Subtitle = a one-line "why" — what makes this move the move.
+      const subtitleText = (a.why || "").slice(0, 149);
+
+      // Body = the structured meta (owner · by · signal) on one line so the
+      // rep has a quick at-a-glance reference without scrolling within the
+      // card. Keeps narrow-panel rendering clean.
+      const metaParts: string[] = [];
+      if (a.ownerRole) metaParts.push(`*Owner:* ${a.ownerRole}`);
+      if (a.byDate) metaParts.push(`*By:* ${a.byDate}`);
+      if (a.expectedSignal) metaParts.push(`*Signal:* ${a.expectedSignal}`);
+      const bodyText = metaParts.join("  ·  ").slice(0, 1500);
 
       const card: Record<string, unknown> = {
         type: "card",
         block_id: `next_move_card:${i}`,
         title: { type: "mrkdwn", text: titleText },
       };
-      if (subtitleParts.length > 0) {
-        card.subtitle = {
-          type: "mrkdwn",
-          text: subtitleParts.join(" · ").slice(0, 149),
-        };
+      if (subtitleText) {
+        card.subtitle = { type: "mrkdwn", text: subtitleText };
       }
-      if (a.expectedSignal) {
-        card.body = {
-          type: "mrkdwn",
-          text: `*Signal:* ${a.expectedSignal}`.slice(0, 1500),
-        };
+      if (bodyText) {
+        card.body = { type: "mrkdwn", text: bodyText };
       }
       if (state === "open") {
         card.actions = [

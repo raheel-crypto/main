@@ -144,22 +144,42 @@ def _render_task() -> str:
 
 Use `submit_argument` to return:
 
-- `headline`: one sentence — "why these actions, in this order"
-- `claims`: one claim summarizing the deal state + post-call signal that drives the actions
-- `recommended_actions`: 2-4 concrete next moves, ordered by priority. Each action MUST include:
-  - `action`: the specific move (e.g. "Draft email to CFO Sarah Chen with ROI summary and ask for 30 min next week", NOT "follow up with CFO")
-  - `owner_role`: who does it ("AE", "CSM", "Manager", "Internal SE", etc.)
-  - `by_date`: a calendar date or relative window ("by Friday", "before next call", "today")
-  - `expected_signal`: what success looks like ("CFO confirms attendance", "MSA redlines back within 5 days")
+- `headline`: ≤120 chars. One sentence framing the post-call situation.
+- `claims`: one claim, ≤300 chars. The deal state + post-call signal that drives the actions.
+- `recommended_actions`: 2-4 concrete next moves, ordered by priority.
+
+EACH ACTION HAS FIVE FIELDS. Stay within the character budget per field —
+these render as a Slack carousel card and longer text gets clipped.
+
+  • `action` — IMPERATIVE VERB PHRASE. ≤80 chars. The literal move the rep
+    will execute. Starts with a verb. Not a headline, not narrative.
+       GOOD: "Draft EB intro email for Christine to forward"
+       GOOD: "Book 30-min ROI walkthrough with Linda"
+       GOOD: "Send signed POC scope to Chris by EOD"
+       BAD:  "Buyer-initiated re-engagement + self-volunteered POC criterion — convert into structured event"
+       BAD:  "Champion advocacy strategy with stakeholder mapping"
+
+  • `why` — ONE-LINE REASON. ≤140 chars. Why this action is the move.
+    Reference the specific signal from the call or deal state. No narrative.
+       GOOD: "Champion is strong but EB hasn't been confirmed — closing that gap moves the deal."
+       GOOD: "Buyer named a clear bar (50+ historical pitches) — a free success criterion to run against."
+       BAD:  "This is a buyer-initiated re-engagement with an objection that doubles as a buying signal: the partner has already named the exact bar Rogo must clear (50+ historical pitches, which Claude can't hold). That's a free success criterion handed to the rep — we just need to run it."
+
+  • `owner_role` — short role label. "AE", "CSM", "Manager", "SE".
+  • `by_date` — short. "by Wed", "today EOD", "next week", "by Aug 15".
+  • `expected_signal` — ≤120 chars. What success looks like.
+       GOOD: "Christine forwards the intro within 48h"
+       GOOD: "Signed scope returned by Friday"
+       BAD:  long narrative
 
 Bias toward forward-looking moves that advance the deal:
-- Drafts (emails, decks, ROI memos) the rep can send today
-- Stakeholders to bring in (champion intros, internal escalation, technical SE)
+- Drafts the rep can send today (emails, decks, ROI memos)
+- Stakeholders to bring in (champion intros, internal escalation, SE)
 - Meetings to book (working sessions, executive 1:1s)
-- Specific Salesforce updates that unblock the funnel (NextStep, MEDDPICC fields, contacts)
+- Specific Salesforce updates that unblock the funnel
 
 AVOID:
-- Generic "follow up" or "check in" — be specific about with whom and about what
-- Vague "discovery" — name the topic
-- Pure hygiene (e.g. "log the call notes") unless it's actually the most important next move
+- Headline-shaped actions ("Buyer re-engagement strategy" — that's a topic, not a move)
+- Generic "follow up" or "check in" — name the person and the topic
+- Pure hygiene ("log call notes") unless it's actually the most important move
 """

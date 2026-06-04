@@ -132,10 +132,11 @@ async def run_next_moves(req: NextMovesRequest) -> NextMovesResponse:
             continue
         actions.append(
             NextMovesAction(
-                action=str(ra.get("action") or "").strip(),
-                ownerRole=str(ra.get("owner_role") or "").strip(),
-                byDate=str(ra.get("by_date") or "").strip(),
-                expectedSignal=str(ra.get("expected_signal") or "").strip(),
+                action=str(ra.get("action") or "").strip()[:160],
+                why=str(ra.get("why") or "").strip()[:200],
+                ownerRole=str(ra.get("owner_role") or "").strip()[:40],
+                byDate=str(ra.get("by_date") or "").strip()[:40],
+                expectedSignal=str(ra.get("expected_signal") or "").strip()[:200],
             )
         )
     actions = [a for a in actions if a.action]

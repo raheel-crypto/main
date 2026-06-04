@@ -588,6 +588,7 @@ class NextMovesRequest(_Wire):
 
 class NextMovesAction(_Wire):
     action: str
+    why: str = ""
     ownerRole: str = ""
     byDate: str = ""
     expectedSignal: str = ""
