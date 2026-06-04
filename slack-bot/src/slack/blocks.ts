@@ -2684,13 +2684,12 @@ export function nextMovesCard(
       // Subtitle = a one-line "why" — what makes this move the move.
       const subtitleText = (a.why || "").slice(0, 149);
 
-      // Body = the structured meta (owner · by · signal) on one line so the
-      // rep has a quick at-a-glance reference without scrolling within the
-      // card. Keeps narrow-panel rendering clean.
+      // Body = compact owner · by-date on one line. We deliberately dropped
+      // the "Signal" field — the why subtitle already explains the move; a
+      // forward-looking success signal added noise in narrow card layouts.
       const metaParts: string[] = [];
       if (a.ownerRole) metaParts.push(`*Owner:* ${a.ownerRole}`);
       if (a.byDate) metaParts.push(`*By:* ${a.byDate}`);
-      if (a.expectedSignal) metaParts.push(`*Signal:* ${a.expectedSignal}`);
       const bodyText = metaParts.join("  ·  ").slice(0, 1500);
 
       const card: Record<string, unknown> = {

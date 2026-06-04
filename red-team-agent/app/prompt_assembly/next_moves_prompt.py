@@ -148,7 +148,7 @@ Use `submit_argument` to return:
 - `claims`: one claim, ≤300 chars. The deal state + post-call signal that drives the actions.
 - `recommended_actions`: 2-4 concrete next moves, ordered by priority.
 
-EACH ACTION HAS FIVE FIELDS. Stay within the character budget per field —
+EACH ACTION HAS FOUR FIELDS. Stay within the character budget per field —
 these render as a Slack carousel card and longer text gets clipped.
 
   • `action` — IMPERATIVE VERB PHRASE. ≤80 chars. The literal move the rep
@@ -159,18 +159,18 @@ these render as a Slack carousel card and longer text gets clipped.
        BAD:  "Buyer-initiated re-engagement + self-volunteered POC criterion — convert into structured event"
        BAD:  "Champion advocacy strategy with stakeholder mapping"
 
-  • `why` — ONE-LINE REASON. ≤140 chars. Why this action is the move.
-    Reference the specific signal from the call or deal state. No narrative.
+  • `why` — ONE-LINE REASON. ≤140 chars. Why this action is the move RIGHT
+    NOW. Reference the specific signal from the call or deal state that
+    triggered this recommendation. Backward-looking justification, not
+    forward-looking prediction.
        GOOD: "Champion is strong but EB hasn't been confirmed — closing that gap moves the deal."
-       GOOD: "Buyer named a clear bar (50+ historical pitches) — a free success criterion to run against."
-       BAD:  "This is a buyer-initiated re-engagement with an objection that doubles as a buying signal: the partner has already named the exact bar Rogo must clear (50+ historical pitches, which Claude can't hold). That's a free success criterion handed to the rep — we just need to run it."
+       GOOD: "Buyer named the exact bar (50+ historical pitches) — run it as a structured event."
+       GOOD: "Chris explicitly asked for Excel + Claude head-to-head — fastest path to advance."
+       BAD:  "Chris confirms receipt and schedules review" (that's forward-looking — wrong slot)
+       BAD:  long paragraph
 
   • `owner_role` — short role label. "AE", "CSM", "Manager", "SE".
   • `by_date` — short. "by Wed", "today EOD", "next week", "by Aug 15".
-  • `expected_signal` — ≤120 chars. What success looks like.
-       GOOD: "Christine forwards the intro within 48h"
-       GOOD: "Signed scope returned by Friday"
-       BAD:  long narrative
 
 Bias toward forward-looking moves that advance the deal:
 - Drafts the rep can send today (emails, decks, ROI memos)

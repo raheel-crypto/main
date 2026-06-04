@@ -136,7 +136,9 @@ async def run_next_moves(req: NextMovesRequest) -> NextMovesResponse:
                 why=str(ra.get("why") or "").strip()[:200],
                 ownerRole=str(ra.get("owner_role") or "").strip()[:40],
                 byDate=str(ra.get("by_date") or "").strip()[:40],
-                expectedSignal=str(ra.get("expected_signal") or "").strip()[:200],
+                # expectedSignal intentionally not extracted — dropped from
+                # the prompt; field kept on the schema for back-compat with
+                # any in-flight cards.
             )
         )
     actions = [a for a in actions if a.action]

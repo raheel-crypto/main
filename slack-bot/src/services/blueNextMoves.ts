@@ -222,6 +222,7 @@ export async function runBlueNextMovesForCall(
               headline: resp.headline,
               actions: resp.recommendedActions.map((a) => ({
                 action: a.action,
+                why: a.why,
                 ownerRole: a.ownerRole,
                 byDate: a.byDate,
               })),
