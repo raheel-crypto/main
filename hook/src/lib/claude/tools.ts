@@ -69,6 +69,15 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: ["accountId"],
     },
   },
+  {
+    name: "run_full_sweep",
+    description:
+      "Kick off a full ARR reconciliation across every Customer and Former Customer account. Returns immediately with a 'started' status; the actual sweep runs asynchronously and posts a complete digest to #revops in roughly 90 seconds. Use this when the user asks for a full ARR check, a fresh sweep, or 'which accounts have wrong ARR'. Do NOT use last_audit for this — last_audit only returns historical data from prior runs. This tool produces fresh results.",
+    input_schema: {
+      type: "object",
+      properties: {},
+    },
+  },
 ];
 
 export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
@@ -158,6 +167,47 @@ export const TOOL_EXECUTORS: Record<string, ToolExecutor> = {
         gapCount: gaps.length,
         gaps,
         oppsWithoutOfe,
+      });
+    } catch (err) {
+      return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+
+  async run_full_sweep() {
+    const baseUrl =
+      process.env.HOOK_BASE_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "");
+    if (!baseUrl) {
+      return JSON.stringify({
+        error: "HOOK_BASE_URL or VERCEL_URL not set; cannot self-call /api/cron/weekly",
+      });
+    }
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret) {
+      return JSON.stringify({ error: "CRON_SECRET not set" });
+    }
+
+    try {
+      const res = await fetch(`${baseUrl}/api/cron/weekly`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${cronSecret}` },
+      });
+      if (!res.ok) {
+        return JSON.stringify({
+          error: `Sweep kick-off failed: ${res.status} ${await res.text()}`,
+        });
+      }
+      const body = (await res.json()) as {
+        runId: number;
+        accountsToCheck: number;
+        estimatedSeconds: number;
+      };
+      return JSON.stringify({
+        status: "started",
+        runId: body.runId,
+        accountsToCheck: body.accountsToCheck,
+        estimatedSeconds: body.estimatedSeconds,
+        message: `Full ARR sweep kicked off across ${body.accountsToCheck} accounts. Digest will post to #revops in ~${body.estimatedSeconds}s.`,
       });
     } catch (err) {
       return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });

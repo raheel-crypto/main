@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getAllCustomerAccountIds } from "@/lib/salesforce/soql";
 import { sql } from "@/lib/db/client";
 import { slack, REVOPS_CHANNEL } from "@/lib/slack/client";
@@ -7,9 +7,16 @@ import type { GapResult } from "@/lib/arr/recompute";
 
 export const runtime = "nodejs";
 
+function resolveOrigin(req: Request): string {
+  const fwd = req.headers.get("x-forwarded-host");
+  if (fwd) return `https://${fwd}`;
+  return new URL(req.url).origin;
+}
+
 export async function GET(req: Request) {
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}` && !req.headers.get("x-vercel-cron")) {
+  const isCron = req.headers.get("x-vercel-cron") !== null;
+  if (auth !== `Bearer ${process.env.CRON_SECRET}` && !isCron) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -19,11 +26,28 @@ export async function GET(req: Request) {
   const runId = runRows[0]!.id;
 
   const accountIds = await getAllCustomerAccountIds();
+  const origin = resolveOrigin(req);
 
-  const origin = req.headers.get("x-forwarded-host")
-    ? `https://${req.headers.get("x-forwarded-host")}`
-    : new URL(req.url).origin;
+  // Return immediately so the caller (Vercel Cron, or Hook on demand) gets a
+  // fast ack. The fan-out and digest post run in after() — bound by the
+  // function's maxDuration but not the caller's.
+  after(async () => {
+    try {
+      await runSweep(runId, accountIds, origin);
+    } catch (err) {
+      console.error("weekly sweep failed", err);
+    }
+  });
 
+  return NextResponse.json({
+    runId,
+    accountsToCheck: accountIds.length,
+    status: "running",
+    estimatedSeconds: 90,
+  });
+}
+
+async function runSweep(runId: number, accountIds: string[], origin: string) {
   const fanout = await Promise.allSettled(
     accountIds.map((accountId) =>
       fetch(`${origin}/api/cron/recompute-account`, {
@@ -64,7 +88,7 @@ export async function GET(req: Request) {
       newSinceLastWeek,
       resolvedSinceLastWeek,
     }),
-    text: `Hook weekly run — ${gaps.length} issue(s) found`,
+    text: `Hook sweep — ${gaps.length} issue(s) found`,
   });
 
   await sql`
@@ -72,11 +96,4 @@ export async function GET(req: Request) {
                     gaps_found = ${gaps.length}, digest_message_ts = ${post.ts ?? null}
     WHERE id = ${runId}
   `;
-
-  return NextResponse.json({
-    runId,
-    accountsChecked: accountIds.length,
-    gapsFound: gaps.length,
-    digestTs: post.ts,
-  });
 }
