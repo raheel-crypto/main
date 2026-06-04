@@ -2612,7 +2612,7 @@ export function nextMovesCard(
           : state === "skipped"
           ? "⏭ "
           : "";
-      const titleText = `${stateMarker}*${i + 1}.* ${(a.action || "").slice(0, 150)}`;
+      const titleText = `${stateMarker}*${i + 1}.* ${a.action || ""}`.slice(0, 149);
 
       const subtitleParts: string[] = [];
       if (a.ownerRole) subtitleParts.push(`*Owner:* ${a.ownerRole}`);
@@ -2626,13 +2626,13 @@ export function nextMovesCard(
       if (subtitleParts.length > 0) {
         card.subtitle = {
           type: "mrkdwn",
-          text: subtitleParts.join(" · "),
+          text: subtitleParts.join(" · ").slice(0, 149),
         };
       }
       if (a.expectedSignal) {
         card.body = {
           type: "mrkdwn",
-          text: `*Signal:* ${a.expectedSignal.slice(0, 600)}`,
+          text: `*Signal:* ${a.expectedSignal}`.slice(0, 1500),
         };
       }
       if (state === "open") {
