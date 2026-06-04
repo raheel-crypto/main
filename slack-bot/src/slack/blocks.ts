@@ -2681,16 +2681,18 @@ export function nextMovesCard(
       // 150-char title cap.
       const titleText = `${stateMarker}*${i + 1}.* ${a.action || ""}`.slice(0, 149);
 
-      // Subtitle = a one-line "why" — what makes this move the move.
-      const subtitleText = (a.why || "").slice(0, 149);
-
-      // Body = compact owner · by-date on one line. We deliberately dropped
-      // the "Signal" field — the why subtitle already explains the move; a
-      // forward-looking success signal added noise in narrow card layouts.
+      // Subtitle = compact Owner · By line. Slack renders subtitle as a
+      // single line (truncates on overflow) so we keep it tight.
       const metaParts: string[] = [];
       if (a.ownerRole) metaParts.push(`*Owner:* ${a.ownerRole}`);
       if (a.byDate) metaParts.push(`*By:* ${a.byDate}`);
-      const bodyText = metaParts.join("  ·  ").slice(0, 1500);
+      const subtitleText = metaParts.join("  ·  ").slice(0, 149);
+
+      // Body = the why (multi-line, wraps naturally). This is where the
+      // longer-form reasoning goes; Slack's card renderer wraps text in
+      // the body field but truncates the subtitle, so put descriptive
+      // content here.
+      const bodyText = (a.why || "").slice(0, 1500);
 
       const card: Record<string, unknown> = {
         type: "card",
@@ -2701,7 +2703,7 @@ export function nextMovesCard(
         card.subtitle = { type: "mrkdwn", text: subtitleText };
       }
       if (bodyText) {
-        card.body = { type: "mrkdwn", text: bodyText };
+        card.body = { type: "mrkdwn", text: `_${bodyText}_` };
       }
       if (state === "open") {
         card.actions = [
