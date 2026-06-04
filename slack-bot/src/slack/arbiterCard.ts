@@ -84,24 +84,26 @@ function citationLine(c: ArbiterClaim["citations"][number]): string {
 }
 
 function claimBlocks(claim: ArbiterClaim, index: number): KnownBlock[] {
-  const blocks: KnownBlock[] = [];
-  const lines = [`*${index}.* ${truncate(claim.statement, 1500)}`];
+  // Inline citations into the claim's section text instead of emitting a
+  // separate context block. Halves the block count per claim and keeps Slack's
+  // 50-block-per-message limit comfortable when both teams run heavy.
+  const lines = [`*${index}.* ${truncate(claim.statement, 1200)}`];
   if (claim.pattern_match) {
-    lines.push(`   _Pattern: ${truncate(claim.pattern_match, 200)}_`);
+    lines.push(`_Pattern: ${truncate(claim.pattern_match, 200)}_`);
   }
-  blocks.push({
-    type: "section",
-    text: { type: "mrkdwn", text: lines.join("\n") },
-  });
-  const citationLines = claim.citations.slice(0, 4).map(citationLine);
-  if (citationLines.length > 0) {
-    blocks.push({
-      type: "context",
-      elements: [{ type: "mrkdwn", text: citationLines.join("\n") }],
-    });
+  const cits = claim.citations.slice(0, 3).map(citationLine);
+  if (cits.length > 0) {
+    lines.push(...cits);
   }
-  return blocks;
+  return [
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: lines.join("\n") },
+    },
+  ];
 }
+
+const MAX_CLAIMS_PER_TEAM = 5;
 
 function teamBlocks(
   arg: ArbiterTeamArgument,
@@ -119,8 +121,20 @@ function teamBlocks(
       },
     },
   ];
-  for (let i = 0; i < arg.claims.length; i++) {
+  const limit = Math.min(arg.claims.length, MAX_CLAIMS_PER_TEAM);
+  for (let i = 0; i < limit; i++) {
     blocks.push(...claimBlocks(arg.claims[i], i + 1));
+  }
+  if (arg.claims.length > MAX_CLAIMS_PER_TEAM) {
+    blocks.push({
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `_+${arg.claims.length - MAX_CLAIMS_PER_TEAM} more claims in audit log_`,
+        },
+      ],
+    });
   }
   return blocks;
 }
@@ -189,23 +203,15 @@ function ifThenDiagnosticBlocks(
   ];
   for (let i = 0; i < scenarios.length && i < 3; i++) {
     const s = scenarios[i];
+    const lines = [
+      `*${i + 1}.* ${truncate(s.condition, 600)}`,
+      `→ ${leanEmoji(s.new_lean)} *${s.new_probability}%* (${s.new_lean})`,
+    ];
+    if (s.rationale) lines.push(`_${truncate(s.rationale, 700)}_`);
     blocks.push({
       type: "section",
-      text: {
-        type: "mrkdwn",
-        text:
-          `*${i + 1}.* ${truncate(s.condition, 600)}\n` +
-          `   → ${leanEmoji(s.new_lean)} *${s.new_probability}%* (${s.new_lean})`,
-      },
+      text: { type: "mrkdwn", text: lines.join("\n") },
     });
-    if (s.rationale) {
-      blocks.push({
-        type: "context",
-        elements: [
-          { type: "mrkdwn", text: `_${truncate(s.rationale, 900)}_` },
-        ],
-      });
-    }
   }
   return blocks;
 }
@@ -224,31 +230,21 @@ function resolvedContradictionsBlocks(
       },
     },
   ];
-  // One section + one context block per concession. Per-item blocks keep
-  // each concession well under Slack's 3000-char section limit so the
-  // impact line doesn't get cut mid-sentence.
+  // Collapsed to one section per concession (summary + impact inline) to
+  // keep total block count well under Slack's 50-per-message limit.
   for (const c of concessions.slice(0, 4)) {
     const sideLabel = c.conceding_team === "red" ? "🔴 Red" : "🔵 Blue";
+    const lines = [
+      `${sideLabel} conceded on *${c.on_topic}*`,
+      truncate(c.summary, 1000),
+    ];
+    if (c.impact) {
+      lines.push(`_Impact: ${truncate(c.impact, 700)}_`);
+    }
     blocks.push({
       type: "section",
-      text: {
-        type: "mrkdwn",
-        text:
-          `${sideLabel} conceded on *${c.on_topic}*\n` +
-          truncate(c.summary, 1200),
-      },
+      text: { type: "mrkdwn", text: lines.join("\n") },
     });
-    if (c.impact) {
-      blocks.push({
-        type: "context",
-        elements: [
-          {
-            type: "mrkdwn",
-            text: `_Impact: ${truncate(c.impact, 800)}_`,
-          },
-        ],
-      });
-    }
   }
   return blocks;
 }
@@ -459,5 +455,36 @@ export function arbiterCard(args: ArbiterCardArgs): {
   // Feedback row — captures whether reps actually find the verdict useful.
   blocks.push(feedbackButtonsRow("arbiter", cardId));
 
-  return { blocks, text };
+  // Slack hard caps chat.postMessage at 50 blocks. With v2.1 synthesis +
+  // R2 claims + diagnostics + feedback, a rich verdict can tip over even
+  // after per-section caps. Final safety net: trim from the *middle*
+  // (high-density team-claim region) so we always keep header + probability
+  // + final actions + footer visible.
+  return { blocks: clampBlocks(blocks, 50), text };
+}
+
+const KEEP_HEAD_BLOCKS = 4;
+const KEEP_TAIL_BLOCKS = 5;
+
+function clampBlocks(blocks: KnownBlock[], max: number): KnownBlock[] {
+  if (blocks.length <= max) return blocks;
+  const head = blocks.slice(0, KEEP_HEAD_BLOCKS);
+  const tail = blocks.slice(blocks.length - KEEP_TAIL_BLOCKS);
+  // Budget for the middle = max − head − tail − 1 (the truncation notice).
+  const middleBudget = Math.max(0, max - head.length - tail.length - 1);
+  const middle = blocks.slice(
+    KEEP_HEAD_BLOCKS,
+    KEEP_HEAD_BLOCKS + middleBudget
+  );
+  const truncated = blocks.length - head.length - tail.length - middle.length;
+  const notice: KnownBlock = {
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: `_… ${truncated} additional block${truncated === 1 ? "" : "s"} truncated — full verdict in audit log_`,
+      },
+    ],
+  };
+  return [...head, ...middle, notice, ...tail];
 }
