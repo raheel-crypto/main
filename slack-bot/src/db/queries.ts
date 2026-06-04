@@ -6,6 +6,7 @@ import type {
   GcTokens,
   MeetingPickerPayload,
   MeetingRun,
+  NextMovesPayload,
   PendingCard,
   PendingCardKind,
   NooksDispositionBucket,
@@ -20,6 +21,8 @@ import type {
   ArbiterChatConversationTurn,
   ArbiterChatRole,
   ArbiterVerdict,
+  FeedbackRating,
+  FeedbackSurface,
   VerdictConversation,
 } from "../types.js";
 
@@ -475,7 +478,8 @@ export async function insertPendingCard(c: {
     | PostMeetingPayload
     | MeetingPickerPayload
     | RecordUpdateProposal
-    | BulkRecordUpdateProposal;
+    | BulkRecordUpdateProposal
+    | NextMovesPayload;
   kind?: PendingCardKind;
 }): Promise<string> {
   const pool = getPool();
@@ -1225,5 +1229,58 @@ export async function getVerdictConversationTurns(
     role: (r.role as ArbiterChatRole) ?? "user",
     content: r.content,
     metadata: r.metadata ?? undefined,
+  }));
+}
+
+// ─── Merlin feedback (helpful / not helpful) ──────────────────────────────
+
+export async function insertFeedback(args: {
+  slackUserId: string;
+  surface: FeedbackSurface;
+  rating: FeedbackRating;
+  cardId?: string | null;
+  note?: string | null;
+  metadata?: Record<string, unknown> | null;
+}): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO merlin_feedback
+       (card_id, slack_user_id, surface, rating, note, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      args.cardId ?? null,
+      args.slackUserId,
+      args.surface,
+      args.rating,
+      args.note ?? null,
+      args.metadata ? JSON.stringify(args.metadata) : null,
+    ]
+  );
+}
+
+export async function getRecentFeedbackForCard(
+  cardId: string
+): Promise<Array<{
+  slackUserId: string;
+  rating: FeedbackRating;
+  createdAt: string;
+}>> {
+  const pool = getPool();
+  const { rows } = await pool.query<{
+    slack_user_id: string;
+    rating: string;
+    created_at: string;
+  }>(
+    `SELECT slack_user_id, rating, created_at
+       FROM merlin_feedback
+      WHERE card_id = $1
+      ORDER BY created_at DESC
+      LIMIT 50`,
+    [cardId]
+  );
+  return rows.map((r) => ({
+    slackUserId: r.slack_user_id,
+    rating: r.rating as FeedbackRating,
+    createdAt: r.created_at,
   }));
 }

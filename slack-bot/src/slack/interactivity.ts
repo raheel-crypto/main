@@ -7,6 +7,7 @@ import {
   getGcTokens,
   getPendingCard,
   getUser,
+  insertFeedback,
   setCardStatus,
   updatePendingCardRecommendation,
   updateSubscriptionPrefs,
@@ -61,6 +62,7 @@ import {
   cardWithFieldResolved,
   editFieldModal,
   editProposedFieldModal,
+  nextMovesCard,
   parseActionId,
   postBindPromptBlocks,
   postMeetingAddContactModal,
@@ -73,6 +75,9 @@ import type {
   BulkRecordProposalPendingCard,
   BulkRecordUpdateProposal,
   BuySignalPendingCard,
+  FeedbackRating,
+  FeedbackSurface,
+  NextMovesPayload,
   PendingCard,
   PostMeetingPendingCard,
   MeetingPickerPendingCard,
@@ -873,6 +878,133 @@ export function registerInteractivity(app: App): void {
       });
     }
   });
+
+  // ─── Blue next-moves: Mark done / Skip per action ─────────────────────
+  app.action(/^next_moves_accept:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed || parsed.field === undefined) return;
+    await handleNextMovesAction(app, body, parsed.cardId, parsed.field, "accepted");
+  });
+
+  app.action(/^next_moves_skip:.+/, async ({ ack, body, action }) => {
+    await ack();
+    const parsed = parseActionId((action as any).action_id);
+    if (!parsed || parsed.field === undefined) return;
+    await handleNextMovesAction(app, body, parsed.cardId, parsed.field, "skipped");
+  });
+
+  // ─── Universal feedback (helpful / not helpful) ───────────────────────
+  // action_id shape: feedback_helpful:<surface>[:<cardId>]
+  app.action(/^feedback_(helpful|not_helpful):/, async ({ ack, body, action }) => {
+    await ack();
+    await handleFeedback(app, body, (action as any).action_id);
+  });
+}
+
+async function handleNextMovesAction(
+  app: App,
+  body: any,
+  cardId: string,
+  indexStr: string,
+  newState: "accepted" | "skipped"
+) {
+  const idx = Number(indexStr);
+  if (Number.isNaN(idx)) return;
+  const card = await getPendingCard(cardId);
+  if (!card || card.kind !== "next_moves") return;
+  const payload = card.recommendation as NextMovesPayload;
+  if (idx < 0 || idx >= payload.actions.length) return;
+
+  const nextStates = { ...payload.actionStates, [idx]: newState };
+  const allActioned = payload.actions.every(
+    (_, i) => (nextStates[i] ?? "open") !== "open"
+  );
+  const updated: NextMovesPayload = { ...payload, actionStates: nextStates };
+  await updatePendingCardRecommendation(cardId, updated);
+  if (allActioned) {
+    const accepted = Object.values(nextStates).filter((s) => s === "accepted").length;
+    const skipped = Object.values(nextStates).filter((s) => s === "skipped").length;
+    await setCardStatus(
+      cardId,
+      accepted === 0 ? "skipped" : skipped === 0 ? "applied" : "partial"
+    );
+  }
+
+  const slackUserId = body.user?.id ?? card.slackUserId;
+  await appendAudit({
+    slackUserId,
+    opportunityId: payload.opportunityId,
+    action:
+      newState === "accepted"
+        ? "next_moves_action_accepted"
+        : "next_moves_action_skipped",
+    metadata: {
+      cardId,
+      actionIndex: idx,
+      action: payload.actions[idx]?.action,
+      callId: payload.callId,
+    },
+  });
+
+  // Re-render the card with the updated state markers.
+  const conn = await getConnectionForUser(card.slackUserId).catch(() => null);
+  const instanceUrl =
+    conn?.instanceUrl ?? "https://login.salesforce.com";
+  const view = nextMovesCard(cardId, updated, instanceUrl);
+  try {
+    await app.client.chat.update({
+      channel: card.slackChannel,
+      ts: card.slackMessageTs,
+      text: view.text,
+      blocks: view.blocks,
+    });
+  } catch (err: any) {
+    console.error("[next_moves] chat.update failed:", err?.message ?? err);
+  }
+}
+
+async function handleFeedback(app: App, body: any, actionId: string) {
+  // action_id shape: feedback_helpful:<surface>[:<cardId>]
+  const parts = actionId.split(":");
+  const verb = parts[0]; // 'feedback_helpful' | 'feedback_not_helpful'
+  const surface = parts[1] as FeedbackSurface | undefined;
+  const cardId = parts[2] ?? null;
+  if (!surface) return;
+  const rating: FeedbackRating =
+    verb === "feedback_helpful" ? "helpful" : "not_helpful";
+  const slackUserId = body.user?.id;
+  if (!slackUserId) return;
+
+  await insertFeedback({
+    slackUserId,
+    surface,
+    rating,
+    cardId,
+    metadata: {
+      channel: body.channel?.id ?? null,
+      messageTs: body.message?.ts ?? null,
+    },
+  });
+  await appendAudit({
+    slackUserId,
+    action: "feedback_given",
+    metadata: { surface, rating, cardId },
+  });
+
+  // Lightweight visual confirmation: ephemeral toast in-channel.
+  try {
+    await app.client.chat.postEphemeral({
+      channel: body.channel?.id ?? body.container?.channel_id,
+      user: slackUserId,
+      text:
+        rating === "helpful"
+          ? ":pray: Thanks — logged as helpful. Merlin learns from this."
+          : ":pencil2: Thanks — logged. Tell merlin what was off in DM if you'd like.",
+    });
+  } catch {
+    // ignore — feedback persists even if the toast fails
+  }
 }
 
 function splitName(

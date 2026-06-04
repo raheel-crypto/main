@@ -5,6 +5,7 @@
  * (reuses the existing red_team_mute action verb).
  */
 import type { KnownBlock } from "@slack/types";
+import { feedbackButtonsRow } from "./blocks.js";
 import type {
   ArbiterClaim,
   ArbiterConcession,
@@ -454,6 +455,9 @@ export function arbiterCard(args: ArbiterCardArgs): {
       },
     ],
   });
+
+  // Feedback row — captures whether reps actually find the verdict useful.
+  blocks.push(feedbackButtonsRow("arbiter", cardId));
 
   return { blocks, text };
 }

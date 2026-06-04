@@ -521,4 +521,85 @@ class ChatResponse(_Wire):
     appendedTurns: List[ChatConversationTurn] = Field(default_factory=list)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# BLUE POST-CALL NEXT MOVES — /blue/next-moves wire types
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class NextMovesOpportunity(_Wire):
+    id: str
+    name: str
+    stageName: str
+    type: Optional[str] = None
+    amount: Optional[float] = None
+    closeDate: Optional[str] = None
+    accountName: str
+    accountId: str
+    ownerSlackUserId: Optional[str] = None
+
+
+class NextMovesCallInsight(_Wire):
+    summary: Optional[str] = None
+    positives: List[str] = Field(default_factory=list)
+    negatives: List[str] = Field(default_factory=list)
+    nextSteps: List[str] = Field(default_factory=list)
+
+
+class NextMovesCallMetadata(_Wire):
+    callId: Optional[str] = None
+    title: Optional[str] = None
+    durationSec: Optional[float] = None
+    startedAt: Optional[str] = None
+    parties: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class NextMovesContact(_Wire):
+    id: str
+    name: Optional[str] = None
+    email: Optional[str] = None
+    title: Optional[str] = None
+
+
+class NextMovesAttendee(_Wire):
+    email: str
+    displayName: Optional[str] = None
+
+
+class NextMovesActivity(_Wire):
+    type: str
+    subject: str
+    activityDate: Optional[str] = None
+    description: Optional[str] = None
+
+
+class NextMovesRequest(_Wire):
+    """POST /blue/next-moves — lightweight post-call ask for forward-looking
+    actions. No MEDDPICC scoring required; the call insight + recent SF state
+    is enough for Blue to produce 2-4 concrete next moves."""
+
+    opportunity: NextMovesOpportunity
+    callInsight: Optional[NextMovesCallInsight] = None
+    callMetadata: Optional[NextMovesCallMetadata] = None
+    matchedContacts: List[NextMovesContact] = Field(default_factory=list)
+    unmatchedAttendees: List[NextMovesAttendee] = Field(default_factory=list)
+    recentActivities: List[NextMovesActivity] = Field(default_factory=list)
+    shadowMode: bool = False
+
+
+class NextMovesAction(_Wire):
+    action: str
+    ownerRole: str = ""
+    byDate: str = ""
+    expectedSignal: str = ""
+
+
+class NextMovesResponse(_Wire):
+    evaluatedAt: str
+    shadowMode: bool = False
+    headline: str = ""
+    rationale: str = ""
+    recommendedActions: List[NextMovesAction] = Field(default_factory=list)
+    dropReason: Optional[str] = None
+
+
 ArbiterVerdict.model_rebuild()

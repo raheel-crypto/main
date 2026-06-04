@@ -234,3 +234,21 @@ CREATE TABLE IF NOT EXISTS verdict_conversation_turns (
 );
 CREATE INDEX IF NOT EXISTS idx_verdict_turns_conv
   ON verdict_conversation_turns(conversation_id, created_at);
+
+-- Universal feedback on Merlin outputs. card_id is nullable so we can also
+-- capture feedback on non-card surfaces (e.g., the moderator's reply, a
+-- standup parent message). One row per click; reps can revise by clicking
+-- again (we keep the history).
+CREATE TABLE IF NOT EXISTS merlin_feedback (
+  id BIGSERIAL PRIMARY KEY,
+  card_id UUID,
+  slack_user_id TEXT NOT NULL,
+  surface TEXT NOT NULL,
+  rating TEXT NOT NULL,
+  note TEXT,
+  metadata JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_surface ON merlin_feedback(surface, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_card ON merlin_feedback(card_id) WHERE card_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_feedback_user ON merlin_feedback(slack_user_id, created_at DESC);

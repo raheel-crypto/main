@@ -27,6 +27,7 @@ from .chat.conversation import run_arbiter_chat
 from .context import pack_to_context
 from .cooldowns import is_cooled_down, mark_evaluated
 from .personas.routing import route_personas
+from .runner_blue import run_next_moves
 from .schemas import (
     AgentArgument,
     ArbiterRequest,
@@ -39,6 +40,8 @@ from .schemas import (
     DealContext,
     FiredTrigger,
     IntelPackRequest,
+    NextMovesRequest,
+    NextMovesResponse,
     PersonaArgument,
     RunResult,
     TeamArgument,
@@ -537,6 +540,51 @@ async def arbiter_chat(
             toolCalls=[],
             hopsUsed=0,
             appendedTurns=[],
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# /blue/next-moves — lightweight post-call Blue call
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@app.post("/blue/next-moves", response_model=NextMovesResponse)
+async def blue_next_moves(
+    raw_body: Annotated[bytes, Depends(verify_signature)],
+) -> NextMovesResponse:
+    """
+    Post-call entry point for forward-looking next moves. Reuses the BlueHat
+    Merlin managed agent (same submit_argument tool, same envs) but with a
+    lighter user message that asks for 2-4 concrete next moves grounded in
+    the call insight + deal state + people. Returns only `recommendedActions`
+    + a short headline + rationale.
+
+    Stateless: Merlin owns the post-call DM thread + audit + card lifecycle.
+    """
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"invalid JSON: {exc}",
+        ) from exc
+    try:
+        req = NextMovesRequest.model_validate(payload)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"invalid next-moves request: {exc}",
+        ) from exc
+
+    try:
+        return await run_next_moves(req)
+    except Exception as exc:  # noqa: BLE001
+        from datetime import datetime, timezone
+        print(f"[blue_next_moves] failed: {exc}", flush=True)
+        return NextMovesResponse(
+            evaluatedAt=datetime.now(timezone.utc).isoformat(),
+            shadowMode=req.shadowMode,
+            dropReason=f"handler_failed: {str(exc)[:240]}",
         )
 
 

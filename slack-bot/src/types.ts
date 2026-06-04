@@ -174,7 +174,8 @@ export type PendingCardKind =
   | "bulk_record_proposal"
   | "notion_sync"
   | "channel_sync"
-  | "opp_watch";
+  | "opp_watch"
+  | "next_moves";
 
 export interface PendingCardBase {
   id: string;
@@ -340,6 +341,12 @@ export interface BulkRecordUpdateProposal {
   instanceUrl: string;
 }
 
+export interface NextMovesPendingCard extends PendingCardBase {
+  kind: "next_moves";
+  opportunityId: string;
+  recommendation: NextMovesPayload;
+}
+
 export interface BulkRecordProposalPendingCard extends PendingCardBase {
   kind: "bulk_record_proposal";
   opportunityId: null;
@@ -354,7 +361,8 @@ export type PendingCard =
   | MeetingPickerPendingCard
   | QaProposalPendingCard
   | RecordProposalPendingCard
-  | BulkRecordProposalPendingCard;
+  | BulkRecordProposalPendingCard
+  | NextMovesPendingCard;
 
 export type AuditAction =
   | "recommended"
@@ -413,7 +421,12 @@ export type AuditAction =
   | "opp_watch_surfaced"
   | "opp_watch_dropped"
   | "arbiter_chat"
-  | "arbiter_chat_failed";
+  | "arbiter_chat_failed"
+  | "next_moves_surfaced"
+  | "next_moves_dropped"
+  | "next_moves_action_accepted"
+  | "next_moves_action_skipped"
+  | "feedback_given";
 
 const BRIEF_SUGGESTION_KINDS = [
   "update_next_step",
@@ -1184,3 +1197,116 @@ export interface VerdictConversation {
   createdAt: string;
   lastActivityAt: string;
 }
+
+// ─── Blue post-call next moves ───────────────────────────────────────────────
+
+export const NextMovesActionSchema = z.object({
+  action: z.string(),
+  ownerRole: z.string().default(""),
+  byDate: z.string().default(""),
+  expectedSignal: z.string().default(""),
+});
+
+export const NextMovesRequestSchema = z.object({
+  opportunity: z.object({
+    id: z.string(),
+    name: z.string(),
+    stageName: z.string(),
+    type: z.string().nullable().optional(),
+    amount: z.number().nullable().optional(),
+    closeDate: z.string().nullable().optional(),
+    accountName: z.string(),
+    accountId: z.string(),
+    ownerSlackUserId: z.string().nullable().optional(),
+  }),
+  callInsight: z
+    .object({
+      summary: z.string().nullable().optional(),
+      positives: z.array(z.string()).default([]),
+      negatives: z.array(z.string()).default([]),
+      nextSteps: z.array(z.string()).default([]),
+    })
+    .nullable()
+    .optional(),
+  callMetadata: z
+    .object({
+      callId: z.string().nullable().optional(),
+      title: z.string().nullable().optional(),
+      durationSec: z.number().nullable().optional(),
+      startedAt: z.string().nullable().optional(),
+      parties: z.array(z.record(z.string(), z.unknown())).default([]),
+    })
+    .nullable()
+    .optional(),
+  matchedContacts: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+        title: z.string().nullable().optional(),
+      })
+    )
+    .default([]),
+  unmatchedAttendees: z
+    .array(
+      z.object({
+        email: z.string(),
+        displayName: z.string().nullable().optional(),
+      })
+    )
+    .default([]),
+  recentActivities: z
+    .array(
+      z.object({
+        type: z.string(),
+        subject: z.string(),
+        activityDate: z.string().nullable().optional(),
+        description: z.string().nullable().optional(),
+      })
+    )
+    .default([]),
+  shadowMode: z.boolean().default(false),
+});
+
+export const NextMovesResponseSchema = z.object({
+  evaluatedAt: z.string(),
+  shadowMode: z.boolean().default(false),
+  headline: z.string().default(""),
+  rationale: z.string().default(""),
+  recommendedActions: z.array(NextMovesActionSchema).default([]),
+  dropReason: z.string().nullable().optional(),
+});
+
+export type NextMovesAction = z.infer<typeof NextMovesActionSchema>;
+export type NextMovesRequest = z.infer<typeof NextMovesRequestSchema>;
+export type NextMovesResponse = z.infer<typeof NextMovesResponseSchema>;
+
+// What we persist in `pending_cards.recommendation` for kind='next_moves'
+export interface NextMovesPayload {
+  opportunityId: string;
+  opportunityName: string;
+  accountName: string;
+  callId: string | null;
+  callTitle: string | null;
+  headline: string;
+  rationale: string;
+  actions: NextMovesAction[];
+  actionStates: Record<number, "open" | "accepted" | "skipped">; // index → state
+}
+
+// ─── Feedback (helpful / not helpful) ───────────────────────────────────────
+
+export type FeedbackRating = "helpful" | "not_helpful";
+
+export type FeedbackSurface =
+  | "standup"
+  | "brief"
+  | "buy_signal"
+  | "post_meeting"
+  | "arbiter"
+  | "arbiter_chat"
+  | "next_moves"
+  | "channel_sync"
+  | "notion_sync"
+  | "opp_watch";

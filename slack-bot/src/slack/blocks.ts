@@ -5,9 +5,11 @@ import type {
   BriefSuggestion,
   BulkRecordUpdateProposal,
   BuySignalPayload,
+  FeedbackSurface,
   GongCallInsight,
   GongWebhookPayload,
   MeetingPickerCandidate,
+  NextMovesPayload,
   NooksWebhookPayload,
   PostMeetingPayload,
   ProposedField,
@@ -37,7 +39,11 @@ export type ActionVerb =
   | "bulk_exclude"
   | "bulk_apply"
   | "bulk_confirm"
-  | "bulk_cancel";
+  | "bulk_cancel"
+  | "next_moves_accept"
+  | "next_moves_skip"
+  | "feedback_helpful"
+  | "feedback_not_helpful";
 
 const VALID_VERBS: ActionVerb[] = [
   "accept",
@@ -60,6 +66,10 @@ const VALID_VERBS: ActionVerb[] = [
   "bulk_apply",
   "bulk_confirm",
   "bulk_cancel",
+  "next_moves_accept",
+  "next_moves_skip",
+  "feedback_helpful",
+  "feedback_not_helpful",
 ];
 
 export function actionId(
@@ -2507,4 +2517,141 @@ export function oppWatchBadge(watch: OppWatchCardOpts): string {
     );
   }
   return parts.join(" · ");
+}
+
+// ─── Universal feedback row (helpful / not helpful) ──────────────────────
+// Action ids encode the surface so the handler can audit/aggregate by source
+// without needing to look up the pending_cards row first.
+//   feedback_helpful:<surface>:<cardId?>
+//   feedback_not_helpful:<surface>:<cardId?>
+// When card_id is absent (e.g. moderator thread reply), pass surface only.
+
+export function feedbackButtonsRow(
+  surface: FeedbackSurface,
+  cardId?: string | null
+): KnownBlock {
+  const suffix = cardId ? `:${cardId}` : "";
+  return {
+    type: "actions",
+    block_id: `feedback:${surface}${suffix}`,
+    elements: [
+      {
+        type: "button",
+        action_id: `feedback_helpful:${surface}${suffix}`,
+        text: { type: "plain_text", text: ":+1: Helpful", emoji: true },
+        value: surface,
+      },
+      {
+        type: "button",
+        action_id: `feedback_not_helpful:${surface}${suffix}`,
+        text: { type: "plain_text", text: ":-1: Not helpful", emoji: true },
+        value: surface,
+        style: "danger",
+      },
+    ],
+  };
+}
+
+// ─── Blue post-call next-moves card ──────────────────────────────────────
+
+export function nextMovesCard(
+  cardId: string,
+  payload: NextMovesPayload,
+  instanceUrl: string
+): { blocks: KnownBlock[]; text: string } {
+  const oppUrl = `${instanceUrl.replace(/\/+$/, "")}/${payload.opportunityId}`;
+  const blocks: KnownBlock[] = [
+    {
+      type: "header",
+      text: {
+        type: "plain_text",
+        text: `:dart: Next moves — ${payload.opportunityName}`.slice(0, 150),
+      },
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: `${payload.accountName}${
+            payload.callTitle ? ` · after Gong call _${payload.callTitle.slice(0, 80)}_` : ""
+          }`,
+        },
+      ],
+    },
+  ];
+
+  if (payload.headline) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*${payload.headline}*` },
+    });
+  }
+  if (payload.rationale) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `_${payload.rationale.slice(0, 600)}_` }],
+    });
+  }
+
+  payload.actions.forEach((a, i) => {
+    const state = payload.actionStates[i] ?? "open";
+    blocks.push({ type: "divider" });
+    const stateLabel =
+      state === "accepted"
+        ? " :white_check_mark: _accepted_"
+        : state === "skipped"
+        ? " :black_square_for_stop: _skipped_"
+        : "";
+    const meta: string[] = [];
+    if (a.ownerRole) meta.push(`*Owner:* ${a.ownerRole}`);
+    if (a.byDate) meta.push(`*By:* ${a.byDate}`);
+    if (a.expectedSignal) meta.push(`*Signal:* ${a.expectedSignal}`);
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*${i + 1}. ${a.action}*${stateLabel}\n${meta.join(" · ")}`,
+      },
+    });
+    if (state === "open") {
+      blocks.push({
+        type: "actions",
+        block_id: `next_move:${i}`,
+        elements: [
+          {
+            type: "button",
+            style: "primary",
+            text: { type: "plain_text", text: "Mark done" },
+            action_id: `next_moves_accept:${cardId}:${i}`,
+            value: String(i),
+          },
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Skip" },
+            action_id: `next_moves_skip:${cardId}:${i}`,
+            value: String(i),
+          },
+        ],
+      });
+    }
+  });
+
+  blocks.push({ type: "divider" });
+  blocks.push({
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        action_id: `linkout:open_in_sf:${payload.opportunityId}`,
+        text: { type: "plain_text", text: "Open in Salesforce" },
+        url: oppUrl,
+      },
+    ],
+  });
+  blocks.push(feedbackButtonsRow("next_moves", cardId));
+
+  const fallbackText =
+    payload.headline || `Next moves on ${payload.opportunityName}`;
+  return { blocks, text: fallbackText };
 }

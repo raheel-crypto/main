@@ -11,6 +11,7 @@ import {
 import { oppCard, postMeetingCard } from "../slack/blocks.js";
 import { resolveAccount } from "./accountResolver.js";
 import { recommendForPostMeeting } from "./postMeetingRecommender.js";
+import { runBlueNextMovesForCall } from "./blueNextMoves.js";
 import {
   getConnectionForUser,
   SfNotConnectedError,
@@ -277,6 +278,43 @@ export async function runGongPostCallSfUpdate(args: {
       manualOppCount: oppsWithoutAi.length,
     },
   });
+
+  // Best-effort Blue post-call next-moves. Never blocks the SF-update flow;
+  // any failure audits a `next_moves_dropped` row and continues.
+  if (allOpenOpps.length > 0) {
+    try {
+      await runBlueNextMovesForCall({
+        slackUserId,
+        conn,
+        slack,
+        digestChannelId,
+        digestTs,
+        callId,
+        callTitle: callData?.metaData?.title ?? null,
+        callStartedAt: callData?.metaData?.started ?? null,
+        callDurationSec: callData?.metaData?.duration ?? null,
+        callParties: (parties ?? []) as any[],
+        callInsight: insights,
+        opportunities: allOpenOpps.map((o) => ({
+          id: o.id,
+          name: o.name,
+          stageName: o.stage,
+          type: null,
+          amount: o.amount,
+          closeDate: o.closeDate,
+          accountId: resolved.accountId!,
+          accountName: resolved.accountName ?? "",
+        })),
+        matchedContacts: matched,
+        unmatchedAttendees: unmatched,
+      });
+    } catch (err: any) {
+      console.error(
+        "[gong_post_call] next_moves orchestrator failed:",
+        err?.message ?? err
+      );
+    }
+  }
 
   return { ok: true, reason: "surfaced" };
 }

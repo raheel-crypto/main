@@ -83,3 +83,7 @@ export const TZ_OPTIONS = [
   "Asia/Tokyo",
   "Australia/Sydney",
 ];
+
+// Blue post-call next moves
+export const NEXT_MOVES_SHADOW_DEFAULT = true; // ship in shadow first
+export const NEXT_MOVES_MAX_PER_CALL = 3; // up to 3 opps per call get next-moves
