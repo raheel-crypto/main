@@ -9,14 +9,27 @@ export const PACKAGE_LIST_PRICE: Record<Package, number | null> = {
 };
 
 export function calculatePricing(form: QuoteForm): PricingBreakdown {
-  const platformFeeRaw = form.price_per_user * form.users;
+  // price_per_user is the ALL-IN annual rate per seat -- it includes the
+  // hosting share and the credit-commit share. The customer pays exactly
+  // price_per_user * users per year; hosting and credits commit are
+  // internal allocations carved out of that revenue for the order form
+  // breakdown, NOT additive line items on top.
+  const total = form.price_per_user * form.users;
   const creditsCommit = form.total_credits * CREDIT_COMMIT_RATE;
-  const platformFee = platformFeeRaw - creditsCommit;
   const hosting = form.hosting_fee;
-  const total = platformFee + creditsCommit + hosting;
+  const platformFee = total - creditsCommit - hosting;
 
   const listPrice = PACKAGE_LIST_PRICE[form.package];
-  const discountPerUser = listPrice != null ? listPrice - form.price_per_user : null;
+  // Discount math compares the customer's effective platform-only per-seat
+  // rate against the platform-only list price. Subtract hosting + credits
+  // out of the per-user total before comparing, so a discount stays
+  // platform-vs-platform even on deals that carry hosting.
+  const effectivePlatformPerUser =
+    form.users > 0 ? platformFee / form.users : null;
+  const discountPerUser =
+    listPrice != null && effectivePlatformPerUser != null
+      ? listPrice - effectivePlatformPerUser
+      : null;
   const discountPct =
     listPrice != null && listPrice > 0 && discountPerUser != null
       ? discountPerUser / listPrice

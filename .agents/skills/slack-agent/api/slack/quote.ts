@@ -98,7 +98,7 @@ function buildQuoteModalView(intakeId: string, prefill: string) {
       {
         type: "input",
         block_id: "price_per_user",
-        label: { type: "plain_text", text: "Price per user ($USD, platform + credits, excl. hosting)" },
+        label: { type: "plain_text", text: "Price per user ($USD, all-in including hosting)" },
         element: { type: "number_input", action_id: "value", is_decimal_allowed: true },
       },
       {
