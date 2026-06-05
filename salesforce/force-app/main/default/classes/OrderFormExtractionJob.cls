@@ -57,18 +57,16 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         );
 
         try {
-            List<ContentVersion> filesForCallout = new List<ContentVersion>();
+            // Split files by source so Claude can be told which are the CURRENT
+            // deal and which are PARENT CONTRACT context.
+            List<ContentVersion> currentFiles = new List<ContentVersion>();
+            List<ContentVersion> baseFiles = new List<ContentVersion>();
             List<String> skipped = new List<String>();
-            for (Id docId : docIds) {
-                ContentVersion cv = versionByDocId.get(docId);
-                if (cv == null || cv.VersionData == null) continue;
-                if (getMediaType(cv) == null) {
-                    skipped.add((cv.Title == null ? cv.Id : cv.Title) + ' (' + cv.FileExtension + ')');
-                    continue;
-                }
-                filesForCallout.add(cv);
-            }
-            if (filesForCallout.isEmpty()) {
+            classifyFilesBySource(docIds, versionByDocId, opportunityId,
+                parentOpp == null ? null : parentOpp.Base_Opportunity__c,
+                currentFiles, baseFiles, skipped);
+
+            if (currentFiles.isEmpty() && baseFiles.isEmpty()) {
                 row.Extraction_Status__c = 'No Document';
                 row.Error_Message__c = skipped.isEmpty()
                     ? 'No ContentVersion data found for the supplied ContentDocument Ids.'
@@ -76,7 +74,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 return row;
             }
 
-            String body = buildRequestBody(filesForCallout);
+            String body = buildRequestBody(currentFiles, baseFiles, opportunityId, parentOpp);
             HttpResponse resp = callAnthropic(body);
             row.HTTP_Status_Code__c = resp.getStatusCode();
             row.Raw_Response__c = truncate(resp.getBody(), RAW_RESPONSE_LIMIT);
@@ -114,10 +112,59 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static Opportunity loadParentOpp(Id opportunityId) {
         if (opportunityId == null) return null;
         List<Opportunity> opps = [
-            SELECT Id, Type, Base_Opportunity__c, Base_Opportunity__r.Annual_Recurring_Revenue__c
+            SELECT Id, Name, Type, CloseDate, Base_Opportunity__c,
+                   Base_Opportunity__r.Name, Base_Opportunity__r.CloseDate,
+                   Base_Opportunity__r.Annual_Recurring_Revenue__c
             FROM Opportunity WHERE Id = :opportunityId LIMIT 1
         ];
         return opps.isEmpty() ? null : opps[0];
+    }
+
+    @TestVisible
+    private static void classifyFilesBySource(
+        List<Id> docIds,
+        Map<Id, ContentVersion> versionByDocId,
+        Id currentOppId,
+        Id baseOppId,
+        List<ContentVersion> currentFilesOut,
+        List<ContentVersion> baseFilesOut,
+        List<String> skippedOut
+    ) {
+        if (docIds == null || docIds.isEmpty()) return;
+
+        // Look up which Opp each ContentDocument is linked to. A single doc
+        // can be linked to multiple parents; prefer the current Opp.
+        Map<Id, Id> sourceByDoc = new Map<Id, Id>();
+        Set<Id> scopeEntityIds = new Set<Id>{ currentOppId };
+        if (baseOppId != null) scopeEntityIds.add(baseOppId);
+
+        for (ContentDocumentLink cdl : [
+            SELECT ContentDocumentId, LinkedEntityId
+            FROM ContentDocumentLink
+            WHERE ContentDocumentId IN :docIds
+              AND LinkedEntityId IN :scopeEntityIds
+        ]) {
+            // Prefer current Opp if a doc is linked to both.
+            Id existing = sourceByDoc.get(cdl.ContentDocumentId);
+            if (existing == currentOppId) continue;
+            sourceByDoc.put(cdl.ContentDocumentId, cdl.LinkedEntityId);
+        }
+
+        Set<Id> seen = new Set<Id>();
+        for (Id docId : docIds) {
+            if (seen.contains(docId)) continue;
+            seen.add(docId);
+            ContentVersion cv = versionByDocId.get(docId);
+            if (cv == null || cv.VersionData == null) continue;
+            if (getMediaType(cv) == null) {
+                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) + ' (' + cv.FileExtension + ')');
+                continue;
+            }
+            Id linkedTo = sourceByDoc.get(docId);
+            if (linkedTo == currentOppId) currentFilesOut.add(cv);
+            else if (linkedTo == baseOppId) baseFilesOut.add(cv);
+            else currentFilesOut.add(cv); // unknown linkage defaults to "current deal"
+        }
     }
 
     @TestVisible
@@ -143,6 +190,44 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             byDoc.put(cv.ContentDocumentId, cv);
         }
         return byDoc;
+    }
+
+    @TestVisible
+    private static String buildDealContext(Id currentOppId, Opportunity parentOpp, Integer numCurrent, Integer numBase) {
+        String name = (parentOpp != null && String.isNotBlank(parentOpp.Name)) ? parentOpp.Name : 'unknown';
+        String type = (parentOpp != null && String.isNotBlank(parentOpp.Type)) ? parentOpp.Type : 'unspecified';
+        String closeDate = (parentOpp != null && parentOpp.CloseDate != null) ? String.valueOf(parentOpp.CloseDate) : 'unknown';
+        String baseName = (parentOpp != null && parentOpp.Base_Opportunity__r != null && String.isNotBlank(parentOpp.Base_Opportunity__r.Name))
+            ? parentOpp.Base_Opportunity__r.Name : null;
+
+        String s =
+            'DEAL CONTEXT:\n' +
+            'You are extracting the CURRENT deal below. Documents are split into two groups.\n' +
+            '- Opportunity Name: ' + name + '\n' +
+            '- Opportunity Type: ' + type + '\n' +
+            '- Close Date: ' + closeDate + '\n' +
+            '- Current-deal documents attached: ' + numCurrent + '\n' +
+            '- Parent-contract context documents attached: ' + numBase;
+        if (baseName != null) s += ' (from base Opportunity "' + baseName + '")';
+        s += '\n\nIMPORTANT: Extract THE CURRENT deal. If parent-contract documents are present, treat them as CONTEXT ONLY ' +
+             '(for unchanged MSA terms, base ARR/seats for incremental computation, prior renewal cadence). ' +
+             'Do NOT report figures from the parent contract as if they were the current deal. ' +
+             'When the parent and current deal describe different legal entities, customers, seat counts, or terms, the CURRENT-deal documents win.';
+        return s;
+    }
+
+    private static Map<String, Object> makeFileBlock(ContentVersion cv) {
+        String mediaType = getMediaType(cv);
+        if (mediaType == null) return null;
+        String blockType = mediaType.startsWith('image/') ? 'image' : 'document';
+        return new Map<String, Object>{
+            'type' => blockType,
+            'source' => new Map<String, Object>{
+                'type' => 'base64',
+                'media_type' => mediaType,
+                'data' => EncodingUtil.base64Encode(cv.VersionData)
+            }
+        };
     }
 
     @TestVisible
@@ -179,25 +264,51 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     @TestVisible
-    private static String buildRequestBody(List<ContentVersion> files) {
+    private static String buildRequestBody(
+        List<ContentVersion> currentFiles,
+        List<ContentVersion> baseFiles,
+        Id currentOppId,
+        Opportunity parentOpp
+    ) {
         String systemPrompt = loadPrompt();
         List<Object> content = new List<Object>();
-        for (ContentVersion cv : files) {
-            String mediaType = getMediaType(cv);
-            if (mediaType == null) continue;
-            String blockType = mediaType.startsWith('image/') ? 'image' : 'document';
-            content.add(new Map<String, Object>{
-                'type' => blockType,
-                'source' => new Map<String, Object>{
-                    'type' => 'base64',
-                    'media_type' => mediaType,
-                    'data' => EncodingUtil.base64Encode(cv.VersionData)
-                }
-            });
-        }
+
+        // Deal context header so Claude knows WHICH deal it's extracting.
         content.add(new Map<String, Object>{
             'type' => 'text',
-            'text' => 'Extract one unified order form per the schema from all attached PDFs and images. Return JSON only.'
+            'text' => buildDealContext(currentOppId, parentOpp,
+                                       currentFiles.size(), baseFiles.size())
+        });
+
+        // Current deal docs first, labeled.
+        if (!currentFiles.isEmpty()) {
+            content.add(new Map<String, Object>{
+                'type' => 'text',
+                'text' => '--- CURRENT DEAL DOCUMENTS (extract THIS deal) ---'
+            });
+            for (ContentVersion cv : currentFiles) {
+                Object block = makeFileBlock(cv);
+                if (block != null) content.add(block);
+            }
+        }
+
+        // Base/parent docs next, explicitly labeled as context.
+        if (!baseFiles.isEmpty()) {
+            content.add(new Map<String, Object>{
+                'type' => 'text',
+                'text' => '--- PARENT CONTRACT DOCUMENTS (CONTEXT ONLY - do NOT extract these as the deal) ---\n' +
+                          'Use these only for: unchanged MSA boilerplate (renewal terms, payment terms, credit terms), ' +
+                          'and as a reference for the base ARR / seats that the current deal expands or renews.'
+            });
+            for (ContentVersion cv : baseFiles) {
+                Object block = makeFileBlock(cv);
+                if (block != null) content.add(block);
+            }
+        }
+
+        content.add(new Map<String, Object>{
+            'type' => 'text',
+            'text' => 'Extract the CURRENT deal per the schema, using parent docs only for context. Return JSON only.'
         });
         Map<String, Object> userMessage = new Map<String, Object>{
             'role' => 'user',

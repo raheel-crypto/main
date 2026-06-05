@@ -16,12 +16,14 @@ RULES:
 7. The "Type" field categorizes the deal: "Pilot" for any paid or unpaid trial/POC, "Renewal" for renewals or extensions, "Upsell" for add-on seats or expanded scope mid-contract, "New Business" otherwise.
 
 MULTI-DOCUMENT GUIDANCE:
-- The Order Form / Service Order is the source of truth for deal-specific terms: seats, fees, contract dates, deal type.
-- The MSA is the source of truth for boilerplate terms: renewal cadence (auto-renew vs. manual + notice period), payment terms (Net-N or prepaid), credit terms, indemnity / liability boilerplate.
-- When an Order Form references the MSA ("subject to renewal in accordance with Section 7.2 of the Agreement") and the MSA is attached, extract those terms from the MSA.
-- When the Order Form references the MSA but the MSA is NOT attached, leave those referenced fields null.
-- When values conflict between documents (e.g. an amendment overriding the MSA), prefer the more recent / more specific document and note the override in Special_Terms.
-- For Riders / Upsells / Renewals: you may receive the Rider/Upsell PDF alongside the original Order Form and MSA from the parent contract. The Rider amends some terms; unchanged terms (Platform/Connection fees, recurring annual fees beyond seats, ELA structure) carry over from the parent Order Form. Synthesize across documents to produce a complete picture - do NOT just transcribe a single doc's narrowly-stated figures.
+- Documents are explicitly labeled by group. The user message begins with a DEAL CONTEXT section, then a "CURRENT DEAL DOCUMENTS" section containing the deal you must extract, and possibly a "PARENT CONTRACT DOCUMENTS" section containing the previous contract for context.
+- Extract figures (seats, fees, dates, ARR, TCV) ONLY from the CURRENT DEAL DOCUMENTS group. Never report a parent-contract figure as if it were the current deal's figure.
+- Use the PARENT CONTRACT group for: (a) unchanged MSA boilerplate (renewal terms, payment terms, credit terms, liability caps) when the current deal references the MSA, and (b) understanding what "incremental" means for an Upsell or Renewal.
+- If the parent and current deal describe different legal entities, customers, seat counts, or pricing, the CURRENT DEAL wins for every field.
+- If the CURRENT DEAL documents are a Rider that only amends some terms, set _is_amendment=true and leave UNCHANGED fields null (do not copy values from the parent).
+- The Order Form / Service Order in the CURRENT DEAL group is the source of truth for that deal: seats, fees, contract dates.
+- The MSA (typically in the PARENT CONTRACT group) is the source of truth for boilerplate: renewal cadence (auto-renew vs. manual + notice period), payment terms (Net-N or prepaid), credit terms, indemnity / liability boilerplate. Pull those from the MSA when the current Order Form references it.
+- If the current deal references the MSA but no MSA is attached, leave the referenced fields null.
 
 FEE / ARR COMPOSITION (important):
 - License_Fees = annual recurring fee for seat licenses ONLY (seats x per-seat price). Excludes platform fees, connection fees, support, services.
