@@ -20,16 +20,15 @@ export function calculatePricing(form: QuoteForm): PricingBreakdown {
   const platformFee = total - creditsCommit - hosting;
 
   const listPrice = PACKAGE_LIST_PRICE[form.package];
-  // Discount math compares the customer's effective platform-only per-seat
-  // rate against the platform-only list price. Subtract hosting + credits
-  // out of the per-user total before comparing, so a discount stays
-  // platform-vs-platform even on deals that carry hosting.
-  const effectivePlatformPerUser =
-    form.users > 0 ? platformFee / form.users : null;
+  // Discount compares the rep-entered all-in per-user rate against the list
+  // per-user rate. That's what the rep and the approver think about ("$4,500
+  // vs $7,500 list = 40%") and what drives routing decisions. We don't
+  // re-derive a "platform-only" rate by subtracting hosting/credits here --
+  // doing so inflates the discount on deals that bundle hosting (e.g. a
+  // Standard quote with $100K hosting attached would show 80%+ discount on
+  // the same $4,500/user the rep entered).
   const discountPerUser =
-    listPrice != null && effectivePlatformPerUser != null
-      ? listPrice - effectivePlatformPerUser
-      : null;
+    listPrice != null ? listPrice - form.price_per_user : null;
   const discountPct =
     listPrice != null && listPrice > 0 && discountPerUser != null
       ? discountPerUser / listPrice
