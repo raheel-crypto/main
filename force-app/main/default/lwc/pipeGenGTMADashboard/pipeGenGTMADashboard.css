@@ -1066,3 +1066,35 @@
 }
 
 .gtma2-remove-btn:hover { background: rgba(239, 68, 68, 0.22); }
+/* ── Week Navigation Pills ────────────────────────────────────────────────── */
+
+.week-nav {
+    display: inline-flex;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    padding: 3px;
+    gap: 2px;
+}
+
+.week-nav-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.3rem 0.85rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    letter-spacing: 0.01em;
+}
+
+.week-nav-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.week-nav-btn--active {
+    background: rgba(99, 102, 241, 0.75);
+    color: #fff;
+}

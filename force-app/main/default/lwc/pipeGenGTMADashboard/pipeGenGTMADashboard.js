@@ -61,6 +61,9 @@ export default class PipeGenGTMADashboard extends LightningElement {
     // ─── Active tab tracking — prevents tab reset on re-render ──────────────
     @track activeTab = 'dashboard';
 
+    // ─── Week navigation ─────────────────────────────────────────────────────
+    @track selectedWeekOffset = 0;  // -1 = last week, 0 = this week, 1 = next week
+
     // ─── GTMA2 account search state ──────────────────────────────────────────
     @track gtma2SearchTerm    = '';
     @track gtma2SearchResults = [];
@@ -79,7 +82,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         this.isLoading    = true;
         this.errorMessage = null;
         try {
-            const raw    = await getGTMADashboardData();
+            const raw    = await getGTMADashboardData({ weekOffset: this.selectedWeekOffset });
             this.isGTMA2 = raw.isGTMA2 || false;
             this.data    = this.processData(raw);
         } catch (e) {
@@ -163,6 +166,14 @@ export default class PipeGenGTMADashboard extends LightningElement {
     get hasCommits()        { return this.allCommits.length > 0; }
     get hasAccountResults() { return this.accountSearchResults.length > 0; }
     get accountCountLabel() { return `${this.data?.targetAccounts?.length || 0} accounts`; }
+
+    // ─── Computed — week navigation ────────────────────────────────────────────────
+    get lastWeekBtnClass() { return `week-nav-btn${this.selectedWeekOffset === -1 ? ' week-nav-btn--active' : ''}`; }
+    get thisWeekBtnClass() { return `week-nav-btn${this.selectedWeekOffset ===  0 ? ' week-nav-btn--active' : ''}`; }
+    get nextWeekBtnClass() { return `week-nav-btn${this.selectedWeekOffset ===  1 ? ' week-nav-btn--active' : ''}`; }
+    get scorecardLabel()   { return this.data?.scorecardLabel || 'Prior Week'; }
+    get carryForwardLabel(){ return this.selectedWeekOffset === 1 ? '↷ Pull from This Week' : '↷ Carry Forward'; }
+    get showCarryForward() { return this.selectedWeekOffset >= 0; }  // not shown when viewing last week
 
     // ─── Computed — weekly target header ───────────────────────────────────────────
 
@@ -332,6 +343,14 @@ export default class PipeGenGTMADashboard extends LightningElement {
         this.activeTab = e.detail.value;
     }
 
+    handleWeekNav(e) {
+        const offset = parseInt(e.currentTarget.dataset.offset, 10);
+        if (offset === this.selectedWeekOffset) return;
+        this.selectedWeekOffset = offset;
+        this.accountCardsLoaded = false;
+        this.loadData();
+    }
+
     // ─── Commit Form Handlers ───────────────────────────────────────────────────
 
     openCommitForm()  { this.showCommitForm = true;  this.newCommit = EMPTY_COMMIT(); this.accountSearchResults = []; }
@@ -383,7 +402,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         };
 
         try {
-            const saved = await saveCommit({ commitRecord: record });
+            const saved = await saveCommit({ commitRecord: record, weekOffset: this.selectedWeekOffset });
             this.data = {
                 ...this.data,
                 thisWeekCommits: [...(this.data.thisWeekCommits || []), this.enrichCommit(saved)]
@@ -432,11 +451,12 @@ export default class PipeGenGTMADashboard extends LightningElement {
     async handleCarryForward() {
         this.isCarryingForward = true;
         try {
-            const carried = await carryForwardGTMACommits();
+            const carried = await carryForwardGTMACommits({ weekOffset: this.selectedWeekOffset });
             const count   = Array.isArray(carried) ? carried.length : 0;
+            const fromLabel = this.selectedWeekOffset === 1 ? 'this week' : 'last week';
             if (count > 0) {
                 await this.loadData();
-                this.toast('Carried Forward', `${count} incomplete commit${count === 1 ? '' : 's'} copied from last week.`, 'success');
+                this.toast('Carried Forward', `${count} incomplete commit${count === 1 ? '' : 's'} copied from ${fromLabel}.`, 'success');
             } else {
                 this.toast('Nothing to Carry', 'No incomplete commits from last week.', 'info');
             }

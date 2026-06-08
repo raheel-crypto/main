@@ -51,14 +51,23 @@
                 </template>
 
                 <!-- Chips -->
-                <div class="slds-col slds-size_1-of-1">
-                    <span class="chip">{data.weeklyTarget.total} commits this week</span>
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_small">
+                    <span class="chip">{data.weeklyTarget.total} commits tracked</span>
                     <template lwc:if={data.weeklyTarget.target}>
                         <span class="chip slds-m-left_x-small">Target: {data.weeklyTarget.target}</span>
                     </template>
                     <template lwc:if={isGTMA2}>
                         <span class="chip chip--tier2 slds-m-left_x-small">Tier 2</span>
                     </template>
+                </div>
+
+                <!-- Week navigation -->
+                <div class="slds-col slds-size_1-of-1">
+                    <div class="week-nav">
+                        <button class={lastWeekBtnClass} data-offset="-1" onclick={handleWeekNav}>Last Week</button>
+                        <button class={thisWeekBtnClass} data-offset="0"  onclick={handleWeekNav}>This Week</button>
+                        <button class={nextWeekBtnClass} data-offset="1"  onclick={handleWeekNav}>Next Week</button>
+                    </div>
                 </div>
 
             </div>
@@ -153,7 +162,9 @@
                                     This Week&rsquo;s Activity Commits
                                 </div>
                                 <div class="slds-grid slds-grid_vertical-align-center">
-                                    <lightning-button label="&#x21B7; Carry Forward" variant="neutral" size="small" onclick={handleCarryForward} disabled={isCarryingForward} class="slds-m-right_x-small"></lightning-button>
+                                    <template lwc:if={showCarryForward}>
+                                        <lightning-button label={carryForwardLabel} variant="neutral" size="small" onclick={handleCarryForward} disabled={isCarryingForward} class="slds-m-right_x-small"></lightning-button>
+                                    </template>
                                     <lightning-button label="+ Add Commit" variant="brand" onclick={openCommitForm} disabled={showCommitForm}></lightning-button>
                                 </div>
                             </div>
@@ -221,7 +232,7 @@
                             <div class="dash-section-hd">
                                 <div class="dash-section-title">
                                     <lightning-icon icon-name="utility:chart" size="x-small" class="slds-m-right_x-small"></lightning-icon>
-                                    Last Week&rsquo;s Scorecard
+                                    {scorecardLabel}&rsquo;s Scorecard
                                 </div>
                             </div>
                             <div class="dash-section-bd">

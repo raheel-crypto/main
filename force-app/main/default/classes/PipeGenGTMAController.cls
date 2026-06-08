@@ -8,6 +8,8 @@ public with sharing class PipeGenGTMAController {
         @AuraEnabled public List<Weekly_Commit__c> thisWeekCommits;
         @AuraEnabled public GTMAScorecardData     lastWeekScorecard;
         @AuraEnabled public Boolean               isGTMA2;
+        @AuraEnabled public Integer               selectedWeekOffset;  // -1, 0, or 1
+        @AuraEnabled public String                scorecardLabel;      // label for the prior-week scorecard section
     }
 
     public class GTMAWeeklyTarget {
@@ -74,7 +76,12 @@ public with sharing class PipeGenGTMAController {
     // ─── Main Entry Point ────────────────────────────────────────────────
 
     @AuraEnabled(cacheable=false)
-    public static GTMADashboardData getGTMADashboardData() {
+    public static GTMADashboardData getGTMADashboardData(Integer weekOffset) {
+        if (weekOffset == null) weekOffset = 0;
+        Integer safeOffset = Math.max(-1, Math.min(1, weekOffset));
+        Date weekStart     = getWeekStart(Date.today()).addDays(safeOffset * 7);
+        Date priorWeekStart = weekStart.addDays(-7);
+
         Id userId = UserInfo.getUserId();
 
         User u;
@@ -85,20 +92,26 @@ public with sharing class PipeGenGTMAController {
         }
         Boolean isGTMA2 = '2'.equals(u.GTM_Associate_Tier__c);
 
+        String[] months = new String[]{
+            '', 'January','February','March','April','May','June',
+            'July','August','September','October','November','December'
+        };
+
         GTMADashboardData d = new GTMADashboardData();
         d.isGTMA2           = isGTMA2;
-        d.weeklyTarget      = buildWeeklyTarget(userId, u.GTMA_Weekly_Target__c);
+        d.selectedWeekOffset = safeOffset;
+        d.scorecardLabel    = 'Week of ' + months[priorWeekStart.month()] + ' ' + priorWeekStart.day();
+        d.weeklyTarget      = buildWeeklyTarget(userId, u.GTMA_Weekly_Target__c, weekStart);
         d.targetAccounts    = buildTargetAccounts(userId, isGTMA2);
-        d.thisWeekCommits   = buildThisWeekCommits(userId);
-        d.lastWeekScorecard = buildLastWeekScorecard(userId, isGTMA2);
+        d.thisWeekCommits   = buildThisWeekCommits(userId, weekStart);
+        d.lastWeekScorecard = buildLastWeekScorecard(userId, isGTMA2, weekStart);
         return d;
     }
 
     // ─── Weekly Target ───────────────────────────────────────────────────
 
-    private static GTMAWeeklyTarget buildWeeklyTarget(Id userId, Decimal weeklyTargetVal) {
+    private static GTMAWeeklyTarget buildWeeklyTarget(Id userId, Decimal weeklyTargetVal, Date weekStart) {
         GTMAWeeklyTarget wt = new GTMAWeeklyTarget();
-        Date weekStart = getWeekStart(Date.today());
 
         wt.target = weeklyTargetVal != null ? weeklyTargetVal.intValue() : 0;
 
@@ -114,7 +127,6 @@ public with sharing class PipeGenGTMAController {
             if (c.Completion_Status__c == 'Completed') wt.completed++;
         }
 
-        // Format "Week of May 19" — use Apex Date formatting
         String[] months = new String[]{
             '', 'January','February','March','April','May','June',
             'July','August','September','October','November','December'
@@ -179,9 +191,8 @@ public with sharing class PipeGenGTMAController {
 
     // ─── This Week's Commits ───────────────────────────────────────────────────
 
-    private static List<Weekly_Commit__c> buildThisWeekCommits(Id userId) {
-        Date weekStart = getWeekStart(Date.today());
-        Date weekEnd   = weekStart.addDays(6);
+    private static List<Weekly_Commit__c> buildThisWeekCommits(Id userId, Date weekStart) {
+        Date weekEnd = weekStart.addDays(6);
         List<Weekly_Commit__c> commits = [
             SELECT Id, Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Target_Account__r.Name,
@@ -198,9 +209,9 @@ public with sharing class PipeGenGTMAController {
 
     // ─── Last Week's Scorecard ──────────────────────────────────────────────────
 
-    private static GTMAScorecardData buildLastWeekScorecard(Id userId, Boolean isGTMA2) {
+    private static GTMAScorecardData buildLastWeekScorecard(Id userId, Boolean isGTMA2, Date weekStart) {
         GTMAScorecardData sc = new GTMAScorecardData();
-        Date lastWeekStart = getWeekStart(Date.today()).addDays(-7);
+        Date lastWeekStart = weekStart.addDays(-7);
         Date lastWeekEnd   = lastWeekStart.addDays(6);
 
         List<Weekly_Commit__c> commits = [
@@ -466,9 +477,10 @@ public with sharing class PipeGenGTMAController {
     // ─── Commit Mutations ──────────────────────────────────────────────────
 
     @AuraEnabled
-    public static Weekly_Commit__c saveCommit(Weekly_Commit__c commitRecord) {
+    public static Weekly_Commit__c saveCommit(Weekly_Commit__c commitRecord, Integer weekOffset) {
+        Integer safeOffset = (weekOffset == null) ? 0 : Math.max(-1, Math.min(1, weekOffset));
         commitRecord.Rep__c             = UserInfo.getUserId();
-        commitRecord.Week_Start_Date__c = getWeekStart(Date.today());
+        commitRecord.Week_Start_Date__c = getWeekStart(Date.today()).addDays(safeOffset * 7);
         upsert commitRecord;
         return [
             SELECT Id, Rep__c, Week_Start_Date__c, Motion_Type__c,
@@ -511,9 +523,10 @@ public with sharing class PipeGenGTMAController {
     }
 
     @AuraEnabled
-    public static List<Weekly_Commit__c> carryForwardGTMACommits() {
+    public static List<Weekly_Commit__c> carryForwardGTMACommits(Integer weekOffset) {
+        Integer safeOffset = (weekOffset == null) ? 0 : Math.max(0, Math.min(1, weekOffset));
         Id   userId        = UserInfo.getUserId();
-        Date weekStart     = getWeekStart(Date.today());
+        Date weekStart     = getWeekStart(Date.today()).addDays(safeOffset * 7);
         Date lastWeekStart = weekStart.addDays(-7);
 
         List<Weekly_Commit__c> incomplete = [
