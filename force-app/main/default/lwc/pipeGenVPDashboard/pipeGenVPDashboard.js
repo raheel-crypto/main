@@ -188,9 +188,9 @@ export default class PipeGenVPDashboard extends LightningElement {
     }
 
     get modalTitle() {
-        if (this.isModalTeam)    return `${this.modalManager?.managerName || ‘’}’s Team`;
-        if (this.isModalCommits) return `${this.modalRep?.repName || ‘’} — Commits`;
-        return ‘’;
+        if (this.isModalTeam)    return `${this.modalManager?.managerName || ''}'s Team`;
+        if (this.isModalCommits) return `${this.modalRep?.repName || ''} — Commits`;
+        return '';
     }
 
     // ── Modal handlers ─────────────────────────────────────────────────────────
