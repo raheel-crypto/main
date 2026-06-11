@@ -604,15 +604,66 @@ async function normalizeProposedValue(
       return { ok: true, value: iso, display: iso };
     }
     case "picklist": {
-      const s = String(rawValue);
+      const raw = String(rawValue).trim();
       const allowed = desc.picklistValues.map((p) => p.value);
-      if (allowed.length > 0 && !allowed.includes(s)) {
+
+      // Strict match first.
+      if (allowed.includes(raw)) {
+        return { ok: true, value: raw, display: raw };
+      }
+
+      // Case-insensitive exact match.
+      const ciExact = allowed.find((v) => v.toLowerCase() === raw.toLowerCase());
+      if (ciExact) {
+        return { ok: true, value: ciExact, display: ciExact };
+      }
+
+      // The picklist might be a "user full names" picklist (common pattern for
+      // Post_Sales_Owner, Account_Manager, etc. where the org chose a picklist
+      // over a User lookup). When the rep says "me" or a partial name, try to
+      // resolve to a picklist option that matches the user's full name.
+      if (isSelfReference(raw)) {
+        const uid = await resolveCurrentUserId(ctx.conn);
+        if (uid) {
+          const fullName = await fetchUserName(ctx.conn, uid);
+          if (fullName) {
+            const match = allowed.find(
+              (v) => v.toLowerCase() === fullName.toLowerCase()
+            );
+            if (match) {
+              return { ok: true, value: match, display: match };
+            }
+            return {
+              ok: false,
+              error: `Your name "${fullName}" isn't in the ${desc.name} picklist. Valid: ${allowed.join(" | ")}`,
+            };
+          }
+        }
+      }
+
+      // Substring match for partial names ("Andrew" → "Andrew McClure"). Only
+      // accept if exactly one option contains the input as a substring; if
+      // multiple match, ask the rep to disambiguate.
+      const substrMatches = allowed.filter((v) =>
+        v.toLowerCase().includes(raw.toLowerCase())
+      );
+      if (substrMatches.length === 1) {
+        return { ok: true, value: substrMatches[0], display: substrMatches[0] };
+      }
+      if (substrMatches.length > 1) {
         return {
           ok: false,
-          error: `${desc.name} value "${s}" is not in the picklist. Valid: ${allowed.join(" | ")}`,
+          error: `${desc.name} value "${raw}" is ambiguous — matches: ${substrMatches.join(" | ")}. Use the full name.`,
         };
       }
-      return { ok: true, value: s, display: s };
+
+      return {
+        ok: false,
+        error:
+          allowed.length > 0
+            ? `${desc.name} value "${raw}" is not in the picklist. Valid: ${allowed.slice(0, 20).join(" | ")}${allowed.length > 20 ? ` (+${allowed.length - 20} more)` : ""}`
+            : `${desc.name} value "${raw}" rejected (picklist has no allowed values).`,
+      };
     }
     case "multipicklist": {
       const arr = Array.isArray(rawValue)
