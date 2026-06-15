@@ -200,4 +200,29 @@ private class AccountDedupeScanControllerTest {
             System.assert(true);
         }
     }
+
+    @IsTest
+    static void dismissGroups_marksResolved() {
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        List<Dedupe_Group__c> open = [
+            SELECT Id FROM Dedupe_Group__c WHERE Scan__c = :scanId AND Status__c = 'Open' LIMIT 5
+        ];
+        System.assert(!open.isEmpty());
+
+        List<Id> ids = new List<Id>();
+        for (Dedupe_Group__c g : open) ids.add(g.Id);
+
+        Integer count = AccountDedupeScanController.dismissGroups(ids);
+        System.assertEquals(ids.size(), count);
+
+        Integer stillOpen = [SELECT COUNT() FROM Dedupe_Group__c WHERE Id IN :ids AND Status__c = 'Open'];
+        System.assertEquals(0, stillOpen);
+
+        // Empty / null inputs return 0
+        System.assertEquals(0, AccountDedupeScanController.dismissGroups(null));
+        System.assertEquals(0, AccountDedupeScanController.dismissGroups(new List<Id>()));
+    }
 }

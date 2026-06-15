@@ -77,25 +77,55 @@
                         <div class="slds-text-color_error slds-p-vertical_small">{error}</div>
                     </template>
 
-                    <div class="slds-grid slds-gutters_x-small slds-grid_vertical-align-end slds-m-bottom_small filters-row">
-                        <div class="slds-col slds-size_1-of-3">
+                    <!-- Filters row -->
+                    <div class="slds-grid slds-gutters_x-small slds-grid_vertical-align-end slds-m-bottom_x-small filters-row">
+                        <div class="slds-col slds-size_1-of-4">
                             <lightning-combobox label="Status" value={statusFilter}
                                 options={statusFilterOptions}
                                 onchange={handleStatusFilterChange}>
                             </lightning-combobox>
                         </div>
-                        <div class="slds-col slds-size_1-of-3">
+                        <div class="slds-col slds-size_1-of-4">
                             <lightning-combobox label="Scenario" value={scenarioFilter}
                                 options={scenarioFilterOptions}
                                 onchange={handleScenarioFilterChange}>
                             </lightning-combobox>
                         </div>
-                        <div class="slds-col slds-size_1-of-3">
+                        <div class="slds-col slds-size_1-of-4">
+                            <lightning-combobox label="Sort by" value={sortBy}
+                                options={sortOptions} onchange={handleSortChange}>
+                            </lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-4">
                             <lightning-input type="search" label="Search"
                                 placeholder="Match domain, GRP-#, or scenario"
                                 value={searchQuery} onchange={handleSearchChange}>
                             </lightning-input>
                         </div>
+                    </div>
+
+                    <!-- Summary bar + bulk actions -->
+                    <div class="summary-bar slds-grid slds-grid_vertical-align-center slds-m-bottom_x-small">
+                        <template lwc:if={hasFilteredGroups}>
+                            <label class="slds-m-right_small slds-grid slds-grid_vertical-align-center select-all">
+                                <input type="checkbox" checked={selectAllChecked}
+                                    onchange={handleSelectAll}
+                                    aria-label="Select all groups" />
+                            </label>
+                        </template>
+                        <div class="slds-grow summary-text">{summaryLabel}</div>
+                        <template lwc:if={hasSelection}>
+                            <div class="slds-m-right_x-small slds-text-body_small">
+                                {selectedCount} selected
+                            </div>
+                            <lightning-button label={bulkDismissLabel} variant="destructive-text"
+                                icon-name="utility:close" onclick={handleBulkDismiss}
+                                disabled={dismissingBulk}></lightning-button>
+                            <template lwc:if={dismissingBulk}>
+                                <lightning-spinner alternative-text="Dismissing" size="small"
+                                    class="slds-m-left_x-small"></lightning-spinner>
+                            </template>
+                        </template>
                     </div>
 
                     <template lwc:if={loadingGroups}>
@@ -107,16 +137,31 @@
                     <template lwc:if={hasFilteredGroups}>
                         <ul class="dedupe-groups">
                             <template for:each={groupRows} for:item="g">
-                                <li key={g.id} class="dedupe-group">
-                                    <div class="dedupe-group__header"
-                                        data-id={g.id} onclick={handleGroupClick}>
-                                        <lightning-icon icon-name={g.chevron} size="x-small"
-                                            class="slds-m-right_x-small"></lightning-icon>
-                                        <div class="dedupe-group__title">
-                                            <div class="dedupe-group__key">{g.displayMatchKey}</div>
-                                            <div class="dedupe-group__meta">{g.metaLine}</div>
+                                <li key={g.id} class={g.rowClass}>
+                                    <div class="dedupe-group__header">
+                                        <label class="dedupe-group__check">
+                                            <input type="checkbox" data-id={g.id}
+                                                checked={g.selected} onchange={handleGroupSelect}
+                                                aria-label="Select group" />
+                                        </label>
+                                        <div class="dedupe-group__main"
+                                            data-id={g.id} onclick={handleGroupClick}>
+                                            <lightning-icon icon-name={g.chevron} size="x-small"
+                                                class="slds-m-right_x-small"></lightning-icon>
+                                            <div class="dedupe-group__title">
+                                                <div class="dedupe-group__key">{g.displayMatchKey}</div>
+                                                <div class="dedupe-group__meta">
+                                                    <span class={g.scenarioChipClass}>{g.scenarioLabel}</span>
+                                                    <span class="dedupe-group__meta-text">{g.metaLine}</span>
+                                                </div>
+                                            </div>
+                                            <lightning-badge label={g.status} variant={g.statusVariant}></lightning-badge>
                                         </div>
-                                        <lightning-badge label={g.status} variant={g.statusVariant}></lightning-badge>
+                                        <lightning-button-icon data-id={g.id} icon-name="utility:close"
+                                            alternative-text="Not a duplicate" title="Not a duplicate"
+                                            variant="border-filled" size="small"
+                                            onclick={handleDismissGroup}
+                                            class="slds-m-left_x-small"></lightning-button-icon>
                                     </div>
 
                                     <template lwc:if={g.expanded}>

@@ -311,4 +311,32 @@ public with sharing class AccountDedupeScanController {
             throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
         }
     }
+
+    /**
+     * Mark groups as Resolved without performing a merge — used for "Not a
+     * duplicate" / bulk-dismiss flows. Records who dismissed and when.
+     */
+    @AuraEnabled
+    public static Integer dismissGroups(List<Id> groupIds) {
+        try {
+            if (groupIds == null || groupIds.isEmpty()) return 0;
+            List<Dedupe_Group__c> updates = new List<Dedupe_Group__c>();
+            DateTime now = System.now();
+            Id me = UserInfo.getUserId();
+            for (Id gid : groupIds) {
+                if (gid == null) continue;
+                updates.add(new Dedupe_Group__c(
+                    Id = gid,
+                    Status__c = 'Resolved',
+                    Resolved_At__c = now,
+                    Resolved_By__c = me
+                ));
+            }
+            if (updates.isEmpty()) return 0;
+            update updates;
+            return updates.size();
+        } catch (Exception e) {
+            throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
+        }
+    }
 }

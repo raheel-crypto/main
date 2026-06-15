@@ -11,6 +11,26 @@ ul.slds-has-dividers_bottom-space {
     margin: 0;
 }
 
+/* Summary bar */
+.summary-bar {
+    padding: 0.5rem 0.25rem;
+    border-bottom: 1px solid #ebebeb;
+    background: transparent;
+}
+
+.summary-text {
+    font-size: 0.8125rem;
+    color: #444;
+    font-weight: 500;
+}
+
+.select-all input[type="checkbox"] {
+    cursor: pointer;
+    width: 1rem;
+    height: 1rem;
+}
+
+/* Group list */
 .dedupe-groups {
     list-style: none;
     margin: 0;
@@ -22,22 +42,47 @@ ul.slds-has-dividers_bottom-space {
     border-radius: 0.25rem;
     margin-bottom: 0.5rem;
     background: #fff;
-    transition: box-shadow 0.15s ease;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
 .dedupe-group:hover {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
+.dedupe-group--selected {
+    border-color: #1589ee;
+    box-shadow: 0 0 0 1px #1589ee inset;
+}
+
 .dedupe-group__header {
     display: flex;
     align-items: center;
     padding: 0.625rem 0.875rem;
+}
+
+.dedupe-group__check {
+    margin-right: 0.625rem;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.dedupe-group__check input[type="checkbox"] {
+    cursor: pointer;
+    width: 1rem;
+    height: 1rem;
+}
+
+.dedupe-group__main {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
     cursor: pointer;
     user-select: none;
 }
 
-.dedupe-group__header:hover {
+.dedupe-group__main:hover {
     background: #f7f7f9;
 }
 
@@ -55,9 +100,16 @@ ul.slds-has-dividers_bottom-space {
 }
 
 .dedupe-group__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.25rem;
+}
+
+.dedupe-group__meta-text {
     font-size: 0.75rem;
     color: #706e6b;
-    margin-top: 0.125rem;
 }
 
 .dedupe-group__body {
@@ -66,10 +118,32 @@ ul.slds-has-dividers_bottom-space {
     background: #fafaf9;
 }
 
+/* Scenario chips */
+.scenario-chip {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.scenario-chip--blue   { background: #e3f2fd; color: #1565c0; }
+.scenario-chip--indigo { background: #e8eaf6; color: #283593; }
+.scenario-chip--teal   { background: #e0f2f1; color: #00695c; }
+.scenario-chip--green  { background: #e8f5e9; color: #2e7d32; }
+.scenario-chip--orange { background: #fff3e0; color: #ef6c00; }
+.scenario-chip--grey   { background: #ececec; color: #555; }
+
+/* Expanded member table */
 .dedupe-members tr.master-row td {
     background: #f0f8ff;
 }
 
+/* ACR section */
 .acr-banner {
     display: flex;
     align-items: center;
