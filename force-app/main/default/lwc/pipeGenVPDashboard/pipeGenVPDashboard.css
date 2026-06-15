@@ -388,6 +388,7 @@ lightning-button {
 }
 
 .commit-detail .slds-text-body_small { color: rgba(255, 255, 255, 0.7); }
+.commit-row-info .slds-text-body_small { color: rgba(255, 255, 255, 0.7); }
 
 .empty-detail-msg {
     font-size: 0.8rem;
