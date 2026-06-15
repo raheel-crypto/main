@@ -61,7 +61,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -83,7 +83,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -104,7 +104,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -118,7 +118,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -140,7 +140,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -176,7 +176,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -204,7 +204,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -218,7 +218,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -357,7 +357,7 @@ private class PipeGenGTMAControllerTest {
                 Motion_Type__c        = 'GTMA Activity',
                 Committed_Count__c    = 1
             );
-            saved = PipeGenGTMAController.saveCommit(rec);
+            saved = PipeGenGTMAController.saveCommit(rec, 0);
         }
         Test.stopTest();
 
@@ -379,7 +379,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         System.runAs(gtma) {
             existing.Commit_Description__c = 'Updated description';
-            PipeGenGTMAController.saveCommit(existing);
+            PipeGenGTMAController.saveCommit(existing, 0);
         }
         Test.stopTest();
 
@@ -423,7 +423,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         List<Weekly_Commit__c> carried;
         System.runAs(gtma) {
-            carried = PipeGenGTMAController.carryForwardGTMACommits();
+            carried = PipeGenGTMAController.carryForwardGTMACommits(0);
         }
         Test.stopTest();
 
@@ -439,7 +439,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         List<Weekly_Commit__c> carried;
         System.runAs(gtma) {
-            carried = PipeGenGTMAController.carryForwardGTMACommits();
+            carried = PipeGenGTMAController.carryForwardGTMACommits(0);
         }
         Test.stopTest();
 
@@ -496,7 +496,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma1) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
         System.assertEquals(false, d.isGTMA2, 'Standard GTMA user should have isGTMA2=false');
@@ -508,7 +508,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma2) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
         System.assertEquals(true, d.isGTMA2, 'Tier 2 user should have isGTMA2=true');
@@ -533,7 +533,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma2) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
@@ -559,7 +559,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         PipeGenGTMAController.GTMADashboardData d;
         System.runAs(gtma2) {
-            d = PipeGenGTMAController.getGTMADashboardData();
+            d = PipeGenGTMAController.getGTMADashboardData(0);
         }
         Test.stopTest();
 
