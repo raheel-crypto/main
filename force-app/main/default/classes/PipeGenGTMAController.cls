@@ -142,7 +142,7 @@ public with sharing class PipeGenGTMAController {
         List<Account> accounts;
 
         if (isGTMA2) {
-            Set<Id> coveredIds = getCoverageAccountIds(userId);
+            Set<Id> coveredIds = getAllGTMA2AccountIds(userId);
             if (coveredIds.isEmpty()) return rows;
             accounts = [
                 SELECT Id, Name, Type, Account_Status__c, ARR__c, Estimated_TAM__c, Website,
@@ -235,7 +235,7 @@ public with sharing class PipeGenGTMAController {
         // Pipeline influence: for GTMA2 use coverage accounts; for GTMA1 use GTM_Associate__c
         Set<Id> coveredIds;
         if (isGTMA2) {
-            coveredIds = getCoverageAccountIds(userId);
+            coveredIds = getAllGTMA2AccountIds(userId);
         } else {
             coveredIds = new Set<Id>();
             for (Account a : [SELECT Id FROM Account WHERE GTM_Associate__c = :userId]) {
@@ -338,7 +338,7 @@ public with sharing class PipeGenGTMAController {
         Date thirtyAgo    = today.addDays(-30);
         Date sixMonthsAgo = today.addDays(-180);
 
-        Set<Id> coveredIds = getCoverageAccountIds(userId);
+        Set<Id> coveredIds = getAllGTMA2AccountIds(userId);
         if (coveredIds.isEmpty()) return new List<AccountCard>();
 
         List<Account> accounts = [
@@ -419,23 +419,30 @@ public with sharing class PipeGenGTMAController {
         if (String.isBlank(searchTerm) || searchTerm.trim().length() < 3) return new List<Account>();
         String likeTerm  = '%' + String.escapeSingleQuotes(searchTerm.trim()) + '%';
         Set<Id> excluded = excludeIds != null ? new Set<Id>(excludeIds) : new Set<Id>();
-        if (excluded.isEmpty()) {
+        return AccountSearchHelper.run(likeTerm, excluded);
+    }
+
+    // without sharing so GTMA2 reps can see all accounts regardless of sharing rules
+    private without sharing class AccountSearchHelper {
+        public static List<Account> run(String likeTerm, Set<Id> excluded) {
+            if (excluded.isEmpty()) {
+                return [
+                    SELECT Id, Name, Type, Account_Status__c, Website
+                    FROM Account
+                    WHERE (Name LIKE :likeTerm OR Website LIKE :likeTerm)
+                    ORDER BY Name ASC
+                    LIMIT 50
+                ];
+            }
             return [
                 SELECT Id, Name, Type, Account_Status__c, Website
                 FROM Account
-                WHERE Name LIKE :likeTerm
+                WHERE (Name LIKE :likeTerm OR Website LIKE :likeTerm)
+                  AND Id NOT IN :excluded
                 ORDER BY Name ASC
-                LIMIT 20
+                LIMIT 50
             ];
         }
-        return [
-            SELECT Id, Name, Type, Account_Status__c, Website
-            FROM Account
-            WHERE Name LIKE :likeTerm
-              AND Id NOT IN :excluded
-            ORDER BY Name ASC
-            LIMIT 20
-        ];
     }
 
     @AuraEnabled
@@ -683,6 +690,16 @@ public with sharing class PipeGenGTMAController {
             WHERE Rep__c = :userId AND Is_Active__c = true
         ]) {
             ids.add(cov.Account__c);
+        }
+        return ids;
+    }
+
+    // Union of junction-record targets + directly-assigned accounts (GTM_Associate__c)
+    @TestVisible
+    private static Set<Id> getAllGTMA2AccountIds(Id userId) {
+        Set<Id> ids = getCoverageAccountIds(userId);
+        for (Account a : [SELECT Id FROM Account WHERE GTM_Associate__c = :userId]) {
+            ids.add(a.Id);
         }
         return ids;
     }
