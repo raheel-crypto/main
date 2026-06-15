@@ -419,12 +419,12 @@ public with sharing class PipeGenGTMAController {
         if (String.isBlank(searchTerm) || searchTerm.trim().length() < 3) return new List<Account>();
         String likeTerm  = '%' + String.escapeSingleQuotes(searchTerm.trim()) + '%';
         Set<Id> excluded = excludeIds != null ? new Set<Id>(excludeIds) : new Set<Id>();
-        return AccountSearchHelper.run(likeTerm, excluded);
+        return new AccountSearchHelper().run(likeTerm, excluded);
     }
 
     // without sharing so GTMA2 reps can see all accounts regardless of sharing rules
     private without sharing class AccountSearchHelper {
-        public static List<Account> run(String likeTerm, Set<Id> excluded) {
+        public List<Account> run(String likeTerm, Set<Id> excluded) {
             if (excluded.isEmpty()) {
                 return [
                     SELECT Id, Name, Type, Account_Status__c, Website

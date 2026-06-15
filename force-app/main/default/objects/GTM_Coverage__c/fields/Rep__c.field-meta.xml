@@ -6,8 +6,7 @@
     <referenceTo>User</referenceTo>
     <relationshipLabel>GTM Coverage Records</relationshipLabel>
     <relationshipName>GTM_Coverage_Records</relationshipName>
-    <required>true</required>
-    <deleteConstraint>Restrict</deleteConstraint>
+    <required>false</required>
     <trackHistory>false</trackHistory>
     <trackTrending>false</trackTrending>
     <type>Lookup</type>
