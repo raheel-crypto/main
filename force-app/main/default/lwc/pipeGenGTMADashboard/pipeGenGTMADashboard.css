@@ -1098,3 +1098,247 @@
     background: rgba(99, 102, 241, 0.75);
     color: #fff;
 }
+
+/* ── Alpha Filter Strip ───────────────────────────────────────────────────── */
+
+.alpha-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    scrollbar-width: none;
+}
+.alpha-strip::-webkit-scrollbar { display: none; }
+
+.alpha-pill {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.7rem;
+    font-weight: 600;
+    width: 1.9rem;
+    height: 1.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.12s, color 0.12s, border-color 0.12s;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.alpha-pill--active {
+    background: rgba(99, 102, 241, 0.75);
+    border-color: rgba(99, 102, 241, 0.5);
+    color: #fff;
+}
+
+.alpha-pill:hover:not(.alpha-pill--active) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Carry-Forward Modal ──────────────────────────────────────────────────── */
+
+.carry-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 8000;
+}
+
+.carry-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 8001;
+    width: min(520px, 92vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    background: #1a1f2e;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 10px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+
+.carry-modal-hd {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem 0.875rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.carry-modal-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #e0e7ff;
+    letter-spacing: 0.01em;
+}
+
+.carry-modal-close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    line-height: 1;
+    transition: color 0.15s, background 0.15s;
+}
+.carry-modal-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.carry-modal-loading {
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.carry-modal-empty {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.85rem;
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.carry-section-label {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.35);
+    padding: 0.625rem 1.25rem 0.375rem;
+}
+.carry-section-label--done { color: rgba(52, 211, 153, 0.5); }
+
+.carry-commit-list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0.75rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.carry-commit-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.55rem 0.5rem;
+    border-radius: 6px;
+    transition: background 0.12s;
+}
+.carry-commit-row:hover { background: rgba(255, 255, 255, 0.04); }
+.carry-commit-row--done { opacity: 0.6; }
+
+.carry-checkbox {
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    accent-color: #6366f1;
+    cursor: pointer;
+}
+
+.carry-commit-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.carry-commit-type {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #c7d2fe;
+}
+
+.carry-commit-acct {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.carry-commit-desc {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.carry-modal-ft {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.875rem 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.carry-shortcuts {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.carry-shortcut-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.carry-shortcut-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.carry-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.carry-cancel-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.4rem 0.9rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+.carry-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+}
+
+.carry-confirm-btn {
+    background: rgba(99, 102, 241, 0.85);
+    border: none;
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 0.4rem 1.1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+}
+.carry-confirm-btn:hover:not(:disabled) { background: rgba(99, 102, 241, 1); }
+.carry-confirm-btn:disabled { opacity: 0.5; cursor: default; }

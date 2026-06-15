@@ -7,6 +7,7 @@ import toggleCommitComplete          from '@salesforce/apex/PipeGenGTMAControlle
 import getGTMAAccountsForSelection   from '@salesforce/apex/PipeGenGTMAController.getGTMAAccountsForSelection';
 import updateGTMATargetAccounts      from '@salesforce/apex/PipeGenGTMAController.updateGTMATargetAccounts';
 import carryForwardGTMACommits       from '@salesforce/apex/PipeGenGTMAController.carryForwardGTMACommits';
+import getPriorWeekCommits           from '@salesforce/apex/PipeGenGTMAController.getPriorWeekCommits';
 import searchAllAccounts             from '@salesforce/apex/PipeGenGTMAController.searchAllAccounts';
 import addGTMA2Target                from '@salesforce/apex/PipeGenGTMAController.addGTMA2Target';
 import removeGTMA2Target             from '@salesforce/apex/PipeGenGTMAController.removeGTMA2Target';
@@ -15,6 +16,7 @@ const CURRENCY   = new Intl.NumberFormat('en-US', { style: 'currency', currency:
 const SHORT_DATE = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
 
 const SEGMENT_ORDER = ['Expansion', 'Early Stage', 'Uncracked', 'Recent Closed Lost', 'No Opportunities', 'Other'];
+const ALPHABET = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
 const AVATAR_COLORS = ['#3b82f6','#8b5cf6','#ec4899','#f59e0b','#10b981','#06b6d4','#ef4444','#6366f1'];
 
 const GTMA_COMMIT_TYPES = [
@@ -44,6 +46,9 @@ export default class PipeGenGTMADashboard extends LightningElement {
     @track showCommitForm       = false;
     @track isSaving             = false;
     @track isCarryingForward    = false;
+    @track showCarryModal       = false;
+    @track carryModalCommits    = [];
+    @track isLoadingCarry       = false;
     @track accountSearchResults = [];
     @track newCommit            = EMPTY_COMMIT();
 
@@ -57,6 +62,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
     @track isSavingTargets    = false;
     @track cardSearchTerm     = '';
     @track accountSortBy      = 'name';
+    @track alphaFilter        = 'All';
 
     // ─── Active tab tracking — prevents tab reset on re-render ──────────────
     @track activeTab = 'dashboard';
@@ -172,8 +178,29 @@ export default class PipeGenGTMADashboard extends LightningElement {
     get thisWeekBtnClass() { return `week-nav-btn${this.selectedWeekOffset ===  0 ? ' week-nav-btn--active' : ''}`; }
     get nextWeekBtnClass() { return `week-nav-btn${this.selectedWeekOffset ===  1 ? ' week-nav-btn--active' : ''}`; }
     get scorecardLabel()   { return this.data?.scorecardLabel || 'Prior Week'; }
-    get carryForwardLabel(){ return this.selectedWeekOffset === 1 ? '↷ Pull from This Week' : '↷ Carry Forward'; }
-    get showCarryForward() { return this.selectedWeekOffset >= 0; }  // not shown when viewing last week
+    get carryForwardLabel() {
+        if (this.selectedWeekOffset === 1)  return '↷ Pull from This Week';
+        if (this.selectedWeekOffset === -1) return '↷ Copy to This Week';
+        return '↷ Carry Forward';
+    }
+    get showCarryForward() { return true; }
+
+    // ─── Computed — carry-forward modal ────────────────────────────────────────────
+    get carryModalTitle() {
+        return this.selectedWeekOffset === 1 ? 'Copy from This Week' : 'Copy from Last Week';
+    }
+    get carryIncompleteCommits() {
+        return this.carryModalCommits.filter(c => c.Completion_Status__c !== 'Completed');
+    }
+    get carryCompletedCommits() {
+        return this.carryModalCommits.filter(c => c.Completion_Status__c === 'Completed');
+    }
+    get hasCarryIncomplete() { return this.carryIncompleteCommits.length > 0; }
+    get hasCarryCompleted()  { return this.carryCompletedCommits.length > 0; }
+    get selectedCarryCount() { return this.carryModalCommits.filter(c => c.selected).length; }
+    get carryConfirmLabel()  { return `Copy Selected (${this.selectedCarryCount})`; }
+    get hasCarrySelection()  { return this.selectedCarryCount > 0; }
+    get noCarryCommits()     { return !this.isLoadingCarry && this.carryModalCommits.length === 0; }
 
     // ─── Computed — weekly target header ───────────────────────────────────────────
 
@@ -234,6 +261,14 @@ export default class PipeGenGTMADashboard extends LightningElement {
 
     // ─── Computed — GTMA1 account segments ────────────────────────────────────────
 
+    get alphaLetters() {
+        return ['All', ...ALPHABET].map(l => ({
+            key:      l,
+            label:    l,
+            btnClass: `alpha-pill${this.alphaFilter === l ? ' alpha-pill--active' : ''}`
+        }));
+    }
+
     get sortedFilteredCards() {
         const term = this.cardSearchTerm.toLowerCase();
         let cards = term.length >= 2
@@ -242,6 +277,10 @@ export default class PipeGenGTMADashboard extends LightningElement {
                 (c.industry      || '').toLowerCase().includes(term) ||
                 (c.accountStatus || '').toLowerCase().includes(term))
             : [...this.accountCards];
+
+        if (this.alphaFilter !== 'All') {
+            cards = cards.filter(c => (c.name || '').toUpperCase().startsWith(this.alphaFilter));
+        }
 
         if (this.accountSortBy === 'activityDate') {
             cards.sort((a, b) => {
@@ -295,7 +334,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
     get hasAccountCards()       { return this.accountCards.length > 0; }
     get hasGTMA2SearchResults() { return this.gtma2SearchResults.length > 0; }
     get showGTMA2NoResults() {
-        return !this.isSearching && this.gtma2SearchTerm.length >= 3 && this.gtma2SearchResults.length === 0;
+        return !this.isSearching && this.gtma2SearchTerm.length >= 2 && this.gtma2SearchResults.length === 0;
     }
 
     applyCardClass(c) {
@@ -449,22 +488,68 @@ export default class PipeGenGTMADashboard extends LightningElement {
     }
 
     async handleCarryForward() {
+        this.carryModalCommits = [];
+        this.showCarryModal    = true;
+        this.isLoadingCarry    = true;
+        try {
+            const apexOffset = Math.max(0, this.selectedWeekOffset);
+            const commits    = await getPriorWeekCommits({ weekOffset: apexOffset });
+            this.carryModalCommits = (commits || []).map(c => ({
+                ...c,
+                selected: c.Completion_Status__c !== 'Completed',
+                refName:  (c.Target_Account__r && c.Target_Account__r.Name) || ''
+            }));
+        } catch (e) {
+            this.toast('Error', 'Could not load prior week commits.', 'error');
+            this.showCarryModal = false;
+        } finally {
+            this.isLoadingCarry = false;
+        }
+    }
+
+    handleCarryToggle(e) {
+        const id = e.currentTarget.dataset.id;
+        this.carryModalCommits = this.carryModalCommits.map(c =>
+            c.Id === id ? { ...c, selected: !c.selected } : c
+        );
+    }
+
+    handleCarrySelectAll() {
+        this.carryModalCommits = this.carryModalCommits.map(c => ({ ...c, selected: true }));
+    }
+
+    handleCarrySelectIncomplete() {
+        this.carryModalCommits = this.carryModalCommits.map(c =>
+            ({ ...c, selected: c.Completion_Status__c !== 'Completed' })
+        );
+    }
+
+    async handleCarryConfirm() {
+        const selectedIds = this.carryModalCommits.filter(c => c.selected).map(c => c.Id);
+        if (!selectedIds.length) {
+            this.toast('Nothing Selected', 'Check at least one commit to copy.', 'info');
+            return;
+        }
         this.isCarryingForward = true;
         try {
-            const carried = await carryForwardGTMACommits({ weekOffset: this.selectedWeekOffset });
-            const count   = Array.isArray(carried) ? carried.length : 0;
-            const fromLabel = this.selectedWeekOffset === 1 ? 'this week' : 'last week';
-            if (count > 0) {
-                await this.loadData();
-                this.toast('Carried Forward', `${count} incomplete commit${count === 1 ? '' : 's'} copied from ${fromLabel}.`, 'success');
-            } else {
-                this.toast('Nothing to Copy', 'No commits found in the prior week.', 'info');
-            }
+            const apexOffset = Math.max(0, this.selectedWeekOffset);
+            const carried    = await carryForwardGTMACommits({ weekOffset: apexOffset, selectedIds });
+            const count      = Array.isArray(carried) ? carried.length : 0;
+            this.showCarryModal    = false;
+            this.carryModalCommits = [];
+            await this.loadData();
+            const fromLabel = apexOffset === 1 ? 'this week' : 'last week';
+            this.toast('Copied', `${count} commit${count === 1 ? '' : 's'} copied from ${fromLabel}.`, 'success');
         } catch (e) {
-            this.toast('Error', e.body?.message || 'Could not carry forward commits.', 'error');
+            this.toast('Error', e.body?.message || 'Could not copy commits.', 'error');
         } finally {
             this.isCarryingForward = false;
         }
+    }
+
+    handleCarryCancel() {
+        this.showCarryModal    = false;
+        this.carryModalCommits = [];
     }
 
     // ─── GTMA1 Account Cards Handlers ────────────────────────────────────────────
@@ -490,7 +575,8 @@ export default class PipeGenGTMADashboard extends LightningElement {
         );
     }
 
-    handleCardSearch(e) { this.cardSearchTerm = e.detail.value || ''; }
+    handleCardSearch(e) { this.cardSearchTerm = e.detail.value || ''; this.alphaFilter = 'All'; }
+    handleAlphaFilter(e) { this.alphaFilter = e.currentTarget.dataset.letter; }
     handleSortChange(e) { this.accountSortBy  = e.detail.value; }
 
     cancelTargetChanges() {
@@ -522,7 +608,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
         const term = e.detail.value || '';
         this.gtma2SearchTerm = term;
         clearTimeout(this._searchTimer);
-        if (term.length < 3) { this.gtma2SearchResults = []; return; }
+        if (term.length < 2) { this.gtma2SearchResults = []; return; }
         this._searchTimer = setTimeout(async () => {
             this.isSearching = true;
             try {

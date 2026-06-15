@@ -409,7 +409,7 @@ private class PipeGenGTMAControllerTest {
     // ─── carryForwardGTMACommits Tests ───────────────────────────────────────────
 
     @IsTest
-    static void testCarryForward_copiesIncompleteCommits() {
+    static void testCarryForward_copiesAllCommitsWhenNoSelection() {
         User gtma = makeGTMAUser();
         Date weekStart     = PipeGenGTMAController.getWeekStart(Date.today());
         Date lastWeekStart = weekStart.addDays(-7);
@@ -417,20 +417,43 @@ private class PipeGenGTMAControllerTest {
         System.runAs(gtma) {
             makeCommit(gtma.Id, lastWeekStart, 'Meeting Booked',   'Not Started');
             makeCommit(gtma.Id, lastWeekStart, 'LinkedIn Outreach', 'Partial');
-            makeCommit(gtma.Id, lastWeekStart, 'Cold Call Made',    'Completed'); // should NOT carry
+            makeCommit(gtma.Id, lastWeekStart, 'Cold Call Made',    'Completed');
         }
 
         Test.startTest();
         List<Weekly_Commit__c> carried;
         System.runAs(gtma) {
-            carried = PipeGenGTMAController.carryForwardGTMACommits(0);
+            carried = PipeGenGTMAController.carryForwardGTMACommits(0, null);
         }
         Test.stopTest();
 
-        System.assertEquals(2, carried.size(), 'Only 2 incomplete commits should be carried forward');
+        System.assertEquals(3, carried.size(), 'All 3 prior-week commits should be carried forward when selectedIds is null');
         for (Weekly_Commit__c c : carried) {
             System.assertEquals(weekStart, c.Week_Start_Date__c, 'Carried commits should be in current week');
         }
+    }
+
+    @IsTest
+    static void testCarryForward_copiesOnlySelectedCommits() {
+        User gtma = makeGTMAUser();
+        Date weekStart     = PipeGenGTMAController.getWeekStart(Date.today());
+        Date lastWeekStart = weekStart.addDays(-7);
+
+        Weekly_Commit__c c1, c2, c3;
+        System.runAs(gtma) {
+            c1 = makeCommit(gtma.Id, lastWeekStart, 'Meeting Booked',    'Not Started');
+            c2 = makeCommit(gtma.Id, lastWeekStart, 'LinkedIn Outreach', 'Partial');
+            c3 = makeCommit(gtma.Id, lastWeekStart, 'Cold Call Made',    'Completed');
+        }
+
+        Test.startTest();
+        List<Weekly_Commit__c> carried;
+        System.runAs(gtma) {
+            carried = PipeGenGTMAController.carryForwardGTMACommits(0, new List<Id>{ c1.Id, c2.Id });
+        }
+        Test.stopTest();
+
+        System.assertEquals(2, carried.size(), 'Only the 2 selected commits should be carried forward');
     }
 
     @IsTest
@@ -439,7 +462,7 @@ private class PipeGenGTMAControllerTest {
         Test.startTest();
         List<Weekly_Commit__c> carried;
         System.runAs(gtma) {
-            carried = PipeGenGTMAController.carryForwardGTMACommits(0);
+            carried = PipeGenGTMAController.carryForwardGTMACommits(0, null);
         }
         Test.stopTest();
 

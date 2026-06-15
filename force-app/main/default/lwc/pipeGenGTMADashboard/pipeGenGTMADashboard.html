@@ -283,7 +283,7 @@
                             <div class="search-wrap">
                                 <lightning-input
                                     type="search"
-                                    placeholder="Search any account by name (3+ chars)..."
+                                    placeholder="Search any account by name..."
                                     value={gtma2SearchTerm}
                                     onchange={handleGTMA2Search}
                                     variant="label-hidden"
@@ -440,6 +440,13 @@
                             </div>
                         </div>
 
+                        <!-- Alpha filter strip -->
+                        <div class="alpha-strip slds-p-horizontal_medium slds-p-bottom_x-small">
+                            <template for:each={alphaLetters} for:item="l">
+                                <button key={l.key} class={l.btnClass} data-letter={l.key} onclick={handleAlphaFilter}>{l.label}</button>
+                            </template>
+                        </div>
+
                         <!-- Segment sections -->
                         <div class="slds-p-horizontal_medium acct-cards-bg">
                             <template for:each={accountSegments} for:item="seg">
@@ -549,6 +556,85 @@
             </lightning-tab>
 
         </lightning-tabset>
+
+        <!-- ── Carry-Forward Selection Modal ── -->
+        <template lwc:if={showCarryModal}>
+            <div class="carry-modal-overlay" onclick={handleCarryCancel}></div>
+            <div class="carry-modal" role="dialog" aria-modal="true">
+                <div class="carry-modal-hd">
+                    <span class="carry-modal-title">{carryModalTitle}</span>
+                    <button class="carry-modal-close" onclick={handleCarryCancel} title="Close">&#x2715;</button>
+                </div>
+
+                <!-- Loading state -->
+                <template lwc:if={isLoadingCarry}>
+                    <div class="carry-modal-loading">
+                        <lightning-spinner size="small" alternative-text="Loading"></lightning-spinner>
+                    </div>
+                </template>
+
+                <!-- Empty state -->
+                <template lwc:if={noCarryCommits}>
+                    <p class="carry-modal-empty">No commits found in the prior week.</p>
+                </template>
+
+                <!-- Commit list -->
+                <template lwc:if={hasCarryIncomplete}>
+                    <div class="carry-section-label">Incomplete</div>
+                    <ul class="carry-commit-list">
+                        <template for:each={carryIncompleteCommits} for:item="c">
+                            <li key={c.Id} class="carry-commit-row">
+                                <input type="checkbox" class="carry-checkbox" data-id={c.Id}
+                                    checked={c.selected} onchange={handleCarryToggle} />
+                                <div class="carry-commit-info">
+                                    <span class="carry-commit-type">{c.Commit_Type__c}</span>
+                                    <template lwc:if={c.refName}>
+                                        <span class="carry-commit-acct">{c.refName}</span>
+                                    </template>
+                                    <template lwc:if={c.Commit_Description__c}>
+                                        <span class="carry-commit-desc">{c.Commit_Description__c}</span>
+                                    </template>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+
+                <template lwc:if={hasCarryCompleted}>
+                    <div class="carry-section-label carry-section-label--done">Completed</div>
+                    <ul class="carry-commit-list">
+                        <template for:each={carryCompletedCommits} for:item="c">
+                            <li key={c.Id} class="carry-commit-row carry-commit-row--done">
+                                <input type="checkbox" class="carry-checkbox" data-id={c.Id}
+                                    checked={c.selected} onchange={handleCarryToggle} />
+                                <div class="carry-commit-info">
+                                    <span class="carry-commit-type">{c.Commit_Type__c}</span>
+                                    <template lwc:if={c.refName}>
+                                        <span class="carry-commit-acct">{c.refName}</span>
+                                    </template>
+                                    <template lwc:if={c.Commit_Description__c}>
+                                        <span class="carry-commit-desc">{c.Commit_Description__c}</span>
+                                    </template>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+
+                <!-- Shortcuts + confirm -->
+                <div class="carry-modal-ft">
+                    <div class="carry-shortcuts">
+                        <button class="carry-shortcut-btn" onclick={handleCarrySelectAll}>Select All</button>
+                        <button class="carry-shortcut-btn" onclick={handleCarrySelectIncomplete}>Incomplete Only</button>
+                    </div>
+                    <div class="carry-actions">
+                        <button class="carry-cancel-btn" onclick={handleCarryCancel}>Cancel</button>
+                        <button class="carry-confirm-btn" onclick={handleCarryConfirm}
+                            disabled={isCarryingForward}>{carryConfirmLabel}</button>
+                    </div>
+                </div>
+            </div>
+        </template>
 
     </template>
 </template>

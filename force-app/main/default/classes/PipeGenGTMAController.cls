@@ -153,7 +153,7 @@ public with sharing class PipeGenGTMAController {
                 FROM Account
                 WHERE Id IN :coveredIds
                 ORDER BY Name ASC
-                LIMIT 150
+                LIMIT 1200
             ];
         } else {
             accounts = [
@@ -165,7 +165,7 @@ public with sharing class PipeGenGTMAController {
                 FROM Account
                 WHERE GTM_Associate__c = :userId AND GTMA_Target_Account__c = true
                 ORDER BY Name ASC
-                LIMIT 150
+                LIMIT 1200
             ];
         }
 
@@ -283,7 +283,7 @@ public with sharing class PipeGenGTMAController {
             FROM Account
             WHERE GTM_Associate__c = :userId
             ORDER BY Name ASC
-            LIMIT 300
+            LIMIT 1200
         ];
 
         List<AccountCard> cards = new List<AccountCard>();
@@ -352,7 +352,7 @@ public with sharing class PipeGenGTMAController {
             FROM Account
             WHERE Id IN :coveredIds
             ORDER BY Name ASC
-            LIMIT 300
+            LIMIT 1200
         ];
 
         List<AccountCard> cards = new List<AccountCard>();
@@ -416,7 +416,7 @@ public with sharing class PipeGenGTMAController {
 
     @AuraEnabled(cacheable=false)
     public static List<Account> searchAllAccounts(String searchTerm, List<Id> excludeIds) {
-        if (String.isBlank(searchTerm) || searchTerm.trim().length() < 3) return new List<Account>();
+        if (String.isBlank(searchTerm) || searchTerm.trim().length() < 2) return new List<Account>();
         String likeTerm  = '%' + String.escapeSingleQuotes(searchTerm.trim()) + '%';
         Set<Id> excluded = excludeIds != null ? new Set<Id>(excludeIds) : new Set<Id>();
         return new AccountSearchHelper().run(likeTerm, excluded);
@@ -529,20 +529,50 @@ public with sharing class PipeGenGTMAController {
         ];
     }
 
+    @AuraEnabled(cacheable=false)
+    public static List<Weekly_Commit__c> getPriorWeekCommits(Integer weekOffset) {
+        Integer safeOffset = (weekOffset == null) ? 0 : Math.max(0, Math.min(1, weekOffset));
+        Id   userId        = UserInfo.getUserId();
+        Date weekStart     = getWeekStart(Date.today()).addDays(safeOffset * 7);
+        Date lastWeekStart = weekStart.addDays(-7);
+        return [
+            SELECT Id, Commit_Type__c, Commit_Description__c,
+                   Target_Account__c, Target_Account__r.Name,
+                   Committed_Count__c, Completion_Status__c
+            FROM Weekly_Commit__c
+            WHERE Rep__c = :userId
+              AND Week_Start_Date__c = :lastWeekStart
+            ORDER BY CreatedDate ASC
+        ];
+    }
+
     @AuraEnabled
-    public static List<Weekly_Commit__c> carryForwardGTMACommits(Integer weekOffset) {
+    public static List<Weekly_Commit__c> carryForwardGTMACommits(Integer weekOffset, List<Id> selectedIds) {
         Integer safeOffset = (weekOffset == null) ? 0 : Math.max(0, Math.min(1, weekOffset));
         Id   userId        = UserInfo.getUserId();
         Date weekStart     = getWeekStart(Date.today()).addDays(safeOffset * 7);
         Date lastWeekStart = weekStart.addDays(-7);
 
-        List<Weekly_Commit__c> priorWeek = [
-            SELECT Commit_Type__c, Commit_Description__c,
-                   Target_Account__c, Committed_Count__c, Notes__c
-            FROM Weekly_Commit__c
-            WHERE Rep__c = :userId
-              AND Week_Start_Date__c = :lastWeekStart
-        ];
+        List<Weekly_Commit__c> priorWeek;
+        if (selectedIds != null && !selectedIds.isEmpty()) {
+            Set<Id> selectedSet = new Set<Id>(selectedIds);
+            priorWeek = [
+                SELECT Commit_Type__c, Commit_Description__c,
+                       Target_Account__c, Committed_Count__c, Notes__c
+                FROM Weekly_Commit__c
+                WHERE Rep__c = :userId
+                  AND Week_Start_Date__c = :lastWeekStart
+                  AND Id IN :selectedSet
+            ];
+        } else {
+            priorWeek = [
+                SELECT Commit_Type__c, Commit_Description__c,
+                       Target_Account__c, Committed_Count__c, Notes__c
+                FROM Weekly_Commit__c
+                WHERE Rep__c = :userId
+                  AND Week_Start_Date__c = :lastWeekStart
+            ];
+        }
         if (priorWeek.isEmpty()) return new List<Weekly_Commit__c>();
 
         List<Weekly_Commit__c> toInsert = new List<Weekly_Commit__c>();
