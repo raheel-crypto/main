@@ -77,18 +77,24 @@
                         <div class="slds-text-color_error slds-p-vertical_small">{error}</div>
                     </template>
 
-                    <div class="slds-grid slds-gutters slds-m-bottom_small">
-                        <div class="slds-col slds-size_1-of-2">
+                    <div class="slds-grid slds-gutters_x-small slds-grid_vertical-align-end slds-m-bottom_small filters-row">
+                        <div class="slds-col slds-size_1-of-3">
                             <lightning-combobox label="Status" value={statusFilter}
                                 options={statusFilterOptions}
                                 onchange={handleStatusFilterChange}>
                             </lightning-combobox>
                         </div>
-                        <div class="slds-col slds-size_1-of-2">
+                        <div class="slds-col slds-size_1-of-3">
                             <lightning-combobox label="Scenario" value={scenarioFilter}
                                 options={scenarioFilterOptions}
                                 onchange={handleScenarioFilterChange}>
                             </lightning-combobox>
+                        </div>
+                        <div class="slds-col slds-size_1-of-3">
+                            <lightning-input type="search" label="Search"
+                                placeholder="Match domain, GRP-#, or scenario"
+                                value={searchQuery} onchange={handleSearchChange}>
+                            </lightning-input>
                         </div>
                     </div>
 
@@ -98,61 +104,125 @@
                         </div>
                     </template>
 
-                    <template lwc:if={hasGroups}>
-                        <ul class="slds-has-dividers_bottom-space">
+                    <template lwc:if={hasFilteredGroups}>
+                        <ul class="dedupe-groups">
                             <template for:each={groupRows} for:item="g">
-                                <li key={g.id} class="slds-item slds-p-around_small slds-border_bottom">
-                                    <div class="slds-grid slds-grid_vertical-align-center"
-                                        data-id={g.id} onclick={handleGroupClick}
-                                        style="cursor: pointer;">
+                                <li key={g.id} class="dedupe-group">
+                                    <div class="dedupe-group__header"
+                                        data-id={g.id} onclick={handleGroupClick}>
                                         <lightning-icon icon-name={g.chevron} size="x-small"
                                             class="slds-m-right_x-small"></lightning-icon>
-                                        <div class="slds-grow">
-                                            <div class="slds-text-title slds-text-color_default">
-                                                {g.scenarioLabel}
-                                                <span class="slds-text-color_weak slds-text-body_small slds-m-left_x-small">
-                                                    {g.matchKey}
-                                                </span>
-                                            </div>
-                                            <div class="slds-text-body_small slds-text-color_weak">
-                                                {g.memberCount} accounts · {g.name}
-                                            </div>
+                                        <div class="dedupe-group__title">
+                                            <div class="dedupe-group__key">{g.displayMatchKey}</div>
+                                            <div class="dedupe-group__meta">{g.metaLine}</div>
                                         </div>
                                         <lightning-badge label={g.status} variant={g.statusVariant}></lightning-badge>
                                     </div>
 
                                     <template lwc:if={g.expanded}>
-                                        <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-m-top_x-small">
-                                            <thead>
-                                                <tr class="slds-line-height_reset">
-                                                    <th>Account</th>
-                                                    <th>Website</th>
-                                                    <th>LinkedIn</th>
-                                                    <th>Owner</th>
-                                                    <th style="width: 4rem;"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                <template for:each={g.members} for:item="m">
-                                                    <tr key={m.accountId}>
-                                                        <td>{m.accountName}</td>
-                                                        <td class="slds-truncate" title={m.website}>{m.website}</td>
-                                                        <td class="slds-truncate" title={m.linkedIn}>{m.linkedIn}</td>
-                                                        <td>{m.ownerName}</td>
-                                                        <td>
-                                                            <lightning-button-icon data-id={m.accountId}
-                                                                icon-name="utility:new_window"
-                                                                alternative-text="Open"
-                                                                title="Open record to merge"
-                                                                onclick={handleOpenAccount}></lightning-button-icon>
-                                                        </td>
+                                        <div class="dedupe-group__body">
+                                            <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                                                Pick a master, then resolve any duplicate contact relations before merging.
+                                            </p>
+                                            <table class="slds-table slds-table_bordered slds-table_cell-buffer dedupe-members">
+                                                <thead>
+                                                    <tr class="slds-line-height_reset">
+                                                        <th style="width: 4rem;">Master</th>
+                                                        <th>Account</th>
+                                                        <th>Website</th>
+                                                        <th>LinkedIn</th>
+                                                        <th>Owner</th>
+                                                        <th style="width: 3rem;"></th>
                                                     </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <template for:each={g.members} for:item="m">
+                                                        <tr key={m.accountId} class={m.rowClass}>
+                                                            <td>
+                                                                <input type="radio" name={m.radioName}
+                                                                    id={m.radioId} data-id={m.accountId}
+                                                                    checked={m.isMaster}
+                                                                    onchange={handleMasterPick} />
+                                                            </td>
+                                                            <td>{m.accountName}</td>
+                                                            <td class="slds-truncate" title={m.website}>{m.website}</td>
+                                                            <td class="slds-truncate" title={m.linkedIn}>{m.linkedIn}</td>
+                                                            <td>{m.ownerName}</td>
+                                                            <td>
+                                                                <lightning-button-icon data-id={m.accountId}
+                                                                    icon-name="utility:new_window"
+                                                                    alternative-text="Open" title="Open record"
+                                                                    onclick={handleOpenAccount}></lightning-button-icon>
+                                                            </td>
+                                                        </tr>
+                                                    </template>
+                                                </tbody>
+                                            </table>
+
+                                            <div class="acr-section slds-m-top_small">
+                                                <template lwc:if={expandedAcrLoading}>
+                                                    <div class="slds-align_absolute-center slds-p-vertical_x-small">
+                                                        <lightning-spinner alternative-text="Checking relations" size="small"></lightning-spinner>
+                                                    </div>
                                                 </template>
-                                            </tbody>
-                                        </table>
-                                        <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
-                                            Open any record above to use the per-record Duplicate Finder widget for the merge.
-                                        </p>
+
+                                                <template lwc:if={hasAcrConflicts}>
+                                                    <div class="slds-box slds-box_x-small slds-theme_warning slds-m-bottom_x-small acr-banner">
+                                                        <lightning-icon icon-name="utility:warning" size="x-small"
+                                                            class="slds-m-right_xx-small"></lightning-icon>
+                                                        {acrConflictsLabel}
+                                                    </div>
+                                                    <table class="slds-table slds-table_bordered slds-table_cell-buffer acr-table">
+                                                        <thead>
+                                                            <tr class="slds-line-height_reset">
+                                                                <th>Contact</th>
+                                                                <th>Title</th>
+                                                                <th>Email</th>
+                                                                <th>On accounts</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <template for:each={acrConflictRows} for:item="c">
+                                                                <tr key={c.key}>
+                                                                    <td>{c.contactName}</td>
+                                                                    <td>{c.contactTitle}</td>
+                                                                    <td>{c.contactEmail}</td>
+                                                                    <td>
+                                                                        <template for:each={c.relations} for:item="r">
+                                                                            <div key={r.key} class={r.cellClass}>
+                                                                                {r.label}
+                                                                            </div>
+                                                                        </template>
+                                                                    </td>
+                                                                </tr>
+                                                            </template>
+                                                        </tbody>
+                                                    </table>
+                                                    <div class="slds-m-top_x-small slds-grid slds-grid_vertical-align-center">
+                                                        <lightning-button label={cleanupButtonLabel}
+                                                            variant="brand" disabled={cleanupDisabled}
+                                                            onclick={handleCleanupAcrs}></lightning-button>
+                                                        <template lwc:if={expandedAcrCleaning}>
+                                                            <lightning-spinner alternative-text="Cleaning"
+                                                                size="small"
+                                                                class="slds-m-left_x-small"></lightning-spinner>
+                                                        </template>
+                                                    </div>
+                                                </template>
+
+                                                <template lwc:if={expandedAcrLoading}></template>
+                                                <template lwc:elseif={hasAcrConflicts}></template>
+                                                <template lwc:else>
+                                                    <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small">
+                                                        No duplicate contact relations across these accounts — safe to merge.
+                                                    </p>
+                                                </template>
+                                            </div>
+
+                                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_small">
+                                                After cleanup, open the master record to perform the merge.
+                                            </p>
+                                        </div>
                                     </template>
                                 </li>
                             </template>
@@ -160,10 +230,10 @@
                     </template>
 
                     <template lwc:if={loadingGroups}></template>
-                    <template lwc:elseif={hasGroups}></template>
+                    <template lwc:elseif={hasFilteredGroups}></template>
                     <template lwc:else>
                         <p class="slds-text-body_small slds-text-color_weak slds-p-vertical_small">
-                            No groups for the selected scan/filters.
+                            {emptyMessage}
                         </p>
                     </template>
                 </div>

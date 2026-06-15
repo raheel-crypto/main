@@ -137,4 +137,67 @@ private class AccountDedupeScanControllerTest {
             System.assert(true);
         }
     }
+
+    @IsTest
+    static void acrConflicts_detectAndCleanup() {
+        // Two Acme accounts share Website — they'll be in the same Exact Website group.
+        List<Account> acmes = [
+            SELECT Id FROM Account WHERE Website LIKE '%acme%' ORDER BY Name LIMIT 3
+        ];
+        System.assert(acmes.size() >= 2, 'Need >= 2 Acme accounts');
+        Id master = acmes[0].Id;
+        Id dupe   = acmes[1].Id;
+
+        // Contact's direct account = master; add an indirect ACR on the dupe.
+        Contact c = new Contact(FirstName = 'Test', LastName = 'Person', AccountId = master);
+        insert c;
+        insert new AccountContactRelation(ContactId = c.Id, AccountId = dupe);
+
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        Dedupe_Group__c acmeGroup;
+        for (Dedupe_Group__c g : [
+            SELECT Id, (SELECT Account__c FROM Members__r)
+            FROM Dedupe_Group__c WHERE Scan__c = :scanId
+        ]) {
+            for (Dedupe_Group_Member__c m : g.Members__r) {
+                if (m.Account__c == master) { acmeGroup = g; break; }
+            }
+            if (acmeGroup != null) break;
+        }
+        System.assertNotEquals(null, acmeGroup, 'Acme group should exist');
+
+        List<AccountDedupeScanController.AcrConflict> conflicts =
+            AccountDedupeScanController.listAcrConflicts(acmeGroup.Id);
+        System.assert(!conflicts.isEmpty(), 'Should detect the conflict contact');
+        Boolean found = false;
+        for (AccountDedupeScanController.AcrConflict cf : conflicts) {
+            if (cf.contactId == c.Id) {
+                found = true;
+                System.assert(cf.relations.size() >= 2);
+            }
+        }
+        System.assert(found, 'Inserted contact should appear in conflicts');
+
+        Integer cleaned = AccountDedupeScanController.cleanupAcrConflicts(acmeGroup.Id, master);
+        System.assert(cleaned >= 1);
+        Integer remaining = [
+            SELECT COUNT() FROM AccountContactRelation
+            WHERE ContactId = :c.Id AND AccountId = :dupe AND IsDirect = false
+        ];
+        System.assertEquals(0, remaining, 'Indirect ACR on dupe should be gone');
+    }
+
+    @IsTest
+    static void acrConflicts_emptyInputs() {
+        System.assertEquals(0, AccountDedupeScanController.listAcrConflicts(null).size());
+        try {
+            AccountDedupeScanController.cleanupAcrConflicts(null, null);
+            System.assert(false, 'should throw');
+        } catch (AuraHandledException e) {
+            System.assert(true);
+        }
+    }
 }

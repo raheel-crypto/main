@@ -38,6 +38,22 @@ public with sharing class AccountDedupeScanController {
         @AuraEnabled public String label;
     }
 
+    public class AcrConflict {
+        @AuraEnabled public Id contactId;
+        @AuraEnabled public String contactName;
+        @AuraEnabled public String contactEmail;
+        @AuraEnabled public String contactTitle;
+        @AuraEnabled public List<AcrRow> relations;
+    }
+
+    public class AcrRow {
+        @AuraEnabled public Id relationId;
+        @AuraEnabled public Id accountId;
+        @AuraEnabled public String accountName;
+        @AuraEnabled public Boolean isDirect;
+        @AuraEnabled public String roles;
+    }
+
     @AuraEnabled(cacheable=true)
     public static List<ScenarioOption> listScenarios() {
         List<ScenarioOption> out = new List<ScenarioOption>();
@@ -167,5 +183,132 @@ public with sharing class AccountDedupeScanController {
             out.add(gs);
         }
         return out;
+    }
+
+    /**
+     * For a group, return every Contact that has AccountContactRelation rows on
+     * more than one account in the group. These are the relationships that
+     * typically block Account merges with "Duplicate AccountContactRelation".
+     */
+    @AuraEnabled(cacheable=false)
+    public static List<AcrConflict> listAcrConflicts(Id groupId) {
+        if (groupId == null) return new List<AcrConflict>();
+
+        Set<Id> accountIds = new Set<Id>();
+        for (Dedupe_Group_Member__c m : [
+            SELECT Account__c FROM Dedupe_Group_Member__c WHERE Group__c = :groupId
+        ]) {
+            if (m.Account__c != null) accountIds.add(m.Account__c);
+        }
+        if (accountIds.isEmpty()) return new List<AcrConflict>();
+
+        Map<Id, AcrConflict> byContact = new Map<Id, AcrConflict>();
+        Map<Id, Set<Id>> accountsPerContact = new Map<Id, Set<Id>>();
+
+        for (AccountContactRelation acr : [
+            SELECT Id, AccountId, Account.Name, ContactId, Contact.Name, Contact.Email,
+                   Contact.Title, Roles, IsDirect
+            FROM AccountContactRelation
+            WHERE AccountId IN :accountIds
+            ORDER BY Contact.Name NULLS LAST
+            LIMIT 5000
+        ]) {
+            if (acr.ContactId == null) continue;
+
+            if (!byContact.containsKey(acr.ContactId)) {
+                AcrConflict c = new AcrConflict();
+                c.contactId    = acr.ContactId;
+                c.contactName  = acr.Contact != null ? acr.Contact.Name : null;
+                c.contactEmail = acr.Contact != null ? acr.Contact.Email : null;
+                c.contactTitle = acr.Contact != null ? acr.Contact.Title : null;
+                c.relations    = new List<AcrRow>();
+                byContact.put(acr.ContactId, c);
+                accountsPerContact.put(acr.ContactId, new Set<Id>());
+            }
+            AcrRow row = new AcrRow();
+            row.relationId  = acr.Id;
+            row.accountId   = acr.AccountId;
+            row.accountName = acr.Account != null ? acr.Account.Name : null;
+            row.isDirect    = acr.IsDirect;
+            row.roles       = acr.Roles;
+            byContact.get(acr.ContactId).relations.add(row);
+            accountsPerContact.get(acr.ContactId).add(acr.AccountId);
+        }
+
+        List<AcrConflict> out = new List<AcrConflict>();
+        for (Id cid : byContact.keySet()) {
+            if (accountsPerContact.get(cid).size() > 1) out.add(byContact.get(cid));
+        }
+        return out;
+    }
+
+    /**
+     * For contacts whose relationships span the group's accounts, retain only
+     * their relationship to the master:
+     *  - IsDirect=false on a duplicate → delete
+     *  - IsDirect=true on a duplicate → reparent the Contact to the master
+     *    (Salesforce auto-moves the direct relationship and upgrades the
+     *    existing indirect on the master if present)
+     * Returns the number of relations cleaned up.
+     */
+    @AuraEnabled
+    public static Integer cleanupAcrConflicts(Id groupId, Id masterAccountId) {
+        try {
+            if (groupId == null) throw new AuraHandledException('Group is required.');
+            if (masterAccountId == null) throw new AuraHandledException('Master account is required.');
+
+            Set<Id> accountIds = new Set<Id>();
+            for (Dedupe_Group_Member__c m : [
+                SELECT Account__c FROM Dedupe_Group_Member__c WHERE Group__c = :groupId
+            ]) {
+                if (m.Account__c != null) accountIds.add(m.Account__c);
+            }
+            if (!accountIds.contains(masterAccountId)) {
+                throw new AuraHandledException('Master account is not part of this group.');
+            }
+            Set<Id> dupeAccountIds = new Set<Id>(accountIds);
+            dupeAccountIds.remove(masterAccountId);
+            if (dupeAccountIds.isEmpty()) return 0;
+
+            // Conflict = contact has an ACR on master AND on at least one dupe.
+            Set<Id> contactsOnMaster = new Set<Id>();
+            for (AccountContactRelation acr : [
+                SELECT ContactId FROM AccountContactRelation WHERE AccountId = :masterAccountId
+            ]) {
+                if (acr.ContactId != null) contactsOnMaster.add(acr.ContactId);
+            }
+            if (contactsOnMaster.isEmpty()) return 0;
+
+            List<AccountContactRelation> dupeAcrs = [
+                SELECT Id, ContactId, AccountId, IsDirect
+                FROM AccountContactRelation
+                WHERE AccountId IN :dupeAccountIds AND ContactId IN :contactsOnMaster
+            ];
+            if (dupeAcrs.isEmpty()) return 0;
+
+            List<AccountContactRelation> toDelete = new List<AccountContactRelation>();
+            Set<Id> contactsToReparent = new Set<Id>();
+            for (AccountContactRelation acr : dupeAcrs) {
+                if (acr.IsDirect) contactsToReparent.add(acr.ContactId);
+                else toDelete.add(new AccountContactRelation(Id = acr.Id));
+            }
+
+            Integer cleaned = 0;
+            if (!toDelete.isEmpty()) {
+                delete toDelete;
+                cleaned += toDelete.size();
+            }
+            if (!contactsToReparent.isEmpty()) {
+                List<Contact> updates = new List<Contact>();
+                for (Id cid : contactsToReparent) {
+                    updates.add(new Contact(Id = cid, AccountId = masterAccountId));
+                }
+                update updates;
+                cleaned += contactsToReparent.size();
+            }
+            return cleaned;
+        } catch (Exception e) {
+            throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
+        }
     }
 }

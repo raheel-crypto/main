@@ -5,6 +5,8 @@ import listScenarios from '@salesforce/apex/AccountDedupeScanController.listScen
 import startScan from '@salesforce/apex/AccountDedupeScanController.startScan';
 import listScans from '@salesforce/apex/AccountDedupeScanController.listScans';
 import listGroups from '@salesforce/apex/AccountDedupeScanController.listGroups';
+import listAcrConflicts from '@salesforce/apex/AccountDedupeScanController.listAcrConflicts';
+import cleanupAcrConflicts from '@salesforce/apex/AccountDedupeScanController.cleanupAcrConflicts';
 
 const POLL_INTERVAL_MS = 4000;
 const STATUS_FILTER_OPTIONS = [
@@ -20,8 +22,13 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     @track activeScanId;
     @track groups = [];
     @track expandedGroupId;
+    @track expandedMasterId;
+    @track expandedAcrConflicts = [];
+    @track expandedAcrLoading = false;
+    @track expandedAcrCleaning = false;
     @track statusFilter = 'Open';
     @track scenarioFilter = '';
+    @track searchQuery = '';
     @track starting = false;
     @track loadingGroups = false;
     @track error;
@@ -109,18 +116,24 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
         const id = event.currentTarget.dataset.id;
         if (id === this.activeScanId) return;
         this.activeScanId = id;
-        this.expandedGroupId = undefined;
+        this.resetExpansion();
         this.refreshGroups();
     }
 
     handleStatusFilterChange(event) {
         this.statusFilter = event.detail.value;
+        this.resetExpansion();
         this.refreshGroups();
     }
 
     handleScenarioFilterChange(event) {
         this.scenarioFilter = event.detail.value || '';
+        this.resetExpansion();
         this.refreshGroups();
+    }
+
+    handleSearchChange(event) {
+        this.searchQuery = (event.target.value || '').trim().toLowerCase();
     }
 
     async refreshGroups() {
@@ -141,7 +154,64 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
 
     handleGroupClick(event) {
         const id = event.currentTarget.dataset.id;
-        this.expandedGroupId = this.expandedGroupId === id ? undefined : id;
+        if (this.expandedGroupId === id) {
+            this.resetExpansion();
+        } else {
+            this.expandedGroupId = id;
+            this.expandedMasterId = undefined;
+            this.expandedAcrConflicts = [];
+            this.loadAcrConflicts();
+        }
+    }
+
+    resetExpansion() {
+        this.expandedGroupId = undefined;
+        this.expandedMasterId = undefined;
+        this.expandedAcrConflicts = [];
+        this.expandedAcrLoading = false;
+        this.expandedAcrCleaning = false;
+    }
+
+    handleMasterPick(event) {
+        event.stopPropagation();
+        this.expandedMasterId = event.currentTarget.dataset.id;
+    }
+
+    async loadAcrConflicts() {
+        if (!this.expandedGroupId) {
+            this.expandedAcrConflicts = [];
+            return;
+        }
+        this.expandedAcrLoading = true;
+        try {
+            const data = await listAcrConflicts({ groupId: this.expandedGroupId });
+            this.expandedAcrConflicts = data || [];
+        } catch (e) {
+            this.expandedAcrConflicts = [];
+        } finally {
+            this.expandedAcrLoading = false;
+        }
+    }
+
+    async handleCleanupAcrs() {
+        if (this.cleanupDisabled) return;
+        this.expandedAcrCleaning = true;
+        try {
+            const count = await cleanupAcrConflicts({
+                groupId: this.expandedGroupId,
+                masterAccountId: this.expandedMasterId
+            });
+            this.toast(
+                `Cleaned up ${count} relation${count === 1 ? '' : 's'}`,
+                'You can now merge into the master record.',
+                'success'
+            );
+            await this.loadAcrConflicts();
+        } catch (e) {
+            this.toast('Cleanup failed', this.extractError(e), 'error');
+        } finally {
+            this.expandedAcrCleaning = false;
+        }
     }
 
     handleOpenAccount(event) {
@@ -154,7 +224,26 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     }
 
     get hasScans() { return this.scans && this.scans.length > 0; }
-    get hasGroups() { return this.groups && this.groups.length > 0; }
+
+    get filteredGroups() {
+        if (!this.searchQuery) return this.groups;
+        const q = this.searchQuery;
+        return this.groups.filter((g) =>
+            (g.matchKey || '').toLowerCase().includes(q) ||
+            (g.name || '').toLowerCase().includes(q) ||
+            (g.scenarioLabel || '').toLowerCase().includes(q)
+        );
+    }
+
+    get hasFilteredGroups() {
+        return this.filteredGroups.length > 0;
+    }
+
+    get emptyMessage() {
+        if (!this.activeScanId) return 'Run a scan to see duplicate groups.';
+        if (this.searchQuery) return `No groups match "${this.searchQuery}".`;
+        return 'No groups for the selected filters.';
+    }
 
     get scenarioFilterOptions() {
         return [{ label: 'All scenarios', value: '' }]
@@ -175,12 +264,63 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     }
 
     get groupRows() {
-        return this.groups.map((g) => ({
-            ...g,
-            expanded: g.id === this.expandedGroupId,
-            chevron: g.id === this.expandedGroupId ? 'utility:chevrondown' : 'utility:chevronright',
-            statusVariant: g.status === 'Resolved' ? 'success' : 'warning'
+        const masterId = this.expandedMasterId;
+        return this.filteredGroups.map((g) => {
+            const expanded = g.id === this.expandedGroupId;
+            return {
+                ...g,
+                expanded,
+                chevron: expanded ? 'utility:chevrondown' : 'utility:chevronright',
+                statusVariant: g.status === 'Resolved' ? 'success' : 'warning',
+                displayMatchKey: g.matchKey || '(no key)',
+                metaLine: `${g.memberCount} accounts · ${g.scenarioLabel} · ${g.name}`,
+                members: (g.members || []).map((m) => ({
+                    ...m,
+                    isMaster: expanded && m.accountId === masterId,
+                    radioId: `master-${g.id}-${m.accountId}`,
+                    radioName: `master-${g.id}`,
+                    rowClass: expanded && m.accountId === masterId
+                        ? 'master-row'
+                        : ''
+                }))
+            };
+        });
+    }
+
+    get acrConflictRows() {
+        const masterId = this.expandedMasterId;
+        return this.expandedAcrConflicts.map((c) => ({
+            key: c.contactId,
+            contactId: c.contactId,
+            contactName: c.contactName || '(no name)',
+            contactTitle: c.contactTitle || '',
+            contactEmail: c.contactEmail || '',
+            relations: (c.relations || []).map((r) => ({
+                key: r.relationId,
+                accountId: r.accountId,
+                label: r.accountName + (r.isDirect ? ' • primary' : ''),
+                cellClass: r.accountId === masterId
+                    ? 'acr-rel acr-rel--master'
+                    : 'acr-rel'
+            }))
         }));
+    }
+
+    get hasAcrConflicts() {
+        return this.expandedAcrConflicts && this.expandedAcrConflicts.length > 0;
+    }
+
+    get acrConflictsLabel() {
+        const n = this.expandedAcrConflicts ? this.expandedAcrConflicts.length : 0;
+        return `${n} contact${n === 1 ? '' : 's'} linked to multiple accounts in this group`;
+    }
+
+    get cleanupDisabled() {
+        return !this.expandedMasterId || this.expandedAcrCleaning || !this.hasAcrConflicts;
+    }
+
+    get cleanupButtonLabel() {
+        return this.expandedMasterId ? 'Clean up duplicate relations' : 'Pick a master first';
     }
 
     extractError(e) {
