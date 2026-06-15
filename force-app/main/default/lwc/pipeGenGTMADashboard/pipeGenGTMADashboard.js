@@ -458,7 +458,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
                 await this.loadData();
                 this.toast('Carried Forward', `${count} incomplete commit${count === 1 ? '' : 's'} copied from ${fromLabel}.`, 'success');
             } else {
-                this.toast('Nothing to Carry', 'No incomplete commits from last week.', 'info');
+                this.toast('Nothing to Copy', 'No commits found in the prior week.', 'info');
             }
         } catch (e) {
             this.toast('Error', e.body?.message || 'Could not carry forward commits.', 'error');

@@ -536,18 +536,17 @@ public with sharing class PipeGenGTMAController {
         Date weekStart     = getWeekStart(Date.today()).addDays(safeOffset * 7);
         Date lastWeekStart = weekStart.addDays(-7);
 
-        List<Weekly_Commit__c> incomplete = [
+        List<Weekly_Commit__c> priorWeek = [
             SELECT Commit_Type__c, Commit_Description__c,
                    Target_Account__c, Committed_Count__c, Notes__c
             FROM Weekly_Commit__c
             WHERE Rep__c = :userId
               AND Week_Start_Date__c = :lastWeekStart
-              AND Completion_Status__c != 'Completed'
         ];
-        if (incomplete.isEmpty()) return new List<Weekly_Commit__c>();
+        if (priorWeek.isEmpty()) return new List<Weekly_Commit__c>();
 
         List<Weekly_Commit__c> toInsert = new List<Weekly_Commit__c>();
-        for (Weekly_Commit__c c : incomplete) {
+        for (Weekly_Commit__c c : priorWeek) {
             toInsert.add(new Weekly_Commit__c(
                 Rep__c                = userId,
                 Week_Start_Date__c    = weekStart,
