@@ -231,6 +231,15 @@
 
                                     <template lwc:if={g.expanded}>
                                         <div class="dedupe-group__body">
+                                            <template lwc:if={expandedMergeMode}>
+                                                <c-account-compare-merge
+                                                    account-ids={mergeAccountIds}
+                                                    initial-master-id={expandedMasterId}
+                                                    onmergecomplete={handleMergeComplete}
+                                                    oncancel={handleMergeCancel}>
+                                                </c-account-compare-merge>
+                                            </template>
+                                            <template lwc:else>
                                             <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
                                                 Pick a master, then resolve any duplicate contact relations before merging.
                                             </p>
@@ -329,9 +338,16 @@
                                                 </template>
                                             </div>
 
-                                            <p class="slds-text-body_small slds-text-color_weak slds-m-top_small">
-                                                After cleanup, open the master record to perform the merge.
-                                            </p>
+                                            <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center">
+                                                <lightning-button label={mergeButtonLabel}
+                                                    variant="brand" icon-name="utility:merge"
+                                                    disabled={mergeButtonDisabled}
+                                                    onclick={handleStartMerge}></lightning-button>
+                                                <span class="slds-text-body_small slds-text-color_weak slds-m-left_small">
+                                                    Salesforce caps each merge call at 3 accounts — the service chunks larger groups automatically.
+                                                </span>
+                                            </div>
+                                            </template>
                                         </div>
                                     </template>
                                 </li>

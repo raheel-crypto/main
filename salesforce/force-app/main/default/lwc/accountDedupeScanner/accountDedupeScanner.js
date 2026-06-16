@@ -44,6 +44,7 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     @track expandedAcrConflicts = [];
     @track expandedAcrLoading = false;
     @track expandedAcrCleaning = false;
+    @track expandedMergeMode = false;
     @track selectedGroupIds = new Set();
     @track statusFilter = 'Open';
     @track scenarioFilter = '';
@@ -206,6 +207,24 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
         this.expandedAcrConflicts = [];
         this.expandedAcrLoading = false;
         this.expandedAcrCleaning = false;
+        this.expandedMergeMode = false;
+    }
+
+    handleStartMerge() {
+        if (!this.expandedMasterId) return;
+        this.expandedMergeMode = true;
+    }
+
+    handleMergeCancel() {
+        this.expandedMergeMode = false;
+    }
+
+    async handleMergeComplete() {
+        this.expandedMergeMode = false;
+        // The merge service marks the group Resolved automatically;
+        // refresh so the row drops out of the Open filter.
+        await this.refreshGroups();
+        this.resetExpansion();
     }
 
     handleMasterPick(event) {
@@ -534,6 +553,23 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
 
     get cleanupButtonLabel() {
         return this.expandedMasterId ? 'Clean up duplicate relations' : 'Pick a master first';
+    }
+
+    get mergeAccountIds() {
+        const g = this.filteredGroups.find((x) => x.id === this.expandedGroupId);
+        if (!g) return [];
+        return (g.members || []).map((m) => m.accountId).filter(Boolean);
+    }
+
+    get mergeButtonLabel() {
+        if (!this.expandedMasterId) return 'Pick a master to merge';
+        const ids = this.mergeAccountIds;
+        const dupes = Math.max(0, ids.length - 1);
+        return `Merge ${dupes} record${dupes === 1 ? '' : 's'} into master`;
+    }
+
+    get mergeButtonDisabled() {
+        return !this.expandedMasterId || this.mergeAccountIds.length < 2;
     }
 
     get totalGroupsCount() {

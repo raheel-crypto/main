@@ -16,68 +16,11 @@
 
             <template lwc:if={data}>
                 <template lwc:if={compareMode}>
-                    <!-- Compare & Merge view -->
-                    <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small">
-                        <h2 class="slds-text-heading_small slds-grow">Compare &amp; Merge</h2>
-                        <lightning-button label="Back to candidates" onclick={handleCancelCompare}
-                            variant="neutral" class="slds-m-right_x-small"></lightning-button>
-                        <lightning-button label="Confirm Merge" variant="destructive"
-                            onclick={handleConfirmMerge} disabled={merging}></lightning-button>
-                    </div>
-
-                    <p class="slds-text-body_small slds-m-bottom_x-small">
-                        Choose the master record (column header). For each field, pick the value that should
-                        end up on the master. Greyed cells are read-only.
-                    </p>
-
-                    <template lwc:if={merging}>
-                        <lightning-spinner alternative-text="Merging" size="small"></lightning-spinner>
-                    </template>
-
-                    <div class="slds-scrollable_x compare-scroll">
-                        <table class="slds-table slds-table_bordered slds-table_cell-buffer compare-table">
-                            <thead>
-                                <tr class="slds-line-height_reset">
-                                    <th class="slds-text-title_caps field-col">Field</th>
-                                    <template for:each={compareColumns} for:item="col">
-                                        <th key={col.id} class="slds-text-title_caps candidate-col">
-                                            <div class="slds-text-heading_small slds-truncate" title={col.name}>{col.name}</div>
-                                            <lightning-button data-id={col.id} label={col.masterLabel}
-                                                variant={col.masterVariant} onclick={handlePickMaster}
-                                                class="slds-m-top_xx-small"></lightning-button>
-                                        </th>
-                                    </template>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template for:each={compareRows} for:item="row">
-                                    <tr key={row.key}>
-                                        <td class="field-col">
-                                            <div class="slds-text-title">{row.label}</div>
-                                            <div class="slds-text-body_small slds-text-color_weak">{row.apiName}</div>
-                                        </td>
-                                        <template for:each={row.cells} for:item="cell">
-                                            <td key={cell.id} class={cell.cellClass}>
-                                                <div class="slds-grid slds-grid_vertical-align-start">
-                                                    <template lwc:if={row.updateable}>
-                                                        <input type="radio" name={cell.radioGroup}
-                                                            id={cell.radioId}
-                                                            data-field={cell.fieldName} data-id={cell.id}
-                                                            checked={cell.checked}
-                                                            onchange={handleFieldChoice}
-                                                            class="slds-m-right_x-small slds-m-top_xx-small" />
-                                                    </template>
-                                                    <label for={cell.radioId} class="cell-value" title={cell.value}>
-                                                        {cell.value}
-                                                    </label>
-                                                </div>
-                                            </td>
-                                        </template>
-                                    </tr>
-                                </template>
-                            </tbody>
-                        </table>
-                    </div>
+                    <c-account-compare-merge account-ids={compareAccountIds}
+                        initial-master-id={recordId}
+                        onmergecomplete={handleMergeComplete}
+                        oncancel={handleCancelCompare}>
+                    </c-account-compare-merge>
                 </template>
 
                 <template lwc:else>

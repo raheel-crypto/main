@@ -148,4 +148,21 @@ private class AccountDedupeControllerTest {
         System.assertEquals(0, nameDomainRoot.matchIds.size(),
             '"Name + Domain Root" stays exact-after-normalization and should not fire here');
     }
+
+    @IsTest
+    static void getCompareData_returnsFieldsAndRecords() {
+        List<Account> accs = [SELECT Id FROM Account LIMIT 3];
+        List<Id> ids = new List<Id>();
+        for (Account a : accs) ids.add(a.Id);
+
+        AccountDedupeService.CompareData cd = AccountDedupeController.getCompareData(ids);
+        System.assertNotEquals(null, cd);
+        System.assert(cd.fields.size() > 0, 'Should include field metadata');
+        System.assertEquals(3, cd.records.size(), 'Should include all requested accounts');
+        for (Id id : ids) System.assert(cd.records.containsKey(id));
+
+        // Null/empty input returns empty records but still includes field meta.
+        AccountDedupeService.CompareData empty = AccountDedupeController.getCompareData(null);
+        System.assertEquals(0, empty.records.size());
+    }
 }

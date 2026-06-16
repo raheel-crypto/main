@@ -49,6 +49,29 @@ public with sharing class AccountDedupeService {
         @AuraEnabled public Map<Id, Map<String, Object>> records;
     }
 
+    public class CompareData {
+        @AuraEnabled public List<FieldMeta> fields;
+        @AuraEnabled public Map<Id, Map<String, Object>> records;
+    }
+
+    /**
+     * Lightweight fetch of field metadata + per-account values for a fixed
+     * set of accounts. Used by the embedded compare/merge UI when we
+     * already know the participants (e.g. a dedupe group's members) and
+     * don't need scenario discovery.
+     */
+    public static CompareData getCompareData(List<Id> accountIds) {
+        CompareData out = new CompareData();
+        out.fields = buildFieldMeta();
+        out.records = new Map<Id, Map<String, Object>>();
+        if (accountIds == null || accountIds.isEmpty()) return out;
+        Set<Id> idSet = new Set<Id>(accountIds);
+        for (Account a : queryAccounts(idSet)) {
+            out.records.put(a.Id, accountToMap(a));
+        }
+        return out;
+    }
+
     public static DedupeResult findDuplicates(Id accountId) {
         if (accountId == null) {
             throw new AuraHandledException('Account Id is required.');
