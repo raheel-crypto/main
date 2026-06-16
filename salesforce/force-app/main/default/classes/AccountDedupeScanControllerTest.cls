@@ -284,4 +284,51 @@ private class AccountDedupeScanControllerTest {
         System.assertEquals(2, out.size());
         System.assertEquals(0, AccountDedupeScanController.getAccountSummaries(null).size());
     }
+
+    @IsTest
+    static void getGroupRiskBatch_countsBusinessRecords() {
+        List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 2];
+        System.assert(acmes.size() >= 2);
+        Id withOpp = acmes[0].Id;
+
+        // Renewal opp on Acme #1 — should bubble into both openOpps and renewalOpps.
+        insert new Opportunity(
+            Name = 'Test Renewal',
+            AccountId = withOpp,
+            StageName = 'Prospecting',
+            CloseDate = Date.today().addDays(30),
+            Type = 'Renewal'
+        );
+        // A task within the 90-day window.
+        insert new Task(WhatId = withOpp, Subject = 'Follow up', Status = 'Open');
+
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        List<Dedupe_Group__c> groups = [SELECT Id FROM Dedupe_Group__c WHERE Scan__c = :scanId LIMIT 5];
+        System.assert(!groups.isEmpty());
+        List<Id> groupIds = new List<Id>();
+        for (Dedupe_Group__c g : groups) groupIds.add(g.Id);
+
+        List<AccountDedupeScanController.GroupRiskSummary> risk =
+            AccountDedupeScanController.getGroupRiskBatch(groupIds);
+        System.assertEquals(groupIds.size(), risk.size());
+
+        Boolean sawAcmeWithOpp = false;
+        for (AccountDedupeScanController.GroupRiskSummary g : risk) {
+            for (AccountDedupeScanController.MemberBusinessRecords m : g.members) {
+                if (m.accountId == withOpp) {
+                    sawAcmeWithOpp = true;
+                    System.assertEquals(1, m.openOpps);
+                    System.assertEquals(1, m.renewalOpps);
+                }
+            }
+        }
+        System.assert(sawAcmeWithOpp, 'Acme with renewal opp should be summarized');
+
+        // Empty / null inputs are no-ops
+        System.assertEquals(0, AccountDedupeScanController.getGroupRiskBatch(null).size());
+        System.assertEquals(0, AccountDedupeScanController.getGroupRiskBatch(new List<Id>()).size());
+    }
 }

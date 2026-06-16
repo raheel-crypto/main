@@ -217,6 +217,7 @@
                                                     <template lwc:if={g.showMergePill}>
                                                         <span class="merge-pill" title="Salesforce merge handles up to 3 accounts per call">{g.mergeLabel}</span>
                                                     </template>
+                                                    <span class={g.riskClass} title={g.riskTitle}>{g.riskLabel}</span>
                                                     <span class="dedupe-group__meta-text">{g.metaLine}</span>
                                                 </div>
                                             </div>
@@ -277,6 +278,35 @@
                                                     </template>
                                                 </tbody>
                                             </table>
+
+                                            <div class="br-section slds-m-top_small">
+                                                <div class="slds-text-title_caps slds-text-color_weak slds-m-bottom_xx-small">Business records</div>
+                                                <table class="slds-table slds-table_bordered slds-table_cell-buffer br-table">
+                                                    <thead>
+                                                        <tr class="slds-line-height_reset">
+                                                            <th>Account</th>
+                                                            <th>Open opps</th>
+                                                            <th>Renewal opps</th>
+                                                            <th>Active contracts</th>
+                                                            <th>Activities (90d)</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <template for:each={g.businessRecordRows} for:item="b">
+                                                            <tr key={b.accountId} class={b.rowClass}>
+                                                                <td>{b.accountName}</td>
+                                                                <td class={b.openOppsClass}>{b.openOpps}</td>
+                                                                <td class={b.renewalOppsClass}>{b.renewalOpps}</td>
+                                                                <td class={b.activeContractsClass}>{b.activeContracts}</td>
+                                                                <td>{b.recentActivities}</td>
+                                                            </tr>
+                                                        </template>
+                                                    </tbody>
+                                                </table>
+                                                <p class="slds-text-body_small slds-text-color_weak slds-m-top_xx-small">
+                                                    Red cells = both master and a duplicate hold the same record type — merging would create a collision.
+                                                </p>
+                                            </div>
 
                                             <div class="acr-section slds-m-top_small">
                                                 <template lwc:if={expandedAcrLoading}>

@@ -439,4 +439,117 @@ public with sharing class AccountDedupeScanController {
             throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
         }
     }
+
+    public class MemberBusinessRecords {
+        @AuraEnabled public Id accountId;
+        @AuraEnabled public Integer openOpps;
+        @AuraEnabled public Integer renewalOpps;
+        @AuraEnabled public Integer activeContracts;
+        @AuraEnabled public Integer recentActivities;
+    }
+
+    public class GroupRiskSummary {
+        @AuraEnabled public Id groupId;
+        @AuraEnabled public List<MemberBusinessRecords> members;
+    }
+
+    /**
+     * For a batch of groups, return per-member counts of business-critical
+     * child records (open opps, renewal opps, active contracts, recent
+     * activities). Used by the merge safety belt to flag groups where
+     * absorbing a duplicate would collide with the master's own records.
+     *
+     * Uses 4 aggregate queries total regardless of group/member count, so
+     * it scales to scanner pages of 100+ groups without governor issues.
+     */
+    @AuraEnabled(cacheable=false)
+    public static List<GroupRiskSummary> getGroupRiskBatch(List<Id> groupIds) {
+        List<GroupRiskSummary> out = new List<GroupRiskSummary>();
+        if (groupIds == null || groupIds.isEmpty()) return out;
+
+        Map<Id, List<Id>> membersByGroup = new Map<Id, List<Id>>();
+        Set<Id> accountIds = new Set<Id>();
+        for (Dedupe_Group_Member__c m : [
+            SELECT Group__c, Account__c FROM Dedupe_Group_Member__c
+            WHERE Group__c IN :groupIds AND Account__c != NULL
+        ]) {
+            if (!membersByGroup.containsKey(m.Group__c)) {
+                membersByGroup.put(m.Group__c, new List<Id>());
+            }
+            membersByGroup.get(m.Group__c).add(m.Account__c);
+            accountIds.add(m.Account__c);
+        }
+        if (accountIds.isEmpty()) return out;
+
+        Map<Id, Integer> openOpps        = new Map<Id, Integer>();
+        Map<Id, Integer> renewalOpps     = new Map<Id, Integer>();
+        Map<Id, Integer> activeContracts = new Map<Id, Integer>();
+        Map<Id, Integer> recentActs      = new Map<Id, Integer>();
+
+        for (AggregateResult ar : [
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Opportunity
+            WHERE AccountId IN :accountIds AND IsClosed = false
+            GROUP BY AccountId
+        ]) {
+            openOpps.put((Id) ar.get('acc'), ((Decimal) ar.get('cnt')).intValue());
+        }
+        for (AggregateResult ar : [
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Opportunity
+            WHERE AccountId IN :accountIds AND IsClosed = false AND Type = 'Renewal'
+            GROUP BY AccountId
+        ]) {
+            renewalOpps.put((Id) ar.get('acc'), ((Decimal) ar.get('cnt')).intValue());
+        }
+        for (AggregateResult ar : [
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Contract
+            WHERE AccountId IN :accountIds AND Status = 'Activated'
+            GROUP BY AccountId
+        ]) {
+            activeContracts.put((Id) ar.get('acc'), ((Decimal) ar.get('cnt')).intValue());
+        }
+        // Tasks + Events combined into a single "recent activity" count.
+        for (AggregateResult ar : [
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Task
+            WHERE AccountId IN :accountIds AND CreatedDate = LAST_N_DAYS:90
+            GROUP BY AccountId
+        ]) {
+            Id aid = (Id) ar.get('acc');
+            Integer cnt = ((Decimal) ar.get('cnt')).intValue();
+            recentActs.put(aid, (recentActs.containsKey(aid) ? recentActs.get(aid) : 0) + cnt);
+        }
+        for (AggregateResult ar : [
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Event
+            WHERE AccountId IN :accountIds AND CreatedDate = LAST_N_DAYS:90
+            GROUP BY AccountId
+        ]) {
+            Id aid = (Id) ar.get('acc');
+            Integer cnt = ((Decimal) ar.get('cnt')).intValue();
+            recentActs.put(aid, (recentActs.containsKey(aid) ? recentActs.get(aid) : 0) + cnt);
+        }
+
+        for (Id gid : groupIds) {
+            GroupRiskSummary grs = new GroupRiskSummary();
+            grs.groupId = gid;
+            grs.members = new List<MemberBusinessRecords>();
+            List<Id> accIds = membersByGroup.get(gid);
+            if (accIds != null) {
+                for (Id aid : accIds) {
+                    MemberBusinessRecords mr = new MemberBusinessRecords();
+                    mr.accountId       = aid;
+                    mr.openOpps        = openOpps.containsKey(aid)        ? openOpps.get(aid)        : 0;
+                    mr.renewalOpps     = renewalOpps.containsKey(aid)     ? renewalOpps.get(aid)     : 0;
+                    mr.activeContracts = activeContracts.containsKey(aid) ? activeContracts.get(aid) : 0;
+                    mr.recentActivities = recentActs.containsKey(aid)     ? recentActs.get(aid)     : 0;
+                    grs.members.add(mr);
+                }
+            }
+            out.add(grs);
+        }
+        return out;
+    }
 }

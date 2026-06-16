@@ -10,6 +10,7 @@ import cleanupAcrConflicts from '@salesforce/apex/AccountDedupeScanController.cl
 import dismissGroups from '@salesforce/apex/AccountDedupeScanController.dismissGroups';
 import createManualGroup from '@salesforce/apex/AccountDedupeScanController.createManualGroup';
 import getAccountSummaries from '@salesforce/apex/AccountDedupeScanController.getAccountSummaries';
+import getGroupRiskBatch from '@salesforce/apex/AccountDedupeScanController.getGroupRiskBatch';
 
 const POLL_INTERVAL_MS = 4000;
 const STATUS_FILTER_OPTIONS = [
@@ -177,15 +178,41 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
         if (!this.activeScanId) return;
         this.loadingGroups = true;
         try {
-            this.groups = await listGroups({
+            const groups = await listGroups({
                 scanId: this.activeScanId,
                 statusFilter: this.statusFilter || null,
                 scenarioFilter: this.scenarioFilter || null
             });
+            this.groups = await this.enrichGroupsWithRisk(groups);
         } catch (e) {
             this.error = this.extractError(e);
         } finally {
             this.loadingGroups = false;
+        }
+    }
+
+    async enrichGroupsWithRisk(groups) {
+        if (!groups || !groups.length) return groups || [];
+        try {
+            const risk = await getGroupRiskBatch({ groupIds: groups.map((g) => g.id) });
+            const byGroup = new Map(risk.map((r) => [r.groupId, r.members || []]));
+            return groups.map((g) => {
+                const counts = byGroup.get(g.id) || [];
+                const byAcc = new Map(counts.map((m) => [m.accountId, m]));
+                return {
+                    ...g,
+                    members: (g.members || []).map((m) => ({
+                        ...m,
+                        counts: byAcc.get(m.accountId) || {
+                            openOpps: 0, renewalOpps: 0, activeContracts: 0, recentActivities: 0
+                        }
+                    }))
+                };
+            });
+        } catch (e) {
+            // If a user lacks perm to query Opportunity/Contract/etc., fail
+            // open — show groups without the safety belt rather than blocking.
+            return groups;
         }
     }
 
@@ -496,6 +523,7 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
             const isSelected = selected.has(g.id);
             const n = g.memberCount || 0;
             const merges = n > 1 ? Math.ceil((n - 1) / 2) : 0;
+            const risk = this.computeRisk(g, expanded ? masterId : null);
             return {
                 ...g,
                 expanded,
@@ -507,7 +535,11 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
                 scenarioChipClass: SCENARIO_CLASS[g.scenarioKey] || 'scenario-chip scenario-chip--grey',
                 mergeLabel: `${merges} merge${merges === 1 ? '' : 's'}`,
                 showMergePill: merges > 0,
+                riskLabel: risk.label,
+                riskClass: risk.pillClass,
+                riskTitle: risk.reason,
                 metaLine: `${n} accounts · ${g.name}`,
+                businessRecordRows: this.buildBusinessRecordRows(g, masterId),
                 members: (g.members || []).map((m) => ({
                     ...m,
                     isMaster: expanded && m.accountId === masterId,
@@ -515,6 +547,94 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
                     radioName: `master-${g.id}`,
                     rowClass: expanded && m.accountId === masterId ? 'master-row' : ''
                 }))
+            };
+        });
+    }
+
+    computeRisk(group, masterId) {
+        const members = group.members || [];
+        const hasCritical = (c) =>
+            (c.openOpps || 0) > 0 || (c.renewalOpps || 0) > 0 || (c.activeContracts || 0) > 0;
+
+        if (masterId) {
+            const master = members.find((m) => m.accountId === masterId);
+            const dupes = members.filter((m) => m.accountId !== masterId);
+            const mc = (master && master.counts) || {};
+            let collisions = [];
+            let dupeHasCritical = false;
+            for (const d of dupes) {
+                const dc = d.counts || {};
+                if ((dc.openOpps || 0) > 0 && (mc.openOpps || 0) > 0) collisions.push('open opps');
+                if ((dc.renewalOpps || 0) > 0 && (mc.renewalOpps || 0) > 0) collisions.push('renewal opps');
+                if ((dc.activeContracts || 0) > 0 && (mc.activeContracts || 0) > 0) collisions.push('contracts');
+                if (hasCritical(dc)) dupeHasCritical = true;
+            }
+            collisions = Array.from(new Set(collisions));
+            if (collisions.length) {
+                return {
+                    label: 'Manual',
+                    pillClass: 'risk-pill risk-pill--manual',
+                    reason: `Both master and a duplicate have ${collisions.join(', ')}.`
+                };
+            }
+            if (dupeHasCritical) {
+                return {
+                    label: 'Review',
+                    pillClass: 'risk-pill risk-pill--review',
+                    reason: 'Duplicates have opps/contracts that will move to master.'
+                };
+            }
+            return {
+                label: 'Safe',
+                pillClass: 'risk-pill risk-pill--safe',
+                reason: 'Duplicates are shells.'
+            };
+        }
+
+        // No master picked yet — coarse view based on count of members with critical records.
+        const criticalCount = members.filter((m) => hasCritical(m.counts || {})).length;
+        if (criticalCount >= 2) {
+            return {
+                label: 'Manual',
+                pillClass: 'risk-pill risk-pill--manual',
+                reason: `${criticalCount} accounts in this group have opps/contracts — likely collision.`
+            };
+        }
+        if (criticalCount === 1) {
+            return {
+                label: 'Review',
+                pillClass: 'risk-pill risk-pill--review',
+                reason: 'One account has opps/contracts; pick it as master to absorb cleanly.'
+            };
+        }
+        return {
+            label: 'Safe',
+            pillClass: 'risk-pill risk-pill--safe',
+            reason: 'No business records on any member.'
+        };
+    }
+
+    buildBusinessRecordRows(group, masterId) {
+        const members = group.members || [];
+        const master = members.find((m) => m.accountId === masterId);
+        const mc = (master && master.counts) || {};
+        return members.map((m) => {
+            const c = m.counts || {};
+            const isMaster = m.accountId === masterId;
+            const oppCollision  = !isMaster && (c.openOpps || 0) > 0 && (mc.openOpps || 0) > 0;
+            const renCollision  = !isMaster && (c.renewalOpps || 0) > 0 && (mc.renewalOpps || 0) > 0;
+            const conCollision  = !isMaster && (c.activeContracts || 0) > 0 && (mc.activeContracts || 0) > 0;
+            return {
+                accountId: m.accountId,
+                accountName: m.accountName,
+                openOpps: c.openOpps || 0,
+                renewalOpps: c.renewalOpps || 0,
+                activeContracts: c.activeContracts || 0,
+                recentActivities: c.recentActivities || 0,
+                rowClass: isMaster ? 'br-row br-row--master' : 'br-row',
+                openOppsClass: oppCollision  ? 'br-cell br-cell--collision' : 'br-cell',
+                renewalOppsClass: renCollision ? 'br-cell br-cell--collision' : 'br-cell',
+                activeContractsClass: conCollision ? 'br-cell br-cell--collision' : 'br-cell'
             };
         });
     }

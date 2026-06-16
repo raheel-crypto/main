@@ -153,6 +153,46 @@ ul.slds-has-dividers_bottom-space {
     white-space: nowrap;
 }
 
+/* Risk pill */
+.risk-pill {
+    display: inline-block;
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.risk-pill--safe   { background: #e8f5e9; color: #1b5e20; border: 1px solid #c8e6c9; }
+.risk-pill--review { background: #fff8e1; color: #b26a00; border: 1px solid #ffe082; }
+.risk-pill--manual { background: #ffebee; color: #b71c1c; border: 1px solid #ffcdd2; }
+
+/* Business records table */
+.br-table th,
+.br-table td {
+    text-align: center;
+    font-size: 0.8125rem;
+}
+
+.br-table td:first-child,
+.br-table th:first-child {
+    text-align: left;
+}
+
+.br-row--master td {
+    background: #f0f8ff;
+    font-weight: 500;
+}
+
+.br-cell--collision {
+    background: #ffebee !important;
+    color: #b71c1c;
+    font-weight: 600;
+}
+
 /* Manual group panel */
 .manual-panel {
     background: #fbfbfd;
