@@ -246,6 +246,30 @@ ul.slds-has-dividers_bottom-space {
 }
 
 /* Expanded member table */
+/* Expanded member table */
+.dedupe-members {
+    table-layout: fixed;
+    width: 100%;
+}
+
+.dedupe-members td,
+.dedupe-members th {
+    vertical-align: top;
+}
+
+.dedupe-members .col-account {
+    white-space: normal;
+    word-break: break-word;
+    font-weight: 500;
+}
+
+.dedupe-members .col-url {
+    white-space: normal;
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    font-size: 0.8125rem;
+}
+
 .dedupe-members tr.master-row td {
     background: #f0f8ff;
 }

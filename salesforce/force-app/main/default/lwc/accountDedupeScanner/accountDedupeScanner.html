@@ -271,9 +271,9 @@
                                                                     checked={m.isMaster}
                                                                     onchange={handleMasterPick} />
                                                             </td>
-                                                            <td>{m.accountName}</td>
-                                                            <td class="slds-truncate" title={m.website}>{m.website}</td>
-                                                            <td class="slds-truncate" title={m.linkedIn}>{m.linkedIn}</td>
+                                                            <td class="col-account">{m.accountName}</td>
+                                                            <td class="col-url" title={m.website}>{m.website}</td>
+                                                            <td class="col-url" title={m.linkedIn}>{m.linkedIn}</td>
                                                             <td>{m.ownerName}</td>
                                                             <td>
                                                                 <lightning-button-icon data-id={m.accountId}
