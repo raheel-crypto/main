@@ -331,4 +331,149 @@ private class AccountDedupeScanControllerTest {
         System.assertEquals(0, AccountDedupeScanController.getGroupRiskBatch(null).size());
         System.assertEquals(0, AccountDedupeScanController.getGroupRiskBatch(new List<Id>()).size());
     }
+
+    @IsTest
+    static void queueAndDrain_resolvesGroup() {
+        // Spin up a scan with the Acme group, then queue it.
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        Dedupe_Group__c acmeGroup;
+        List<Account> acmesInGroup = new List<Account>();
+        for (Dedupe_Group__c g : [
+            SELECT Id, Match_Key__c, (SELECT Account__c FROM Members__r)
+            FROM Dedupe_Group__c WHERE Scan__c = :scanId
+        ]) {
+            if (g.Match_Key__c != null && g.Match_Key__c.contains('acme')) {
+                acmeGroup = g;
+                for (Dedupe_Group_Member__c m : g.Members__r) {
+                    acmesInGroup.add(new Account(Id = m.Account__c));
+                }
+                break;
+            }
+        }
+        System.assertNotEquals(null, acmeGroup);
+        System.assert(acmesInGroup.size() >= 2);
+
+        Id master = acmesInGroup[0].Id;
+
+        AccountDedupeScanController.QueueRequest req = new AccountDedupeScanController.QueueRequest();
+        req.groupId = acmeGroup.Id;
+        req.masterId = master;
+        req.notes = 'integration test';
+
+        Integer queued = AccountDedupeScanController.queueGroupsForMerge(
+            new List<AccountDedupeScanController.QueueRequest>{ req }
+        );
+        System.assertEquals(1, queued);
+
+        Dedupe_Group__c after = [
+            SELECT Status__c, Master_Account__c, Queued_At__c, Merge_Notes__c
+            FROM Dedupe_Group__c WHERE Id = :acmeGroup.Id
+        ];
+        System.assertEquals('Queued', after.Status__c);
+        System.assertEquals(master, after.Master_Account__c);
+        System.assertNotEquals(null, after.Queued_At__c);
+
+        // Drain synchronously inside a fresh test window.
+        Test.startTest();
+        System.enqueueJob(new AccountMergeQueueDrainer());
+        Test.stopTest();
+
+        Dedupe_Group__c done = [
+            SELECT Status__c FROM Dedupe_Group__c WHERE Id = :acmeGroup.Id
+        ];
+        System.assertEquals('Resolved', done.Status__c,
+            'Drainer should resolve via the merge service auto-resolve');
+    }
+
+    @IsTest
+    static void queueGroupsForMerge_emptyInputs() {
+        System.assertEquals(0, AccountDedupeScanController.queueGroupsForMerge(null));
+        System.assertEquals(0,
+            AccountDedupeScanController.queueGroupsForMerge(new List<AccountDedupeScanController.QueueRequest>()));
+    }
+
+    @IsTest
+    static void drainer_marksFailedWhenMasterMissing() {
+        // Queue a group with no Master_Account__c — drainer should mark Failed.
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+        Dedupe_Group__c g = [SELECT Id FROM Dedupe_Group__c WHERE Scan__c = :scanId LIMIT 1];
+        update new Dedupe_Group__c(
+            Id = g.Id, Status__c = 'Queued', Queued_At__c = System.now(),
+            Master_Account__c = null
+        );
+
+        Test.startTest();
+        System.enqueueJob(new AccountMergeQueueDrainer());
+        Test.stopTest();
+
+        Dedupe_Group__c done = [SELECT Status__c, Error_Message__c FROM Dedupe_Group__c WHERE Id = :g.Id];
+        System.assertEquals('Failed', done.Status__c);
+        System.assert(done.Error_Message__c != null && done.Error_Message__c.contains('master'));
+    }
+
+    @IsTest
+    static void drainer_marksNeedsReviewOnCollision() {
+        // Put a renewal opp on each of two Acme accounts → collision on renewal opps.
+        List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 2];
+        System.assert(acmes.size() >= 2);
+        List<Opportunity> opps = new List<Opportunity>{
+            new Opportunity(Name='M', AccountId=acmes[0].Id, StageName='Prospecting',
+                CloseDate=Date.today().addDays(30), Type='Renewal'),
+            new Opportunity(Name='D', AccountId=acmes[1].Id, StageName='Prospecting',
+                CloseDate=Date.today().addDays(30), Type='Renewal')
+        };
+        insert opps;
+
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        Dedupe_Group__c acmeGroup;
+        for (Dedupe_Group__c g : [
+            SELECT Id, Match_Key__c, (SELECT Account__c FROM Members__r)
+            FROM Dedupe_Group__c WHERE Scan__c = :scanId
+        ]) {
+            if (g.Match_Key__c != null && g.Match_Key__c.contains('acme')) { acmeGroup = g; break; }
+        }
+        System.assertNotEquals(null, acmeGroup);
+
+        update new Dedupe_Group__c(
+            Id = acmeGroup.Id, Status__c = 'Queued',
+            Queued_At__c = System.now(), Master_Account__c = acmes[0].Id
+        );
+
+        Test.startTest();
+        System.enqueueJob(new AccountMergeQueueDrainer());
+        Test.stopTest();
+
+        Dedupe_Group__c done = [SELECT Status__c, Error_Message__c FROM Dedupe_Group__c WHERE Id = :acmeGroup.Id];
+        System.assertEquals('NeedsReview', done.Status__c);
+        System.assert(done.Error_Message__c != null && done.Error_Message__c.contains('renewal'));
+    }
+
+    @IsTest
+    static void requeueAsOpen_movesQueuedBackToOpen() {
+        // Make a group, set it Queued manually, then call requeueAsOpen.
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+        Dedupe_Group__c g = [SELECT Id FROM Dedupe_Group__c WHERE Scan__c = :scanId LIMIT 1];
+        update new Dedupe_Group__c(Id = g.Id, Status__c = 'Queued', Queued_At__c = System.now());
+
+        Integer n = AccountDedupeScanController.requeueAsOpen(new List<Id>{ g.Id });
+        System.assertEquals(1, n);
+
+        Dedupe_Group__c after = [SELECT Status__c, Queued_At__c FROM Dedupe_Group__c WHERE Id = :g.Id];
+        System.assertEquals('Open', after.Status__c);
+        System.assertEquals(null, after.Queued_At__c);
+
+        // Null/empty are no-ops
+        System.assertEquals(0, AccountDedupeScanController.requeueAsOpen(null));
+        System.assertEquals(0, AccountDedupeScanController.requeueAsOpen(new List<Id>()));
+    }
 }

@@ -21,6 +21,9 @@ public with sharing class AccountDedupeScanController {
         @AuraEnabled public Integer memberCount;
         @AuraEnabled public String status;
         @AuraEnabled public DateTime resolvedAt;
+        @AuraEnabled public Id masterAccountId;
+        @AuraEnabled public DateTime queuedAt;
+        @AuraEnabled public String errorMessage;
         @AuraEnabled public List<MemberSummary> members;
     }
 
@@ -133,7 +136,8 @@ public with sharing class AccountDedupeScanController {
         if (scanId == null) return new List<GroupSummary>();
 
         String soql = 'SELECT Id, Name, Scenario_Key__c, Scenario_Label__c, Match_Key__c, ' +
-                      'Member_Count__c, Status__c, Resolved_At__c ' +
+                      'Member_Count__c, Status__c, Resolved_At__c, Master_Account__c, ' +
+                      'Queued_At__c, Error_Message__c ' +
                       'FROM Dedupe_Group__c WHERE Scan__c = :scanId';
         if (String.isNotBlank(statusFilter)) {
             soql += ' AND Status__c = :statusFilter';
@@ -179,6 +183,9 @@ public with sharing class AccountDedupeScanController {
             gs.memberCount = g.Member_Count__c == null ? 0 : g.Member_Count__c.intValue();
             gs.status = g.Status__c;
             gs.resolvedAt = g.Resolved_At__c;
+            gs.masterAccountId = g.Master_Account__c;
+            gs.queuedAt = g.Queued_At__c;
+            gs.errorMessage = g.Error_Message__c;
             gs.members = membersByGroup.containsKey(g.Id) ? membersByGroup.get(g.Id) : new List<MemberSummary>();
             out.add(gs);
         }
@@ -435,6 +442,73 @@ public with sharing class AccountDedupeScanController {
             );
 
             return g.Id;
+        } catch (Exception e) {
+            throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
+        }
+    }
+
+    public class QueueRequest {
+        @AuraEnabled public Id groupId;
+        @AuraEnabled public Id masterId;
+        @AuraEnabled public String notes;
+    }
+
+    /**
+     * Stamp the picked master + notes onto each group and flip Status__c
+     * to Queued so the AccountMergeQueueDrainer Queueable can absorb the
+     * duplicates in the background using the MasterWinsFillNulls policy.
+     * Enqueues a single drainer chain that will pick up everything just
+     * queued — chained Queueables will keep draining until empty.
+     */
+    @AuraEnabled
+    public static Integer queueGroupsForMerge(List<QueueRequest> requests) {
+        try {
+            if (requests == null || requests.isEmpty()) return 0;
+            List<Dedupe_Group__c> updates = new List<Dedupe_Group__c>();
+            DateTime now = System.now();
+            for (QueueRequest r : requests) {
+                if (r == null || r.groupId == null || r.masterId == null) continue;
+                updates.add(new Dedupe_Group__c(
+                    Id = r.groupId,
+                    Master_Account__c = r.masterId,
+                    Status__c = 'Queued',
+                    Queued_At__c = now,
+                    Merge_Notes__c = r.notes,
+                    Error_Message__c = null
+                ));
+            }
+            if (updates.isEmpty()) return 0;
+            update updates;
+            if (!Test.isRunningTest()) {
+                System.enqueueJob(new AccountMergeQueueDrainer());
+            }
+            return updates.size();
+        } catch (Exception e) {
+            throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
+        }
+    }
+
+    /**
+     * Pulls a group back to Open and clears queue state — used when a
+     * user wants to cancel a queued (but not yet processing) merge.
+     */
+    @AuraEnabled
+    public static Integer requeueAsOpen(List<Id> groupIds) {
+        try {
+            if (groupIds == null || groupIds.isEmpty()) return 0;
+            List<Dedupe_Group__c> updates = new List<Dedupe_Group__c>();
+            for (Id gid : groupIds) {
+                if (gid == null) continue;
+                updates.add(new Dedupe_Group__c(
+                    Id = gid,
+                    Status__c = 'Open',
+                    Queued_At__c = null,
+                    Error_Message__c = null
+                ));
+            }
+            if (updates.isEmpty()) return 0;
+            update updates;
+            return updates.size();
         } catch (Exception e) {
             throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
         }

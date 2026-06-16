@@ -232,6 +232,13 @@
 
                                     <template lwc:if={g.expanded}>
                                         <div class="dedupe-group__body">
+                                            <template lwc:if={g.errorMessage}>
+                                                <div class="slds-box slds-box_x-small slds-theme_error slds-m-bottom_x-small">
+                                                    <lightning-icon icon-name="utility:error" size="x-small"
+                                                        class="slds-m-right_xx-small"></lightning-icon>
+                                                    {g.errorMessage}
+                                                </div>
+                                            </template>
                                             <template lwc:if={expandedMergeMode}>
                                                 <c-account-compare-merge
                                                     account-ids={mergeAccountIds}
@@ -368,14 +375,24 @@
                                                 </template>
                                             </div>
 
-                                            <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center">
+                                            <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center slds-wrap">
+                                                <lightning-button label={queueButtonLabel}
+                                                    variant="brand" icon-name="utility:adduser"
+                                                    disabled={queueButtonDisabled}
+                                                    onclick={handleQueueMerge}
+                                                    class="slds-m-right_x-small"></lightning-button>
                                                 <lightning-button label={mergeButtonLabel}
-                                                    variant="brand" icon-name="utility:merge"
+                                                    variant="neutral" icon-name="utility:merge"
                                                     disabled={mergeButtonDisabled}
                                                     onclick={handleStartMerge}></lightning-button>
-                                                <span class="slds-text-body_small slds-text-color_weak slds-m-left_small">
-                                                    Salesforce caps each merge call at 3 accounts — the service chunks larger groups automatically.
-                                                </span>
+                                                <template lwc:if={queueingGroup}>
+                                                    <lightning-spinner alternative-text="Queueing"
+                                                        size="small"
+                                                        class="slds-m-left_x-small"></lightning-spinner>
+                                                </template>
+                                                <p class="slds-text-body_small slds-text-color_weak slds-m-top_x-small slds-size_1-of-1">
+                                                    Queue runs the merge in the background using the master plus "fill nulls from duplicates" policy. Cherry-pick when you need per-field control.
+                                                </p>
                                             </div>
                                             </template>
                                         </div>

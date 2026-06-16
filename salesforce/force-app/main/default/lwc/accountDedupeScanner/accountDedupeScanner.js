@@ -11,10 +11,16 @@ import dismissGroups from '@salesforce/apex/AccountDedupeScanController.dismissG
 import createManualGroup from '@salesforce/apex/AccountDedupeScanController.createManualGroup';
 import getAccountSummaries from '@salesforce/apex/AccountDedupeScanController.getAccountSummaries';
 import getGroupRiskBatch from '@salesforce/apex/AccountDedupeScanController.getGroupRiskBatch';
+import queueGroupsForMerge from '@salesforce/apex/AccountDedupeScanController.queueGroupsForMerge';
+import requeueAsOpen from '@salesforce/apex/AccountDedupeScanController.requeueAsOpen';
 
 const POLL_INTERVAL_MS = 4000;
 const STATUS_FILTER_OPTIONS = [
     { label: 'Open', value: 'Open' },
+    { label: 'Queued', value: 'Queued' },
+    { label: 'Processing', value: 'Processing' },
+    { label: 'Needs Review', value: 'NeedsReview' },
+    { label: 'Failed', value: 'Failed' },
     { label: 'Resolved', value: 'Resolved' },
     { label: 'All', value: '' }
 ];
@@ -54,6 +60,7 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     @track starting = false;
     @track loadingGroups = false;
     @track dismissingBulk = false;
+    @track queueingGroup = false;
     @track error;
 
     // Manual-group panel state
@@ -92,8 +99,14 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
                 this.activeScanId = this.scans[0].id;
                 this.refreshGroups();
             }
-            const anyRunning = this.scans.some((s) => s.status === 'Running');
-            if (anyRunning) this.startPolling();
+            const scanRunning = this.scans.some((s) => s.status === 'Running');
+            const queueActive = (this.groups || []).some(
+                (g) => g.status === 'Queued' || g.status === 'Processing'
+            );
+            // Re-fetch groups while the drainer is working so users see
+            // Queued → Processing → Resolved transitions live.
+            if (queueActive) this.refreshGroups();
+            if (scanRunning || queueActive) this.startPolling();
             else this.stopPolling();
         } catch (e) {
             this.error = this.extractError(e);
@@ -240,6 +253,56 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     handleStartMerge() {
         if (!this.expandedMasterId) return;
         this.expandedMergeMode = true;
+    }
+
+    async handleQueueMerge() {
+        if (!this.expandedGroupId || !this.expandedMasterId || this.queueingGroup) return;
+        const expanded = this.filteredGroups.find((g) => g.id === this.expandedGroupId);
+        const risk = expanded ? this.computeRisk(expanded, this.expandedMasterId) : null;
+        if (risk && risk.label === 'Manual') {
+            // eslint-disable-next-line no-alert
+            const ok = window.confirm(
+                'This group has a collision risk (Manual tier). Queuing skips the cherry-pick step and uses the MasterWinsFillNulls policy. Continue?'
+            );
+            if (!ok) return;
+        }
+        this.queueingGroup = true;
+        try {
+            await queueGroupsForMerge({
+                requests: [{
+                    groupId: this.expandedGroupId,
+                    masterId: this.expandedMasterId,
+                    notes: null
+                }]
+            });
+            this.toast(
+                'Queued for auto-merge',
+                'The merge will run in the background. Watch the Queued/Processing filter for status.',
+                'success'
+            );
+            this.resetExpansion();
+            await this.refreshGroups();
+            this.startPolling();
+        } catch (e) {
+            this.toast('Could not queue group', this.extractError(e), 'error');
+        } finally {
+            this.queueingGroup = false;
+        }
+    }
+
+    async handleCancelQueue(event) {
+        event.stopPropagation();
+        const id = event.currentTarget.dataset.id;
+        if (!id) return;
+        // eslint-disable-next-line no-alert
+        if (!window.confirm('Cancel the queued merge and return this group to Open?')) return;
+        try {
+            await requeueAsOpen({ groupIds: [id] });
+            this.toast('Removed from queue', '', 'success');
+            await this.refreshGroups();
+        } catch (e) {
+            this.toast('Could not cancel queue', this.extractError(e), 'error');
+        }
     }
 
     handleMergeCancel() {
@@ -530,7 +593,10 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
                 selected: isSelected,
                 rowClass: isSelected ? 'dedupe-group dedupe-group--selected' : 'dedupe-group',
                 chevron: expanded ? 'utility:chevrondown' : 'utility:chevronright',
-                statusVariant: g.status === 'Resolved' ? 'success' : 'warning',
+                statusVariant: this.statusVariantFor(g.status),
+                isQueued: g.status === 'Queued',
+                isProcessing: g.status === 'Processing',
+                isFailed: g.status === 'Failed' || g.status === 'NeedsReview',
                 displayMatchKey: g.matchKey || '(no key)',
                 scenarioChipClass: SCENARIO_CLASS[g.scenarioKey] || 'scenario-chip scenario-chip--grey',
                 mergeLabel: `${merges} merge${merges === 1 ? '' : 's'}`,
@@ -685,11 +751,20 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
         if (!this.expandedMasterId) return 'Pick a master to merge';
         const ids = this.mergeAccountIds;
         const dupes = Math.max(0, ids.length - 1);
-        return `Merge ${dupes} record${dupes === 1 ? '' : 's'} into master`;
+        return `Cherry-pick & merge ${dupes} record${dupes === 1 ? '' : 's'}`;
     }
 
     get mergeButtonDisabled() {
         return !this.expandedMasterId || this.mergeAccountIds.length < 2;
+    }
+
+    get queueButtonLabel() {
+        if (!this.expandedMasterId) return 'Pick a master to queue';
+        return 'Queue for auto-merge';
+    }
+
+    get queueButtonDisabled() {
+        return !this.expandedMasterId || this.mergeAccountIds.length < 2 || this.queueingGroup;
     }
 
     get totalGroupsCount() {
@@ -745,6 +820,17 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
 
     get manualPanelToggleLabel() {
         return this.manualPanelOpen ? 'Close' : 'Add manual group';
+    }
+
+    statusVariantFor(status) {
+        switch (status) {
+            case 'Resolved': return 'success';
+            case 'Failed':
+            case 'NeedsReview': return 'error';
+            case 'Queued':
+            case 'Processing': return 'inverse';
+            default: return 'warning';
+        }
     }
 
     extractError(e) {
