@@ -165,4 +165,16 @@ private class AccountDedupeControllerTest {
         AccountDedupeService.CompareData empty = AccountDedupeController.getCompareData(null);
         System.assertEquals(0, empty.records.size());
     }
+
+    @IsTest
+    static void findDuplicates_nullIdPropagatesError() {
+        // Service throws on null Id; controller catches and re-wraps as
+        // AuraHandledException. Covers the controller's catch path.
+        try {
+            AccountDedupeController.findDuplicates(null);
+            System.assert(false, 'findDuplicates(null) should throw');
+        } catch (AuraHandledException e) {
+            System.assert(true);
+        }
+    }
 }
