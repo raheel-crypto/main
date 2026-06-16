@@ -273,9 +273,13 @@ public with sharing class AccountDedupeScanService {
     public static Set<Id> findOpenGroupsForAccounts(Set<Id> accountIds) {
         Set<Id> groupIds = new Set<Id>();
         if (accountIds == null || accountIds.isEmpty()) return groupIds;
+        // Include 'Processing' so the queue drainer's in-flight groups also
+        // get auto-resolved on a successful merge — without this, drainer
+        // merges complete but the group stays stuck in Processing.
+        Set<String> openStatuses = new Set<String>{ 'Open', 'Processing' };
         for (Dedupe_Group_Member__c m : [
             SELECT Group__c FROM Dedupe_Group_Member__c
-            WHERE Account__c IN :accountIds AND Group__r.Status__c = 'Open'
+            WHERE Account__c IN :accountIds AND Group__r.Status__c IN :openStatuses
             LIMIT 10000
         ]) {
             groupIds.add(m.Group__c);
