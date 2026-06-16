@@ -339,4 +339,104 @@ public with sharing class AccountDedupeScanController {
             throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
         }
     }
+
+    public class ManualAccount {
+        @AuraEnabled public Id accountId;
+        @AuraEnabled public String accountName;
+        @AuraEnabled public String website;
+    }
+
+    /**
+     * Lightweight lookup used by the manual-group picker to show readable
+     * names/sites once an Account is selected in the record picker.
+     */
+    @AuraEnabled(cacheable=true)
+    public static List<ManualAccount> getAccountSummaries(List<Id> ids) {
+        List<ManualAccount> out = new List<ManualAccount>();
+        if (ids == null || ids.isEmpty()) return out;
+        for (Account a : [SELECT Id, Name, Website FROM Account WHERE Id IN :ids]) {
+            ManualAccount m = new ManualAccount();
+            m.accountId = a.Id;
+            m.accountName = a.Name;
+            m.website = a.Website;
+            out.add(m);
+        }
+        return out;
+    }
+
+    /**
+     * Create a Dedupe_Group__c covering 2–5 accounts that the user has
+     * identified as a hierarchy / fuzzy duplicate set the rules wouldn't
+     * catch (e.g. "Pantheon" + "Pantheon International"). Attaches to the
+     * provided scan, or spins up a tagged "manual" scan if none is given,
+     * so the row shows up in the existing scanner UI exactly like an
+     * auto-detected group.
+     */
+    @AuraEnabled
+    public static Id createManualGroup(Id scanId, List<Id> accountIds, String matchKey) {
+        try {
+            if (accountIds == null || accountIds.size() < 2) {
+                throw new AuraHandledException('Pick at least 2 accounts.');
+            }
+            if (accountIds.size() > 5) {
+                throw new AuraHandledException('Manual groups support up to 5 accounts.');
+            }
+            Set<Id> uniq = new Set<Id>(accountIds);
+            if (uniq.size() != accountIds.size()) {
+                throw new AuraHandledException('Duplicate accounts in selection.');
+            }
+            Integer existing = [SELECT COUNT() FROM Account WHERE Id IN :uniq];
+            if (existing != uniq.size()) {
+                throw new AuraHandledException('One or more accounts could not be found.');
+            }
+
+            Id targetScanId = scanId;
+            if (targetScanId == null) {
+                Dedupe_Scan__c s = new Dedupe_Scan__c(
+                    Status__c = 'Completed',
+                    Scenarios_Run__c = 'manual',
+                    Completed_At__c = System.now(),
+                    Group_Count__c = 0,
+                    Account_Count__c = 0
+                );
+                insert s;
+                targetScanId = s.Id;
+            }
+
+            String key = String.isBlank(matchKey) ? 'manual' : matchKey.trim().left(255);
+
+            Dedupe_Group__c g = new Dedupe_Group__c(
+                Scan__c = targetScanId,
+                Scenario_Key__c = 'manual',
+                Scenario_Label__c = 'Manual',
+                Match_Key__c = key,
+                Member_Count__c = accountIds.size(),
+                Status__c = 'Open'
+            );
+            insert g;
+
+            List<Dedupe_Group_Member__c> members = new List<Dedupe_Group_Member__c>();
+            for (Id aid : accountIds) {
+                members.add(new Dedupe_Group_Member__c(Group__c = g.Id, Account__c = aid));
+            }
+            insert members;
+
+            // Roll counts forward on the scan so the history list stays accurate.
+            Dedupe_Scan__c scan = [
+                SELECT Group_Count__c, Account_Count__c
+                FROM Dedupe_Scan__c WHERE Id = :targetScanId
+            ];
+            Integer gc = scan.Group_Count__c == null ? 0 : scan.Group_Count__c.intValue();
+            Integer ac = scan.Account_Count__c == null ? 0 : scan.Account_Count__c.intValue();
+            update new Dedupe_Scan__c(
+                Id = targetScanId,
+                Group_Count__c = gc + 1,
+                Account_Count__c = ac + accountIds.size()
+            );
+
+            return g.Id;
+        } catch (Exception e) {
+            throw new AuraHandledException(e.getTypeName() + ': ' + e.getMessage());
+        }
+    }
 }

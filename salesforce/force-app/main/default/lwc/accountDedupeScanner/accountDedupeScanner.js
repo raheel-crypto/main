@@ -8,6 +8,8 @@ import listGroups from '@salesforce/apex/AccountDedupeScanController.listGroups'
 import listAcrConflicts from '@salesforce/apex/AccountDedupeScanController.listAcrConflicts';
 import cleanupAcrConflicts from '@salesforce/apex/AccountDedupeScanController.cleanupAcrConflicts';
 import dismissGroups from '@salesforce/apex/AccountDedupeScanController.dismissGroups';
+import createManualGroup from '@salesforce/apex/AccountDedupeScanController.createManualGroup';
+import getAccountSummaries from '@salesforce/apex/AccountDedupeScanController.getAccountSummaries';
 
 const POLL_INTERVAL_MS = 4000;
 const STATUS_FILTER_OPTIONS = [
@@ -26,8 +28,10 @@ const SCENARIO_CLASS = {
     exactLinkedIn: 'scenario-chip scenario-chip--indigo',
     nameNormalizedDomain: 'scenario-chip scenario-chip--teal',
     nameDomainRoot: 'scenario-chip scenario-chip--green',
-    fuzzyNameDomainRoot: 'scenario-chip scenario-chip--orange'
+    fuzzyNameDomainRoot: 'scenario-chip scenario-chip--orange',
+    manual: 'scenario-chip scenario-chip--purple'
 };
+const MANUAL_MAX = 5;
 
 export default class AccountDedupeScanner extends NavigationMixin(LightningElement) {
     @track scenarioOptions = [];
@@ -49,6 +53,13 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     @track loadingGroups = false;
     @track dismissingBulk = false;
     @track error;
+
+    // Manual-group panel state
+    @track manualPanelOpen = false;
+    @track manualMatchKey = '';
+    @track manualSelected = [];
+    @track manualSubmitting = false;
+    pickerNonce = 0;
 
     statusFilterOptions = STATUS_FILTER_OPTIONS;
     sortOptions = SORT_OPTIONS;
@@ -303,6 +314,102 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
         });
     }
 
+    // ── manual group ────────────────────────────────────────────────────────
+
+    handleToggleManualPanel() {
+        this.manualPanelOpen = !this.manualPanelOpen;
+        if (!this.manualPanelOpen) this.resetManualForm();
+    }
+
+    handleCancelManualPanel() {
+        this.manualPanelOpen = false;
+        this.resetManualForm();
+    }
+
+    resetManualForm() {
+        this.manualMatchKey = '';
+        this.manualSelected = [];
+        this.pickerNonce += 1;
+    }
+
+    handleManualMatchKeyChange(event) {
+        this.manualMatchKey = event.target.value;
+    }
+
+    async handleAccountPicked(event) {
+        const recordId = event.detail && event.detail.recordId;
+        if (!recordId) return;
+        if (this.manualSelected.some((a) => a.accountId === recordId)) {
+            this.clearRecordPicker();
+            return;
+        }
+        if (this.manualSelected.length >= MANUAL_MAX) {
+            this.toast(
+                `Manual groups support up to ${MANUAL_MAX} accounts`,
+                'Remove one before adding another.',
+                'warning'
+            );
+            this.clearRecordPicker();
+            return;
+        }
+        try {
+            const existingIds = this.manualSelected.map((a) => a.accountId);
+            const ids = existingIds.concat([recordId]);
+            const summaries = await getAccountSummaries({ ids });
+            this.manualSelected = ids
+                .map((id) => summaries.find((s) => s.accountId === id))
+                .filter((x) => !!x);
+        } catch (e) {
+            this.toast('Could not load account', this.extractError(e), 'error');
+        } finally {
+            this.clearRecordPicker();
+        }
+    }
+
+    clearRecordPicker() {
+        const picker = this.template.querySelector('lightning-record-picker');
+        if (picker && typeof picker.clearSelection === 'function') {
+            try { picker.clearSelection(); } catch (e) { /* ignore */ }
+        } else {
+            // Fallback: force re-render by bumping the key
+            this.pickerNonce += 1;
+        }
+    }
+
+    handleRemoveManualAccount(event) {
+        const id = event.currentTarget.dataset.id;
+        this.manualSelected = this.manualSelected.filter((a) => a.accountId !== id);
+    }
+
+    async handleCreateManualGroup() {
+        if (this.manualSubmitting) return;
+        if (this.manualSelected.length < 2) {
+            this.toast('Pick at least 2 accounts', '', 'warning');
+            return;
+        }
+        this.manualSubmitting = true;
+        try {
+            const ids = this.manualSelected.map((a) => a.accountId);
+            await createManualGroup({
+                scanId: this.activeScanId,
+                accountIds: ids,
+                matchKey: this.manualMatchKey || null
+            });
+            this.toast('Manual group created', '', 'success');
+            this.resetManualForm();
+            this.manualPanelOpen = false;
+            // If no active scan existed, the controller created one — refresh both.
+            await this.refreshScans();
+            await this.refreshGroups();
+        } catch (e) {
+            this.toast('Could not create group', this.extractError(e), 'error');
+        } finally {
+            this.manualSubmitting = false;
+        }
+    }
+
+    // ── derived state ───────────────────────────────────────────────────────
+
     get hasScans() { return this.scans && this.scans.length > 0; }
 
     get filteredGroups() {
@@ -368,6 +475,8 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
         return this.filteredGroups.map((g) => {
             const expanded = g.id === this.expandedGroupId;
             const isSelected = selected.has(g.id);
+            const n = g.memberCount || 0;
+            const merges = n > 1 ? Math.ceil((n - 1) / 2) : 0;
             return {
                 ...g,
                 expanded,
@@ -377,7 +486,9 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
                 statusVariant: g.status === 'Resolved' ? 'success' : 'warning',
                 displayMatchKey: g.matchKey || '(no key)',
                 scenarioChipClass: SCENARIO_CLASS[g.scenarioKey] || 'scenario-chip scenario-chip--grey',
-                metaLine: `${g.memberCount} accounts · ${g.name}`,
+                mergeLabel: `${merges} merge${merges === 1 ? '' : 's'}`,
+                showMergePill: merges > 0,
+                metaLine: `${n} accounts · ${g.name}`,
                 members: (g.members || []).map((m) => ({
                     ...m,
                     isMaster: expanded && m.accountId === masterId,
@@ -455,6 +566,29 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
     get selectAllChecked() {
         const total = this.filteredGroups.length;
         return total > 0 && this.selectedCount === total;
+    }
+
+    get manualSelectedRows() {
+        return this.manualSelected.map((a) => ({
+            ...a,
+            displayName: a.accountName || '(no name)'
+        }));
+    }
+
+    get manualCountLabel() {
+        return `${this.manualSelected.length}/${MANUAL_MAX} selected`;
+    }
+
+    get manualCreateDisabled() {
+        return this.manualSubmitting || this.manualSelected.length < 2;
+    }
+
+    get manualPickerDisabled() {
+        return this.manualSelected.length >= MANUAL_MAX;
+    }
+
+    get manualPanelToggleLabel() {
+        return this.manualPanelOpen ? 'Close' : 'Add manual group';
     }
 
     extractError(e) {

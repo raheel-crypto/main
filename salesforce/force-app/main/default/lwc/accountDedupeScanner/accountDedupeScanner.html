@@ -68,13 +68,75 @@
         <!-- Right column: groups for active scan -->
         <div class="slds-col slds-size_1-of-1 slds-large-size_2-of-3">
             <lightning-card title="Duplicate groups" icon-name="standard:related_list">
+                <lightning-button slot="actions" label={manualPanelToggleLabel}
+                    variant="neutral" icon-name="utility:add"
+                    onclick={handleToggleManualPanel}></lightning-button>
                 <lightning-button-icon slot="actions" icon-name="utility:refresh"
                     alternative-text="Refresh" title="Refresh" onclick={refreshGroups}
-                    disabled={loadingGroups}></lightning-button-icon>
+                    disabled={loadingGroups} class="slds-m-left_xx-small"></lightning-button-icon>
 
                 <div class="slds-p-horizontal_medium">
                     <template lwc:if={error}>
                         <div class="slds-text-color_error slds-p-vertical_small">{error}</div>
+                    </template>
+
+                    <!-- Manual group panel -->
+                    <template lwc:if={manualPanelOpen}>
+                        <div class="manual-panel slds-box slds-box_x-small slds-m-bottom_small">
+                            <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_x-small">
+                                <h3 class="slds-text-heading_small slds-grow">Add a manual duplicate group</h3>
+                                <span class="slds-text-body_small slds-text-color_weak">{manualCountLabel}</span>
+                            </div>
+                            <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                                Use for hierarchy duplicates the rules can't catch (e.g. parent + intl subsidiary).
+                                Pick 2–5 accounts.
+                            </p>
+                            <div class="slds-grid slds-gutters_x-small slds-m-bottom_x-small">
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-input type="text" label="Match key (optional)"
+                                        placeholder="e.g. pantheon"
+                                        value={manualMatchKey}
+                                        onchange={handleManualMatchKeyChange}>
+                                    </lightning-input>
+                                </div>
+                                <div class="slds-col slds-size_1-of-2">
+                                    <lightning-record-picker label="Find account"
+                                        placeholder="Search Accounts…"
+                                        object-api-name="Account"
+                                        disabled={manualPickerDisabled}
+                                        onchange={handleAccountPicked}>
+                                    </lightning-record-picker>
+                                </div>
+                            </div>
+                            <template lwc:if={manualSelectedRows.length}>
+                                <ul class="manual-selected slds-m-bottom_x-small">
+                                    <template for:each={manualSelectedRows} for:item="a">
+                                        <li key={a.accountId} class="manual-chip">
+                                            <span class="manual-chip__name">{a.displayName}</span>
+                                            <template lwc:if={a.website}>
+                                                <span class="manual-chip__site">{a.website}</span>
+                                            </template>
+                                            <button type="button" class="manual-chip__remove"
+                                                data-id={a.accountId}
+                                                onclick={handleRemoveManualAccount}
+                                                aria-label="Remove">&times;</button>
+                                        </li>
+                                    </template>
+                                </ul>
+                            </template>
+                            <div class="slds-grid slds-grid_vertical-align-center">
+                                <lightning-button label="Create group" variant="brand"
+                                    disabled={manualCreateDisabled}
+                                    onclick={handleCreateManualGroup}></lightning-button>
+                                <lightning-button label="Cancel" variant="neutral"
+                                    class="slds-m-left_x-small"
+                                    onclick={handleCancelManualPanel}></lightning-button>
+                                <template lwc:if={manualSubmitting}>
+                                    <lightning-spinner alternative-text="Saving" size="small"
+                                        class="slds-m-left_x-small"></lightning-spinner>
+                                </template>
+                            </div>
+                        </div>
                     </template>
 
                     <!-- Filters row -->
@@ -152,6 +214,9 @@
                                                 <div class="dedupe-group__key">{g.displayMatchKey}</div>
                                                 <div class="dedupe-group__meta">
                                                     <span class={g.scenarioChipClass}>{g.scenarioLabel}</span>
+                                                    <template lwc:if={g.showMergePill}>
+                                                        <span class="merge-pill" title="Salesforce merge handles up to 3 accounts per call">{g.mergeLabel}</span>
+                                                    </template>
                                                     <span class="dedupe-group__meta-text">{g.metaLine}</span>
                                                 </div>
                                             </div>

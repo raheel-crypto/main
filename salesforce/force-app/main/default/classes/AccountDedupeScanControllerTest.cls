@@ -225,4 +225,63 @@ private class AccountDedupeScanControllerTest {
         System.assertEquals(0, AccountDedupeScanController.dismissGroups(null));
         System.assertEquals(0, AccountDedupeScanController.dismissGroups(new List<Id>()));
     }
+
+    @IsTest
+    static void createManualGroup_happyPath() {
+        List<Account> picks = [SELECT Id FROM Account LIMIT 3];
+        List<Id> ids = new List<Id>();
+        for (Account a : picks) ids.add(a.Id);
+
+        Id groupId = AccountDedupeScanController.createManualGroup(null, ids, 'pantheon');
+        System.assertNotEquals(null, groupId);
+
+        Dedupe_Group__c g = [
+            SELECT Scenario_Key__c, Match_Key__c, Member_Count__c, Status__c,
+                   (SELECT Account__c FROM Members__r)
+            FROM Dedupe_Group__c WHERE Id = :groupId
+        ];
+        System.assertEquals('manual', g.Scenario_Key__c);
+        System.assertEquals('pantheon', g.Match_Key__c);
+        System.assertEquals(3, g.Member_Count__c.intValue());
+        System.assertEquals(3, g.Members__r.size());
+        System.assertEquals('Open', g.Status__c);
+    }
+
+    @IsTest
+    static void createManualGroup_validation() {
+        List<Account> picks = [SELECT Id FROM Account LIMIT 6];
+        List<Id> tooMany = new List<Id>();
+        for (Account a : picks) tooMany.add(a.Id);
+
+        try {
+            AccountDedupeScanController.createManualGroup(null, new List<Id>{ picks[0].Id }, null);
+            System.assert(false, 'should reject < 2');
+        } catch (AuraHandledException e) {
+            System.assert(true);
+        }
+        try {
+            AccountDedupeScanController.createManualGroup(null, tooMany, null);
+            System.assert(false, 'should reject > 5');
+        } catch (AuraHandledException e) {
+            System.assert(true);
+        }
+        try {
+            AccountDedupeScanController.createManualGroup(null,
+                new List<Id>{ picks[0].Id, picks[0].Id }, null);
+            System.assert(false, 'should reject duplicates');
+        } catch (AuraHandledException e) {
+            System.assert(true);
+        }
+    }
+
+    @IsTest
+    static void getAccountSummaries_returnsRequested() {
+        List<Account> picks = [SELECT Id FROM Account LIMIT 2];
+        List<Id> ids = new List<Id>();
+        for (Account a : picks) ids.add(a.Id);
+        List<AccountDedupeScanController.ManualAccount> out =
+            AccountDedupeScanController.getAccountSummaries(ids);
+        System.assertEquals(2, out.size());
+        System.assertEquals(0, AccountDedupeScanController.getAccountSummaries(null).size());
+    }
 }
