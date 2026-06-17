@@ -3,6 +3,16 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getBulkMergeCandidates from '@salesforce/apex/AccountDedupeScanController.getBulkMergeCandidates';
 import queueGroupsForMerge from '@salesforce/apex/AccountDedupeScanController.queueGroupsForMerge';
 
+const SCENARIO_FILTER_OPTIONS = [
+    { label: 'Exact Website (default)', value: 'exactWebsite' },
+    { label: 'Exact LinkedIn URL', value: 'exactLinkedIn' },
+    { label: 'Name + Normalized Domain', value: 'nameNormalizedDomain' },
+    { label: 'Name + Domain Root', value: 'nameDomainRoot' },
+    { label: 'Similar Name + Domain Root', value: 'fuzzyNameDomainRoot' },
+    { label: 'Manual', value: 'manual' },
+    { label: 'All scenarios', value: '' }
+];
+
 export default class AccountDedupeBulkAutoMerge extends LightningElement {
     @track loading = false;
     @track queueing = false;
@@ -13,8 +23,16 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
     @track candidates = [];
     @track masterByGroup = {};
     @track skippedByGroup = {};
+    @track scenarioFilter = 'exactWebsite';
+
+    scenarioFilterOptions = SCENARIO_FILTER_OPTIONS;
 
     connectedCallback() {
+        this.load();
+    }
+
+    handleScenarioFilterChange(event) {
+        this.scenarioFilter = event.detail.value;
         this.load();
     }
 
@@ -22,7 +40,11 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
         this.loading = true;
         this.error = undefined;
         try {
-            const res = await getBulkMergeCandidates({ scanId: null, maxResults: 100 });
+            const res = await getBulkMergeCandidates({
+                scanId: null,
+                scenarioFilter: this.scenarioFilter || null,
+                maxResults: 100
+            });
             this.scanName = res.scanName;
             this.totalOpenGroups = res.totalOpenGroups || 0;
             this.eligibleCount = res.eligibleCount || 0;

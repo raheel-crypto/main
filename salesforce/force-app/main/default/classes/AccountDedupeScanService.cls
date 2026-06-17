@@ -34,18 +34,20 @@ public with sharing class AccountDedupeScanService {
     // ── exactWebsite ────────────────────────────────────────────────────────
 
     private static List<GroupDraft> scanExactWebsite() {
-        // Prefer Normalized_Domain__c when populated; fall back to normalizing Website in-memory.
+        // Always derive the effective registrable domain from Website itself
+        // — Normalized_Domain__c can be wrong for compound TLDs (.com.hk,
+        // .co.uk, etc.) and ends up lumping every site under that ccTLD
+        // into a single false group.
         Map<String, List<Id>> buckets = new Map<String, List<Id>>();
         for (Account a : [
-            SELECT Id, Website, Normalized_Domain__c
+            SELECT Id, Website
             FROM Account
             WHERE Website != NULL
             LIMIT :FETCH_LIMIT
         ]) {
-            String key = String.isNotBlank(a.Normalized_Domain__c)
-                ? a.Normalized_Domain__c
-                : normalizeUrl(a.Website);
+            String key = AccountDedupeService.extractEffectiveDomain(a.Website);
             if (String.isBlank(key)) continue;
+            if (AccountDedupeService.COMPOUND_TLDS.contains(key)) continue;
             if (!buckets.containsKey(key)) buckets.put(key, new List<Id>());
             buckets.get(key).add(a.Id);
         }
@@ -73,17 +75,23 @@ public with sharing class AccountDedupeScanService {
     // ── nameNormalizedDomain / nameDomainRoot ────────────────────────────────
 
     private static List<GroupDraft> scanNameAndField(String fieldName, String scenarioKey) {
-        String soql = 'SELECT Id, Name, ' + fieldName + ' FROM Account '
-                    + 'WHERE ' + fieldName + ' != NULL AND Name != NULL '
-                    + 'LIMIT ' + FETCH_LIMIT;
-        List<Account> accts = Database.query(soql);
+        // Re-derive domain/root from Website so compound TLDs (.com.hk,
+        // .co.uk) don't lump unrelated accounts together via a buggy
+        // precomputed Normalized_Domain__c / Domain_Root__c value.
+        Boolean useDomain = (scenarioKey == 'nameNormalizedDomain');
+        List<Account> accts = [
+            SELECT Id, Name, Website FROM Account
+            WHERE Website != NULL AND Name != NULL
+            LIMIT :FETCH_LIMIT
+        ];
 
-        // Two-level bucket: fieldValue -> normalizedName -> ids.
-        // Using two levels avoids splitting on spaces in normalized names.
         Map<String, Map<String, List<Id>>> byField = new Map<String, Map<String, List<Id>>>();
         for (Account a : accts) {
-            String fieldVal = (String) a.get(fieldName);
+            String fieldVal = useDomain
+                ? AccountDedupeService.extractEffectiveDomain(a.Website)
+                : AccountDedupeService.extractDomainRoot(a.Website);
             if (String.isBlank(fieldVal)) continue;
+            if (useDomain && AccountDedupeService.COMPOUND_TLDS.contains(fieldVal)) continue;
             String normName = normalizeName(a.Name);
             if (String.isBlank(normName)) continue;
             if (!byField.containsKey(fieldVal)) byField.put(fieldVal, new Map<String, List<Id>>());
@@ -112,14 +120,17 @@ public with sharing class AccountDedupeScanService {
     // ── fuzzyNameDomainRoot ──────────────────────────────────────────────────
 
     private static List<GroupDraft> scanFuzzyNameDomainRoot() {
+        // Derive the domain root from Website directly so accounts on
+        // ccTLDs like .com.hk don't all share root "com".
         Map<String, List<Account>> byDomain = new Map<String, List<Account>>();
         for (Account a : [
-            SELECT Id, Name, Domain_Root__c
+            SELECT Id, Name, Website
             FROM Account
-            WHERE Domain_Root__c != NULL AND Name != NULL
+            WHERE Website != NULL AND Name != NULL
             LIMIT :FETCH_LIMIT
         ]) {
-            String dr = a.Domain_Root__c;
+            String dr = AccountDedupeService.extractDomainRoot(a.Website);
+            if (String.isBlank(dr)) continue;
             if (!byDomain.containsKey(dr)) byDomain.put(dr, new List<Account>());
             byDomain.get(dr).add(a);
         }

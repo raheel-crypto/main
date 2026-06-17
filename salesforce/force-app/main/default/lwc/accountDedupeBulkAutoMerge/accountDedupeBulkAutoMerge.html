@@ -10,6 +10,14 @@
                 Suggested master = most recently active member (greyed name marked "suggested").
             </p>
 
+            <div class="slds-grid slds-gutters_x-small slds-grid_vertical-align-end slds-m-bottom_x-small">
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-combobox label="Scenario" value={scenarioFilter}
+                        options={scenarioFilterOptions}
+                        onchange={handleScenarioFilterChange}></lightning-combobox>
+                </div>
+            </div>
+
             <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small bulk-summary">
                 <div class="slds-grow slds-text-body_regular">{headlineLabel}</div>
                 <lightning-button label={queueButtonLabel} variant="brand"

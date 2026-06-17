@@ -321,6 +321,75 @@ public with sharing class AccountDedupeService {
         return s;
     }
 
+    /**
+     * Common multi-part registrable suffixes (effective TLDs / public
+     * suffixes). Anything in this list — like "com.hk" or "co.uk" —
+     * means the URL "abci.com.hk" has registrable domain "abci.com.hk",
+     * not "com.hk". Stops the scanner from bucketing every site on a
+     * given ccTLD into one giant fake group.
+     *
+     * Not the full Public Suffix List, but covers the cases we've hit
+     * in the wild (HK, UK, AU, JP, KR, CN, TW, SG, etc.).
+     */
+    public static final Set<String> COMPOUND_TLDS = new Set<String>{
+        'com.hk','com.cn','com.tw','com.au','com.sg','com.my','com.vn',
+        'com.th','com.ph','com.kw','com.mx','com.br','com.ar','com.co',
+        'com.ec','com.pe','com.uy','com.tr','com.eg','com.sa','com.qa',
+        'com.ae','com.np','com.bd','com.pk','com.lk','com.ng','com.ke',
+        'com.gh','com.tz','com.ua','com.pl','com.de','com.es','com.ru',
+        'co.uk','co.jp','co.in','co.kr','co.nz','co.za','co.il',
+        'co.th','co.id','co.ke','co.ma','co.tz','co.zw',
+        'org.uk','net.uk','ac.uk','gov.uk','me.uk','ltd.uk','plc.uk',
+        'or.jp','ne.jp','ac.jp','go.jp','ad.jp','ed.jp','gr.jp',
+        'org.au','net.au','gov.au','edu.au','asn.au','id.au',
+        'gov.cn','org.cn','net.cn','edu.cn','ac.cn',
+        'or.kr','ne.kr','pe.kr','go.kr','ac.kr','re.kr',
+        'org.tw','net.tw','gov.tw','edu.tw',
+        'org.hk','gov.hk','edu.hk','net.hk','idv.hk',
+        'org.sg','gov.sg','edu.sg','net.sg',
+        'or.id','net.id','gov.id','ac.id','sch.id'
+    };
+
+    /**
+     * Extracts the registrable domain from a URL or hostname, recognising
+     * compound TLDs so abci.com.hk → "abci.com.hk" (not "com.hk") and
+     * bbc.co.uk → "bbc.co.uk" (not "co.uk").
+     */
+    public static String extractEffectiveDomain(String url) {
+        if (String.isBlank(url)) return null;
+        String s = url.trim().toLowerCase();
+        s = s.replaceFirst('^https?://', '');
+        s = s.replaceFirst('^www\\.', '');
+        Integer slashIdx = s.indexOf('/');
+        if (slashIdx > 0) s = s.substring(0, slashIdx);
+        Integer qIdx = s.indexOf('?');
+        if (qIdx > 0) s = s.substring(0, qIdx);
+        Integer hIdx = s.indexOf('#');
+        if (hIdx > 0) s = s.substring(0, hIdx);
+        Integer colonIdx = s.indexOf(':');
+        if (colonIdx > 0) s = s.substring(0, colonIdx);
+        if (String.isBlank(s)) return null;
+        List<String> parts = s.split('\\.');
+        if (parts.size() < 2) return s;
+        String last2 = parts[parts.size() - 2] + '.' + parts[parts.size() - 1];
+        if (COMPOUND_TLDS.contains(last2) && parts.size() >= 3) {
+            return parts[parts.size() - 3] + '.' + last2;
+        }
+        return last2;
+    }
+
+    /**
+     * The leftmost label of the effective domain — "acme" for "acme.com",
+     * "bbc" for "bbc.co.uk", "abci" for "abci.com.hk". Used as the fuzzy
+     * clustering key for similar-named regional offices.
+     */
+    public static String extractDomainRoot(String url) {
+        String d = extractEffectiveDomain(url);
+        if (String.isBlank(d)) return null;
+        List<String> parts = d.split('\\.');
+        return parts.isEmpty() ? null : parts[0];
+    }
+
     public static String normalizeName(String name) {
         if (String.isBlank(name)) return null;
         String s = name.toLowerCase();

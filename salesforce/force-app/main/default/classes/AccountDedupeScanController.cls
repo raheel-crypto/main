@@ -713,9 +713,11 @@ public with sharing class AccountDedupeScanController {
      * default master — RevOps can override per row before queueing.
      *
      * If no scanId is provided, defaults to the most-recent completed scan.
+     * scenarioFilter restricts to a single scenario key (e.g. 'exactWebsite');
+     * blank means "all scenarios".
      */
     @AuraEnabled(cacheable=false)
-    public static BulkCandidateResult getBulkMergeCandidates(Id scanId, Integer maxResults) {
+    public static BulkCandidateResult getBulkMergeCandidates(Id scanId, String scenarioFilter, Integer maxResults) {
         BulkCandidateResult out = new BulkCandidateResult();
         out.candidates = new List<BulkCandidate>();
         out.totalOpenGroups = 0;
@@ -740,13 +742,14 @@ public with sharing class AccountDedupeScanController {
 
         Integer cap = (maxResults == null || maxResults <= 0) ? 100 : Math.min(maxResults, 500);
 
-        List<Dedupe_Group__c> openGroups = [
-            SELECT Id, Name, Match_Key__c, Scenario_Label__c, Member_Count__c
-            FROM Dedupe_Group__c
-            WHERE Scan__c = :targetScanId AND Status__c = 'Open'
-            ORDER BY Member_Count__c DESC NULLS LAST
-            LIMIT :cap
-        ];
+        String soql = 'SELECT Id, Name, Match_Key__c, Scenario_Label__c, Member_Count__c '
+                    + 'FROM Dedupe_Group__c '
+                    + 'WHERE Scan__c = :targetScanId AND Status__c = \'Open\'';
+        if (String.isNotBlank(scenarioFilter)) {
+            soql += ' AND Scenario_Key__c = :scenarioFilter';
+        }
+        soql += ' ORDER BY Member_Count__c DESC NULLS LAST LIMIT ' + cap;
+        List<Dedupe_Group__c> openGroups = Database.query(soql);
         out.totalOpenGroups = openGroups.size();
         if (openGroups.isEmpty()) return out;
 

@@ -550,7 +550,7 @@ private class AccountDedupeScanControllerTest {
         Test.stopTest();
 
         AccountDedupeScanController.BulkCandidateResult res =
-            AccountDedupeScanController.getBulkMergeCandidates(scanId, 100);
+            AccountDedupeScanController.getBulkMergeCandidates(scanId, null, 100);
         System.assertNotEquals(null, res);
         System.assertEquals(scanId, res.scanId);
         System.assert(res.totalOpenGroups > 0);
@@ -566,10 +566,40 @@ private class AccountDedupeScanControllerTest {
             }
         }
 
+        // Scenario-filtered call (exactWebsite-only) also works.
+        AccountDedupeScanController.BulkCandidateResult resWebsite =
+            AccountDedupeScanController.getBulkMergeCandidates(scanId, 'exactWebsite', 100);
+        for (AccountDedupeScanController.BulkCandidate bc : resWebsite.candidates) {
+            // Scenario label varies but the underlying scenario key is exactWebsite.
+            System.assertEquals('Exact Website', bc.scenarioLabel);
+        }
+
         // Defaulting to "latest completed scan" when scanId is null also works.
         AccountDedupeScanController.BulkCandidateResult res2 =
-            AccountDedupeScanController.getBulkMergeCandidates(null, null);
+            AccountDedupeScanController.getBulkMergeCandidates(null, null, null);
         System.assertNotEquals(null, res2);
+    }
+
+    @IsTest
+    static void compoundTld_doesNotGroupAccountsOnSameCcTld() {
+        // Two unrelated accounts on .com.hk — they share the ccTLD but
+        // not the actual registrable domain. exactWebsite must NOT bucket
+        // them together.
+        insert new List<Account>{
+            new Account(Name = 'ABC HK Capital', Website = 'https://abci.com.hk'),
+            new Account(Name = 'Bosera HK',      Website = 'https://bosera.com.hk')
+        };
+
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        for (Dedupe_Group__c g : [
+            SELECT Match_Key__c FROM Dedupe_Group__c WHERE Scan__c = :scanId
+        ]) {
+            System.assertNotEquals('com.hk', g.Match_Key__c,
+                'A bare ccTLD must never be a match key');
+        }
     }
 
     @IsTest
