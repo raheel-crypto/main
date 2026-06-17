@@ -337,8 +337,9 @@ public with sharing class AccountDedupeService {
         'com.ec','com.pe','com.uy','com.tr','com.eg','com.sa','com.qa',
         'com.ae','com.np','com.bd','com.pk','com.lk','com.ng','com.ke',
         'com.gh','com.tz','com.ua','com.pl','com.de','com.es','com.ru',
+        'com.tn','com.cy','com.na','com.mt','com.jo',
         'co.uk','co.jp','co.in','co.kr','co.nz','co.za','co.il',
-        'co.th','co.id','co.ke','co.ma','co.tz','co.zw',
+        'co.th','co.id','co.ke','co.ma','co.tz','co.zw','co.bw',
         'org.uk','net.uk','ac.uk','gov.uk','me.uk','ltd.uk','plc.uk',
         'or.jp','ne.jp','ac.jp','go.jp','ad.jp','ed.jp','gr.jp',
         'org.au','net.au','gov.au','edu.au','asn.au','id.au',
@@ -347,7 +348,8 @@ public with sharing class AccountDedupeService {
         'org.tw','net.tw','gov.tw','edu.tw',
         'org.hk','gov.hk','edu.hk','net.hk','idv.hk',
         'org.sg','gov.sg','edu.sg','net.sg',
-        'or.id','net.id','gov.id','ac.id','sch.id'
+        'or.id','net.id','gov.id','ac.id','sch.id',
+        'ac.in'
     };
 
     /**
