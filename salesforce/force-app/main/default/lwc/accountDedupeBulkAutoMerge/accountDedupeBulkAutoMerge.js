@@ -13,6 +13,11 @@ const SCENARIO_FILTER_OPTIONS = [
     { label: 'All scenarios', value: '' }
 ];
 
+const CUSTOMER_MODE_OPTIONS = [
+    { label: 'No customers in group (safe auto-merge)', value: 'noCustomers' },
+    { label: 'Single customer (customer becomes master)', value: 'singleCustomer' }
+];
+
 export default class AccountDedupeBulkAutoMerge extends LightningElement {
     @track loading = false;
     @track queueing = false;
@@ -24,8 +29,10 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
     @track masterByGroup = {};
     @track skippedByGroup = {};
     @track scenarioFilter = 'exactWebsite';
+    @track customerMode = 'noCustomers';
 
     scenarioFilterOptions = SCENARIO_FILTER_OPTIONS;
+    customerModeOptions = CUSTOMER_MODE_OPTIONS;
 
     connectedCallback() {
         this.load();
@@ -36,6 +43,11 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
         this.load();
     }
 
+    handleCustomerModeChange(event) {
+        this.customerMode = event.detail.value;
+        this.load();
+    }
+
     async load() {
         this.loading = true;
         this.error = undefined;
@@ -43,6 +55,7 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
             const res = await getBulkMergeCandidates({
                 scanId: null,
                 scenarioFilter: this.scenarioFilter || null,
+                customerMode: this.customerMode,
                 maxResults: 100
             });
             this.scanName = res.scanName;
@@ -157,7 +170,8 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
                     radioId: `bulk-${c.groupId}-${m.accountId}`,
                     radioName: `bulk-${c.groupId}`,
                     rowClass: m.accountId === masterId ? 'bulk-row bulk-row--master' : 'bulk-row',
-                    displayType: m.accountType || '—',
+                    displayStatus: m.accountStatus || '—',
+                    statusClass: m.isCustomer ? 'bulk-status bulk-status--customer' : 'bulk-status',
                     displayOwner: m.ownerName || '—',
                     displayActivity: m.lastActivityDate || (m.lastModifiedDate ? new Date(m.lastModifiedDate).toISOString().slice(0, 10) + ' (modified)' : '—')
                 }))

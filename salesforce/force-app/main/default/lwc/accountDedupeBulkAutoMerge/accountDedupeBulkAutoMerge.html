@@ -16,6 +16,11 @@
                         options={scenarioFilterOptions}
                         onchange={handleScenarioFilterChange}></lightning-combobox>
                 </div>
+                <div class="slds-col slds-size_1-of-2">
+                    <lightning-combobox label="Customer mix" value={customerMode}
+                        options={customerModeOptions}
+                        onchange={handleCustomerModeChange}></lightning-combobox>
+                </div>
             </div>
 
             <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small bulk-summary">
@@ -61,7 +66,7 @@
                                     <tr class="slds-line-height_reset">
                                         <th style="width: 4rem;">Master</th>
                                         <th>Account</th>
-                                        <th>Type</th>
+                                        <th>Status</th>
                                         <th>Owner</th>
                                         <th>Last activity</th>
                                     </tr>
@@ -82,7 +87,9 @@
                                                     <span class="bulk-suggested-tag">suggested</span>
                                                 </template>
                                             </td>
-                                            <td>{m.displayType}</td>
+                                            <td>
+                                                <span class={m.statusClass}>{m.displayStatus}</span>
+                                            </td>
                                             <td>{m.displayOwner}</td>
                                             <td>{m.displayActivity}</td>
                                         </tr>

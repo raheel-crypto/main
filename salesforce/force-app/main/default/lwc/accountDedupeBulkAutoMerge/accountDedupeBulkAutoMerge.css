@@ -80,3 +80,20 @@
 .bulk-row--master td {
     background: #f0f8ff;
 }
+
+.bulk-status {
+    display: inline-block;
+    font-size: 0.75rem;
+    color: #555;
+}
+
+.bulk-status--customer {
+    padding: 0.125rem 0.5rem;
+    border-radius: 999px;
+    background: #e8f5e9;
+    color: #1b5e20;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-size: 0.6875rem;
+}

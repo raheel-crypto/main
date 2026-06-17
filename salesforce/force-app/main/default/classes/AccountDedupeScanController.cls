@@ -678,10 +678,11 @@ public with sharing class AccountDedupeScanController {
     public class BulkCandidateMember {
         @AuraEnabled public Id accountId;
         @AuraEnabled public String accountName;
-        @AuraEnabled public String accountType;
+        @AuraEnabled public String accountStatus;
         @AuraEnabled public String industry;
         @AuraEnabled public String website;
         @AuraEnabled public String ownerName;
+        @AuraEnabled public Boolean isCustomer;
         @AuraEnabled public Date lastActivityDate;
         @AuraEnabled public DateTime lastModifiedDate;
     }
@@ -706,18 +707,20 @@ public with sharing class AccountDedupeScanController {
     }
 
     /**
-     * Returns groups eligible for unattended auto-merge: Open status, no
-     * member has Type containing "customer", and no member carries open
-     * opportunities, open renewals, or active contracts. For each eligible
-     * group, suggests the member with the most recent activity as the
-     * default master — RevOps can override per row before queueing.
+     * Returns groups eligible for unattended auto-merge:
+     *  - Open status
+     *  - No member carries open opps, open renewals, or active contracts
+     *  - Customer mix matches the requested mode:
+     *      'noCustomers' (default) → no member has Account_Status__c='Customer'
+     *      'singleCustomer'        → exactly one member is a Customer; that
+     *                                customer is the suggested master.
      *
      * If no scanId is provided, defaults to the most-recent completed scan.
      * scenarioFilter restricts to a single scenario key (e.g. 'exactWebsite');
      * blank means "all scenarios".
      */
     @AuraEnabled(cacheable=false)
-    public static BulkCandidateResult getBulkMergeCandidates(Id scanId, String scenarioFilter, Integer maxResults) {
+    public static BulkCandidateResult getBulkMergeCandidates(Id scanId, String scenarioFilter, String customerMode, Integer maxResults) {
         BulkCandidateResult out = new BulkCandidateResult();
         out.candidates = new List<BulkCandidate>();
         out.totalOpenGroups = 0;
@@ -770,8 +773,10 @@ public with sharing class AccountDedupeScanController {
         }
         if (allAccountIds.isEmpty()) return out;
 
+        String mode = String.isBlank(customerMode) ? 'noCustomers' : customerMode;
+
         Map<Id, Account> accountsById = new Map<Id, Account>([
-            SELECT Id, Name, Type, Industry, Website, Owner.Name,
+            SELECT Id, Name, Account_Status__c, Industry, Website, Owner.Name,
                    LastActivityDate, LastModifiedDate
             FROM Account WHERE Id IN :allAccountIds
         ]);
@@ -800,12 +805,18 @@ public with sharing class AccountDedupeScanController {
             List<Id> accIds = memberAccountsByGroup.get(g.Id);
             if (accIds == null || accIds.size() < 2) continue;
 
+            // Count customers and detect any business-record disqualifier.
             Boolean disqualified = false;
+            Integer customerCount = 0;
+            Id customerId;
             for (Id aid : accIds) {
                 Account a = accountsById.get(aid);
                 if (a == null) { disqualified = true; break; }
-                if (a.Type != null && a.Type.toLowerCase().contains('customer')) {
-                    disqualified = true; break;
+                Boolean isCustomer = a.Account_Status__c != null
+                    && a.Account_Status__c.equalsIgnoreCase('Customer');
+                if (isCustomer) {
+                    customerCount += 1;
+                    customerId = aid;
                 }
                 if ((openOpps.containsKey(aid) ? openOpps.get(aid) : 0) > 0) { disqualified = true; break; }
                 if ((renewalOpps.containsKey(aid) ? renewalOpps.get(aid) : 0) > 0) { disqualified = true; break; }
@@ -813,18 +824,32 @@ public with sharing class AccountDedupeScanController {
             }
             if (disqualified) continue;
 
-            // Suggested master = highest LastActivityDate (else LastModifiedDate).
-            Id suggested = accIds[0];
-            DateTime bestScore;
-            for (Id aid : accIds) {
-                Account a = accountsById.get(aid);
-                if (a == null) continue;
-                DateTime score = a.LastActivityDate != null
-                    ? DateTime.newInstance(a.LastActivityDate.year(), a.LastActivityDate.month(), a.LastActivityDate.day())
-                    : a.LastModifiedDate;
-                if (score != null && (bestScore == null || score > bestScore)) {
-                    bestScore = score;
-                    suggested = aid;
+            if (mode == 'singleCustomer') {
+                if (customerCount != 1) continue;
+            } else {
+                // noCustomers — skip any group with even one customer.
+                if (customerCount > 0) continue;
+            }
+
+            // Suggested master:
+            //  - single-customer mode → the customer (preserve their data)
+            //  - otherwise → highest LastActivityDate (else LastModifiedDate)
+            Id suggested;
+            if (mode == 'singleCustomer' && customerId != null) {
+                suggested = customerId;
+            } else {
+                suggested = accIds[0];
+                DateTime bestScore;
+                for (Id aid : accIds) {
+                    Account a = accountsById.get(aid);
+                    if (a == null) continue;
+                    DateTime score = a.LastActivityDate != null
+                        ? DateTime.newInstance(a.LastActivityDate.year(), a.LastActivityDate.month(), a.LastActivityDate.day())
+                        : a.LastModifiedDate;
+                    if (score != null && (bestScore == null || score > bestScore)) {
+                        bestScore = score;
+                        suggested = aid;
+                    }
                 }
             }
 
@@ -843,10 +868,12 @@ public with sharing class AccountDedupeScanController {
                 BulkCandidateMember bm = new BulkCandidateMember();
                 bm.accountId = aid;
                 bm.accountName = a.Name;
-                bm.accountType = a.Type;
+                bm.accountStatus = a.Account_Status__c;
                 bm.industry = a.Industry;
                 bm.website = a.Website;
                 bm.ownerName = a.Owner != null ? a.Owner.Name : null;
+                bm.isCustomer = a.Account_Status__c != null
+                    && a.Account_Status__c.equalsIgnoreCase('Customer');
                 bm.lastActivityDate = a.LastActivityDate;
                 bm.lastModifiedDate = a.LastModifiedDate;
                 bc.members.add(bm);

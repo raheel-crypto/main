@@ -77,9 +77,12 @@ public with sharing class AccountMergeQueueDrainer implements Queueable {
             return;
         }
 
-        // Bail if a customer-typed account appeared in the group since
-        // queueing — RevOps wants to eyeball those before merging.
-        String customerReason = detectCustomerType(allIds);
+        // Bail if more than one customer-status account is in the group —
+        // that's a merge collision that needs human eyes. Exactly one
+        // customer (with everything else a prospect) is fine: the queue
+        // workflow specifically suggests the customer as the master and
+        // absorbs the prospects into it.
+        String customerReason = detectCustomerCollision(masterId, allIds);
         if (customerReason != null) {
             update new Dedupe_Group__c(
                 Id = groupId,
@@ -104,13 +107,23 @@ public with sharing class AccountMergeQueueDrainer implements Queueable {
         }
     }
 
-    private String detectCustomerType(Set<Id> accountIds) {
+    private String detectCustomerCollision(Id masterId, Set<Id> accountIds) {
+        Integer customerCount = 0;
+        Boolean masterIsCustomer = false;
         for (Account a : [
-            SELECT Id, Type FROM Account WHERE Id IN :accountIds
+            SELECT Id, Account_Status__c FROM Account WHERE Id IN :accountIds
         ]) {
-            if (a.Type != null && a.Type.toLowerCase().contains('customer')) {
-                return 'A customer-typed account is in this group — needs manual review.';
+            if (a.Account_Status__c != null && a.Account_Status__c.equalsIgnoreCase('Customer')) {
+                customerCount += 1;
+                if (a.Id == masterId) masterIsCustomer = true;
             }
+        }
+        if (customerCount >= 2) {
+            return 'Two or more Customer-status accounts in this group — needs manual review.';
+        }
+        if (customerCount == 1 && !masterIsCustomer) {
+            // The single customer would be merged AWAY into a non-customer master.
+            return 'The single Customer in this group is not the picked master — pick the Customer as master or review manually.';
         }
         return null;
     }

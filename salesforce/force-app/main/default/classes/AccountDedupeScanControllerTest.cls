@@ -533,16 +533,15 @@ private class AccountDedupeScanControllerTest {
     @IsTest
     static void getBulkMergeCandidates_filtersOutCustomersAndBusinessRecords() {
         // Two Acme accounts that share Website — exactWebsite groups them.
-        // Plant a "Customer" tag on one Acme + an open opp on another to
-        // ensure they're DISQUALIFIED.
+        // Plant a "Customer" status on one Acme + an open opp on another
+        // so the group is DISQUALIFIED in noCustomers mode.
         List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 3];
-        update new Account(Id = acmes[0].Id, Type = 'Customer - Direct');
+        update new Account(Id = acmes[0].Id, Account_Status__c = 'Customer');
         insert new Opportunity(
             Name = 'Open Opp', AccountId = acmes[1].Id, StageName = 'Prospecting',
             CloseDate = Date.today().addDays(30)
         );
 
-        // Oaklins doesn't share opps/customers — should be eligible.
         Test.startTest();
         Id scanId = AccountDedupeScanController.startScan(
             new List<String>{ 'exactWebsite', 'fuzzyNameDomainRoot' }
@@ -550,34 +549,66 @@ private class AccountDedupeScanControllerTest {
         Test.stopTest();
 
         AccountDedupeScanController.BulkCandidateResult res =
-            AccountDedupeScanController.getBulkMergeCandidates(scanId, null, 100);
+            AccountDedupeScanController.getBulkMergeCandidates(scanId, null, 'noCustomers', 100);
         System.assertNotEquals(null, res);
         System.assertEquals(scanId, res.scanId);
         System.assert(res.totalOpenGroups > 0);
 
-        // The Acme group must be filtered out; Oaklins (if grouped) should remain.
         for (AccountDedupeScanController.BulkCandidate bc : res.candidates) {
             System.assertNotEquals(null, bc.suggestedMasterId);
             for (AccountDedupeScanController.BulkCandidateMember m : bc.members) {
-                System.assert(
-                    m.accountType == null || !m.accountType.toLowerCase().contains('customer'),
-                    'Customer-typed account should never appear in bulk candidates'
-                );
+                System.assert(m.isCustomer == null || !m.isCustomer,
+                    'Customer-status account should not appear in noCustomers mode');
             }
         }
 
-        // Scenario-filtered call (exactWebsite-only) also works.
+        // Scenario filter (exactWebsite) works.
         AccountDedupeScanController.BulkCandidateResult resWebsite =
-            AccountDedupeScanController.getBulkMergeCandidates(scanId, 'exactWebsite', 100);
+            AccountDedupeScanController.getBulkMergeCandidates(scanId, 'exactWebsite', 'noCustomers', 100);
         for (AccountDedupeScanController.BulkCandidate bc : resWebsite.candidates) {
-            // Scenario label varies but the underlying scenario key is exactWebsite.
             System.assertEquals('Exact Website', bc.scenarioLabel);
         }
 
-        // Defaulting to "latest completed scan" when scanId is null also works.
+        // Defaulting to "latest completed scan" when scanId is null still works.
         AccountDedupeScanController.BulkCandidateResult res2 =
-            AccountDedupeScanController.getBulkMergeCandidates(null, null, null);
+            AccountDedupeScanController.getBulkMergeCandidates(null, null, null, null);
         System.assertNotEquals(null, res2);
+    }
+
+    @IsTest
+    static void getBulkMergeCandidates_singleCustomerMode_suggestsCustomerAsMaster() {
+        // Acme group with one Customer and two Prospects. singleCustomer
+        // mode should include this group and suggest the customer as master.
+        List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 3];
+        update new Account(Id = acmes[0].Id, Account_Status__c = 'Customer');
+
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        AccountDedupeScanController.BulkCandidateResult single =
+            AccountDedupeScanController.getBulkMergeCandidates(scanId, null, 'singleCustomer', 100);
+        Boolean foundAcme = false;
+        for (AccountDedupeScanController.BulkCandidate bc : single.candidates) {
+            for (AccountDedupeScanController.BulkCandidateMember m : bc.members) {
+                if (m.accountId == acmes[0].Id) {
+                    foundAcme = true;
+                    System.assertEquals(acmes[0].Id, bc.suggestedMasterId,
+                        'Customer should be the suggested master in singleCustomer mode');
+                }
+            }
+        }
+        System.assert(foundAcme, 'Single-customer Acme group should appear in singleCustomer mode');
+
+        // noCustomers mode excludes the same group.
+        AccountDedupeScanController.BulkCandidateResult none =
+            AccountDedupeScanController.getBulkMergeCandidates(scanId, null, 'noCustomers', 100);
+        for (AccountDedupeScanController.BulkCandidate bc : none.candidates) {
+            for (AccountDedupeScanController.BulkCandidateMember m : bc.members) {
+                System.assertNotEquals(acmes[0].Id, m.accountId,
+                    'noCustomers mode must not surface a group with the customer');
+            }
+        }
     }
 
     @IsTest
@@ -603,14 +634,14 @@ private class AccountDedupeScanControllerTest {
     }
 
     @IsTest
-    static void drainer_marksNeedsReviewWhenCustomerAppears() {
-        // Group is queued safely, but a Customer-typed member sneaks in
-        // before the drainer runs. Drainer should route to NeedsReview.
+    static void drainer_marksNeedsReviewWhenSingleCustomerIsNotMaster() {
+        // Master is a prospect; a non-master account is the customer.
+        // Drainer should bail since merging would absorb the customer.
         List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 2];
         Dedupe_Group__c g = buildGroupForAccounts(
             new List<Id>{ acmes[0].Id, acmes[1].Id }, acmes[0].Id, 'Queued'
         );
-        update new Account(Id = acmes[1].Id, Type = 'Customer - Direct');
+        update new Account(Id = acmes[1].Id, Account_Status__c = 'Customer');
 
         Test.startTest();
         System.enqueueJob(new AccountMergeQueueDrainer());
