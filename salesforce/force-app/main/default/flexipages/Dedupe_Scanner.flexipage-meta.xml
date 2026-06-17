@@ -3,6 +3,10 @@
     <flexiPageRegions>
         <itemInstances>
             <componentInstance>
+                <componentName>c:accountDedupeBulkAutoMerge</componentName>
+                <identifier>accountDedupeBulkAutoMerge_1</identifier>
+            </componentInstance>
+            <componentInstance>
                 <componentName>c:accountDedupeScanner</componentName>
                 <identifier>accountDedupeScanner_1</identifier>
             </componentInstance>

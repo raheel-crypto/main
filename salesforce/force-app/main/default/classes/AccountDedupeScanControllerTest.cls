@@ -529,4 +529,66 @@ private class AccountDedupeScanControllerTest {
         System.assertEquals(0, AccountDedupeScanController.requeueAsOpen(null));
         System.assertEquals(0, AccountDedupeScanController.requeueAsOpen(new List<Id>()));
     }
+
+    @IsTest
+    static void getBulkMergeCandidates_filtersOutCustomersAndBusinessRecords() {
+        // Two Acme accounts that share Website — exactWebsite groups them.
+        // Plant a "Customer" tag on one Acme + an open opp on another to
+        // ensure they're DISQUALIFIED.
+        List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 3];
+        update new Account(Id = acmes[0].Id, Type = 'Customer - Direct');
+        insert new Opportunity(
+            Name = 'Open Opp', AccountId = acmes[1].Id, StageName = 'Prospecting',
+            CloseDate = Date.today().addDays(30)
+        );
+
+        // Oaklins doesn't share opps/customers — should be eligible.
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(
+            new List<String>{ 'exactWebsite', 'fuzzyNameDomainRoot' }
+        );
+        Test.stopTest();
+
+        AccountDedupeScanController.BulkCandidateResult res =
+            AccountDedupeScanController.getBulkMergeCandidates(scanId, 100);
+        System.assertNotEquals(null, res);
+        System.assertEquals(scanId, res.scanId);
+        System.assert(res.totalOpenGroups > 0);
+
+        // The Acme group must be filtered out; Oaklins (if grouped) should remain.
+        for (AccountDedupeScanController.BulkCandidate bc : res.candidates) {
+            System.assertNotEquals(null, bc.suggestedMasterId);
+            for (AccountDedupeScanController.BulkCandidateMember m : bc.members) {
+                System.assert(
+                    m.accountType == null || !m.accountType.toLowerCase().contains('customer'),
+                    'Customer-typed account should never appear in bulk candidates'
+                );
+            }
+        }
+
+        // Defaulting to "latest completed scan" when scanId is null also works.
+        AccountDedupeScanController.BulkCandidateResult res2 =
+            AccountDedupeScanController.getBulkMergeCandidates(null, null);
+        System.assertNotEquals(null, res2);
+    }
+
+    @IsTest
+    static void drainer_marksNeedsReviewWhenCustomerAppears() {
+        // Group is queued safely, but a Customer-typed member sneaks in
+        // before the drainer runs. Drainer should route to NeedsReview.
+        List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 2];
+        Dedupe_Group__c g = buildGroupForAccounts(
+            new List<Id>{ acmes[0].Id, acmes[1].Id }, acmes[0].Id, 'Queued'
+        );
+        update new Account(Id = acmes[1].Id, Type = 'Customer - Direct');
+
+        Test.startTest();
+        System.enqueueJob(new AccountMergeQueueDrainer());
+        Test.stopTest();
+
+        Dedupe_Group__c done = [SELECT Status__c, Error_Message__c FROM Dedupe_Group__c WHERE Id = :g.Id];
+        System.assertEquals('NeedsReview', done.Status__c);
+        System.assert(done.Error_Message__c != null
+            && done.Error_Message__c.toLowerCase().contains('customer'));
+    }
 }

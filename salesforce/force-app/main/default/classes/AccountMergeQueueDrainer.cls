@@ -77,7 +77,24 @@ public with sharing class AccountMergeQueueDrainer implements Queueable {
             return;
         }
 
+        // Bail if a customer-typed account appeared in the group since
+        // queueing — RevOps wants to eyeball those before merging.
+        String customerReason = detectCustomerType(allIds);
+        if (customerReason != null) {
+            update new Dedupe_Group__c(
+                Id = groupId,
+                Status__c = 'NeedsReview',
+                Error_Message__c = customerReason
+            );
+            return;
+        }
+
         try {
+            // Consolidate every cross-account contact relation onto the
+            // master first so the Account merge doesn't trip over
+            // duplicate AccountContactRelation rows.
+            AccountDedupeScanController.cleanupAcrConflicts(groupId, masterId);
+
             Map<String, Id> fieldSourceMap = buildFillNullSources(masterId, allIds);
             AccountDedupeService.mergeAccounts(masterId, dupeIds, fieldSourceMap);
             // mergeAccounts auto-marks the group Resolved via
@@ -85,6 +102,17 @@ public with sharing class AccountMergeQueueDrainer implements Queueable {
         } catch (Exception e) {
             markFailed(groupId, e.getTypeName() + ': ' + e.getMessage());
         }
+    }
+
+    private String detectCustomerType(Set<Id> accountIds) {
+        for (Account a : [
+            SELECT Id, Type FROM Account WHERE Id IN :accountIds
+        ]) {
+            if (a.Type != null && a.Type.toLowerCase().contains('customer')) {
+                return 'A customer-typed account is in this group — needs manual review.';
+            }
+        }
+        return null;
     }
 
     private void markFailed(Id groupId, String reason) {

@@ -1,0 +1,99 @@
+<template>
+    <lightning-card title="Bulk auto-merge" icon-name="standard:bot">
+        <lightning-button-icon slot="actions" icon-name="utility:refresh"
+            alternative-text="Refresh" title="Refresh"
+            onclick={handleRefresh} disabled={loading}></lightning-button-icon>
+
+        <div class="slds-p-horizontal_medium">
+            <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
+                Safe-tier groups with no Customer accounts and no open opps/renewals/contracts.
+                Suggested master = most recently active member (greyed name marked "suggested").
+            </p>
+
+            <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_small bulk-summary">
+                <div class="slds-grow slds-text-body_regular">{headlineLabel}</div>
+                <lightning-button label={queueButtonLabel} variant="brand"
+                    icon-name="utility:adduser" disabled={queueButtonDisabled}
+                    onclick={handleQueueAll}></lightning-button>
+                <template lwc:if={queueing}>
+                    <lightning-spinner size="small" alternative-text="Queueing"
+                        class="slds-m-left_x-small"></lightning-spinner>
+                </template>
+            </div>
+
+            <template lwc:if={error}>
+                <div class="slds-text-color_error slds-p-vertical_small">{error}</div>
+            </template>
+
+            <template lwc:if={loading}>
+                <div class="slds-align_absolute-center slds-p-vertical_medium">
+                    <lightning-spinner size="small" alternative-text="Loading"></lightning-spinner>
+                </div>
+            </template>
+
+            <template lwc:if={hasCandidates}>
+                <ul class="bulk-list">
+                    <template for:each={candidateRows} for:item="c">
+                        <li key={c.groupId} class={c.cardClass}>
+                            <div class="bulk-card__header slds-grid slds-grid_vertical-align-center">
+                                <div class="slds-grow">
+                                    <div class="bulk-card__key">{c.matchKey}</div>
+                                    <div class="slds-text-body_small slds-text-color_weak">
+                                        {c.scenarioLabel} · {c.memberCount} accounts · {c.groupName}
+                                    </div>
+                                </div>
+                                <label class="slds-checkbox slds-m-left_small bulk-skip">
+                                    <input type="checkbox" data-group={c.groupId}
+                                        checked={c.skipped} onchange={handleToggleSkip} />
+                                    <span class="slds-m-left_xx-small">Skip</span>
+                                </label>
+                            </div>
+                            <table class="slds-table slds-table_bordered slds-table_cell-buffer bulk-table">
+                                <thead>
+                                    <tr class="slds-line-height_reset">
+                                        <th style="width: 4rem;">Master</th>
+                                        <th>Account</th>
+                                        <th>Type</th>
+                                        <th>Owner</th>
+                                        <th>Last activity</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template for:each={c.members} for:item="m">
+                                        <tr key={m.accountId} class={m.rowClass}>
+                                            <td>
+                                                <input type="radio" name={m.radioName}
+                                                    id={m.radioId} data-group={c.groupId}
+                                                    data-account={m.accountId}
+                                                    checked={m.isMaster}
+                                                    onchange={handlePickMaster} />
+                                            </td>
+                                            <td>
+                                                <span class="bulk-account-name">{m.accountName}</span>
+                                                <template lwc:if={m.isSuggested}>
+                                                    <span class="bulk-suggested-tag">suggested</span>
+                                                </template>
+                                            </td>
+                                            <td>{m.displayType}</td>
+                                            <td>{m.displayOwner}</td>
+                                            <td>{m.displayActivity}</td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </li>
+                    </template>
+                </ul>
+            </template>
+
+            <template lwc:if={loading}></template>
+            <template lwc:elseif={hasCandidates}></template>
+            <template lwc:else>
+                <p class="slds-text-body_small slds-text-color_weak slds-p-vertical_medium">
+                    No eligible groups in the most-recent completed scan. Try the scanner — anything
+                    here that ended up Manual or Review tier needs eyes-on review and won't auto-merge.
+                </p>
+            </template>
+        </div>
+    </lightning-card>
+</template>

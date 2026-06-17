@@ -674,4 +674,191 @@ public with sharing class AccountDedupeScanController {
         }
         return out;
     }
+
+    public class BulkCandidateMember {
+        @AuraEnabled public Id accountId;
+        @AuraEnabled public String accountName;
+        @AuraEnabled public String accountType;
+        @AuraEnabled public String industry;
+        @AuraEnabled public String website;
+        @AuraEnabled public String ownerName;
+        @AuraEnabled public Date lastActivityDate;
+        @AuraEnabled public DateTime lastModifiedDate;
+    }
+
+    public class BulkCandidate {
+        @AuraEnabled public Id groupId;
+        @AuraEnabled public String groupName;
+        @AuraEnabled public String matchKey;
+        @AuraEnabled public String scenarioLabel;
+        @AuraEnabled public Integer memberCount;
+        @AuraEnabled public Id scanId;
+        @AuraEnabled public Id suggestedMasterId;
+        @AuraEnabled public List<BulkCandidateMember> members;
+    }
+
+    public class BulkCandidateResult {
+        @AuraEnabled public Id scanId;
+        @AuraEnabled public String scanName;
+        @AuraEnabled public Integer totalOpenGroups;
+        @AuraEnabled public Integer eligibleCount;
+        @AuraEnabled public List<BulkCandidate> candidates;
+    }
+
+    /**
+     * Returns groups eligible for unattended auto-merge: Open status, no
+     * member has Type containing "customer", and no member carries open
+     * opportunities, open renewals, or active contracts. For each eligible
+     * group, suggests the member with the most recent activity as the
+     * default master — RevOps can override per row before queueing.
+     *
+     * If no scanId is provided, defaults to the most-recent completed scan.
+     */
+    @AuraEnabled(cacheable=false)
+    public static BulkCandidateResult getBulkMergeCandidates(Id scanId, Integer maxResults) {
+        BulkCandidateResult out = new BulkCandidateResult();
+        out.candidates = new List<BulkCandidate>();
+        out.totalOpenGroups = 0;
+        out.eligibleCount = 0;
+
+        Id targetScanId = scanId;
+        if (targetScanId == null) {
+            List<Dedupe_Scan__c> latest = [
+                SELECT Id, Name FROM Dedupe_Scan__c
+                WHERE Status__c = 'Completed'
+                ORDER BY Completed_At__c DESC NULLS LAST, CreatedDate DESC
+                LIMIT 1
+            ];
+            if (latest.isEmpty()) return out;
+            targetScanId = latest[0].Id;
+            out.scanName = latest[0].Name;
+        } else {
+            List<Dedupe_Scan__c> s = [SELECT Id, Name FROM Dedupe_Scan__c WHERE Id = :targetScanId LIMIT 1];
+            if (!s.isEmpty()) out.scanName = s[0].Name;
+        }
+        out.scanId = targetScanId;
+
+        Integer cap = (maxResults == null || maxResults <= 0) ? 100 : Math.min(maxResults, 500);
+
+        List<Dedupe_Group__c> openGroups = [
+            SELECT Id, Name, Match_Key__c, Scenario_Label__c, Member_Count__c
+            FROM Dedupe_Group__c
+            WHERE Scan__c = :targetScanId AND Status__c = 'Open'
+            ORDER BY Member_Count__c DESC NULLS LAST
+            LIMIT :cap
+        ];
+        out.totalOpenGroups = openGroups.size();
+        if (openGroups.isEmpty()) return out;
+
+        Set<Id> groupIds = new Set<Id>();
+        for (Dedupe_Group__c g : openGroups) groupIds.add(g.Id);
+
+        Map<Id, List<Id>> memberAccountsByGroup = new Map<Id, List<Id>>();
+        Set<Id> allAccountIds = new Set<Id>();
+        for (Dedupe_Group_Member__c m : [
+            SELECT Group__c, Account__c FROM Dedupe_Group_Member__c
+            WHERE Group__c IN :groupIds AND Account__c != NULL
+        ]) {
+            if (!memberAccountsByGroup.containsKey(m.Group__c)) {
+                memberAccountsByGroup.put(m.Group__c, new List<Id>());
+            }
+            memberAccountsByGroup.get(m.Group__c).add(m.Account__c);
+            allAccountIds.add(m.Account__c);
+        }
+        if (allAccountIds.isEmpty()) return out;
+
+        Map<Id, Account> accountsById = new Map<Id, Account>([
+            SELECT Id, Name, Type, Industry, Website, Owner.Name,
+                   LastActivityDate, LastModifiedDate
+            FROM Account WHERE Id IN :allAccountIds
+        ]);
+
+        // Critical-record counts across all candidate accounts (4 aggregates).
+        Map<Id, Integer> openOpps = countByAccount([
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Opportunity
+            WHERE AccountId IN :allAccountIds AND IsClosed = false
+            GROUP BY AccountId
+        ]);
+        Map<Id, Integer> renewalOpps = countByAccount([
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Opportunity
+            WHERE AccountId IN :allAccountIds AND IsClosed = false AND Type = 'Renewal'
+            GROUP BY AccountId
+        ]);
+        Map<Id, Integer> activeContracts = countByAccount([
+            SELECT AccountId acc, COUNT(Id) cnt
+            FROM Contract
+            WHERE AccountId IN :allAccountIds AND Status = 'Activated'
+            GROUP BY AccountId
+        ]);
+
+        for (Dedupe_Group__c g : openGroups) {
+            List<Id> accIds = memberAccountsByGroup.get(g.Id);
+            if (accIds == null || accIds.size() < 2) continue;
+
+            Boolean disqualified = false;
+            for (Id aid : accIds) {
+                Account a = accountsById.get(aid);
+                if (a == null) { disqualified = true; break; }
+                if (a.Type != null && a.Type.toLowerCase().contains('customer')) {
+                    disqualified = true; break;
+                }
+                if ((openOpps.containsKey(aid) ? openOpps.get(aid) : 0) > 0) { disqualified = true; break; }
+                if ((renewalOpps.containsKey(aid) ? renewalOpps.get(aid) : 0) > 0) { disqualified = true; break; }
+                if ((activeContracts.containsKey(aid) ? activeContracts.get(aid) : 0) > 0) { disqualified = true; break; }
+            }
+            if (disqualified) continue;
+
+            // Suggested master = highest LastActivityDate (else LastModifiedDate).
+            Id suggested = accIds[0];
+            DateTime bestScore;
+            for (Id aid : accIds) {
+                Account a = accountsById.get(aid);
+                if (a == null) continue;
+                DateTime score = a.LastActivityDate != null
+                    ? DateTime.newInstance(a.LastActivityDate.year(), a.LastActivityDate.month(), a.LastActivityDate.day())
+                    : a.LastModifiedDate;
+                if (score != null && (bestScore == null || score > bestScore)) {
+                    bestScore = score;
+                    suggested = aid;
+                }
+            }
+
+            BulkCandidate bc = new BulkCandidate();
+            bc.groupId = g.Id;
+            bc.groupName = g.Name;
+            bc.matchKey = g.Match_Key__c;
+            bc.scenarioLabel = g.Scenario_Label__c;
+            bc.memberCount = g.Member_Count__c == null ? 0 : g.Member_Count__c.intValue();
+            bc.scanId = targetScanId;
+            bc.suggestedMasterId = suggested;
+            bc.members = new List<BulkCandidateMember>();
+            for (Id aid : accIds) {
+                Account a = accountsById.get(aid);
+                if (a == null) continue;
+                BulkCandidateMember bm = new BulkCandidateMember();
+                bm.accountId = aid;
+                bm.accountName = a.Name;
+                bm.accountType = a.Type;
+                bm.industry = a.Industry;
+                bm.website = a.Website;
+                bm.ownerName = a.Owner != null ? a.Owner.Name : null;
+                bm.lastActivityDate = a.LastActivityDate;
+                bm.lastModifiedDate = a.LastModifiedDate;
+                bc.members.add(bm);
+            }
+            out.candidates.add(bc);
+        }
+        out.eligibleCount = out.candidates.size();
+        return out;
+    }
+
+    private static Map<Id, Integer> countByAccount(List<AggregateResult> rows) {
+        Map<Id, Integer> m = new Map<Id, Integer>();
+        for (AggregateResult ar : rows) {
+            m.put((Id) ar.get('acc'), ((Decimal) ar.get('cnt')).intValue());
+        }
+        return m;
+    }
 }
