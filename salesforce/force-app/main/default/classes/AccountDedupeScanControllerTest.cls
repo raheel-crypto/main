@@ -191,6 +191,56 @@ private class AccountDedupeScanControllerTest {
     }
 
     @IsTest
+    static void acrConflicts_consolidatesAcrossMultipleDupes() {
+        // Three-account hierarchy with a contact that's ONLY on the two
+        // non-master accounts. The old cleanup ignored these because they
+        // didn't overlap with master; the new one consolidates them in a
+        // single pass.
+        List<Account> acmes = [SELECT Id FROM Account WHERE Name LIKE 'Acme%' ORDER BY Name LIMIT 3];
+        System.assert(acmes.size() >= 3);
+        Id master = acmes[0].Id;
+        Id dupe1  = acmes[1].Id;
+        Id dupe2  = acmes[2].Id;
+
+        // Contact's primary lives outside the group; both group ACRs are indirect.
+        Account outsideHome = new Account(Name = 'Contact Home (outside group)');
+        insert outsideHome;
+        Contact c = new Contact(FirstName = 'Test', LastName = 'Span', AccountId = outsideHome.Id);
+        insert c;
+        insert new List<AccountContactRelation>{
+            new AccountContactRelation(ContactId = c.Id, AccountId = dupe1),
+            new AccountContactRelation(ContactId = c.Id, AccountId = dupe2)
+        };
+
+        Test.startTest();
+        Id scanId = AccountDedupeScanController.startScan(new List<String>{ 'exactWebsite' });
+        Test.stopTest();
+
+        Dedupe_Group__c acmeGroup;
+        for (Dedupe_Group__c g : [
+            SELECT Id, (SELECT Account__c FROM Members__r)
+            FROM Dedupe_Group__c WHERE Scan__c = :scanId
+        ]) {
+            for (Dedupe_Group_Member__c m : g.Members__r) {
+                if (m.Account__c == master) { acmeGroup = g; break; }
+            }
+            if (acmeGroup != null) break;
+        }
+        System.assertNotEquals(null, acmeGroup);
+
+        // Single cleanup with master should remove ONE of the two dupe ACRs.
+        Integer cleaned = AccountDedupeScanController.cleanupAcrConflicts(acmeGroup.Id, master);
+        System.assert(cleaned >= 1, 'Cleanup should consolidate the two-dupe span');
+
+        Integer remainingInGroup = [
+            SELECT COUNT() FROM AccountContactRelation
+            WHERE ContactId = :c.Id AND AccountId IN (:dupe1, :dupe2)
+        ];
+        System.assertEquals(1, remainingInGroup,
+            'Contact should end up with exactly one ACR across the dupes (the survivor will migrate during merge)');
+    }
+
+    @IsTest
     static void acrConflicts_emptyInputs() {
         System.assertEquals(0, AccountDedupeScanController.listAcrConflicts(null).size());
         try {

@@ -250,13 +250,22 @@ public with sharing class AccountDedupeScanController {
     }
 
     /**
-     * For contacts whose relationships span the group's accounts, retain only
-     * their relationship to the master:
-     *  - IsDirect=false on a duplicate → delete
-     *  - IsDirect=true on a duplicate → reparent the Contact to the master
-     *    (Salesforce auto-moves the direct relationship and upgrades the
-     *    existing indirect on the master if present)
-     * Returns the number of relations cleaned up.
+     * Consolidate every contact relationship that spans more than one
+     * account in the group down to a single ACR row, ideally on the
+     * master. Handles every relevant case in a single pass so users
+     * don't have to switch masters to clear secondary collisions:
+     *
+     *  - Contact is directly tied to a duplicate (Contact.AccountId =
+     *    dupe) → reparent the Contact to the master. Any existing
+     *    indirect ACR on the master is deleted first so the auto-
+     *    created direct ACR doesn't collide.
+     *  - Contact's direct ACR is on the master and there are indirect
+     *    ACRs on duplicates → delete the duplicate-side ACRs.
+     *  - Contact has only indirect ACRs across the group → keep the one
+     *    on the master if it exists; otherwise keep the first duplicate
+     *    ACR (which will migrate to the master cleanly during merge).
+     *
+     * Returns the total number of relations changed.
      */
     @AuraEnabled
     public static Integer cleanupAcrConflicts(Id groupId, Id masterAccountId) {
@@ -273,31 +282,70 @@ public with sharing class AccountDedupeScanController {
             if (!accountIds.contains(masterAccountId)) {
                 throw new AuraHandledException('Master account is not part of this group.');
             }
-            Set<Id> dupeAccountIds = new Set<Id>(accountIds);
-            dupeAccountIds.remove(masterAccountId);
-            if (dupeAccountIds.isEmpty()) return 0;
+            if (accountIds.size() < 2) return 0;
 
-            // Conflict = contact has an ACR on master AND on at least one dupe.
-            Set<Id> contactsOnMaster = new Set<Id>();
+            Map<Id, List<AccountContactRelation>> byContact = new Map<Id, List<AccountContactRelation>>();
             for (AccountContactRelation acr : [
-                SELECT ContactId FROM AccountContactRelation WHERE AccountId = :masterAccountId
-            ]) {
-                if (acr.ContactId != null) contactsOnMaster.add(acr.ContactId);
-            }
-            if (contactsOnMaster.isEmpty()) return 0;
-
-            List<AccountContactRelation> dupeAcrs = [
                 SELECT Id, ContactId, AccountId, IsDirect
                 FROM AccountContactRelation
-                WHERE AccountId IN :dupeAccountIds AND ContactId IN :contactsOnMaster
-            ];
-            if (dupeAcrs.isEmpty()) return 0;
+                WHERE AccountId IN :accountIds
+            ]) {
+                if (acr.ContactId == null) continue;
+                if (!byContact.containsKey(acr.ContactId)) {
+                    byContact.put(acr.ContactId, new List<AccountContactRelation>());
+                }
+                byContact.get(acr.ContactId).add(acr);
+            }
 
             List<AccountContactRelation> toDelete = new List<AccountContactRelation>();
             Set<Id> contactsToReparent = new Set<Id>();
-            for (AccountContactRelation acr : dupeAcrs) {
-                if (acr.IsDirect) contactsToReparent.add(acr.ContactId);
-                else toDelete.add(new AccountContactRelation(Id = acr.Id));
+
+            for (Id cid : byContact.keySet()) {
+                List<AccountContactRelation> rows = byContact.get(cid);
+                if (rows.size() <= 1) continue;
+
+                AccountContactRelation directRow;
+                AccountContactRelation masterIndirect;
+                List<AccountContactRelation> dupeIndirect = new List<AccountContactRelation>();
+                for (AccountContactRelation r : rows) {
+                    if (r.IsDirect) {
+                        directRow = r;
+                    } else if (r.AccountId == masterAccountId) {
+                        masterIndirect = r;
+                    } else {
+                        dupeIndirect.add(r);
+                    }
+                }
+
+                if (directRow != null && directRow.AccountId != masterAccountId) {
+                    // Direct ACR is on a dupe → reparent the contact to master.
+                    // Drop any indirect on master first so the reparent's
+                    // auto-created direct doesn't collide.
+                    contactsToReparent.add(cid);
+                    if (masterIndirect != null) {
+                        toDelete.add(new AccountContactRelation(Id = masterIndirect.Id));
+                    }
+                    for (AccountContactRelation r : dupeIndirect) {
+                        toDelete.add(new AccountContactRelation(Id = r.Id));
+                    }
+                } else if (directRow != null && directRow.AccountId == masterAccountId) {
+                    // Contact is already directly on the master. Drop all dupes.
+                    for (AccountContactRelation r : dupeIndirect) {
+                        toDelete.add(new AccountContactRelation(Id = r.Id));
+                    }
+                } else if (masterIndirect != null) {
+                    // No direct ACR in the group; master already has an indirect.
+                    // Drop the dupe indirects.
+                    for (AccountContactRelation r : dupeIndirect) {
+                        toDelete.add(new AccountContactRelation(Id = r.Id));
+                    }
+                } else if (dupeIndirect.size() > 1) {
+                    // No direct, no master ACR — keep the first dupe ACR (which
+                    // will migrate to master at merge time) and drop the rest.
+                    for (Integer i = 1; i < dupeIndirect.size(); i++) {
+                        toDelete.add(new AccountContactRelation(Id = dupeIndirect[i].Id));
+                    }
+                }
             }
 
             Integer cleaned = 0;
