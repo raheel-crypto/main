@@ -6,7 +6,7 @@
 public with sharing class AnthropicClient {
 
     @TestVisible private static final String NAMED_CREDENTIAL = 'Anthropic_Claude';
-    @TestVisible private static final String DEFAULT_MODEL = 'claude-sonnet-4-20250514';
+    @TestVisible private static final String DEFAULT_MODEL = 'claude-sonnet-4-6';
     @TestVisible private static final String API_VERSION = '2023-06-01';
 
     public class AnthropicException extends Exception {}

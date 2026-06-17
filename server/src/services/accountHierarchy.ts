@@ -311,7 +311,7 @@ ${JSON.stringify(
 Propose the hierarchy now. Return ONLY JSON.`;
 
   const response = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     system: PROPOSAL_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],

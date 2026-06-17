@@ -62,7 +62,7 @@ Referenced Objects: ${flow.referencedObjects.join(", ") || "None"}
 Referenced Fields: ${flow.referencedFields.join(", ") || "None"}`;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     system: FLOW_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
@@ -100,7 +100,7 @@ ${body}
 \`\`\``;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 4096,
     system: APEX_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
@@ -160,7 +160,7 @@ Referenced Fields: ${flow.referencedFields.join(", ") || "None"}
 Please provide a thorough assessment with specific, actionable remediation steps for each finding.`;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 8192,
     system: WELL_ARCHITECTED_SYSTEM_PROMPT,
     messages: [{ role: "user", content: userMessage }],
