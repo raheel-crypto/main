@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Overcommit_Obligation__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True only when the customer is contractually obligated to buy additional credits beyond the initial Credit Allocation (rare). False when overage is optional / triggered by a "good-faith discussion" notice at some utilization threshold, or when the doc says nothing about overage.</description>
+    <label>Credit Overcommit Obligation</label>
+    <type>Checkbox</type>
+</CustomField>

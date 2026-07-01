@@ -60,8 +60,56 @@ JSON SCHEMA (return exactly these keys):
   "Pilot_Success_Criteria": "free text" | null,
   "Credits_Purchased": number | null,
   "Credits_Period": "month" | "quarter" | "year" | "contract" | null,
-  "Special_Terms": "free text summary of any non-standard clauses such as MFN, termination for convenience, indemnity carve-outs, data processing addenda, custom SLA, etc., or null if none" | null
+  "Special_Terms": "free text summary of any non-standard clauses such as MFN, termination for convenience, indemnity carve-outs, data processing addenda, custom SLA, etc., or null if none" | null,
+  "Package_Tier": "Enterprise" | "Team" | "Basic" | "Custom" | null,
+  "Credit_Commit": boolean | null,
+  "Credit_Overcommit_Obligation": boolean | null,
+  "Rate_Limitable_By_Rogo": boolean | null,
+  "Rate_Limit_Terms": "verbatim throttling / rate-limiting language from the contract, or null if none" | null,
+  "Unlimited_Lite_Stated": boolean | null,
+  "Free_Max_Mid_Stated": boolean | null,
+  "Free_Max_Mid_Amount": number | null
 }
+
+PACKAGE / CREDITS / RATE LIMITING GUIDANCE (important):
+
+Package_Tier
+- "Enterprise" if the doc names the tier as Enterprise, or if it grants unlimited platform usage with no Credit Allocation (i.e. seats-based unlimited, possibly with throttling).
+- "Team" or "Basic" if the doc names the tier explicitly.
+- "Custom" if the deal is a bespoke arrangement that doesn't fit standard tiers.
+- Leave null if the tier truly cannot be determined.
+- IMPORTANT: "ELA" (Enterprise License Agreement) is a LICENSING STRUCTURE, not a package tier. An ELA can exist on any package. The ELA field is separate.
+
+Credit_Commit
+- true when the order form specifies a fixed Credit Allocation / Credit Commitment (e.g. "1,400,000 Credits for Initial Subscription Period"). This is the common case for credit-based deals.
+- false when the deal is seats-based / unlimited with no credit purchase.
+- null when the doc doesn't indicate one way or the other.
+
+Credit_Overcommit_Obligation
+- true ONLY when the customer is contractually OBLIGATED to buy additional credits beyond the initial commit if they exceed usage (rare).
+- false when overage is optional / discretionary (e.g. Rogo sends a utilization notice at 80% and the parties "engage in a good-faith commercial discussion" - this is NOT an obligation).
+- false when no overage terms are stated at all.
+
+Rate_Limitable_By_Rogo
+- true when the contract explicitly permits Rogo to throttle usage: concurrency caps ("up to 10 concurrent queries"), fair-use throttling, rate limits, request-per-window caps.
+- false when the contract guarantees unlimited usage without any throttling clause.
+- null when the doc doesn't address it. For credit-based deals with no explicit throttling clause, prefer null over false - credits themselves are the natural limiter.
+
+Rate_Limit_Terms
+- The verbatim throttling language when Rate_Limitable_By_Rogo is true. Otherwise null.
+
+Unlimited_Lite_Stated
+- true ONLY when the doc explicitly mentions unlimited Lite queries / unlimited Lite credits / free Lite usage.
+- false when the doc explicitly excludes Lite from what's included.
+- null when the doc is silent (Apex will infer from Package_Tier=Enterprise).
+
+Free_Max_Mid_Stated
+- true when the doc explicitly grants free / included Max or Mid credits or queries.
+- false when the doc explicitly excludes Max/Mid from free tier.
+- null when the doc is silent (Apex will infer from Package_Tier=Enterprise).
+
+Free_Max_Mid_Amount
+- The stated number of free Max/Mid credits / queries, if the doc says a specific number. Otherwise null.
 
 INTERPRETATION HINTS:
 - "Auto-renews unless 90 days written notice" -> Renewal_Terms = "Auto-renew (90-day)"

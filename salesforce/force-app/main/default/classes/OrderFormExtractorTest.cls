@@ -174,6 +174,86 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_populatesPackageAndCreditFields() {
+        Opportunity opp = insertOpp('Saxenhammer', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        // Credit-commit deal, no overcommit obligation, no explicit throttling,
+        // no Unlimited Lite / free Max/Mid. Team package.
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Package_Tier' => 'Team',
+            'Credit_Commit' => true,
+            'Credit_Overcommit_Obligation' => false,
+            'Rate_Limitable_By_Rogo' => null,
+            'Rate_Limit_Terms' => null,
+            'Unlimited_Lite_Stated' => null,
+            'Free_Max_Mid_Stated' => null,
+            'Credits_Purchased' => 1400000
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Package_Tier__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
+                   Rate_Limitable__c, Rate_Limit_Notes__c,
+                   Unlimited_Lite__c, Free_Max_Mid_Credits__c, Free_Max_Mid_Amount__c,
+                   Credits_Purchased__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals('Team', row.Package_Tier__c);
+        System.assertEquals(true, row.Credit_Commit__c);
+        System.assertEquals(false, row.Credit_Overcommit_Obligation__c);
+        System.assertEquals('Not specified', row.Rate_Limitable__c);
+        System.assertEquals(null, row.Rate_Limit_Notes__c);
+        System.assertEquals('Not specified', row.Unlimited_Lite__c, 'Non-enterprise + silent -> Not specified');
+        System.assertEquals('Not specified', row.Free_Max_Mid_Credits__c);
+        System.assertEquals(1400000, row.Credits_Purchased__c);
+    }
+
+    @isTest
+    static void extractionJob_infersEnterpriseFreebies() {
+        Opportunity opp = insertOpp('Big Bank Enterprise', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Package_Tier' => 'Enterprise',
+            'Credit_Commit' => false,
+            'Rate_Limitable_By_Rogo' => true,
+            'Rate_Limit_Terms' => 'Unlimited requests per day but capped at 10 concurrent queries.',
+            'Unlimited_Lite_Stated' => null,
+            'Free_Max_Mid_Stated' => null
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Package_Tier__c, Rate_Limitable__c, Rate_Limit_Notes__c,
+                   Unlimited_Lite__c, Free_Max_Mid_Credits__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals('Enterprise', row.Package_Tier__c);
+        System.assertEquals('Yes', row.Rate_Limitable__c);
+        System.assert(row.Rate_Limit_Notes__c != null && row.Rate_Limit_Notes__c.contains('concurrent'),
+            'Rate_Limit_Notes__c should capture the language: ' + row.Rate_Limit_Notes__c);
+        System.assertEquals('Inferred (Enterprise)', row.Unlimited_Lite__c);
+        System.assertEquals('Inferred (Enterprise)', row.Free_Max_Mid_Credits__c);
+    }
+
+    @isTest
     static void extractionJob_overridesTypeWithOppType() {
         Opportunity opp = new Opportunity(
             Name = 'Renewal-with-seats',
@@ -880,6 +960,14 @@ private class OrderFormExtractorTest {
         System.assertEquals('New Business', OrderFormPicklistMapper.mapType('new logo'));
         System.assertEquals(null, OrderFormPicklistMapper.mapType(null));
         System.assertEquals(null, OrderFormPicklistMapper.mapType('mystery'));
+
+        // Package tier
+        System.assertEquals('Enterprise', OrderFormPicklistMapper.mapPackageTier('Enterprise package'));
+        System.assertEquals('Team', OrderFormPicklistMapper.mapPackageTier('team tier'));
+        System.assertEquals('Basic', OrderFormPicklistMapper.mapPackageTier('Basic subscription'));
+        System.assertEquals('Custom', OrderFormPicklistMapper.mapPackageTier('bespoke arrangement'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapPackageTier(null));
+        System.assertEquals(null, OrderFormPicklistMapper.mapPackageTier('mystery'));
 
         // Pricing structure - all branches
         System.assertEquals('Seats: Unlimited Usage, No Throttling', OrderFormPicklistMapper.mapPricingStructure('Seats: Unlimited Usage, No Throttling'));

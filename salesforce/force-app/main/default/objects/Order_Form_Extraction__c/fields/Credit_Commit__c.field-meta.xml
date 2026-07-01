@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Commit__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True when the order form includes a fixed Credit Allocation / Credit Commitment purchased upfront (the common case for credit-based deals). Distinct from Credit_Overcommit_Obligation__c which flags whether the customer must buy MORE credits beyond the initial commit.</description>
+    <label>Credit Commit</label>
+    <type>Checkbox</type>
+</CustomField>

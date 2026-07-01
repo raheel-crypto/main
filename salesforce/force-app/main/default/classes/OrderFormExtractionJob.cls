@@ -412,7 +412,32 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credits_Period__c = mapCreditsPeriod((String) extracted.get('Credits_Period'));
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
 
+        populatePackageAndCreditFields(row, extracted);
         deriveEndDate(row);
+    }
+
+    @TestVisible
+    private static void populatePackageAndCreditFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
+        row.Package_Tier__c = OrderFormPicklistMapper.mapPackageTier((String) extracted.get('Package_Tier'));
+        row.Credit_Commit__c = toBoolean(extracted.get('Credit_Commit')) == true;
+        row.Credit_Overcommit_Obligation__c = toBoolean(extracted.get('Credit_Overcommit_Obligation')) == true;
+
+        Boolean rateLimitable = toBoolean(extracted.get('Rate_Limitable_By_Rogo'));
+        if (rateLimitable == true) row.Rate_Limitable__c = 'Yes';
+        else if (rateLimitable == false) row.Rate_Limitable__c = 'No';
+        else row.Rate_Limitable__c = 'Not specified';
+        row.Rate_Limit_Notes__c = truncate((String) extracted.get('Rate_Limit_Terms'), 32768);
+
+        Boolean isEnterprise = 'Enterprise'.equals(row.Package_Tier__c);
+        row.Unlimited_Lite__c = resolveTristate(toBoolean(extracted.get('Unlimited_Lite_Stated')), isEnterprise);
+        row.Free_Max_Mid_Credits__c = resolveTristate(toBoolean(extracted.get('Free_Max_Mid_Stated')), isEnterprise);
+        row.Free_Max_Mid_Amount__c = toDecimal(extracted.get('Free_Max_Mid_Amount'));
+    }
+
+    private static String resolveTristate(Boolean stated, Boolean isEnterprise) {
+        if (stated == true) return 'Yes';
+        if (stated == false) return 'No';
+        return isEnterprise ? 'Inferred (Enterprise)' : 'Not specified';
     }
 
     @TestVisible

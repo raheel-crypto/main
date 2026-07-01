@@ -54,6 +54,16 @@ public with sharing class OrderFormPicklistMapper {
         return null;
     }
 
+    public static String mapPackageTier(String raw) {
+        if (String.isBlank(raw)) return null;
+        String s = raw.toLowerCase();
+        if (s.contains('enterprise')) return 'Enterprise';
+        if (s.contains('team')) return 'Team';
+        if (s.contains('basic')) return 'Basic';
+        if (s.contains('custom') || s.contains('bespoke')) return 'Custom';
+        return null;
+    }
+
     public static String mapPricingStructure(String raw) {
         if (String.isBlank(raw)) return null;
         Set<String> allowed = new Set<String>{
