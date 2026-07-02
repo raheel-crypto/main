@@ -413,7 +413,28 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
 
         populatePackageAndCreditFields(row, extracted);
+        row.Pricing_Structure__c = derivePricingStructure(row);
         deriveEndDate(row);
+    }
+
+    /**
+     * Reps were choosing the wrong Pricing_Structure value in the screen flow,
+     * so we compute it deterministically here from three axes:
+     *   1. ELA__c: true -> "ELA: ...", false -> "Seats: ..."
+     *   2. Credit_Commit__c or Credits_Purchased__c non-null -> "Credit-Based Usage"
+     *   3. Otherwise unlimited path; Rate_Limitable__c='Yes' -> "with Throttling",
+     *      anything else -> "No Throttling" (user's rule: non-credit unlimited
+     *      is assumed non-throttled).
+     */
+    public static String derivePricingStructure(Order_Form_Extraction__c row) {
+        String prefix = (row.ELA__c == true) ? 'ELA' : 'Seats';
+        Boolean creditBased = row.Credit_Commit__c == true
+            || (row.Credits_Purchased__c != null && row.Credits_Purchased__c > 0);
+        if (creditBased) return prefix + ': Credit-Based Usage';
+        Boolean throttled = 'Yes'.equals(row.Rate_Limitable__c);
+        return throttled
+            ? prefix + ': Unlimited Usage, with Throttling'
+            : prefix + ': Unlimited Usage, No Throttling';
     }
 
     @TestVisible

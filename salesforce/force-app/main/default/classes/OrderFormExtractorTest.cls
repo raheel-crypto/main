@@ -254,6 +254,35 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void derivePricingStructure_truthTable() {
+        // Credit-based path (dominates throttling).
+        System.assertEquals('Seats: Credit-Based Usage',
+            OrderFormExtractionJob.derivePricingStructure(new Order_Form_Extraction__c(
+                ELA__c = false, Credit_Commit__c = true)));
+        System.assertEquals('ELA: Credit-Based Usage',
+            OrderFormExtractionJob.derivePricingStructure(new Order_Form_Extraction__c(
+                ELA__c = true, Credit_Commit__c = true)));
+        // Credits_Purchased triggers credit-based even if Credit_Commit is false.
+        System.assertEquals('Seats: Credit-Based Usage',
+            OrderFormExtractionJob.derivePricingStructure(new Order_Form_Extraction__c(
+                ELA__c = false, Credit_Commit__c = false, Credits_Purchased__c = 100000)));
+
+        // Unlimited paths.
+        System.assertEquals('Seats: Unlimited Usage, No Throttling',
+            OrderFormExtractionJob.derivePricingStructure(new Order_Form_Extraction__c(
+                ELA__c = false, Credit_Commit__c = false, Rate_Limitable__c = 'Not specified')));
+        System.assertEquals('Seats: Unlimited Usage, with Throttling',
+            OrderFormExtractionJob.derivePricingStructure(new Order_Form_Extraction__c(
+                ELA__c = false, Credit_Commit__c = false, Rate_Limitable__c = 'Yes')));
+        System.assertEquals('ELA: Unlimited Usage, No Throttling',
+            OrderFormExtractionJob.derivePricingStructure(new Order_Form_Extraction__c(
+                ELA__c = true, Credit_Commit__c = false, Rate_Limitable__c = 'No')));
+        System.assertEquals('ELA: Unlimited Usage, with Throttling',
+            OrderFormExtractionJob.derivePricingStructure(new Order_Form_Extraction__c(
+                ELA__c = true, Credit_Commit__c = false, Rate_Limitable__c = 'Yes')));
+    }
+
+    @isTest
     static void extractionJob_overridesTypeWithOppType() {
         Opportunity opp = new Opportunity(
             Name = 'Renewal-with-seats',

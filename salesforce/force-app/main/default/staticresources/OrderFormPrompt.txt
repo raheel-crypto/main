@@ -71,7 +71,14 @@ JSON SCHEMA (return exactly these keys):
   "Free_Max_Mid_Amount": number | null
 }
 
-PACKAGE / CREDITS / RATE LIMITING GUIDANCE (important):
+ELA / PACKAGE / CREDITS / RATE LIMITING GUIDANCE (important):
+
+ELA
+- Set "ELA" true when the doc mentions "ELA" or "Enterprise License Agreement" anywhere - in the filename, title, section headings, exhibit headings, or body text. This is a LICENSING STRUCTURE separate from Package_Tier; an ELA can exist on any package (Enterprise/Team/Basic).
+- Set false when no such language appears anywhere in the doc.
+- The Pricing_Structure field this feeds is computed in Apex from ELA + credit + throttling axes; you do not need to reason about the final Pricing_Structure enum yourself, just get ELA right.
+
+
 
 Package_Tier
 - "Enterprise" if the doc names the tier as Enterprise, or if it grants unlimited platform usage with no Credit Allocation (i.e. seats-based unlimited, possibly with throttling).
