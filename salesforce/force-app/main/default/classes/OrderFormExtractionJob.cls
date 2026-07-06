@@ -9,6 +9,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     @TestVisible private static final Integer ERROR_MESSAGE_LIMIT = 32768;
     @TestVisible private static final Integer FILE_NAME_LIMIT = 255;
     @TestVisible private static final Integer DOC_ID_LIMIT = 255;
+    // Base64 expands 1.33x and JSON.serialize makes another copy of the encoded
+    // string, so peak heap during request build is roughly 2.7x the raw PDF
+    // bytes. Async heap ceiling is 12MB, so cap raw payload at 3MB total (~8MB
+    // peak) with a per-file cap so a single 6MB behemoth doesn't blow it alone.
+    @TestVisible private static final Integer MAX_TOTAL_PDF_BYTES = 3 * 1024 * 1024;
+    @TestVisible private static final Integer MAX_PER_FILE_BYTES = 4 * 1024 * 1024;
 
     private final Id opportunityId;
     private final List<Id> contentDocumentIds;
@@ -99,6 +105,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             overrideTypeFromOpp(row, parentOpp);
             computeIncrementalARR(row, parentOpp);
             row.Extraction_Status__c = 'Success';
+            if (!skipped.isEmpty()) {
+                row.Error_Message__c = truncate(
+                    'Note: files skipped or dropped during extraction (extraction still succeeded on the remaining files): '
+                        + String.join(skipped, '; '),
+                    ERROR_MESSAGE_LIMIT);
+            }
             return row;
 
         } catch (Exception e) {
@@ -150,6 +162,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             sourceByDoc.put(cdl.ContentDocumentId, cdl.LinkedEntityId);
         }
 
+        // First pass: split candidates into current vs base, filtering out
+        // unsupported types and files bigger than the per-file cap.
+        List<ContentVersion> currentCandidates = new List<ContentVersion>();
+        List<ContentVersion> baseCandidates = new List<ContentVersion>();
         Set<Id> seen = new Set<Id>();
         for (Id docId : docIds) {
             if (seen.contains(docId)) continue;
@@ -157,13 +173,37 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             ContentVersion cv = versionByDocId.get(docId);
             if (cv == null || cv.VersionData == null) continue;
             if (getMediaType(cv) == null) {
-                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) + ' (' + cv.FileExtension + ')');
+                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) + ' (unsupported: ' + cv.FileExtension + ')');
+                continue;
+            }
+            Integer sz = cv.VersionData.size();
+            if (sz > MAX_PER_FILE_BYTES) {
+                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) +
+                    ' (too large: ' + sz + ' bytes; cap ' + MAX_PER_FILE_BYTES + ')');
                 continue;
             }
             Id linkedTo = sourceByDoc.get(docId);
-            if (linkedTo == currentOppId) currentFilesOut.add(cv);
-            else if (linkedTo == baseOppId) baseFilesOut.add(cv);
-            else currentFilesOut.add(cv); // unknown linkage defaults to "current deal"
+            if (linkedTo == currentOppId) currentCandidates.add(cv);
+            else if (linkedTo == baseOppId) baseCandidates.add(cv);
+            else currentCandidates.add(cv); // unknown linkage defaults to "current deal"
+        }
+
+        // Second pass: fit within MAX_TOTAL_PDF_BYTES. Current-deal files come
+        // first (best-effort, all included). Base files fill remaining budget.
+        Integer usedBytes = 0;
+        for (ContentVersion cv : currentCandidates) {
+            currentFilesOut.add(cv);
+            usedBytes += cv.VersionData.size();
+        }
+        for (ContentVersion cv : baseCandidates) {
+            Integer sz = cv.VersionData.size();
+            if (usedBytes + sz > MAX_TOTAL_PDF_BYTES) {
+                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) +
+                    ' (dropped to fit heap budget: ' + sz + ' bytes would put us over ' + MAX_TOTAL_PDF_BYTES + ')');
+                continue;
+            }
+            baseFilesOut.add(cv);
+            usedBytes += sz;
         }
     }
 
