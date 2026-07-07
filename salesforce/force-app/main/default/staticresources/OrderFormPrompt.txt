@@ -68,8 +68,18 @@ JSON SCHEMA (return exactly these keys):
   "Rate_Limit_Terms": "verbatim throttling / rate-limiting language from the contract, or null if none" | null,
   "Unlimited_Lite_Stated": boolean | null,
   "Free_Max_Mid_Stated": boolean | null,
-  "Free_Max_Mid_Amount": number | null
+  "Free_Max_Mid_Amount": number | null,
+  "Customer_Signature_Date": "YYYY-MM-DD" | null,
+  "Rogo_Signature_Date": "YYYY-MM-DD" | null,
+  "Customer_Signer_Name": "full name as printed in the signature block" | null,
+  "Customer_Signer_Title": "title/role of the customer signer" | null
 }
+
+SIGNATURE BLOCK GUIDANCE:
+- Pull the signature dates from the DocuSign envelope stamps, the "Date:" line under each signature, or wherever the doc records when each party signed. Return ISO YYYY-MM-DD.
+- Customer_Signer_Name is the printed/typed name of the customer signer (not the counterparty organization name). If there are multiple customer signers, return the primary / most senior one; note the others in Special_Terms.
+- Customer_Signer_Title is exactly what appears near their name: "Managing Partner", "CFO", "Authorized Signatory", etc. Null if not present.
+- If only one party has signed (unusual for a fully executed order form), still return whichever date is present and leave the other null.
 
 ELA / PACKAGE / CREDITS / RATE LIMITING GUIDANCE (important):
 

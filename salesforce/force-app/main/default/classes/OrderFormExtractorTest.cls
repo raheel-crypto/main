@@ -283,6 +283,63 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_signatureDateIsLaterOfCustomerAndRogo() {
+        Opportunity opp = insertOpp('Sig Date Both', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OF');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Customer_Signature_Date' => '2026-04-14',
+            'Rogo_Signature_Date' => '2026-04-15',
+            'Customer_Signer_Name' => 'Borja Oria Riu',
+            'Customer_Signer_Title' => 'Managing Partner'
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Signature_Date__c, Customer_Signer_Name__c, Customer_Signer_Title__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(Date.newInstance(2026, 4, 15), row.Signature_Date__c,
+            'Signature_Date should be the later of the two (Rogo, 4/15)');
+        System.assertEquals('Borja Oria Riu', row.Customer_Signer_Name__c);
+        System.assertEquals('Managing Partner', row.Customer_Signer_Title__c);
+    }
+
+    @isTest
+    static void extractionJob_signatureDateFallsBackWhenOnlyOnePresent() {
+        Opportunity opp = insertOpp('Sig Date One', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OF');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Customer_Signature_Date' => '2026-04-14',
+            'Rogo_Signature_Date' => null
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Signature_Date__c FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(Date.newInstance(2026, 4, 14), row.Signature_Date__c,
+            'Signature_Date should fall back to the one present date');
+    }
+
+    @isTest
     static void extractionJob_overridesTypeWithOppType() {
         Opportunity opp = new Opportunity(
             Name = 'Renewal-with-seats',

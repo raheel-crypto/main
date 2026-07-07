@@ -453,8 +453,27 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
 
         populatePackageAndCreditFields(row, extracted);
+        populateSignatureFields(row, extracted);
         row.Pricing_Structure__c = derivePricingStructure(row);
         deriveEndDate(row);
+    }
+
+    @TestVisible
+    private static void populateSignatureFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
+        Date customerSig = parseDate((String) extracted.get('Customer_Signature_Date'));
+        Date rogoSig = parseDate((String) extracted.get('Rogo_Signature_Date'));
+
+        // Effective date = latest signature. Fallback to whichever is present.
+        if (customerSig != null && rogoSig != null) {
+            row.Signature_Date__c = (rogoSig > customerSig) ? rogoSig : customerSig;
+        } else if (rogoSig != null) {
+            row.Signature_Date__c = rogoSig;
+        } else if (customerSig != null) {
+            row.Signature_Date__c = customerSig;
+        }
+
+        row.Customer_Signer_Name__c = truncate((String) extracted.get('Customer_Signer_Name'), 255);
+        row.Customer_Signer_Title__c = truncate((String) extracted.get('Customer_Signer_Title'), 100);
     }
 
     /**

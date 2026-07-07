@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Signature_Date__c</fullName>
+    <description>The effective execution date of the order form: the LATER of the Customer signature date and the Rogo signature date (Rogo conventionally signs second, so this is usually Rogo's date). Extracted from the signature block or DocuSign envelope. Null when no signature dates are present.</description>
+    <label>Signature Date</label>
+    <required>false</required>
+    <type>Date</type>
+</CustomField>
