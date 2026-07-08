@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Subprocessor_Notice_Period__c</fullName>
+    <description>Number of days of prior written notice Rogo must provide before adding, removing, or replacing a Subprocessor. Standard clause is 30 days (typically in an MSA data-protection or subprocessor section, e.g. "Rogo shall provide Customer with no less than thirty (30) days' prior written notice before adding, removing, or replacing any Subprocessor"). Null when the contract does not specify a subprocessor-change notice period.</description>
+    <label>Subprocessor Notice Period</label>
+    <precision>3</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Extract_Evidence__c</fullName>
+    <description>Evidence trail of excerpts from the source document(s) showing where non-obvious extracted values came from. Only populated for fields that required inference or deeper search (Total_Contract_Value composed from multiple line items, ARR derivation, Signature_Date choice, Subprocessor_Notice_Period buried in an MSA, Renewal_Terms mapped from customer language, etc.). Trivially-obvious fields (seats, start date, billing email) are not evidenced.</description>
+    <label>Extract Evidence</label>
+    <length>32768</length>
+    <required>false</required>
+    <type>LongTextArea</type>
+    <visibleLines>15</visibleLines>
+</CustomField>

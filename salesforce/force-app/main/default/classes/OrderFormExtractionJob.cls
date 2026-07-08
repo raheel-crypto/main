@@ -454,6 +454,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
+        row.Subprocessor_Notice_Period__c = toDecimal(extracted.get('Subprocessor_Notice_Period_Days'));
+        row.Extract_Evidence__c = truncate((String) extracted.get('Extract_Evidence'), 32768);
         row.Pricing_Structure__c = derivePricingStructure(row);
         deriveEndDate(row);
     }

@@ -72,8 +72,29 @@ JSON SCHEMA (return exactly these keys):
   "Customer_Signature_Date": "YYYY-MM-DD" | null,
   "Rogo_Signature_Date": "YYYY-MM-DD" | null,
   "Customer_Signer_Name": "full name as printed in the signature block" | null,
-  "Customer_Signer_Title": "title/role of the customer signer" | null
+  "Customer_Signer_Title": "title/role of the customer signer" | null,
+  "Subprocessor_Notice_Period_Days": number | null,
+  "Extract_Evidence": "structured evidence trail as described below, or null when nothing warrants explanation" | null
 }
+
+SUBPROCESSOR NOTICE PERIOD:
+- Return the number of DAYS of prior written notice Rogo must give the customer before adding / removing / replacing a Subprocessor. The standard Rogo-paper clause is 30 days and lives in a data-protection / privacy / subprocessor section of the MSA. But do NOT assume any specific section - customer paper varies:
+  - On Rogo paper it's often Section 9(f) or similar in the MSA.
+  - On customer paper (customer's own MSA / DPA / addendum) it may be labeled differently ("Subprocessor Changes", "Sub-processors", "Third-Party Processors"), numbered differently, or in an Exhibit / Annex.
+  - Sometimes it appears as a special term in the Order Form itself, overriding a boilerplate MSA value.
+  - Sometimes there is NO subprocessor-change notice period stated - return null in that case.
+- Search all attached documents (order form, MSA, DPA, riders) for the concept, not for a specific section number. Cue phrases: "Subprocessor", "sub-processor", "sub processor", "prior written notice", "add / remove / replace", "list of approved Subprocessors".
+- If multiple values conflict across documents, prefer the more specific / more recent one (Order Form special term > Rider > MSA); note the override in Special_Terms.
+
+EXTRACT_EVIDENCE FIELD:
+- Populate this ONLY for fields that required inference, computation, semantic search, or a picklist mapping - not for values that are obvious from the doc.
+- Format is your choice; a simple readable pattern is:
+      ## <FieldName>
+      "<short verbatim excerpt from the doc, <= ~300 chars>"
+      [source: <where in the doc - section/exhibit/page/DocuSign envelope, if identifiable>]
+- Include evidence for at minimum, when populated: Total_Contract_Value, Annual_Recurring_Revenue, Signature_Date, Subprocessor_Notice_Period_Days, Renewal_Terms (when mapped from customer language), Rate_Limitable_By_Rogo, Package_Tier when inferred, Unlimited_Lite_Stated / Free_Max_Mid_Stated when explicitly stated, any value that came from a rider overriding the base contract.
+- Skip evidence for trivial extractions: Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name, when they appear plainly in labeled fields at the top of the order form.
+- Keep total length well under 30,000 characters; use short excerpts, not full paragraphs.
 
 SIGNATURE BLOCK GUIDANCE:
 - Pull the signature dates from the DocuSign envelope stamps, the "Date:" line under each signature, or wherever the doc records when each party signed. Return ISO YYYY-MM-DD.

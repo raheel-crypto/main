@@ -283,6 +283,38 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_populatesSubprocessorAndEvidence() {
+        Opportunity opp = insertOpp('Cantor Pilot', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        String evidence = '## Subprocessor_Notice_Period_Days\n' +
+            '"Rogo shall provide Customer with no less than thirty (30) days\' prior written notice before adding, removing, or replacing any Subprocessor"\n' +
+            '[source: MSA Section 9(f)]\n';
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Subprocessor_Notice_Period_Days' => 30,
+            'Extract_Evidence' => evidence
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Subprocessor_Notice_Period__c, Extract_Evidence__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(30, row.Subprocessor_Notice_Period__c);
+        System.assert(row.Extract_Evidence__c != null && row.Extract_Evidence__c.contains('thirty (30)'),
+            'Evidence field should carry the verbatim excerpt: ' + row.Extract_Evidence__c);
+    }
+
+    @isTest
     static void extractionJob_signatureDateIsLaterOfCustomerAndRogo() {
         Opportunity opp = insertOpp('Sig Date Both', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OF');
