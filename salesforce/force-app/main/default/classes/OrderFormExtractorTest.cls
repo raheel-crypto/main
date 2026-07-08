@@ -306,12 +306,71 @@ private class OrderFormExtractorTest {
         Test.stopTest();
 
         Order_Form_Extraction__c row = [
-            SELECT Subprocessor_Notice_Period__c, Extract_Evidence__c
+            SELECT Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Extract_Evidence__c
             FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
         ];
         System.assertEquals(30, row.Subprocessor_Notice_Period__c);
+        System.assertEquals(null, row.Subprocessor_Restrictions__c, 'Plain 30-day notice is not a restriction');
         System.assert(row.Extract_Evidence__c != null && row.Extract_Evidence__c.contains('thirty (30)'),
             'Evidence field should carry the verbatim excerpt: ' + row.Extract_Evidence__c);
+    }
+
+    @isTest
+    static void extractionJob_subprocessorDefaultsTo30WhenAbsent() {
+        Opportunity opp = insertOpp('No Subproc Clause', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Subprocessor_Notice_Period_Days' => null,
+            'Subprocessor_Restrictions' => null
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Extract_Evidence__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(30, row.Subprocessor_Notice_Period__c, 'Absent clause defaults to 30');
+        System.assert(row.Extract_Evidence__c != null && row.Extract_Evidence__c.contains('Defaulted to 30'),
+            'Default should be noted in evidence: ' + row.Extract_Evidence__c);
+    }
+
+    @isTest
+    static void extractionJob_subprocessorConsentRestrictionWithDefault() {
+        // Truist-style: written consent required, no day count -> default 30
+        // for the notice period, restriction captured separately.
+        Opportunity opp = insertOpp('Consent Required', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Subprocessor_Notice_Period_Days' => null,
+            'Subprocessor_Restrictions' => 'Prior written consent required before changing subprocessors (MSA 10.5)'
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(30, row.Subprocessor_Notice_Period__c);
+        System.assert(row.Subprocessor_Restrictions__c.contains('consent'),
+            'Consent restriction should be captured: ' + row.Subprocessor_Restrictions__c);
     }
 
     @isTest

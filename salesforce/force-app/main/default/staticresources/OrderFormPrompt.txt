@@ -74,6 +74,7 @@ JSON SCHEMA (return exactly these keys):
   "Customer_Signer_Name": "full name as printed in the signature block" | null,
   "Customer_Signer_Title": "title/role of the customer signer" | null,
   "Subprocessor_Notice_Period_Days": number | null,
+  "Subprocessor_Restrictions": "short description (<=255 chars) of any non-standard subprocessor obligation, or null" | null,
   "Extract_Evidence": "structured evidence trail as described below, or null when nothing warrants explanation" | null
 }
 
@@ -85,6 +86,16 @@ SUBPROCESSOR NOTICE PERIOD:
   - Sometimes there is NO subprocessor-change notice period stated - return null in that case.
 - Search all attached documents (order form, MSA, DPA, riders) for the concept, not for a specific section number. Cue phrases: "Subprocessor", "sub-processor", "sub processor", "prior written notice", "add / remove / replace", "list of approved Subprocessors".
 - If multiple values conflict across documents, prefer the more specific / more recent one (Order Form special term > Rider > MSA); note the override in Special_Terms.
+- Return the plain day-count only. If the contract expresses the requirement as "prior written consent" / "approval" with NO day count, return null for Subprocessor_Notice_Period_Days (do NOT invent a number - Apex applies a default of 30). If it gives a day count, return it.
+
+SUBPROCESSOR_RESTRICTIONS (exceptional obligations):
+- Populate Subprocessor_Restrictions ONLY when the contract imposes something BEYOND simple advance notice. Examples that qualify:
+  - Prior written CONSENT or APPROVAL required before adding/changing a subprocessor (stronger than notice).
+  - A tiered or longer advance-notice period for certain subprocessors (e.g. "6 months prior notice for Service Providers with access to Customer Data").
+  - An explicit objection / opt-out / termination right tied to subprocessor changes.
+- Write a short (<=255 char) plain-English summary, e.g. "Prior written consent required before changing subprocessors (MSA 10.5)" or "6-month advance notice for Service Providers accessing Customer Data (Exhibit D)".
+- Leave null when the contract only requires ordinary advance notice (that case is fully captured by the day count).
+- This is independent of the day count: a deal can have BOTH a 30-day notice AND a consent restriction.
 
 EXTRACT_EVIDENCE FIELD:
 - Populate this ONLY for fields that required inference, computation, semantic search, or a picklist mapping - not for values that are obvious from the doc.

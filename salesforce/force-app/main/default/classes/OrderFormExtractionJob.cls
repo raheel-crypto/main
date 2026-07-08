@@ -454,10 +454,31 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
-        row.Subprocessor_Notice_Period__c = toDecimal(extracted.get('Subprocessor_Notice_Period_Days'));
-        row.Extract_Evidence__c = truncate((String) extracted.get('Extract_Evidence'), 32768);
+        populateSubprocessorFields(row, extracted);
         row.Pricing_Structure__c = derivePricingStructure(row);
         deriveEndDate(row);
+    }
+
+    @TestVisible private static final Integer DEFAULT_SUBPROCESSOR_NOTICE_DAYS = 30;
+
+    @TestVisible
+    private static void populateSubprocessorFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
+        row.Subprocessor_Restrictions__c = truncate((String) extracted.get('Subprocessor_Restrictions'), 255);
+
+        Decimal notice = toDecimal(extracted.get('Subprocessor_Notice_Period_Days'));
+        String evidence = (String) extracted.get('Extract_Evidence');
+        if (notice != null) {
+            row.Subprocessor_Notice_Period__c = notice;
+        } else {
+            // No explicit day count found: Rogo's standard is 30 days, so
+            // default rather than leaving it blank. Note the assumption in
+            // the evidence trail so Legal can tell defaulted from stated.
+            row.Subprocessor_Notice_Period__c = DEFAULT_SUBPROCESSOR_NOTICE_DAYS;
+            String note = '## Subprocessor_Notice_Period_Days\nDefaulted to ' +
+                DEFAULT_SUBPROCESSOR_NOTICE_DAYS + ' (no explicit day-count notice period found in the attached documents).';
+            evidence = String.isBlank(evidence) ? note : evidence + '\n\n' + note;
+        }
+        row.Extract_Evidence__c = truncate(evidence, 32768);
     }
 
     @TestVisible
