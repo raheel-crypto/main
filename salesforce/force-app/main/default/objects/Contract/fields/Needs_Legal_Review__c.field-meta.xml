@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Needs_Legal_Review__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Set true by ContractLegalTermsApplier when an upsell order form's legal terms conflict with the existing Contract. The conflicting fields are described in Reconciliation_Notes__c and were NOT auto-overwritten - a human must reconcile.</description>
+    <label>Needs Legal Review</label>
+    <type>Checkbox</type>
+</CustomField>
