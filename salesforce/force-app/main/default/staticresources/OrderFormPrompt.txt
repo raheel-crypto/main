@@ -75,8 +75,17 @@ JSON SCHEMA (return exactly these keys):
   "Customer_Signer_Title": "title/role of the customer signer" | null,
   "Subprocessor_Notice_Period_Days": number | null,
   "Subprocessor_Restrictions": "short description (<=255 chars) of any non-standard subprocessor obligation, or null" | null,
+  "Renewal_Fee_Escalator_Percent": number | null,
   "Extract_Evidence": "structured evidence trail as described below, or null when nothing warrants explanation" | null
 }
+
+RENEWAL FEE ESCALATOR:
+- Return the percentage by which fees increase at renewal, as a plain number (e.g. 5 for "increased by five percent (5%)", 3 for a 3% uplift).
+- The clause may be on the Order Form ("License Fees ... increased by five percent (5%)"), buried in the MSA renewal section, or absent entirely.
+- If the contract caps the increase as "the lesser of X% or CPI" (or "greater of"), return the stated numeric percent (X) and describe the full cap language in Extract_Evidence.
+- If renewal is at "Rogo's then-current list pricing" with NO stated percentage, return null (there is no fixed escalator) and note that in Extract_Evidence.
+- Return null when no renewal pricing terms are stated at all.
+- Always add an Extract_Evidence entry for this field when you return a non-null value or when the contract explicitly uses then-current-list-pricing.
 
 SUBPROCESSOR NOTICE PERIOD:
 - Return the number of DAYS of prior written notice Rogo must give the customer before adding / removing / replacing a Subprocessor. The standard Rogo-paper clause is 30 days and lives in a data-protection / privacy / subprocessor section of the MSA. But do NOT assume any specific section - customer paper varies:

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Renewal_Fee_Escalator__c</fullName>
+    <description>Percentage the fees increase at renewal (e.g. 5 for "increased by five percent (5%)"). May be stated on the Order Form, buried in the MSA, or absent. When the contract expresses a cap like "the lesser of 5% or CPI", store the stated numeric percent (5). Null when no renewal escalator is specified. Evidence recorded in Extract_Evidence__c.</description>
+    <label>Renewal Fee Escalator</label>
+    <precision>2</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Percent</type>
+</CustomField>

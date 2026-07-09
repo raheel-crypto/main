@@ -283,6 +283,56 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_populatesRenewalFeeEscalator() {
+        Opportunity opp = insertOpp('IB AI Platform', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Renewal_Fee_Escalator_Percent' => 5
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Renewal_Fee_Escalator__c FROM Order_Form_Extraction__c
+            WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(5, row.Renewal_Fee_Escalator__c);
+    }
+
+    @isTest
+    static void extractionJob_renewalEscalatorNullWhenAbsent() {
+        Opportunity opp = insertOpp('No Escalator', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Renewal_Fee_Escalator_Percent' => null
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Renewal_Fee_Escalator__c FROM Order_Form_Extraction__c
+            WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(null, row.Renewal_Fee_Escalator__c, 'No escalator -> null, not 0');
+    }
+
+    @isTest
     static void extractionJob_populatesSubprocessorAndEvidence() {
         Opportunity opp = insertOpp('Cantor Pilot', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OrderForm');

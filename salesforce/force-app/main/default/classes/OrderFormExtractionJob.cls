@@ -451,6 +451,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credits_Purchased__c = toDecimal(extracted.get('Credits_Purchased'));
         row.Credits_Period__c = mapCreditsPeriod((String) extracted.get('Credits_Period'));
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
+        row.Renewal_Fee_Escalator__c = toDecimal(extracted.get('Renewal_Fee_Escalator_Percent'));
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
