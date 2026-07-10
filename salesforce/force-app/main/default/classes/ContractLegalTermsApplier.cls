@@ -60,7 +60,7 @@ public with sharing class ContractLegalTermsApplier {
 
     @InvocableMethod(
         label='Apply Order Form Legal Terms to Contract'
-        description='Writes an order form extraction''s legal terms to the deal''s Contract; reconciles (never silently overwrites) on upsells.'
+        description='Writes order form legal terms to the deal Contract; reconciles (never silently overwrites) on upsells.'
         category='Sales'
     )
     public static List<Result> apply(List<Request> requests) {
