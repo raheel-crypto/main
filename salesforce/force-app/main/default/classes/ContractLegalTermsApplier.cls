@@ -120,6 +120,7 @@ public with sharing class ContractLegalTermsApplier {
             ]);
 
         Map<Id, Contract> toUpdate = new Map<Id, Contract>();
+        Map<Id, Id> ofeContractStamp = new Map<Id, Id>();   // OFE Id -> Contract it was applied to
         List<Result> results = new List<Result>();
 
         for (Request req : requests) {
@@ -153,10 +154,11 @@ public with sharing class ContractLegalTermsApplier {
                 ? reconcile(current, ofe, changes, log)
                 : freshWrite(current, ofe, changes, log);
 
-            changes.Source_Order_Form_Extraction__c = ofe.Id;
+            changes.Latest_Order_Form_Extraction__c = ofe.Id;
             changes.Reconciliation_Notes__c = truncate(String.join(log, '\n'), 32768);
             if (conflict) changes.Needs_Legal_Review__c = true;
             toUpdate.put(contractId, changes);
+            ofeContractStamp.put(ofe.Id, contractId);   // paper-trail link back to the OFE
 
             res.applied = true;
             res.needsReview = conflict;
@@ -165,6 +167,18 @@ public with sharing class ContractLegalTermsApplier {
         }
 
         if (!toUpdate.isEmpty()) update toUpdate.values();
+
+        // Stamp each OFE with the Contract it was applied to, so the Contract's
+        // "Order Form Extractions" related list shows the full chain (NB/Renewal
+        // that created it + every upsell). Correct even for upsells, since we
+        // used resolveDirectContract to find the base deal's contract.
+        if (!ofeContractStamp.isEmpty()) {
+            List<Order_Form_Extraction__c> stamps = new List<Order_Form_Extraction__c>();
+            for (Id ofeId : ofeContractStamp.keySet()) {
+                stamps.add(new Order_Form_Extraction__c(Id = ofeId, Applied_Contract__c = ofeContractStamp.get(ofeId)));
+            }
+            update stamps;
+        }
         return results;
     }
 

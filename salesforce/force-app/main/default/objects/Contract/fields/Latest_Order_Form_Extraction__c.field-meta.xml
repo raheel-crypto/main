@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Latest_Order_Form_Extraction__c</fullName>
+    <description>The most recent Order_Form_Extraction__c whose legal terms were applied to this Contract. Denormalized "what's current" pointer; the full history is the Contract's Order Form Extractions related list (OFE.Applied_Contract__c).</description>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <label>Latest Order Form Extraction</label>
+    <referenceTo>Order_Form_Extraction__c</referenceTo>
+    <relationshipLabel>Contracts (Latest)</relationshipLabel>
+    <relationshipName>Contracts_Latest</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

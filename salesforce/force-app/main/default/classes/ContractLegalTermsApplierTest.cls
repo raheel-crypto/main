@@ -76,7 +76,7 @@ private class ContractLegalTermsApplierTest {
         Contract after = [
             SELECT Renewal_Terms__c, Renewal_Fee_Escalator__c, Payment_Terms__c, Credit_Terms__c,
                    Subprocessor_Notice_Period__c, Special_Terms__c, ELA__c, Credit_Commit__c,
-                   Needs_Legal_Review__c, Source_Order_Form_Extraction__c
+                   Needs_Legal_Review__c, Latest_Order_Form_Extraction__c
             FROM Contract WHERE Id = :c.Id
         ];
         System.assertEquals('Auto-renew (90-day)', after.Renewal_Terms__c);
@@ -87,7 +87,11 @@ private class ContractLegalTermsApplierTest {
         System.assertEquals(true, after.ELA__c);
         System.assertEquals(true, after.Credit_Commit__c);
         System.assertEquals(false, after.Needs_Legal_Review__c);
-        System.assertEquals(ofe.Id, after.Source_Order_Form_Extraction__c);
+        System.assertEquals(ofe.Id, after.Latest_Order_Form_Extraction__c);
+
+        // Paper-trail link stamped back on the OFE.
+        Order_Form_Extraction__c ofeAfter = [SELECT Applied_Contract__c FROM Order_Form_Extraction__c WHERE Id = :ofe.Id];
+        System.assertEquals(c.Id, ofeAfter.Applied_Contract__c);
     }
 
     @isTest

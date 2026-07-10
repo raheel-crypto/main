@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Applied_Contract__c</fullName>
+    <description>The Contract this extraction's legal terms were applied to. Stamped by ContractLegalTermsApplier (which resolves the correct contract even for upsells that amend the base deal's contract), or set in Flow. Produces the "Order Form Extractions" related list on the Contract - the full paper trail of the NB/Renewal that created the contract plus every upsell that amended it.</description>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <label>Applied Contract</label>
+    <referenceTo>Contract</referenceTo>
+    <relationshipLabel>Order Form Extractions</relationshipLabel>
+    <relationshipName>Order_Form_Extractions</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>
