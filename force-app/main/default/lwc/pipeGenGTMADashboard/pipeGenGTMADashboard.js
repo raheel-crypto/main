@@ -8,6 +8,7 @@ import getGTMAAccountsForSelection   from '@salesforce/apex/PipeGenGTMAControlle
 import updateGTMATargetAccounts      from '@salesforce/apex/PipeGenGTMAController.updateGTMATargetAccounts';
 import carryForwardGTMACommits       from '@salesforce/apex/PipeGenGTMAController.carryForwardGTMACommits';
 import getPriorWeekCommits           from '@salesforce/apex/PipeGenGTMAController.getPriorWeekCommits';
+import massCreateMeetingCommits      from '@salesforce/apex/PipeGenGTMAController.massCreateMeetingCommits';
 import searchAllAccounts             from '@salesforce/apex/PipeGenGTMAController.searchAllAccounts';
 import addGTMA2Target                from '@salesforce/apex/PipeGenGTMAController.addGTMA2Target';
 import removeGTMA2Target             from '@salesforce/apex/PipeGenGTMAController.removeGTMA2Target';
@@ -46,6 +47,7 @@ export default class PipeGenGTMADashboard extends LightningElement {
     @track showCommitForm       = false;
     @track isSaving             = false;
     @track isCarryingForward    = false;
+    @track isMassCreating       = false;
     @track showCarryModal       = false;
     @track carryModalCommits    = [];
     @track isLoadingCarry       = false;
@@ -184,6 +186,8 @@ export default class PipeGenGTMADashboard extends LightningElement {
         return '↷ Carry Forward';
     }
     get showCarryForward() { return true; }
+    get showMassCreate()   { return this.hasAccounts; }
+    get massCreateLabel()  { return `⚡ Book Meetings (${this.data?.targetAccounts?.length || 0})`; }
 
     // ─── Computed — carry-forward modal ────────────────────────────────────────────
     get carryModalTitle() {
@@ -484,6 +488,24 @@ export default class PipeGenGTMADashboard extends LightningElement {
             };
         } catch (err) {
             this.toast('Error', 'Could not update commit status.', 'error');
+        }
+    }
+
+    async handleMassCreate() {
+        this.isMassCreating = true;
+        try {
+            const created = await massCreateMeetingCommits({ weekOffset: this.selectedWeekOffset });
+            const count   = Array.isArray(created) ? created.length : 0;
+            if (count > 0) {
+                await this.loadData();
+                this.toast('Commits Created', `${count} Meeting Booked commit${count === 1 ? '' : 's'} created — one per target account.`, 'success');
+            } else {
+                this.toast('Nothing to Create', 'Every target account already has a Meeting Booked commit this week.', 'info');
+            }
+        } catch (e) {
+            this.toast('Error', e.body?.message || 'Could not create commits.', 'error');
+        } finally {
+            this.isMassCreating = false;
         }
     }
 

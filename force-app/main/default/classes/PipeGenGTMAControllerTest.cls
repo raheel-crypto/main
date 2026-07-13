@@ -469,6 +469,57 @@ private class PipeGenGTMAControllerTest {
         System.assertEquals(0, carried.size(), 'No commits to carry — should return empty list');
     }
 
+    // ─── massCreateMeetingCommits Tests ──────────────────────────────────────────
+
+    @IsTest
+    static void testMassCreate_oneCommitPerTargetAccount() {
+        User gtma = makeGTMAUser();
+        Account a1, a2, a3;
+        System.runAs(gtma) {
+            a1 = makeAccount(gtma.Id, true,  'Prospect');
+            a2 = makeAccount(gtma.Id, true,  'Customer');
+            a3 = makeAccount(gtma.Id, false, 'Prospect'); // NOT a target — should be skipped
+        }
+
+        Test.startTest();
+        List<Weekly_Commit__c> created;
+        System.runAs(gtma) {
+            created = PipeGenGTMAController.massCreateMeetingCommits(0);
+        }
+        Test.stopTest();
+
+        System.assertEquals(2, created.size(), 'One commit per targeted account (non-target excluded)');
+        for (Weekly_Commit__c c : created) {
+            System.assertEquals('Meeting Booked', c.Commit_Type__c, 'Type should be Meeting Booked');
+            System.assertEquals(1, c.Committed_Count__c, 'Count should be 1');
+            System.assertNotEquals(null, c.Target_Account__c, 'Should be tied to an account');
+        }
+    }
+
+    @IsTest
+    static void testMassCreate_skipsAccountsAlreadyCommitted() {
+        User gtma = makeGTMAUser();
+        Date weekStart = PipeGenGTMAController.getWeekStart(Date.today());
+        Account a1;
+        System.runAs(gtma) {
+            a1 = makeAccount(gtma.Id, true, 'Prospect');
+            makeAccount(gtma.Id, true, 'Customer');
+            // Pre-existing Meeting Booked commit on a1 this week
+            Weekly_Commit__c pre = makeCommit(gtma.Id, weekStart, 'Meeting Booked', 'Not Started');
+            pre.Target_Account__c = a1.Id;
+            update pre;
+        }
+
+        Test.startTest();
+        List<Weekly_Commit__c> created;
+        System.runAs(gtma) {
+            created = PipeGenGTMAController.massCreateMeetingCommits(0);
+        }
+        Test.stopTest();
+
+        System.assertEquals(1, created.size(), 'Only the account without an existing commit should get one');
+    }
+
     // ─── getWeekStart Tests ──────────────────────────────────────────────────────
 
     @IsTest

@@ -500,6 +500,69 @@ public with sharing class PipeGenGTMAController {
         ];
     }
 
+    // Bulk-creates a standard "Meeting Booked" commit (count 1, generic
+    // description) for every target account that does not already have one this
+    // week. Streamlines the common GTMA1 workflow of committing to book a
+    // meeting on each of their 20-30 target accounts.
+    @AuraEnabled
+    public static List<Weekly_Commit__c> massCreateMeetingCommits(Integer weekOffset) {
+        Integer safeOffset = (weekOffset == null) ? 0 : Math.max(-1, Math.min(1, weekOffset));
+        Id      userId     = UserInfo.getUserId();
+        Date    weekStart  = getWeekStart(Date.today()).addDays(safeOffset * 7);
+        Boolean isGTMA2    = isGTMA2User(userId);
+
+        List<Account> targets;
+        if (isGTMA2) {
+            Set<Id> coveredIds = getAllGTMA2AccountIds(userId);
+            targets = coveredIds.isEmpty() ? new List<Account>() : [
+                SELECT Id, Name FROM Account WHERE Id IN :coveredIds ORDER BY Name ASC LIMIT 1200
+            ];
+        } else {
+            targets = [
+                SELECT Id, Name FROM Account
+                WHERE GTM_Associate__c = :userId AND GTMA_Target_Account__c = true
+                ORDER BY Name ASC LIMIT 1200
+            ];
+        }
+        if (targets.isEmpty()) return new List<Weekly_Commit__c>();
+
+        // Skip accounts that already have a Meeting Booked commit this week
+        Set<Id> alreadyCommitted = new Set<Id>();
+        for (Weekly_Commit__c c : [
+            SELECT Target_Account__c FROM Weekly_Commit__c
+            WHERE Rep__c = :userId
+              AND Week_Start_Date__c = :weekStart
+              AND Commit_Type__c = 'Meeting Booked'
+              AND Target_Account__c != null
+        ]) { alreadyCommitted.add(c.Target_Account__c); }
+
+        List<Weekly_Commit__c> toInsert = new List<Weekly_Commit__c>();
+        for (Account a : targets) {
+            if (alreadyCommitted.contains(a.Id)) continue;
+            toInsert.add(new Weekly_Commit__c(
+                Rep__c                = userId,
+                Week_Start_Date__c    = weekStart,
+                Motion_Type__c        = 'GTMA Activity',
+                Commit_Type__c        = 'Meeting Booked',
+                Commit_Description__c = 'Book meeting with senior persona at ' + a.Name,
+                Target_Account__c     = a.Id,
+                Committed_Count__c    = 1
+            ));
+        }
+        if (toInsert.isEmpty()) return new List<Weekly_Commit__c>();
+        insert toInsert;
+
+        return [
+            SELECT Id, Week_Start_Date__c, Commit_Type__c, Commit_Description__c,
+                   Target_Account__c, Target_Account__r.Name,
+                   Committed_Count__c, Actual_Count__c,
+                   Completion_Status__c, Notes__c, Manager_Note__c, At_Risk__c
+            FROM Weekly_Commit__c
+            WHERE Id IN :toInsert
+            ORDER BY Target_Account__r.Name ASC
+        ];
+    }
+
     @AuraEnabled
     public static void deleteCommit(Id commitId) {
         delete new Weekly_Commit__c(Id = commitId);
@@ -619,16 +682,23 @@ public with sharing class PipeGenGTMAController {
         }
 
         // Event-based verification
+        // A "Meeting Booked" commit is satisfied either by a meeting that OCCURS
+        // in the commit week (ActivityDate) OR one that was BOOKED in the commit
+        // week for a later date (CreatedDate). GTMAs commonly book meetings this
+        // week that take place in a future week, so matching ActivityDate alone
+        // caused those commits to never auto-complete.
         Map<Id, List<String>> meetingsByAcct = new Map<Id, List<String>>();
         if (!meetingAcctIds.isEmpty()) {
+            DateTime weekStartDT = DateTime.newInstance(weekStart, Time.newInstance(0, 0, 0, 0));
+            DateTime weekEndDT   = DateTime.newInstance(weekEnd.addDays(1), Time.newInstance(0, 0, 0, 0));
             for (Event e : [
                 SELECT Meeting_Type__c, AccountId
                 FROM Event
                 WHERE OwnerId = :userId
-                  AND ActivityDate >= :weekStart
-                  AND ActivityDate <= :weekEnd
                   AND Meeting_Type__c != null
                   AND AccountId IN :meetingAcctIds
+                  AND ( (ActivityDate >= :weekStart AND ActivityDate <= :weekEnd)
+                        OR (CreatedDate >= :weekStartDT AND CreatedDate < :weekEndDT) )
             ]) {
                 if (!meetingsByAcct.containsKey(e.AccountId))
                     meetingsByAcct.put(e.AccountId, new List<String>());

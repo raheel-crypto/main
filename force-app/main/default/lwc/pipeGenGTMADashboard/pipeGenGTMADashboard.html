@@ -162,6 +162,9 @@
                                     This Week&rsquo;s Activity Commits
                                 </div>
                                 <div class="slds-grid slds-grid_vertical-align-center">
+                                    <template lwc:if={showMassCreate}>
+                                        <lightning-button label={massCreateLabel} variant="neutral" size="small" onclick={handleMassCreate} disabled={isMassCreating} class="slds-m-right_x-small" title="Create a Meeting Booked commit for every target account"></lightning-button>
+                                    </template>
                                     <template lwc:if={showCarryForward}>
                                         <lightning-button label={carryForwardLabel} variant="neutral" size="small" onclick={handleCarryForward} disabled={isCarryingForward} class="slds-m-right_x-small"></lightning-button>
                                     </template>
