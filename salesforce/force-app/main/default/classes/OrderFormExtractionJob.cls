@@ -247,7 +247,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             '- Opportunity Type: ' + type + '\n' +
             '- Close Date: ' + closeDate + '\n' +
             '- Current-deal documents attached: ' + numCurrent + '\n' +
-            '- Current-deal file name(s) (HINT ONLY for customer/billing entity, not authoritative): ' +
+            '- Current-deal file name(s) (WEAK last-resort hint only - filenames are often wrong/stale and can name the wrong entity; never prefer over the document body): ' +
                 (String.isBlank(currentFileNames) ? 'n/a' : currentFileNames) + '\n' +
             '- Parent-contract context documents attached: ' + numBase;
         if (baseName != null) s += ' (from base Opportunity "' + baseName + '")';

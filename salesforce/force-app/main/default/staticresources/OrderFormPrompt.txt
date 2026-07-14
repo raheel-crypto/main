@@ -122,13 +122,19 @@ EXTRACT_EVIDENCE FIELD:
 
 BILLING ENTITY (contracting party) GUIDANCE:
 - Billing_Entity_Name is the specific LEGAL entity that contracts and pays - the customer party to the agreement. It is frequently NOT the common brand name and NOT the Salesforce account. E.g. the contracting party may be "Macquarie Group Services Australia Pty Ltd" or "Macquarie Global Services (USA) LLC" even though the customer is known simply as "Macquarie".
-- Find it in this order of preference: (1) the labeled "Customer:" field; (2) the preamble/recital ("This Agreement is between <Entity> and Rogo Technologies, Inc."); (3) the signature block (the entity above the customer signatory); (4) the attached file names listed in DEAL CONTEXT, which often contain the entity/customer name - treat filenames as a HINT only, lower confidence than the document body.
+- Find it in this order of preference, HIGHEST confidence first:
+  (1) the labeled "Customer:" field;
+  (2) the preamble/recital ("This Agreement is between <Entity> and Rogo Technologies, Inc.");
+  (3) the signature block (the entity typed above/beside the customer signatory).
+- WATCH FOR E-SIGNATURE (DocuSign) OVERLAYS: on signed order forms the filled-in field values are often placed by the e-sign overlay and may appear DETACHED from their printed labels - typically clustered near the signature block and run together with adjacent fields (address, phone, contact name, entity name, emails all concatenated). Reconstruct them: the entity name is the company-looking token (ends in Inc / LLC / Ltd / Pty Ltd / GmbH, etc.) sitting among the address/phone/email values. So a "Customer:" label that looks blank inline is usually NOT blank - the value is in the overlay cluster.
+- CORROBORATE with the Accounts Payable / billing email DOMAIN. If the AP email is lft@luckyhand.capital, the entity is almost certainly "Lucky Hand Group", not something else.
+- FILENAMES ARE A LAST RESORT AND CAN BE WRONG. The file name in DEAL CONTEXT is a weak hint only - reps misname files, and the name may reference a related company, a prior deal, or the wrong entity entirely (a file named "..._Beamonte_Investments..." can hold a contract whose actual party is "Lucky Hand Group Inc"). NEVER prefer the filename over any entity name found in the document body, including overlay values. Only fall back to the filename when the document body genuinely contains no entity name anywhere, and when you do, say so in Extract_Evidence and mark it low confidence.
 - Capture the full legal name including the suffix (Pty Ltd, LLC, GmbH, Inc., S.L.U., Ltd, etc.).
 - Billing_Entity_Reg_Id: capture any registration/company number stated next to the entity (Australian ABN, UK company number, EU VAT). This is valuable for deduping entities - always include it when present.
 - Billing_Entity_Address: the Bill to / Billing Address block.
 - Billing_Entity_Jurisdiction: state/country of incorporation if stated ("a Delaware corporation", "ABN" implies Australia, "GmbH" implies Germany). Only when reasonably clear.
-- If the labeled Customer field is blank but the entity appears elsewhere (preamble, signature block, filename), use that. If it genuinely cannot be determined, return null - do not guess a brand name.
-- Add an Extract_Evidence entry for Billing_Entity_Name when it came from anywhere other than a clearly labeled "Customer:" field (preamble, signature block, or filename), noting the source and your confidence.
+- If it genuinely cannot be determined from the document body or a corroborated signal, return null - do not guess a brand name and do not blindly trust the filename.
+- Add an Extract_Evidence entry for Billing_Entity_Name whenever it came from anywhere other than a cleanly labeled inline "Customer:" value - note the source (overlay cluster / preamble / signature block / AP-email corroboration / filename) and your confidence.
 
 SIGNATURE BLOCK GUIDANCE:
 - Pull the signature dates from the DocuSign envelope stamps, the "Date:" line under each signature, or wherever the doc records when each party signed. Return ISO YYYY-MM-DD.
