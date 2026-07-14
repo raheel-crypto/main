@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Billing_Entity_Name__c</fullName>
+    <description>The legal contracting party / billing entity named on the order form (e.g. "Macquarie Group Services Australia Pty Ltd"). This is frequently NOT the Salesforce Account name, which is usually the common brand (Macquarie, Barclays). Extracted from the Customer field, the preamble ("between X and Rogo"), or the signature block. Used to relate the deal to a billing-entity object distinct from the Account.</description>
+    <label>Billing Entity Name</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

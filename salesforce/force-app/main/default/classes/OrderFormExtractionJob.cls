@@ -233,7 +233,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     @TestVisible
-    private static String buildDealContext(Id currentOppId, Opportunity parentOpp, Integer numCurrent, Integer numBase) {
+    private static String buildDealContext(Id currentOppId, Opportunity parentOpp, Integer numCurrent, Integer numBase, String currentFileNames) {
         String name = (parentOpp != null && String.isNotBlank(parentOpp.Name)) ? parentOpp.Name : 'unknown';
         String type = (parentOpp != null && String.isNotBlank(parentOpp.Type)) ? parentOpp.Type : 'unspecified';
         String closeDate = (parentOpp != null && parentOpp.CloseDate != null) ? String.valueOf(parentOpp.CloseDate) : 'unknown';
@@ -247,6 +247,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             '- Opportunity Type: ' + type + '\n' +
             '- Close Date: ' + closeDate + '\n' +
             '- Current-deal documents attached: ' + numCurrent + '\n' +
+            '- Current-deal file name(s) (HINT ONLY for customer/billing entity, not authoritative): ' +
+                (String.isBlank(currentFileNames) ? 'n/a' : currentFileNames) + '\n' +
             '- Parent-contract context documents attached: ' + numBase;
         if (baseName != null) s += ' (from base Opportunity "' + baseName + '")';
         s += '\n\nIMPORTANT: Extract THE CURRENT deal. If parent-contract documents are present, treat them as CONTEXT ONLY ' +
@@ -314,10 +316,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         List<Object> content = new List<Object>();
 
         // Deal context header so Claude knows WHICH deal it's extracting.
+        List<String> currentTitles = new List<String>();
+        for (ContentVersion cv : currentFiles) if (String.isNotBlank(cv.Title)) currentTitles.add(cv.Title);
         content.add(new Map<String, Object>{
             'type' => 'text',
             'text' => buildDealContext(currentOppId, parentOpp,
-                                       currentFiles.size(), baseFiles.size())
+                                       currentFiles.size(), baseFiles.size(),
+                                       String.join(currentTitles, ', '))
         });
 
         // Current deal docs first, labeled.
@@ -452,6 +457,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credits_Period__c = mapCreditsPeriod((String) extracted.get('Credits_Period'));
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
         row.Renewal_Fee_Escalator__c = toDecimal(extracted.get('Renewal_Fee_Escalator_Percent'));
+        row.Billing_Entity_Name__c = truncate((String) extracted.get('Billing_Entity_Name'), 255);
+        row.Billing_Entity_Reg_Id__c = truncate((String) extracted.get('Billing_Entity_Reg_Id'), 100);
+        row.Billing_Entity_Address__c = truncate((String) extracted.get('Billing_Entity_Address'), 255);
+        row.Billing_Entity_Jurisdiction__c = truncate((String) extracted.get('Billing_Entity_Jurisdiction'), 100);
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);

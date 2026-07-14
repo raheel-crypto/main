@@ -283,6 +283,38 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_populatesBillingEntity() {
+        Opportunity opp = insertOpp('Macquarie Expansion', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__MacCap_Order');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Upsell',
+            'Billing_Entity_Name' => 'Macquarie Group Services Australia Pty Ltd',
+            'Billing_Entity_Reg_Id' => 'ABN 53 116 467 031',
+            'Billing_Entity_Address' => '50 Martin Place, Sydney NSW 2000',
+            'Billing_Entity_Jurisdiction' => 'Australia'
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Billing_Entity_Name__c, Billing_Entity_Reg_Id__c,
+                   Billing_Entity_Address__c, Billing_Entity_Jurisdiction__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals('Macquarie Group Services Australia Pty Ltd', row.Billing_Entity_Name__c);
+        System.assertEquals('ABN 53 116 467 031', row.Billing_Entity_Reg_Id__c);
+        System.assertEquals('50 Martin Place, Sydney NSW 2000', row.Billing_Entity_Address__c);
+        System.assertEquals('Australia', row.Billing_Entity_Jurisdiction__c);
+    }
+
+    @isTest
     static void extractionJob_populatesRenewalFeeEscalator() {
         Opportunity opp = insertOpp('IB AI Platform', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OrderForm');
