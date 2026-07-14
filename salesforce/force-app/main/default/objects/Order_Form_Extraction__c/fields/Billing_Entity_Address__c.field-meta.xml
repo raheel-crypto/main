@@ -5,6 +5,5 @@
     <label>Billing Entity Address</label>
     <length>255</length>
     <required>false</required>
-    <type>Text</type>
-    <unique>false</unique>
+    <type>TextArea</type>
 </CustomField>
