@@ -320,7 +320,7 @@ export async function architectChat(
   }));
 
   let response = await client.messages.create({
-    model: "claude-sonnet-5-20250514",
+    model: "claude-sonnet-5-20250620",
     max_tokens: 8192,
     system: SYSTEM_PROMPT,
     tools: allTools,
@@ -370,7 +370,7 @@ export async function architectChat(
     anthropicMessages.push({ role: "user", content: toolResults as any });
 
     response = await client.messages.create({
-      model: "claude-sonnet-5-20250514",
+      model: "claude-sonnet-5-20250620",
       max_tokens: 8192,
       system: SYSTEM_PROMPT,
       tools: allTools,
