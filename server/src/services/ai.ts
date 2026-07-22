@@ -68,8 +68,7 @@ Referenced Fields: ${flow.referencedFields.join(", ") || "None"}`;
     messages: [{ role: "user", content: userMessage }],
   });
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  const text = response.content.find(b => b.type === "text")?.text ?? "";
   return parseAIResponse(text);
 }
 
@@ -106,8 +105,7 @@ ${body}
     messages: [{ role: "user", content: userMessage }],
   });
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  const text = response.content.find(b => b.type === "text")?.text ?? "";
   return parseAIResponse(text);
 }
 
@@ -166,8 +164,8 @@ Please provide a thorough assessment with specific, actionable remediation steps
     messages: [{ role: "user", content: userMessage }],
   });
 
-  const text =
-    response.content[0].type === "text" ? response.content[0].text : "";
+  console.log("[ai] Full content structure:", JSON.stringify(response.content));
+  const text = response.content.find(b => b.type === "text")?.text ?? "";
   console.log("[ai] Response length:", text.length, "| first 300 chars:", text.substring(0, 300));
   return parseAIResponse(text);
 }
