@@ -6,8 +6,8 @@
 
         <div class="slds-p-horizontal_medium">
             <p class="slds-text-body_small slds-text-color_weak slds-m-bottom_x-small">
-                Safe-tier groups with no Customer accounts and no open opps/renewals/contracts.
-                Suggested master = most recently active member (greyed name marked "suggested").
+                Groups with no open opps, renewals, or contracts — safe for unattended merge.
+                Suggested master = most recently active member (or Customer when using single-customer mode).
             </p>
 
             <div class="slds-grid slds-gutters_x-small slds-grid_vertical-align-end slds-m-bottom_x-small">
@@ -108,6 +108,48 @@
                     No eligible groups in the most-recent completed scan. Try the scanner — anything
                     here that ended up Manual or Review tier needs eyes-on review and won't auto-merge.
                 </p>
+            </template>
+
+            <!-- Recently processed section -->
+            <template lwc:if={hasRecentResults}>
+                <div class="bulk-recent slds-m-top_medium">
+                    <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_x-small">
+                        <h3 class="slds-grow slds-text-heading_small">Recently processed</h3>
+                        <span class="slds-text-body_small slds-text-color_weak slds-m-right_small">{recentSummary}</span>
+                        <template lwc:if={hasPendingRecent}>
+                            <lightning-spinner size="x-small" alternative-text="Drainer running"
+                                class="slds-m-right_small"></lightning-spinner>
+                        </template>
+                        <lightning-button-icon icon-name="utility:refresh" size="x-small"
+                            alternative-text="Refresh status" title="Refresh status"
+                            onclick={handleRefreshRecent}
+                            disabled={recentLoading}></lightning-button-icon>
+                    </div>
+                    <table class="slds-table slds-table_bordered slds-table_cell-buffer slds-table_col-bordered bulk-recent__table">
+                        <thead>
+                            <tr class="slds-line-height_reset">
+                                <th style="width: 9rem;">Status</th>
+                                <th>Match key</th>
+                                <th style="width: 9rem;">Scenario</th>
+                                <th style="width: 3rem;">#</th>
+                                <th>Error / note</th>
+                                <th style="width: 11rem;">Updated</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template for:each={recentRows} for:item="r">
+                                <tr key={r.groupId}>
+                                    <td><span class={r.statusClass}>{r.statusLabel}</span></td>
+                                    <td class="bulk-recent__key">{r.matchKey}</td>
+                                    <td>{r.scenarioLabel}</td>
+                                    <td>{r.memberCount}</td>
+                                    <td class="bulk-recent__error">{r.displayError}</td>
+                                    <td class="slds-text-body_small slds-text-color_weak">{r.lastModifiedDisplay}</td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
             </template>
         </div>
     </lightning-card>

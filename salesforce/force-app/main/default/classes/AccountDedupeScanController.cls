@@ -884,6 +884,62 @@ public with sharing class AccountDedupeScanController {
         return out;
     }
 
+    public class RecentResult {
+        @AuraEnabled public Id groupId;
+        @AuraEnabled public String groupName;
+        @AuraEnabled public String matchKey;
+        @AuraEnabled public String scenarioLabel;
+        @AuraEnabled public Integer memberCount;
+        @AuraEnabled public String status;
+        @AuraEnabled public String errorMessage;
+        @AuraEnabled public DateTime lastModifiedDate;
+    }
+
+    /**
+     * Returns all non-Open groups for the given scan (or the latest completed
+     * scan), ordered by LastModifiedDate DESC. Used by the bulk merge UI to
+     * show outcomes after queueing without requiring the user to leave the page.
+     */
+    @AuraEnabled(cacheable=false)
+    public static List<RecentResult> getRecentlyProcessed(Id scanId, Integer maxResults) {
+        Integer cap = (maxResults == null || maxResults <= 0) ? 100 : Math.min(maxResults, 500);
+
+        Id targetScanId = scanId;
+        if (targetScanId == null) {
+            List<Dedupe_Scan__c> latest = [
+                SELECT Id FROM Dedupe_Scan__c
+                WHERE Status__c = 'Completed'
+                ORDER BY Completed_At__c DESC NULLS LAST, CreatedDate DESC
+                LIMIT 1
+            ];
+            if (latest.isEmpty()) return new List<RecentResult>();
+            targetScanId = latest[0].Id;
+        }
+
+        List<RecentResult> out = new List<RecentResult>();
+        for (Dedupe_Group__c g : [
+            SELECT Id, Name, Match_Key__c, Scenario_Label__c, Member_Count__c,
+                   Status__c, Error_Message__c, LastModifiedDate
+            FROM Dedupe_Group__c
+            WHERE Scan__c = :targetScanId
+              AND Status__c != 'Open'
+            ORDER BY LastModifiedDate DESC NULLS LAST
+            LIMIT :cap
+        ]) {
+            RecentResult r = new RecentResult();
+            r.groupId = g.Id;
+            r.groupName = g.Name;
+            r.matchKey = g.Match_Key__c;
+            r.scenarioLabel = g.Scenario_Label__c;
+            r.memberCount = g.Member_Count__c == null ? 0 : g.Member_Count__c.intValue();
+            r.status = g.Status__c;
+            r.errorMessage = g.Error_Message__c;
+            r.lastModifiedDate = g.LastModifiedDate;
+            out.add(r);
+        }
+        return out;
+    }
+
     private static Map<Id, Integer> countByAccount(List<AggregateResult> rows) {
         Map<Id, Integer> m = new Map<Id, Integer>();
         for (AggregateResult ar : rows) {

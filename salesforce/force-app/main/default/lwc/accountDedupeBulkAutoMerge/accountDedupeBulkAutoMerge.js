@@ -2,6 +2,7 @@ import { LightningElement, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getBulkMergeCandidates from '@salesforce/apex/AccountDedupeScanController.getBulkMergeCandidates';
 import queueGroupsForMerge from '@salesforce/apex/AccountDedupeScanController.queueGroupsForMerge';
+import getRecentlyProcessed from '@salesforce/apex/AccountDedupeScanController.getRecentlyProcessed';
 
 const SCENARIO_FILTER_OPTIONS = [
     { label: 'Exact Website (default)', value: 'exactWebsite' },
@@ -18,6 +19,14 @@ const CUSTOMER_MODE_OPTIONS = [
     { label: 'Single customer (customer becomes master)', value: 'singleCustomer' }
 ];
 
+const STATUS_META = {
+    Resolved:    { label: 'Resolved',     cls: 'bulk-pill bulk-pill--resolved' },
+    Failed:      { label: 'Failed',       cls: 'bulk-pill bulk-pill--failed' },
+    NeedsReview: { label: 'Needs review', cls: 'bulk-pill bulk-pill--needsreview' },
+    Queued:      { label: 'Queued',       cls: 'bulk-pill bulk-pill--queued' },
+    Processing:  { label: 'Processing',   cls: 'bulk-pill bulk-pill--processing' }
+};
+
 export default class AccountDedupeBulkAutoMerge extends LightningElement {
     @track loading = false;
     @track queueing = false;
@@ -31,11 +40,20 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
     @track scenarioFilter = 'exactWebsite';
     @track customerMode = 'noCustomers';
 
+    @track recentResults = [];
+    @track recentLoading = false;
+    _scanId = null;
+    _pollTimer = null;
+
     scenarioFilterOptions = SCENARIO_FILTER_OPTIONS;
     customerModeOptions = CUSTOMER_MODE_OPTIONS;
 
     connectedCallback() {
         this.load();
+    }
+
+    disconnectedCallback() {
+        this._stopPolling();
     }
 
     handleScenarioFilterChange(event) {
@@ -58,11 +76,11 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
                 customerMode: this.customerMode,
                 maxResults: 100
             });
+            this._scanId = res.scanId || null;
             this.scanName = res.scanName;
             this.totalOpenGroups = res.totalOpenGroups || 0;
             this.eligibleCount = res.eligibleCount || 0;
             this.candidates = res.candidates || [];
-            // Seed master picks with the suggested master for every candidate.
             const masters = {};
             const skipped = {};
             for (const c of this.candidates) {
@@ -75,6 +93,34 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
             this.error = this.extractError(e);
         } finally {
             this.loading = false;
+        }
+        await this.loadRecent();
+    }
+
+    async loadRecent() {
+        this.recentLoading = true;
+        try {
+            const rows = await getRecentlyProcessed({ scanId: this._scanId, maxResults: 100 });
+            this.recentResults = rows || [];
+        } catch (e) {
+            // non-critical — don't surface as main error
+        } finally {
+            this.recentLoading = false;
+        }
+    }
+
+    _startPolling() {
+        this._stopPolling();
+        this._pollTimer = setInterval(async () => {
+            await this.loadRecent();
+            if (!this._hasPendingRecent) this._stopPolling();
+        }, 5000);
+    }
+
+    _stopPolling() {
+        if (this._pollTimer != null) {
+            clearInterval(this._pollTimer);
+            this._pollTimer = null;
         }
     }
 
@@ -91,6 +137,10 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
 
     handleRefresh() {
         this.load();
+    }
+
+    handleRefreshRecent() {
+        this.loadRecent();
     }
 
     async handleQueueAll() {
@@ -117,10 +167,11 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
             const n = await queueGroupsForMerge({ requests });
             this.toast(
                 `Queued ${n} group${n === 1 ? '' : 's'}`,
-                'Watch the scanner for status. The drainer runs in the background.',
+                'Status updates appear below as the drainer runs.',
                 'success'
             );
             await this.load();
+            this._startPolling();
         } catch (e) {
             this.toast('Bulk queue failed', this.extractError(e), 'error');
         } finally {
@@ -130,6 +181,18 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
 
     get hasCandidates() {
         return this.candidates && this.candidates.length > 0;
+    }
+
+    get hasRecentResults() {
+        return this.recentResults && this.recentResults.length > 0;
+    }
+
+    get _hasPendingRecent() {
+        return this.recentResults.some(r => r.status === 'Queued' || r.status === 'Processing');
+    }
+
+    get hasPendingRecent() {
+        return this._hasPendingRecent;
     }
 
     get headlineLabel() {
@@ -153,6 +216,35 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
             if (this.masterByGroup[c.groupId]) n += 1;
         }
         return n;
+    }
+
+    get recentSummary() {
+        const counts = {};
+        for (const r of this.recentResults) {
+            counts[r.status] = (counts[r.status] || 0) + 1;
+        }
+        const parts = [];
+        if (counts.Resolved)    parts.push(`${counts.Resolved} resolved`);
+        if (counts.Failed)      parts.push(`${counts.Failed} failed`);
+        if (counts.NeedsReview) parts.push(`${counts.NeedsReview} needs review`);
+        if (counts.Queued)      parts.push(`${counts.Queued} queued`);
+        if (counts.Processing)  parts.push(`${counts.Processing} processing`);
+        return parts.join(' · ');
+    }
+
+    get recentRows() {
+        return this.recentResults.map((r) => {
+            const meta = STATUS_META[r.status] || { label: r.status, cls: 'bulk-pill' };
+            return {
+                ...r,
+                statusLabel: meta.label,
+                statusClass: meta.cls,
+                lastModifiedDisplay: r.lastModifiedDate
+                    ? new Date(r.lastModifiedDate).toLocaleString()
+                    : '—',
+                displayError: r.errorMessage || ''
+            };
+        });
     }
 
     get candidateRows() {
