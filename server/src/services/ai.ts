@@ -170,26 +170,58 @@ Please provide a thorough assessment with specific, actionable remediation steps
   return parseAIResponse(text);
 }
 
-function parseAIResponse(text: string): AIExplanation {
-  // Strip markdown code fences
-  const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-  console.log("[ai] parseAIResponse cleaned[0..300]:", cleaned.substring(0, 300));
+// Escape literal control characters inside JSON string values so JSON.parse
+// doesn't choke on newlines / tabs that the model forgot to escape.
+function sanitizeJsonLiterals(s: string): string {
+  let out = "";
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (escape) { out += ch; escape = false; continue; }
+    if (ch === "\\") { out += ch; escape = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (inString) {
+      if (ch === "\n") { out += "\\n"; continue; }
+      if (ch === "\r") { out += "\\r"; continue; }
+      if (ch === "\t") { out += "\\t"; continue; }
+    }
+    out += ch;
+  }
+  return out;
+}
 
-  // Strategy 1: direct JSON.parse on the cleaned string
+function extractParsed(raw: string): AIExplanation | null {
+  const sanitized = sanitizeJsonLiterals(raw);
   try {
-    const parsed = JSON.parse(cleaned);
-    if (parsed && typeof parsed === "object") {
+    const parsed = JSON.parse(sanitized);
+    if (parsed && typeof parsed === "object" && parsed.summary) {
+      const items = (parsed.objectsAndFields || []).map((item: any) => ({
+        object: item.object || item.pillar || item.name || "",
+        fields: item.fields || [],
+      }));
       return {
         summary: parsed.summary || "",
         details: parsed.details || "",
-        objectsAndFields: parsed.objectsAndFields || [],
+        objectsAndFields: items,
         suggestions: parsed.suggestions || [],
       };
     }
-  } catch (_) {}
+  } catch (e) {
+    console.log("[ai] JSON.parse failed:", (e as Error).message);
+  }
+  return null;
+}
 
-  // Strategy 2: extract the outermost {...} block and parse it
-  // Use a manual brace counter so nested braces in string values don't mislead us
+function parseAIResponse(text: string): AIExplanation {
+  // Strip markdown code fences
+  const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+
+  // Strategy 1: direct parse on cleaned text
+  const direct = extractParsed(cleaned);
+  if (direct) return direct;
+
+  // Strategy 2: find the outermost {...} block using brace-depth tracking
   const start = cleaned.indexOf("{");
   if (start !== -1) {
     let depth = 0;
@@ -207,23 +239,12 @@ function parseAIResponse(text: string): AIExplanation {
       }
     }
     if (end !== -1) {
-      const candidate = cleaned.slice(start, end + 1);
-      try {
-        const parsed = JSON.parse(candidate);
-        return {
-          summary: parsed.summary || "",
-          details: parsed.details || "",
-          objectsAndFields: parsed.objectsAndFields || [],
-          suggestions: parsed.suggestions || [],
-        };
-      } catch (e) {
-        console.log("[ai] JSON parse failed:", (e as Error).message);
-        console.log("[ai] candidate[0..200]:", candidate.substring(0, 200));
-      }
+      const candidate = extractParsed(cleaned.slice(start, end + 1));
+      if (candidate) return candidate;
     }
   }
 
-  console.log("[ai] All parse strategies failed, returning raw text");
+  console.log("[ai] All parse strategies failed; text[0..300]:", text.substring(0, 300));
   return {
     summary: text.substring(0, 200),
     details: text,
