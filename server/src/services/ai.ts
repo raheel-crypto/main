@@ -170,40 +170,64 @@ Please provide a thorough assessment with specific, actionable remediation steps
   return parseAIResponse(text);
 }
 
-// Escape literal control characters inside JSON string values so JSON.parse
-// doesn't choke on newlines / tabs that the model forgot to escape.
-function sanitizeJsonLiterals(s: string): string {
+// Repair common issues in AI-generated JSON:
+//  - literal newlines/tabs inside string values (should be \n, \t)
+//  - unescaped double-quotes inside string values
+// Uses look-ahead heuristic: a '"' inside a string is a real terminator only
+// if the next non-whitespace char is ',', '}', ']', or end-of-input.
+function repairJson(text: string): string {
   let out = "";
   let inString = false;
   let escape = false;
-  for (let i = 0; i < s.length; i++) {
-    const ch = s[i];
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
     if (escape) { out += ch; escape = false; continue; }
     if (ch === "\\") { out += ch; escape = true; continue; }
-    if (ch === '"') { inString = !inString; out += ch; continue; }
+
+    if (ch === '"') {
+      if (!inString) {
+        inString = true;
+        out += ch;
+      } else {
+        // Peek ahead past whitespace to see if this is a structural terminator
+        let j = i + 1;
+        while (j < text.length && /[ \t\n\r]/.test(text[j])) j++;
+        const next = j < text.length ? text[j] : "";
+        if (next === "" || next === "," || next === "}" || next === "]") {
+          inString = false;
+          out += ch;
+        } else {
+          out += '\\"'; // unescaped quote inside string — escape it
+        }
+      }
+      continue;
+    }
+
     if (inString) {
       if (ch === "\n") { out += "\\n"; continue; }
       if (ch === "\r") { out += "\\r"; continue; }
       if (ch === "\t") { out += "\\t"; continue; }
     }
+
     out += ch;
   }
+
   return out;
 }
 
-function extractParsed(raw: string): AIExplanation | null {
-  const sanitized = sanitizeJsonLiterals(raw);
+function tryParse(repaired: string): AIExplanation | null {
   try {
-    const parsed = JSON.parse(sanitized);
+    const parsed = JSON.parse(repaired);
     if (parsed && typeof parsed === "object" && parsed.summary) {
-      const items = (parsed.objectsAndFields || []).map((item: any) => ({
-        object: item.object || item.pillar || item.name || "",
-        fields: item.fields || [],
-      }));
       return {
         summary: parsed.summary || "",
         details: parsed.details || "",
-        objectsAndFields: items,
+        objectsAndFields: (parsed.objectsAndFields || []).map((item: any) => ({
+          object: item.object || item.pillar || item.name || "",
+          fields: item.fields || [],
+        })),
         suggestions: parsed.suggestions || [],
       };
     }
@@ -214,32 +238,30 @@ function extractParsed(raw: string): AIExplanation | null {
 }
 
 function parseAIResponse(text: string): AIExplanation {
-  // Strip markdown code fences
+  // Strip markdown code fences then repair common AI JSON mistakes
   const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const repaired = repairJson(cleaned);
 
-  // Strategy 1: direct parse on cleaned text
-  const direct = extractParsed(cleaned);
+  // Strategy 1: parse the whole repaired text
+  const direct = tryParse(repaired);
   if (direct) return direct;
 
-  // Strategy 2: find the outermost {...} block using brace-depth tracking
-  const start = cleaned.indexOf("{");
+  // Strategy 2: extract the outermost {...} from the repaired text and parse that
+  const start = repaired.indexOf("{");
   if (start !== -1) {
-    let depth = 0;
-    let inString = false;
-    let escape = false;
-    let end = -1;
-    for (let i = start; i < cleaned.length; i++) {
-      const ch = cleaned[i];
-      if (escape) { escape = false; continue; }
-      if (ch === "\\") { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (!inString) {
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for (let i = start; i < repaired.length; i++) {
+      const ch = repaired[i];
+      if (esc) { esc = false; continue; }
+      if (ch === "\\") { esc = true; continue; }
+      if (ch === '"') { inStr = !inStr; continue; }
+      if (!inStr) {
         if (ch === "{") depth++;
         else if (ch === "}") { depth--; if (depth === 0) { end = i; break; } }
       }
     }
     if (end !== -1) {
-      const candidate = extractParsed(cleaned.slice(start, end + 1));
+      const candidate = tryParse(repaired.slice(start, end + 1));
       if (candidate) return candidate;
     }
   }
