@@ -168,13 +168,15 @@ Please provide a thorough assessment with specific, actionable remediation steps
 
   const text =
     response.content[0].type === "text" ? response.content[0].text : "";
+  console.log("[ai] Response length:", text.length, "| first 300 chars:", text.substring(0, 300));
   return parseAIResponse(text);
 }
 
 function parseAIResponse(text: string): AIExplanation {
   try {
-    // Try to extract JSON from the response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Strip markdown code fences if present
+    let cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       return {
@@ -184,8 +186,8 @@ function parseAIResponse(text: string): AIExplanation {
         suggestions: parsed.suggestions || [],
       };
     }
-  } catch {
-    // Fall back to treating the whole response as the explanation
+  } catch (e) {
+    console.log("[ai] JSON parse failed, using raw text:", (e as Error).message);
   }
 
   return {
