@@ -745,15 +745,16 @@ public with sharing class AccountDedupeScanController {
 
         Integer cap = (maxResults == null || maxResults <= 0) ? 100 : Math.min(maxResults, 500);
 
-        String soql = 'SELECT Id, Name, Match_Key__c, Scenario_Label__c, Member_Count__c '
-                    + 'FROM Dedupe_Group__c '
-                    + 'WHERE Scan__c = :targetScanId AND Status__c = \'Open\'';
+        String whereClause = 'Scan__c = :targetScanId AND Status__c = \'Open\'';
         if (String.isNotBlank(scenarioFilter)) {
-            soql += ' AND Scenario_Key__c = :scenarioFilter';
+            whereClause += ' AND Scenario_Key__c = :scenarioFilter';
         }
-        soql += ' ORDER BY Member_Count__c DESC NULLS LAST LIMIT ' + cap;
+        out.totalOpenGroups = Database.countQuery('SELECT COUNT() FROM Dedupe_Group__c WHERE ' + whereClause);
+
+        String soql = 'SELECT Id, Name, Match_Key__c, Scenario_Label__c, Member_Count__c '
+                    + 'FROM Dedupe_Group__c WHERE ' + whereClause
+                    + ' ORDER BY Member_Count__c DESC NULLS LAST LIMIT ' + cap;
         List<Dedupe_Group__c> openGroups = Database.query(soql);
-        out.totalOpenGroups = openGroups.size();
         if (openGroups.isEmpty()) return out;
 
         Set<Id> groupIds = new Set<Id>();

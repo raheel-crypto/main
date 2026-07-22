@@ -163,15 +163,25 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
         );
         if (!ok) return;
         this.queueing = true;
+        // eslint-disable-next-line no-console
+        console.log('[BulkMerge] queueGroupsForMerge requests:', JSON.stringify(requests.slice(0, 5)));
         try {
             const n = await queueGroupsForMerge({ requests });
-            this.toast(
-                `Queued ${n} group${n === 1 ? '' : 's'}`,
-                'Status updates appear below as the drainer runs.',
-                'success'
-            );
-            await this.load();
-            this._startPolling();
+            if (n > 0) {
+                this.toast(
+                    `Queued ${n} group${n === 1 ? '' : 's'}`,
+                    'Status updates appear below as the drainer runs.',
+                    'success'
+                );
+                await this.load();
+                this._startPolling();
+            } else {
+                this.toast(
+                    'Nothing queued',
+                    'All groups were skipped — master account could not be resolved. Check the console for details.',
+                    'warning'
+                );
+            }
         } catch (e) {
             this.toast('Bulk queue failed', this.extractError(e), 'error');
         } finally {
