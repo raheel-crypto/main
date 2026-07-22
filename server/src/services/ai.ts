@@ -171,12 +171,14 @@ Please provide a thorough assessment with specific, actionable remediation steps
 }
 
 function parseAIResponse(text: string): AIExplanation {
+  // Strip markdown code fences
+  const cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  console.log("[ai] parseAIResponse cleaned[0..300]:", cleaned.substring(0, 300));
+
+  // Strategy 1: direct JSON.parse on the cleaned string
   try {
-    // Strip markdown code fences if present
-    let cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(cleaned);
+    if (parsed && typeof parsed === "object") {
       return {
         summary: parsed.summary || "",
         details: parsed.details || "",
@@ -184,10 +186,44 @@ function parseAIResponse(text: string): AIExplanation {
         suggestions: parsed.suggestions || [],
       };
     }
-  } catch (e) {
-    console.log("[ai] JSON parse failed, using raw text:", (e as Error).message);
+  } catch (_) {}
+
+  // Strategy 2: extract the outermost {...} block and parse it
+  // Use a manual brace counter so nested braces in string values don't mislead us
+  const start = cleaned.indexOf("{");
+  if (start !== -1) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    let end = -1;
+    for (let i = start; i < cleaned.length; i++) {
+      const ch = cleaned[i];
+      if (escape) { escape = false; continue; }
+      if (ch === "\\") { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (!inString) {
+        if (ch === "{") depth++;
+        else if (ch === "}") { depth--; if (depth === 0) { end = i; break; } }
+      }
+    }
+    if (end !== -1) {
+      const candidate = cleaned.slice(start, end + 1);
+      try {
+        const parsed = JSON.parse(candidate);
+        return {
+          summary: parsed.summary || "",
+          details: parsed.details || "",
+          objectsAndFields: parsed.objectsAndFields || [],
+          suggestions: parsed.suggestions || [],
+        };
+      } catch (e) {
+        console.log("[ai] JSON parse failed:", (e as Error).message);
+        console.log("[ai] candidate[0..200]:", candidate.substring(0, 200));
+      }
+    }
   }
 
+  console.log("[ai] All parse strategies failed, returning raw text");
   return {
     summary: text.substring(0, 200),
     details: text,
