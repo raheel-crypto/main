@@ -1,0 +1,512 @@
+<template>
+
+    <!-- Loading -->
+    <template lwc:if={isLoading}>
+        <div class="slds-p-around_large slds-align_absolute-center">
+            <lightning-spinner alternative-text="Loading" size="large"></lightning-spinner>
+        </div>
+    </template>
+
+    <!-- Error -->
+    <template lwc:if={hasError}>
+        <div class="slds-notify slds-notify_alert slds-alert_error slds-m-around_medium" role="alert">
+            <lightning-icon icon-name="utility:error" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+            {errorMessage}
+        </div>
+    </template>
+
+    <template lwc:if={isReady}>
+
+        <!-- ── Pipeline Target Header ── -->
+        <div class="target-header slds-m-around_medium slds-p-around_large">
+            <div class="slds-grid slds-wrap">
+
+                <!-- Title row -->
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_small">
+                    <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                        <h1 class="target-title">{data.quarterlyTarget.quarter} &mdash; Pipeline Creation Target</h1>
+                        <span class="target-attained">{pipelinePercent}% attained</span>
+                    </div>
+                </div>
+
+                <!-- Amount row -->
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_x-small">
+                    <div class="slds-grid slds-grid_align-spread">
+                        <span class="pipeline-actual">{pipelineActualFormatted}</span>
+                        <span class="pipeline-target-label">goal: {pipelineTargetFormatted}</span>
+                    </div>
+                </div>
+
+                <!-- Gradient progress bar -->
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_small">
+                    <div class="pg-bar-track">
+                        <div class="pg-bar-fill" style={progressBarStyle}></div>
+                    </div>
+                </div>
+
+                <!-- Chips row -->
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_medium">
+                    <span class="chip">{data.quarterlyTarget.weeksRemaining} weeks remaining</span>
+                    <span class="chip slds-m-left_x-small">Gap: {pipelineGapFormatted}</span>
+                </div>
+
+                <!-- Stage breakdown cards -->
+                <div class="slds-col slds-size_1-of-1">
+                    <div class="stage-strip">
+                        <template for:each={stageCards} for:item="sc">
+                            <div key={sc.stageName} class="stage-card">
+                                <div class="sc-name">{sc.stageName}</div>
+                                <div class="sc-count">{sc.oppCount} deal{sc.oppCount !== 1 ? 's' : ''}</div>
+                                <div class="sc-amount">{sc.amountFormatted}</div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ── Tabset ── -->
+        <lightning-tabset class="slds-p-horizontal_medium" variant="scoped">
+
+            <!-- ════ TAB 1: WEEKLY DASHBOARD ════ -->
+            <lightning-tab label="Weekly Dashboard" value="dashboard" icon-name="utility:metrics">
+                <div class="slds-grid slds-gutters slds-wrap slds-p-top_medium">
+
+                    <!-- LEFT COLUMN -->
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
+
+                        <!-- Target Accounts -->
+                        <lightning-card icon-name="standard:account" class="slds-m-bottom_medium">
+                            <span slot="title">Target Accounts &mdash; Net New Universe</span>
+                            <div slot="actions">
+                                <lightning-badge label={accountCountLabel}></lightning-badge>
+                            </div>
+                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                                <template lwc:if={hasAccounts}>
+                                    <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered dash-table">
+                                        <thead>
+                                            <tr>
+                                                <th><div class="slds-truncate">Account</div></th>
+                                                <th><div class="slds-truncate">Last Activity</div></th>
+                                                <th><div class="slds-truncate">Last Gong Call</div></th>
+                                                <th><div class="slds-truncate">Contacts</div></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template for:each={data.targetAccounts} for:item="acct">
+                                                <tr key={acct.id} class="slds-hint-parent">
+                                                    <td>
+                                                        <a href={acct.sfUrl} target="_blank" class="acct-link">{acct.name}</a>
+                                                        <template lwc:if={acct.type}>
+                                                            <div class="slds-text-body_small cc-target">{acct.type}</div>
+                                                        </template>
+                                                    </td>
+                                                    <td>
+                                                        <span class={acct.activityClass}>{acct.lastActivityDateFormatted}</span>
+                                                        <template lwc:if={acct.lastActivitySubject}>
+                                                            <div class="slds-text-body_small cc-target cell-sub">{acct.lastActivitySubject}</div>
+                                                        </template>
+                                                    </td>
+                                                    <td>
+                                                        <span class={acct.gongClass}>{acct.lastGongCallDateFormatted}</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class={acct.threadClass} title="Contact count">{acct.contactCount}</span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </template>
+                                <template lwc:else>
+                                    <p class="empty-msg">No target accounts. Use the Accounts tab to flag some.</p>
+                                </template>
+                            </div>
+                        </lightning-card>
+
+                        <!-- Opps In-Flight -->
+                        <lightning-card icon-name="standard:opportunity" class="slds-m-bottom_medium">
+                            <span slot="title">
+                                Opps In-Flight &mdash; All Stages
+                                <template lwc:if={staleOppCount}>
+                                    <span class="badge-stale slds-m-left_x-small">{staleOppCount} stale</span>
+                                </template>
+                            </span>
+                            <div slot="actions">
+                                <lightning-badge label={inFlightCountLabel}></lightning-badge>
+                            </div>
+                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                                <template lwc:if={hasInFlightOpps}>
+                                    <table class="slds-table slds-table_cell-buffer slds-table_bordered slds-table_col-bordered dash-table">
+                                        <thead>
+                                            <tr>
+                                                <th><div class="slds-truncate">Opportunity</div></th>
+                                                <th><div class="slds-truncate">Stage</div></th>
+                                                <th><div class="slds-truncate">Amount</div></th>
+                                                <th><div class="slds-truncate">Days</div></th>
+                                                <th><div class="slds-truncate">Activity</div></th>
+                                                <th><div class="slds-truncate">Contacts</div></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template for:each={data.inFlightOpps} for:item="opp">
+                                                <tr key={opp.id} class={opp.rowClass}>
+                                                    <td>
+                                                        <a href={opp.sfUrl} target="_blank" class="acct-link">{opp.name}</a>
+                                                        <div class="slds-text-body_small cc-target">{opp.accountName}</div>
+                                                    </td>
+                                                    <td>
+                                                        <span class={opp.stageBadgeClass}>{opp.stageName}</span>
+                                                    </td>
+                                                    <td class="slds-text-body_small">{opp.amountFormatted}</td>
+                                                    <td>
+                                                        <span class={opp.daysClass}>{opp.daysInStage}d</span>
+                                                        <template lwc:if={opp.isStale}>
+                                                            <lightning-icon icon-name="utility:warning" size="x-small" variant="warning" alternative-text="Stale" class="slds-m-left_xx-small" title={opp.staleLabel}></lightning-icon>
+                                                        </template>
+                                                    </td>
+                                                    <td class="slds-text-body_small">{opp.lastActivityDateFormatted}</td>
+                                                    <td>
+                                                        <span class={opp.contactClass}>{opp.contactRoleCount}</span>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </template>
+                                <template lwc:else>
+                                    <p class="empty-msg">No open in-flight opps.</p>
+                                </template>
+                            </div>
+                        </lightning-card>
+
+                    </div>
+                    <!-- end LEFT -->
+
+                    <!-- RIGHT COLUMN -->
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
+
+                        <!-- This Week's Commits -->
+                        <lightning-card icon-name="utility:task" class="slds-m-bottom_medium">
+                            <span slot="title">
+                                This Week&rsquo;s Commits
+                                <template lwc:if={mandatoryProgressionWarning}>
+                                    <span class="badge-warn slds-m-left_small">&#x26A0; Progression commit required</span>
+                                </template>
+                            </span>
+                            <div slot="actions">
+                                <lightning-button label="&#x21B7; Carry Forward" variant="neutral" size="small" onclick={handleCarryForward} disabled={isCarryingForward} class="slds-m-right_x-small"></lightning-button>
+                                <lightning-button label="+ Add Commit" variant="brand" onclick={openCommitForm} disabled={showCommitForm}></lightning-button>
+                            </div>
+                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+
+                                <!-- Commit Form -->
+                                <template lwc:if={showCommitForm}>
+                                    <div class="commit-form slds-m-bottom_medium slds-p-around_medium">
+                                        <h3 class="slds-text-heading_small slds-m-bottom_small">New Commit</h3>
+                                        <lightning-radio-group name="motionType" label="Motion" options={motionOptions} value={newCommit.motionType} type="button" onchange={handleMotionChange}></lightning-radio-group>
+                                        <div class="slds-m-top_small">
+                                            <lightning-combobox name="commitType" label="Commit Type" value={newCommit.commitType} options={commitTypeOptions} onchange={handleCommitTypeChange} required></lightning-combobox>
+                                        </div>
+                                        <div class="slds-m-top_small">
+                                            <lightning-textarea name="description" label="Description" value={newCommit.description} placeholder="e.g. Advance Acme to 3-POV via discovery call with CFO" max-length="500" onchange={handleDescriptionChange} required></lightning-textarea>
+                                        </div>
+                                        <template lwc:if={isNetNew}>
+                                            <div class="slds-m-top_small search-wrap">
+                                                <lightning-input name="accountSearch" label="Target Account" value={newCommit.accountName} placeholder="Type to search your target accounts..." onchange={handleAccountSearch}></lightning-input>
+                                                <template lwc:if={hasAccountResults}>
+                                                    <ul class="search-dropdown">
+                                                        <template for:each={accountSearchResults} for:item="r">
+                                                            <li key={r.id} class="search-result" data-id={r.id} data-name={r.name} onclick={selectAccount}>{r.name}</li>
+                                                        </template>
+                                                    </ul>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <template lwc:if={isProgression}>
+                                            <div class="slds-m-top_small">
+                                                <lightning-combobox name="targetOpp" label="Target Opportunity" value={newCommit.oppId} options={inFlightOppOptions} placeholder="Select in-flight opp..." onchange={handleOppChange} required></lightning-combobox>
+                                            </div>
+                                        </template>
+                                        <div class="slds-m-top_small">
+                                            <lightning-input type="number" name="committedCount" label="Committed Count" value={newCommit.committedCount} min="1" max="99" onchange={handleCountChange}></lightning-input>
+                                        </div>
+                                        <div class="slds-m-top_medium">
+                                            <lightning-button label="Cancel" onclick={closeCommitForm} class="slds-m-right_small"></lightning-button>
+                                            <lightning-button label="Save Commit" variant="brand" onclick={saveNewCommit} disabled={isSaving}></lightning-button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Net New Commits -->
+                                <div class="slds-m-bottom_medium">
+                                    <div class="section-divider netnew-divider slds-m-bottom_small">
+                                        <lightning-icon icon-name="utility:new" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
+                                        Net New
+                                    </div>
+                                    <template lwc:if={hasNetNewCommits}>
+                                        <div class="commit-grid">
+                                            <template for:each={netNewCommits} for:item="c">
+                                                <div key={c.Id} class={c.commitCardClass}>
+                                                    <div class="ctile-logo-row">
+                                                        <div class="ctile-acct-name">{c.refName}</div>
+                                                        <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
+                                                    </div>
+                                                    <div class="ctile-type">{c.Commit_Type__c}</div>
+                                                    <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                                    <div class="ctile-footer">
+                                                        <span class="cc-progress">{c.progressLabel}</span>
+                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template lwc:else>
+                                        <p class="empty-msg">No net new commits yet this week.</p>
+                                    </template>
+                                </div>
+
+                                <!-- Progression Commits -->
+                                <div>
+                                    <div class="section-divider prog-divider slds-m-bottom_small">
+                                        <lightning-icon icon-name="utility:forward" size="x-small" class="slds-m-right_xx-small"></lightning-icon>
+                                        Progression
+                                    </div>
+                                    <template lwc:if={hasProgressionCommits}>
+                                        <div class="commit-grid">
+                                            <template for:each={progressionCommits} for:item="c">
+                                                <div key={c.Id} class={c.commitCardClass}>
+                                                    <div class="ctile-logo-row">
+                                                        <div class="ctile-acct-name">{c.refName}</div>
+                                                        <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
+                                                    </div>
+                                                    <div class="ctile-type">{c.Commit_Type__c}</div>
+                                                    <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                                    <div class="ctile-footer">
+                                                        <span class="cc-progress">{c.progressLabel}</span>
+                                                        <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
+                                                    </div>
+                                                    <template lwc:if={c.showMarkDone}>
+                                                        <div class="slds-m-top_x-small">
+                                                            <lightning-button label="Mark Done" size="x-small" variant="success" data-id={c.Id} onclick={handleMarkMEDDPICCComplete}></lightning-button>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template lwc:else>
+                                        <p class="empty-msg">No progression commits yet this week.</p>
+                                    </template>
+                                </div>
+
+                            </div>
+                        </lightning-card>
+
+                        <!-- Last Week's Scorecard -->
+                        <lightning-card title="Last Week's Scorecard" icon-name="utility:chart" class="slds-m-bottom_medium">
+                            <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                                <div class="slds-grid slds-gutters">
+                                    <div class="slds-col slds-size_1-of-2">
+                                        <div class="section-divider netnew-divider slds-m-bottom_small">Net New</div>
+                                        <dl class="scorecard-dl">
+                                            <dt>Commits completed</dt><dd>{scorecard.nnCommitsCompleted} / {scorecard.nnCommitsTotal}</dd>
+                                            <dt>Opps created</dt><dd>{scorecard.nnOppsCreated}</dd>
+                                            <dt>$ generated</dt><dd class="metric-green">{scorecard.nnDollarFormatted}</dd>
+                                        </dl>
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-2">
+                                        <div class="section-divider prog-divider slds-m-bottom_small">Progression</div>
+                                        <dl class="scorecard-dl">
+                                            <dt>Commits completed</dt><dd>{scorecard.progCommitsCompleted} / {scorecard.progCommitsTotal}</dd>
+                                            <dt>Opps advanced</dt><dd class="metric-green">{scorecard.progOppsAdvanced}</dd>
+                                            <dt>Stalled / slipped</dt><dd class="metric-red">{scorecard.progOppsStalled}</dd>
+                                            <dt>Conversion rate</dt><dd>{scorecard.progConversionRateFormatted}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </lightning-card>
+
+                    </div>
+                    <!-- end RIGHT -->
+
+                </div>
+            </lightning-tab>
+
+            <!-- ════ TAB 2: TARGET ACCOUNTS ════ -->
+            <lightning-tab label="Target Accounts" value="accounts" icon-name="utility:target" onactive={handleAccountsTabActive}>
+
+                <!-- Loading cards -->
+                <template lwc:if={isLoadingCards}>
+                    <div class="slds-p-around_large slds-align_absolute-center">
+                        <lightning-spinner alternative-text="Loading accounts" size="medium"></lightning-spinner>
+                    </div>
+                </template>
+
+                <template lwc:if={accountCardsLoaded}>
+
+                    <!-- Targeted accounts strip -->
+                    <template lwc:if={hasTargetedCards}>
+                        <div class="targeted-strip slds-p-horizontal_medium">
+                            <span class="targeted-strip-label">Targeted</span>
+                            <div class="targeted-strip-scroll">
+                                <template for:each={targetedCards} for:item="card">
+                                    <div key={card.id} class="targeted-chip" data-id={card.id} onclick={handleCardToggle}>
+                                        <template lwc:if={card.faviconUrl}>
+                                            <img src={card.faviconUrl} alt="" class="tchip-favicon" />
+                                        </template>
+                                        <template lwc:else>
+                                            <div class="tchip-avatar" style={card.avatarStyle}>{card.avatarInitial}</div>
+                                        </template>
+                                        <span class="tchip-name">{card.name}</span>
+                                        <span class="tchip-x">&#x00D7;</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Toolbar -->
+                    <div class="slds-grid slds-grid_align-spread slds-p-around_medium slds-p-bottom_x-small card-toolbar slds-wrap">
+                        <div class="slds-col slds-grow">
+                            <lightning-input
+                                type="search"
+                                placeholder="Search by name, industry or status..."
+                                value={cardSearchTerm}
+                                onchange={handleCardSearch}
+                                variant="label-hidden"
+                                class="card-search">
+                            </lightning-input>
+                        </div>
+                        <div class="slds-col slds-no-flex slds-p-left_medium slds-grid slds-grid_vertical-align-center">
+                            <span class="slds-text-body_small metric-dark slds-m-right_small">{targetedCardCount} of {totalCardCount} targeted</span>
+                            <lightning-combobox
+                                label="Sort by"
+                                value={accountSortBy}
+                                options={sortOptions}
+                                onchange={handleSortChange}
+                                variant="label-hidden"
+                                class="sort-select">
+                            </lightning-combobox>
+                        </div>
+                    </div>
+
+                    <!-- Segment sections -->
+                    <div class="slds-p-horizontal_medium acct-cards-bg">
+                        <template for:each={accountSegments} for:item="seg">
+                            <div key={seg.key} class="segment-section slds-m-bottom_large">
+                                <div class="segment-header slds-m-bottom_small">
+                                    {seg.label}
+                                    <span class="segment-count">({seg.cards.length})</span>
+                                </div>
+                                <div class="card-grid">
+                                    <template for:each={seg.cards} for:item="card">
+                                        <div key={card.id} class={card.cardClass} data-id={card.id} onclick={handleCardToggle}>
+
+                                            <!-- Logo / avatar -->
+                                            <div class="acct-logo-row">
+                                                <template lwc:if={card.faviconUrl}>
+                                                    <img src={card.faviconUrl} alt="" class="acct-favicon" />
+                                                </template>
+                                                <template lwc:else>
+                                                    <div class="acct-avatar" style={card.avatarStyle}>{card.avatarInitial}</div>
+                                                </template>
+                                                <!-- Targeted check -->
+                                                <div class="card-check">
+                                                    <template lwc:if={card.effectiveTargeted}>
+                                                        <lightning-icon icon-name="utility:check" size="x-small" alternative-text="Targeted"></lightning-icon>
+                                                    </template>
+                                                </div>
+                                            </div>
+
+                                            <!-- Name -->
+                                            <div class="card-name">{card.name}</div>
+
+                                            <!-- Pills: status + tier -->
+                                            <div class="card-meta slds-m-bottom_xx-small">
+                                                <template lwc:if={card.accountStatus}>
+                                                    <span class="pill pill--status">{card.accountStatus}</span>
+                                                </template>
+                                                <template lwc:if={card.accountTier}>
+                                                    <span class="pill pill--tier">{card.accountTier}</span>
+                                                </template>
+                                            </div>
+
+                                            <!-- ARR (Customer only) + TAM -->
+                                            <div class="card-financials">
+                                                <template lwc:if={card.showArr}>
+                                                    <span class="fin-item fin-arr">ARR {card.arrFormatted}</span>
+                                                </template>
+                                                <template lwc:if={card.tamFormatted}>
+                                                    <span class="fin-item">TAM {card.tamFormatted}</span>
+                                                </template>
+                                            </div>
+
+                                            <!-- Stats bar -->
+                                            <div class="card-stats">
+                                                <span title="Contacts">
+                                                    <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                                                    {card.contactCount}
+                                                </span>
+                                                <span title="Open opps">
+                                                    <lightning-icon icon-name="utility:opportunity" size="xx-small"></lightning-icon>
+                                                    {card.openOppCount}
+                                                </span>
+                                                <template lwc:if={card.bankerCount}>
+                                                    <span title="Bankers/Investors">
+                                                        <lightning-icon icon-name="utility:currency" size="xx-small"></lightning-icon>
+                                                        {card.bankerCount}
+                                                    </span>
+                                                </template>
+                                            </div>
+
+                                            <!-- Last activity -->
+                                            <div class="card-activity">
+                                                <template lwc:if={card.lastActivityDate}>
+                                                    <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
+                                                    {card.activityFmt}
+                                                </template>
+                                                <template lwc:else>
+                                                    <span class="stale-text">No activity</span>
+                                                </template>
+                                            </div>
+
+                                            <!-- Pending indicator -->
+                                            <template lwc:if={card.isPending}>
+                                                <div class="card-pending-label">
+                                                    <template lwc:if={card.effectiveTargeted}>+ will be targeted</template>
+                                                    <template lwc:else>click to undo</template>
+                                                </div>
+                                            </template>
+
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <template lwc:if={hasNoSegments}>
+                            <p class="empty-msg slds-p-vertical_medium">No accounts match your search.</p>
+                        </template>
+                    </div>
+
+                    <!-- Sticky save bar -->
+                    <template lwc:if={hasPendingChanges}>
+                        <div class="save-bar">
+                            <span class="save-bar-label">{pendingCountLabel}</span>
+                            <lightning-button label="Discard" onclick={cancelTargetChanges} class="slds-m-right_small"></lightning-button>
+                            <lightning-button label={pendingLabel} variant="brand" onclick={saveTargetAccounts} disabled={isSavingTargets}></lightning-button>
+                        </div>
+                    </template>
+
+                </template>
+
+            </lightning-tab>
+
+        </lightning-tabset>
+
+    </template>
+</template>

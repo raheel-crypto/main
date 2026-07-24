@@ -1,0 +1,212 @@
+<template>
+
+    <!-- Loading -->
+    <template lwc:if={isLoading}>
+        <div class="slds-p-around_large slds-align_absolute-center">
+            <lightning-spinner alternative-text="Loading" size="large"></lightning-spinner>
+        </div>
+    </template>
+
+    <!-- Error -->
+    <template lwc:if={hasError}>
+        <div class="slds-notify slds-notify_alert slds-alert_error slds-m-around_medium" role="alert">
+            <lightning-icon icon-name="utility:error" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+            {errorMessage}
+        </div>
+    </template>
+
+    <template lwc:if={isReady}>
+
+        <!-- ── Team Summary Band ── -->
+        <div class="mgr-header slds-m-around_medium slds-p-around_large">
+            <div class="slds-grid slds-wrap slds-grid_align-spread slds-grid_vertical-align-center">
+                <div class="slds-col">
+                    <h1 class="mgr-title">Team Pipeline Review &mdash; {weekLabel}</h1>
+                </div>
+                <div class="slds-col slds-no-flex">
+                    <lightning-button label="Refresh" icon-name="utility:refresh" onclick={loadData} disabled={isLoading}></lightning-button>
+                </div>
+            </div>
+            <div class="slds-grid slds-wrap slds-gutters slds-m-top_medium">
+                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                    <div class="summary-block">
+                        <div class="summary-value">{summary.totalReps}</div>
+                        <div class="summary-label">Reps</div>
+                    </div>
+                </div>
+                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                    <div class="summary-block">
+                        <div class="summary-value">{summary.totalCommits}</div>
+                        <div class="summary-label">Commits</div>
+                    </div>
+                </div>
+                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                    <div class="summary-block">
+                        <div class={completionRateClass}>{summary.completionRateLabel}</div>
+                        <div class="summary-label">Completed</div>
+                    </div>
+                </div>
+                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                    <div class="summary-block">
+                        <div class={noCommitsClass}>{summary.repsWithNoCommits}</div>
+                        <div class="summary-label">No commits</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Rep Table ── -->
+        <div class="slds-m-around_medium">
+            <template lwc:if={hasReps}>
+                <template for:each={reps} for:item="rep">
+                    <div key={rep.repId} class={rep.repCardClass}>
+
+                        <!-- Rep Row Header -->
+                        <div class="rep-row slds-grid slds-grid_vertical-align-center"
+                             data-id={rep.repId} onclick={handleRepExpand}>
+
+                            <!-- Chevron -->
+                            <div class="slds-col slds-no-flex rep-chevron">
+                                <lightning-icon
+                                    icon-name={rep.chevronIcon}
+                                    size="x-small"
+                                    class="slds-m-right_x-small">
+                                </lightning-icon>
+                            </div>
+
+                            <!-- Name + risk -->
+                            <div class="slds-col rep-name-col">
+                                <span class="rep-name">{rep.repName}</span>
+                                <template lwc:if={rep.hasRisk}>
+                                    <span class="risk-badge slds-m-left_x-small">&#x26A0; Risk</span>
+                                </template>
+                            </div>
+
+                            <!-- This week progress -->
+                            <div class="slds-col slds-no-flex rep-stat-col">
+                                <span class="stat-label">This week</span>
+                                <span class={rep.twCompletionClass}>{rep.thisWeekCompleted}/{rep.thisWeekTotal}</span>
+                            </div>
+
+                            <!-- Last week NN -->
+                            <div class="slds-col slds-no-flex rep-stat-col slds-hide_small">
+                                <span class="stat-label">LW Net New</span>
+                                <span class="stat-value">{rep.lwNNLabel}</span>
+                            </div>
+
+                            <!-- Last week Prog -->
+                            <div class="slds-col slds-no-flex rep-stat-col slds-hide_small">
+                                <span class="stat-label">LW Prog</span>
+                                <span class="stat-value">{rep.lwProgLabel}</span>
+                            </div>
+
+                            <!-- In-flight opps -->
+                            <div class="slds-col slds-no-flex rep-stat-col slds-hide_small">
+                                <span class="stat-label">In-Flight</span>
+                                <span class="stat-value">{rep.inFlightOppCount} opps</span>
+                            </div>
+
+                        </div>
+
+                        <!-- Risk reasons (always visible if hasRisk) -->
+                        <template lwc:if={rep.hasRisk}>
+                            <div class="risk-reasons slds-p-left_large slds-p-bottom_x-small">
+                                <template for:each={rep.riskReasons} for:item="reason">
+                                    <span key={reason} class="risk-reason">&#x25B8; {reason}</span>
+                                </template>
+                            </div>
+                        </template>
+
+                        <!-- Expanded commit detail -->
+                        <template lwc:if={rep.isExpanded}>
+                            <div class="commit-detail slds-p-around_medium slds-p-top_x-small">
+
+                                <template lwc:if={rep.hasCommits}>
+                                    <template for:each={rep.thisWeekCommits} for:item="c">
+                                        <div key={c.Id} class={c.mgr_commitRowClass}>
+
+                                            <div class="slds-grid slds-grid_vertical-align-start slds-wrap">
+
+                                                <!-- Left: status + type + description -->
+                                                <div class="slds-col slds-size_1-of-1 slds-medium-size_7-of-12">
+                                                    <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                        <span class={c.statusDotClass}></span>
+                                                        <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
+                                                        <span class="slds-text-body_small slds-m-left_x-small mgr-progress">{c.progressLabel}</span>
+                                                        <template lwc:if={c.At_Risk__c}>
+                                                            <span class="at-risk-chip slds-m-left_x-small">&#x26A0; At Risk</span>
+                                                        </template>
+                                                    </div>
+                                                    <div class="slds-text-body_small slds-m-bottom_xx-small">{c.Commit_Description__c}</div>
+                                                    <template lwc:if={c.Target_Account__r}>
+                                                        <div class="slds-text-body_small commit-target">&#x1F3AF; {c.Target_Account__r.Name}</div>
+                                                    </template>
+                                                    <template lwc:if={c.Target_Opportunity__r}>
+                                                        <div class="slds-text-body_small commit-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div>
+                                                    </template>
+                                                    <template lwc:if={c.Notes__c}>
+                                                        <div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div>
+                                                    </template>
+                                                </div>
+
+                                                <!-- Right: at-risk toggle + manager note -->
+                                                <div class="slds-col slds-size_1-of-1 slds-medium-size_5-of-12 slds-p-left_medium">
+                                                    <div class="slds-m-bottom_x-small">
+                                                        <lightning-button
+                                                            label={c.atRiskLabel}
+                                                            variant={c.atRiskVariant}
+                                                            icon-name={c.atRiskIcon}
+                                                            size="x-small"
+                                                            data-id={c.Id}
+                                                            data-current={c.At_Risk__c}
+                                                            onclick={handleAtRiskToggle}
+                                                            disabled={c.isSavingFlag}>
+                                                        </lightning-button>
+                                                    </div>
+                                                    <lightning-textarea
+                                                        label="Manager Note"
+                                                        value={c.pendingNote}
+                                                        placeholder="Add a coaching note..."
+                                                        max-length="500"
+                                                        rows="2"
+                                                        data-id={c.Id}
+                                                        onchange={handleNoteChange}>
+                                                    </lightning-textarea>
+                                                    <template lwc:if={c.noteDirty}>
+                                                        <lightning-button
+                                                            label="Save Note"
+                                                            variant="brand"
+                                                            size="x-small"
+                                                            class="slds-m-top_xx-small"
+                                                            data-id={c.Id}
+                                                            onclick={handleNoteSave}
+                                                            disabled={c.isSavingNote}>
+                                                        </lightning-button>
+                                                    </template>
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </template>
+                                </template>
+
+                                <template lwc:else>
+                                    <p class="empty-detail-msg">No commits logged this week.</p>
+                                </template>
+
+                            </div>
+                        </template>
+
+                    </div>
+                </template>
+            </template>
+
+            <template lwc:else>
+                <div class="slds-p-around_large slds-align_absolute-center">
+                    <p class="empty-detail-msg">No direct reports found. Ensure reps have you set as their Manager in Salesforce.</p>
+                </div>
+            </template>
+        </div>
+
+    </template>
+</template>
