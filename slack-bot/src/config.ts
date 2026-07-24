@@ -1,0 +1,120 @@
+import "dotenv/config";
+
+function required(key: string): string {
+  const v = process.env[key];
+  if (!v) throw new Error(`Missing required env var: ${key}`);
+  return v;
+}
+
+function optional(key: string, fallback = ""): string {
+  return process.env[key] ?? fallback;
+}
+
+export const config = {
+  publicUrl: optional("STANDUP_PUBLIC_URL", "http://localhost:3002"),
+  internalSecret: optional("STANDUP_INTERNAL_SECRET", "dev-internal-secret"),
+  oauthStateSecret: optional("STANDUP_OAUTH_STATE_SECRET", "dev-state-secret"),
+  dryRun: optional("STANDUP_DRY_RUN", "false") === "true",
+  defaultTimezone: optional("STANDUP_DEFAULT_TIMEZONE", "America/Los_Angeles"),
+  defaultHour: parseInt(optional("STANDUP_DEFAULT_HOUR", "16"), 10),
+  slack: {
+    botToken: optional("SLACK_BOT_TOKEN"),
+    signingSecret: optional("SLACK_SIGNING_SECRET"),
+    auditChannelId: optional("SLACK_AUDIT_CHANNEL_ID"),
+  },
+  salesforce: {
+    clientId: optional("SF_CLIENT_ID"),
+    clientSecret: optional("SF_CLIENT_SECRET"),
+    loginUrl: optional("SF_LOGIN_URL", "https://login.salesforce.com"),
+    callbackUrl:
+      optional("STANDUP_PUBLIC_URL", "http://localhost:3002") +
+      "/api/oauth/sf/callback",
+  },
+  gong: {
+    accessKey: optional("GONG_ACCESS_KEY"),
+    accessKeySecret: optional("GONG_ACCESS_KEY_SECRET"),
+    baseUrl: optional("GONG_BASE_URL", "https://api.gong.io"),
+    webhookToken: optional("GONG_WEBHOOK_TOKEN"),
+    jwtPublicKey: optional("GONG_JWT_PUBLIC_KEY"),
+    jwtSecret: optional("GONG_JWT_SECRET"),
+  },
+  rogo: {
+    baseUrl: optional(
+      "ROGO_API_BASE_URL",
+      "https://rogo-analytics-bot-461481229379.us-central1.run.app"
+    ),
+    apiKey: optional("ROGO_API_KEY"),
+    directorySfKey: optional("ROGO_DIRECTORY_SF_KEY", "salesforce_account_id"),
+    directoryCustomerKey: optional(
+      "ROGO_DIRECTORY_CUSTOMER_KEY",
+      "customer_id"
+    ),
+    customerJoinColumn: optional("ROGO_CUSTOMER_JOIN_COLUMN", "customer_id"),
+    customerTable: optional(
+      "ROGO_CUSTOMER_TABLE",
+      "REPORT_ENTITIES.CUSTOMER"
+    ),
+  },
+  anthropic: {
+    apiKey: optional("ANTHROPIC_API_KEY"),
+  },
+  notion: {
+    // Org-wide internal-integration token (starts with `secret_`). Pages must
+    // be shared with this integration in Notion before the API will return
+    // their content.
+    token: optional("NOTION_TOKEN"),
+  },
+  postgres: {
+    url:
+      process.env.POSTGRES_URL ||
+      process.env.DATABASE_URL ||
+      "",
+  },
+  nooks: {
+    webhookSecret: optional("NOOKS_WEBHOOK_SECRET"),
+    signingKey: optional("NOOKS_SIGNING_KEY"),
+    testDmUserId: optional("NOOKS_TEST_DM_USER_ID"),
+  },
+  google: {
+    clientId: optional("GOOGLE_CLIENT_ID"),
+    clientSecret: optional("GOOGLE_CLIENT_SECRET"),
+    callbackUrl:
+      optional("STANDUP_PUBLIC_URL", "http://localhost:3002") +
+      "/api/oauth/google/callback",
+  },
+  calendar: {
+    internalDomains: optional("INTERNAL_EMAIL_DOMAINS", "rogo.ai")
+      .split(",")
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean),
+  },
+  redTeam: {
+    url: optional("RED_TEAM_AGENT_URL"),
+    secret: optional("RED_TEAM_AGENT_SECRET"),
+    shadowMode: optional("RED_TEAM_SHADOW_MODE", "true") === "true",
+    stageAllowlist: optional("RED_TEAM_STAGE_ALLOWLIST", "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    oppFields: optional("RED_TEAM_OPP_FIELDS", "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+    dailySweepHourUtc: parseInt(
+      optional("RED_TEAM_DAILY_SWEEP_HOUR_UTC", "14"),
+      10
+    ),
+    redirectToSlackUserId: optional("RED_TEAM_REDIRECT_TO_SLACK_USER_ID"),
+  },
+};
+
+export function assertProduction() {
+  required("SLACK_BOT_TOKEN");
+  required("SLACK_SIGNING_SECRET");
+  required("SF_CLIENT_ID");
+  required("SF_CLIENT_SECRET");
+  required("ANTHROPIC_API_KEY");
+  required("STANDUP_INTERNAL_SECRET");
+  required("STANDUP_OAUTH_STATE_SECRET");
+  if (!config.postgres.url) throw new Error("Missing POSTGRES_URL/DATABASE_URL");
+}
