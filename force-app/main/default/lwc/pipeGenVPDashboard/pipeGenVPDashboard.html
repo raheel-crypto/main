@@ -1,0 +1,329 @@
+<template>
+
+    <template lwc:if={isLoading}>
+        <div class="slds-p-around_large slds-align_absolute-center">
+            <lightning-spinner alternative-text="Loading" size="large"></lightning-spinner>
+        </div>
+    </template>
+
+    <template lwc:if={hasError}>
+        <div class="slds-notify slds-notify_alert slds-alert_error slds-m-around_medium" role="alert">
+            <lightning-icon icon-name="utility:error" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+            {errorMessage}
+        </div>
+    </template>
+
+    <template lwc:if={isReady}>
+        <div class="mgr-container">
+
+            <!-- ── Header ── -->
+            <div class="mgr-header">
+                <div class="slds-grid slds-wrap slds-grid_align-spread slds-grid_vertical-align-center">
+                    <div class="slds-col">
+                        <h1 class="mgr-title">
+                            <template lwc:if={isVP}>VP Pipeline Review &mdash; {weekLabel}</template>
+                            <template lwc:else>Team Pipeline Review &mdash; {weekLabel}</template>
+                        </h1>
+                    </div>
+                    <div class="slds-col slds-no-flex">
+                        <lightning-button label="Refresh" icon-name="utility:refresh" onclick={loadData} disabled={isLoading}></lightning-button>
+                    </div>
+                </div>
+                <div class="slds-grid slds-wrap slds-gutters slds-m-top_medium">
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class="summary-value">{summary.totalReps}</div>
+                            <div class="summary-label">Reps</div>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class="summary-value">{summary.totalCommits}</div>
+                            <div class="summary-label">Commits</div>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class={completionRateClass}>{summary.completionRateLabel}</div>
+                            <div class="summary-label">Completed</div>
+                        </div>
+                    </div>
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-4">
+                        <div class="summary-block">
+                            <div class={noCommitsClass}>{summary.repsWithNoCommits}</div>
+                            <div class="summary-label">No Commits</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ══ VP MODE — manager cards ══ -->
+            <template lwc:if={isVP}>
+                <template lwc:if={hasManagers}>
+                    <div class="rep-grid">
+                        <template for:each={managers} for:item="mgr">
+                            <div key={mgr.managerId} class={mgr.mgrCardClass}>
+                                <div class="card-top">
+                                    <div class="card-name-row">
+                                        <span class="rep-name">{mgr.managerName}</span>
+                                        <template lwc:if={mgr.hasRisk}>
+                                            <span class="risk-badge">&#x26A0; Risk</span>
+                                        </template>
+                                    </div>
+                                    <div class="card-att-track">
+                                        <div class={mgr.attainmentBarClass} style={mgr.attainmentBarStyle}></div>
+                                    </div>
+                                    <div class="card-att-meta">
+                                        <span class="att-label">{mgr.pipelineActualFmt} / {mgr.pipelineTargetFmt} &bull; {mgr.attainmentPct}%</span>
+                                    </div>
+                                </div>
+                                <div class="card-stats">
+                                    <div class="card-stat">
+                                        <span class="stat-label">Last Week</span>
+                                        <span class={mgr.lwCompletionClass}>{mgr.lwCompleted}/{mgr.lwTotal}</span>
+                                    </div>
+                                    <div class="card-stat">
+                                        <span class="stat-label">This Week</span>
+                                        <span class={mgr.twCompletionClass}>{mgr.thisWeekCompleted}/{mgr.thisWeekTotal}</span>
+                                    </div>
+                                    <div class="card-stat">
+                                        <span class="stat-label">Reps</span>
+                                        <span class="stat-value">{mgr.totalReps}</span>
+                                    </div>
+                                </div>
+                                <div class="card-metrics">
+                                    <div class="card-metric">
+                                        <span class="stat-label">Opps Created</span>
+                                        <span class="stat-value">LW&nbsp;{mgr.lwOppsCreated} &bull; QTD&nbsp;{mgr.qtdOppsCreated}</span>
+                                    </div>
+                                    <div class="card-metric">
+                                        <span class="stat-label">To Discovery</span>
+                                        <span class="stat-value">LW&nbsp;{mgr.lwOppsToDiscovery} &bull; QTD&nbsp;{mgr.qtdOppsToDiscovery}</span>
+                                    </div>
+                                </div>
+                                <template lwc:if={mgr.repsAtRisk}>
+                                    <div class="risk-reasons">
+                                        <span class="risk-reason">&#x26A0; {mgr.repsAtRisk} rep(s) at risk</span>
+                                    </div>
+                                </template>
+                                <div class="card-expand-btn" role="button" tabindex="0" data-id={mgr.managerId} onclick={handleViewTeam}>
+                                    <lightning-icon icon-name="utility:people" size="xx-small" class="card-expand-icon"></lightning-icon>
+                                    <span>View Team</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </template>
+
+            <!-- ══ MANAGER MODE — rep cards ══ -->
+            <template lwc:else>
+                <template lwc:if={hasReps}>
+                    <div class="rep-grid">
+                        <template for:each={reps} for:item="rep">
+                            <div key={rep.repId} class={rep.repCardClass}>
+                                <div class="card-top">
+                                    <div class="card-name-row">
+                                        <span class="rep-name">{rep.repName}</span>
+                                        <template lwc:if={rep.hasRisk}><span class="risk-badge">&#x26A0; Risk</span></template>
+                                    </div>
+                                    <div class="card-att-track">
+                                        <div class={rep.attainmentBarClass} style={rep.attainmentBarStyle}></div>
+                                    </div>
+                                    <div class="card-att-meta">
+                                        <span class="att-label">{rep.pipelineActualFmt} / {rep.pipelineTargetFmt} &bull; {rep.attainmentPct}%</span>
+                                        <span class="att-weeks">{rep.weeksRemaining}w left</span>
+                                    </div>
+                                </div>
+                                <div class="card-stats">
+                                    <div class="card-stat"><span class="stat-label">Last Week</span><span class={rep.lwCompletionClass}>{rep.lwCompleted}/{rep.lwTotal}</span></div>
+                                    <div class="card-stat"><span class="stat-label">This Week</span><span class={rep.twCompletionClass}>{rep.thisWeekCompleted}/{rep.thisWeekTotal}</span></div>
+                                    <div class="card-stat"><span class="stat-label">In-Flight</span><span class="stat-value">{rep.inFlightOppCount}</span></div>
+                                </div>
+                                <div class="card-metrics">
+                                    <div class="card-metric"><span class="stat-label">Opps Created</span><span class="stat-value">LW&nbsp;{rep.lwOppsCreated} &bull; QTD&nbsp;{rep.qtdOppsCreated}</span></div>
+                                    <div class="card-metric"><span class="stat-label">To Discovery</span><span class="stat-value">LW&nbsp;{rep.lwOppsToDiscovery} &bull; QTD&nbsp;{rep.qtdOppsToDiscovery}</span></div>
+                                </div>
+                                <template lwc:if={rep.hasRisk}>
+                                    <div class="risk-reasons">
+                                        <template for:each={rep.riskReasons} for:item="reason">
+                                            <span key={reason} class="risk-reason">&#x25B8; {reason}</span>
+                                        </template>
+                                    </div>
+                                </template>
+                                <div class="card-expand-btn" role="button" tabindex="0" data-repid={rep.repId} onclick={handleViewCommits}>
+                                    <lightning-icon icon-name="utility:list" size="xx-small" class="card-expand-icon"></lightning-icon>
+                                    <span>View Commits</span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                <template lwc:else>
+                    <div class="slds-p-around_large slds-align_absolute-center">
+                        <p class="empty-detail-msg">No direct reports found.</p>
+                    </div>
+                </template>
+            </template>
+
+        </div>
+
+        <!-- ══ Modal overlay ══ -->
+        <template lwc:if={modal.isOpen}>
+            <div class="vp-modal-backdrop" onclick={handleBackdropClick}>
+                <div class="vp-modal">
+
+                    <!-- Modal header -->
+                    <div class="vp-modal-header">
+                        <div class="slds-grid slds-grid_vertical-align-center" style="gap: 0.75rem; min-width: 0; flex: 1;">
+                            <template lwc:if={canGoBack}>
+                                <button class="vp-back-btn" onclick={handleModalBack}>&#x2190; Back</button>
+                            </template>
+                            <span class="vp-modal-title">{modalTitle}</span>
+                        </div>
+                        <button class="vp-close-btn" onclick={closeModal}>&#x2715;</button>
+                    </div>
+
+                    <!-- Modal body -->
+                    <div class="vp-modal-body">
+
+                        <!-- ── Team view: rep cards for selected manager ── -->
+                        <template lwc:if={isModalTeam}>
+                            <div class="rep-grid rep-grid--nested">
+                                <template for:each={modalManager.reps} for:item="rep">
+                                    <div key={rep.repId} class={rep.repCardClass}>
+                                        <div class="card-top">
+                                            <div class="card-name-row">
+                                                <span class="rep-name">{rep.repName}</span>
+                                                <template lwc:if={rep.hasRisk}><span class="risk-badge">&#x26A0; Risk</span></template>
+                                            </div>
+                                            <div class="card-att-track">
+                                                <div class={rep.attainmentBarClass} style={rep.attainmentBarStyle}></div>
+                                            </div>
+                                            <div class="card-att-meta">
+                                                <span class="att-label">{rep.pipelineActualFmt} / {rep.pipelineTargetFmt} &bull; {rep.attainmentPct}%</span>
+                                                <span class="att-weeks">{rep.weeksRemaining}w left</span>
+                                            </div>
+                                        </div>
+                                        <div class="card-stats">
+                                            <div class="card-stat"><span class="stat-label">Last Week</span><span class={rep.lwCompletionClass}>{rep.lwCompleted}/{rep.lwTotal}</span></div>
+                                            <div class="card-stat"><span class="stat-label">This Week</span><span class={rep.twCompletionClass}>{rep.thisWeekCompleted}/{rep.thisWeekTotal}</span></div>
+                                            <div class="card-stat"><span class="stat-label">In-Flight</span><span class="stat-value">{rep.inFlightOppCount}</span></div>
+                                        </div>
+                                        <div class="card-metrics">
+                                            <div class="card-metric"><span class="stat-label">Opps Created</span><span class="stat-value">LW&nbsp;{rep.lwOppsCreated} &bull; QTD&nbsp;{rep.qtdOppsCreated}</span></div>
+                                            <div class="card-metric"><span class="stat-label">To Discovery</span><span class="stat-value">LW&nbsp;{rep.lwOppsToDiscovery} &bull; QTD&nbsp;{rep.qtdOppsToDiscovery}</span></div>
+                                        </div>
+                                        <template lwc:if={rep.hasRisk}>
+                                            <div class="risk-reasons">
+                                                <template for:each={rep.riskReasons} for:item="reason">
+                                                    <span key={reason} class="risk-reason">&#x25B8; {reason}</span>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <div class="card-expand-btn" role="button" tabindex="0"
+                                             data-repid={rep.repId} data-mgrid={modal.managerId}
+                                             onclick={handleViewCommits}>
+                                            <lightning-icon icon-name="utility:list" size="xx-small" class="card-expand-icon"></lightning-icon>
+                                            <span>View Commits</span>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <!-- ── Commits view: LW + TW for selected rep ── -->
+                        <template lwc:if={isModalCommits}>
+
+                            <!-- Last Week — read only -->
+                            <div class="week-section-header">Last Week &mdash; Results</div>
+                            <template lwc:if={modalRep.hasLastWeekCommits}>
+                                <template for:each={modalRep.lastWeekCommits} for:item="c">
+                                    <div key={c.Id} class={c.mgr_commitRowClass}>
+                                        <div class="commit-row-info">
+                                            <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                <span class={c.statusDotClass}></span>
+                                                <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
+                                                <span class="slds-text-body_small slds-m-left_x-small mgr-progress">{c.progressLabel}</span>
+                                                <template lwc:if={c.At_Risk__c}><span class="at-risk-chip slds-m-left_x-small">&#x26A0; At Risk</span></template>
+                                            </div>
+                                            <div class="slds-text-body_small slds-m-bottom_xx-small">{c.Commit_Description__c}</div>
+                                            <template lwc:if={c.Target_Account__r}><div class="slds-text-body_small commit-target">&#x1F3AF; {c.Target_Account__r.Name}</div></template>
+                                            <template lwc:if={c.Target_Opportunity__r}><div class="slds-text-body_small commit-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div></template>
+                                            <template lwc:if={c.Notes__c}><div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div></template>
+                                            <template lwc:if={c.Manager_Note__c}><div class="slds-text-body_small mgr-note-readonly slds-m-top_xx-small">Mgr: {c.Manager_Note__c}</div></template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </template>
+                            <template lwc:else><p class="empty-detail-msg">No commits logged last week.</p></template>
+
+                            <!-- This Week — with actions -->
+                            <div class="week-section-header week-section-header--tw">This Week &mdash; Pipeline</div>
+                            <template lwc:if={modalRep.hasCommits}>
+                                <template for:each={modalRep.thisWeekCommits} for:item="c">
+                                    <div key={c.Id} class={c.mgr_commitRowClass}>
+                                        <div class="commit-row-info">
+                                            <div class="slds-grid slds-grid_vertical-align-center slds-m-bottom_xx-small">
+                                                <span class={c.statusDotClass}></span>
+                                                <lightning-badge label={c.Commit_Type__c} class="slds-m-left_xx-small"></lightning-badge>
+                                                <span class="slds-text-body_small slds-m-left_x-small mgr-progress">{c.progressLabel}</span>
+                                                <template lwc:if={c.At_Risk__c}><span class="at-risk-chip slds-m-left_x-small">&#x26A0; At Risk</span></template>
+                                            </div>
+                                            <div class="slds-text-body_small slds-m-bottom_xx-small">{c.Commit_Description__c}</div>
+                                            <template lwc:if={c.Target_Account__r}><div class="slds-text-body_small commit-target">&#x1F3AF; {c.Target_Account__r.Name}</div></template>
+                                            <template lwc:if={c.Target_Opportunity__r}><div class="slds-text-body_small commit-target">&#x1F4C8; {c.Target_Opportunity__r.Name}</div></template>
+                                            <template lwc:if={c.Notes__c}><div class="slds-text-body_small rep-note slds-m-top_xx-small">Rep: {c.Notes__c}</div></template>
+                                        </div>
+                                        <div class="commit-row-actions">
+                                            <div class="mgr-action-btn-row">
+                                                <lightning-button
+                                                    label={c.atRiskLabel}
+                                                    variant={c.atRiskVariant}
+                                                    icon-name={c.atRiskIcon}
+                                                    size="x-small"
+                                                    data-id={c.Id}
+                                                    data-mgrid={modal.managerId}
+                                                    data-current={c.At_Risk__c}
+                                                    onclick={handleAtRiskToggle}
+                                                    disabled={c.isSavingFlag}>
+                                                </lightning-button>
+                                            </div>
+                                            <label class="mgr-textarea-label">Manager Note</label>
+                                            <textarea
+                                                class="mgr-textarea"
+                                                placeholder="Add a coaching note..."
+                                                maxlength="500"
+                                                rows="2"
+                                                data-id={c.Id}
+                                                data-mgrid={modal.managerId}
+                                                oninput={handleNoteChange}
+                                                value={c.pendingNote}>
+                                            </textarea>
+                                            <template lwc:if={c.noteDirty}>
+                                                <lightning-button
+                                                    label="Save Note"
+                                                    variant="brand"
+                                                    size="x-small"
+                                                    class="slds-m-top_xx-small"
+                                                    data-id={c.Id}
+                                                    data-mgrid={modal.managerId}
+                                                    onclick={handleNoteSave}
+                                                    disabled={c.isSavingNote}>
+                                                </lightning-button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </template>
+                            <template lwc:else><p class="empty-detail-msg">No commits logged this week yet.</p></template>
+
+                        </template>
+
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </template>
+</template>

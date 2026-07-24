@@ -1,0 +1,528 @@
+/* ── Page Container ───────────────────────────────────────────────────────── */
+
+.mgr-container {
+    background: linear-gradient(160deg, #080d1a 0%, #0c1426 55%, #0f1a36 100%);
+    min-height: 100%;
+    padding: 1rem;
+}
+
+/* ── Manager Header ──────────────────────────────────────────────────────── */
+
+.mgr-header {
+    background: linear-gradient(135deg, #0c1426 0%, #0f1a36 100%);
+    border: 1px solid rgba(99, 128, 200, 0.18);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.mgr-title {
+    color: #e0e7ff;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+/* ── Summary Blocks ──────────────────────────────────────────────────────── */
+
+.summary-block {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(99, 128, 200, 0.12);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    text-align: center;
+}
+
+.summary-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.summary-value--good { color: #34d399; }
+.summary-value--warn { color: #fbbf24; }
+.summary-value--bad  { color: #f87171; }
+
+.summary-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 0.15rem;
+}
+
+/* ── Card Grids ──────────────────────────────────────────────────────────── */
+
+.rep-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 0.75rem;
+    align-items: start;
+}
+
+.rep-grid--nested {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 0.6rem;
+}
+
+/* ── Manager Card (VP mode) ──────────────────────────────────────────────── */
+
+.mgr-card {
+    background: rgba(15, 26, 54, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(99, 128, 200, 0.2);
+    border-radius: 0.625rem;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+}
+
+.mgr-card--risk {
+    border-left: 3px solid rgba(245, 158, 11, 0.7);
+}
+
+
+/* ── Rep Card (manager mode + nested in VP mode) ─────────────────────────── */
+
+.rep-card {
+    background: rgba(15, 26, 54, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(99, 128, 200, 0.15);
+    border-radius: 0.625rem;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+}
+
+.rep-card--risk {
+    border-left: 3px solid rgba(245, 158, 11, 0.7);
+}
+
+
+/* ── Card Top ────────────────────────────────────────────────────────────── */
+
+.card-top {
+    padding: 0.875rem 1rem 0.75rem;
+}
+
+.card-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+}
+
+.rep-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #e0e7ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-att-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.35rem;
+}
+
+.att-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+    min-width: 2px;
+}
+
+.att-bar--won  { background: #34d399; }
+.att-bar--good { background: #60a5fa; }
+.att-bar--warn { background: #fbbf24; }
+.att-bar--low  { background: #f87171; }
+
+.card-att-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.att-label {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.55);
+    font-variant-numeric: tabular-nums;
+}
+
+.att-weeks {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.35);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ── Card Stats & Metrics ────────────────────────────────────────────────── */
+
+.card-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid rgba(99, 128, 200, 0.1);
+}
+
+.card-stat {
+    padding: 0.55rem 0.5rem;
+    text-align: center;
+    border-right: 1px solid rgba(99, 128, 200, 0.1);
+}
+
+.card-stat:last-child { border-right: none; }
+
+.card-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-top: 1px solid rgba(99, 128, 200, 0.08);
+}
+
+.card-metric {
+    padding: 0.5rem 0.65rem;
+    border-right: 1px solid rgba(99, 128, 200, 0.08);
+}
+
+.card-metric:last-child { border-right: none; }
+
+/* ── Stat Labels & Values ────────────────────────────────────────────────── */
+
+.stat-label {
+    display: block;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.38);
+    margin-bottom: 0.15rem;
+}
+
+.stat-value   { display: block; font-size: 0.78rem; font-weight: 600; color: rgba(255, 255, 255, 0.78); }
+.stat-done    { display: block; font-size: 0.78rem; font-weight: 700; color: #34d399; }
+.stat-partial { display: block; font-size: 0.78rem; font-weight: 700; color: #fbbf24; }
+.stat-none    { display: block; font-size: 0.78rem; font-weight: 600; color: rgba(255, 255, 255, 0.3); }
+
+/* ── Risk Badge & Reasons ────────────────────────────────────────────────── */
+
+.risk-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.38);
+    border-radius: 999px;
+    font-size: 0.63rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.risk-reasons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem 0.5rem;
+    border-top: 1px solid rgba(245, 158, 11, 0.12);
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.risk-reason {
+    font-size: 0.7rem;
+    color: #fde68a;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    border-radius: 0.25rem;
+    padding: 0.1rem 0.4rem;
+}
+
+/* ── Expand Button ───────────────────────────────────────────────────────── */
+
+.card-expand-btn {
+    width: 100%;
+    padding: 0.55rem 1rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-top: 1px solid rgba(99, 128, 200, 0.1);
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: background 0.12s, color 0.12s;
+    margin-top: auto;
+    user-select: none;
+}
+
+.card-expand-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.card-expand-icon {
+    --lwc-colorTextIconDefault: currentColor;
+}
+
+/* ── Commit Detail Panel ─────────────────────────────────────────────────── */
+
+.commit-detail {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(0, 0, 0, 0.22);
+    padding: 0.75rem 1rem;
+}
+
+.commit-row-info { margin-bottom: 0.5rem; }
+
+.commit-row-actions {
+    border-top: 1px solid rgba(99, 128, 200, 0.1);
+    padding-top: 0.5rem;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* Pill-shaped, centered at-risk button */
+.mgr-action-btn-row {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.5rem;
+}
+
+.mgr-action-btn-row lightning-button { display: inline-flex; }
+
+lightning-button {
+    --sds-c-button-radius-border: 1.5rem;
+    --lwc-buttonBorderRadius: 1.5rem;
+}
+
+/* Native textarea */
+.mgr-textarea-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    margin-bottom: 0.25rem;
+}
+
+.mgr-textarea {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(99, 128, 200, 0.35);
+    border-radius: 0.25rem;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.8rem;
+    padding: 0.4rem 0.5rem;
+    resize: vertical;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.mgr-textarea::placeholder { color: rgba(255, 255, 255, 0.28); }
+
+.mgr-textarea:focus {
+    outline: none;
+    border-color: rgba(99, 128, 200, 0.65);
+    box-shadow: 0 0 0 2px rgba(99, 128, 200, 0.15);
+}
+
+.mgr-commit-row {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(99, 128, 200, 0.12);
+    border-radius: 0.375rem;
+    transition: background 0.12s;
+}
+
+.mgr-commit-row--atrisk {
+    border-left: 3px solid rgba(245, 158, 11, 0.55);
+    background: rgba(245, 158, 11, 0.06);
+}
+
+.mgr-progress {
+    color: rgba(255, 255, 255, 0.45);
+    font-variant-numeric: tabular-nums;
+}
+
+.at-risk-chip {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border-radius: 999px;
+    font-size: 0.63rem;
+    font-weight: 700;
+}
+
+.commit-target {
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 0.1rem;
+}
+
+.rep-note {
+    color: rgba(255, 255, 255, 0.45);
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.2rem;
+}
+
+.mgr-note-readonly {
+    color: rgba(160, 185, 255, 0.6);
+    font-style: italic;
+    background: rgba(99, 128, 200, 0.08);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.2rem;
+    border-left: 2px solid rgba(99, 128, 200, 0.3);
+}
+
+.commit-detail .slds-text-body_small { color: rgba(255, 255, 255, 0.7); }
+.commit-row-info .slds-text-body_small { color: rgba(255, 255, 255, 0.7); }
+
+.empty-detail-msg {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.35);
+    text-align: center;
+    padding: 1rem 0;
+}
+
+/* ── Week Section Headers ────────────────────────────────────────────────── */
+
+.week-section-header {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.38);
+    padding: 0.5rem 0 0.35rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    margin-bottom: 0.4rem;
+}
+
+.week-section-header--tw {
+    margin-top: 0.75rem;
+    border-top-color: rgba(99, 128, 200, 0.2);
+    color: rgba(160, 185, 255, 0.5);
+}
+
+/* ── Status Dots ─────────────────────────────────────────────────────────── */
+
+.mgr-dot {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.mgr-dot--complete { background: #10b981; }
+.mgr-dot--partial  { background: #f59e0b; }
+.mgr-dot--pending  { background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.35); }
+
+/* ── Modal backdrop ──────────────────────────────────────────────────────── */
+
+.vp-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+/* ── Modal container ─────────────────────────────────────────────────────── */
+
+.vp-modal {
+    background: linear-gradient(160deg, #080d1a 0%, #0c1426 55%, #0f1a36 100%);
+    border: 1px solid rgba(99, 128, 200, 0.28);
+    border-radius: 0.75rem;
+    width: 100%;
+    max-width: 960px;
+    max-height: 85vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+}
+
+/* ── Modal header ────────────────────────────────────────────────────────── */
+
+.vp-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid rgba(99, 128, 200, 0.18);
+    flex-shrink: 0;
+    gap: 0.75rem;
+}
+
+.vp-modal-title {
+    color: #e0e7ff;
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vp-back-btn {
+    background: rgba(99, 128, 200, 0.12);
+    border: 1px solid rgba(99, 128, 200, 0.3);
+    border-radius: 999px;
+    color: rgba(160, 185, 255, 0.8);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.75rem;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+}
+
+.vp-back-btn:hover {
+    background: rgba(99, 128, 200, 0.22);
+    color: #e0e7ff;
+}
+
+.vp-close-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.85rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.12s, color 0.12s;
+}
+
+.vp-close-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* ── Modal body ──────────────────────────────────────────────────────────── */
+
+.vp-modal-body {
+    padding: 1rem;
+    overflow-y: auto;
+    flex: 1;
+}

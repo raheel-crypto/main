@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Coverage_Type__c</fullName>
+    <externalId>false</externalId>
+    <label>Coverage Type</label>
+    <required>true</required>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Picklist</type>
+    <valueSet>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value>
+                <fullName>GTMA1 Target</fullName>
+                <default>false</default>
+                <label>GTMA1 Target</label>
+            </value>
+            <value>
+                <fullName>GTMA2 Target</fullName>
+                <default>true</default>
+                <label>GTMA2 Target</label>
+            </value>
+            <value>
+                <fullName>AE Target</fullName>
+                <default>false</default>
+                <label>AE Target</label>
+            </value>
+            <value>
+                <fullName>Post-Sales</fullName>
+                <default>false</default>
+                <label>Post-Sales</label>
+            </value>
+            <value>
+                <fullName>Solutions Engineering</fullName>
+                <default>false</default>
+                <label>Solutions Engineering</label>
+            </value>
+            <value>
+                <fullName>Onboarding</fullName>
+                <default>false</default>
+                <label>Onboarding</label>
+            </value>
+            <value>
+                <fullName>Manager Assigned</fullName>
+                <default>false</default>
+                <label>Manager Assigned</label>
+            </value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

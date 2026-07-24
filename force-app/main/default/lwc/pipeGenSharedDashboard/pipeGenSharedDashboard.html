@@ -1,0 +1,260 @@
+<template>
+
+    <!-- Loading -->
+    <template lwc:if={isLoading}>
+        <div class="slds-p-around_large slds-align_absolute-center">
+            <lightning-spinner alternative-text="Loading" size="large"></lightning-spinner>
+        </div>
+    </template>
+
+    <!-- Error -->
+    <template lwc:if={hasError}>
+        <div class="slds-notify slds-notify_alert slds-alert_error slds-m-around_medium" role="alert">
+            <lightning-icon icon-name="utility:error" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+            {errorMessage}
+        </div>
+    </template>
+
+    <template lwc:if={isReady}>
+
+        <!-- Header -->
+        <div class="shared-header slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+            <div>
+                <h1>Shared Pipeline View</h1>
+                <p class="slds-text-body_small" style="color:#a5b4fc;margin-top:0.25rem;">Commits shared between you and your GTMA partner</p>
+            </div>
+            <div class="gtma-selector">
+                <lightning-combobox
+                    label="Select GTMA"
+                    value={selectedGtmaId}
+                    options={gtmaOptions}
+                    placeholder="Choose a GTMA..."
+                    onchange={handleGtmaChange}>
+                </lightning-combobox>
+            </div>
+        </div>
+
+        <!-- No GTMAs -->
+        <template lwc:if={hasNoGtmas}>
+            <div class="slds-p-around_large">
+                <p class="empty-msg">No GTMAs are mapped to your accounts. Contact your admin to assign GTM Associates to your accounts.</p>
+            </div>
+        </template>
+
+        <!-- No GTMA selected -->
+        <template lwc:if={noGtmaSelected}>
+            <div class="slds-p-around_large">
+                <p class="empty-msg">Select a GTMA above to view your shared accounts and commits.</p>
+            </div>
+        </template>
+
+        <!-- Main dashboard -->
+        <template lwc:if={hasGtmaSelected}>
+            <div class="tab-dark-bg">
+            <div class="slds-grid slds-gutters slds-wrap">
+
+                <!-- LEFT: Shared Accounts -->
+                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
+                    <div class="dash-section slds-m-bottom_medium">
+                        <div class="dash-section-hd">
+                            <div class="dash-section-title">
+                                <lightning-icon icon-name="standard:account" size="x-small"></lightning-icon>
+                                Shared Accounts
+                            </div>
+                            <lightning-badge label={accountCountLabel}></lightning-badge>
+                        </div>
+                        <div class="dash-section-bd">
+                            <template lwc:if={hasAccounts}>
+                                <div class="card-grid">
+                                    <template for:each={data.accounts} for:item="acct">
+                                        <div key={acct.id} class="acct-card">
+                                            <template lwc:if={acct.faviconUrl}>
+                                                <img src={acct.faviconUrl} alt="" class="acct-favicon" />
+                                            </template>
+                                            <template lwc:else>
+                                                <div class="acct-avatar" style={acct.avatarStyle}>{acct.avatarInitial}</div>
+                                            </template>
+                                            <div class="card-name">{acct.name}</div>
+                                            <div class="card-meta">
+                                                <template lwc:if={acct.accountStatus}>
+                                                    <span class="pill pill--status">{acct.accountStatus}</span>
+                                                </template>
+                                            </div>
+                                            <div class="card-stats">
+                                                <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                                                {acct.contactCount}
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template lwc:else>
+                                <p class="empty-msg">No shared accounts found for this GTMA pairing.</p>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RIGHT: Commits + Form -->
+                <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
+
+                    <!-- Commit Form -->
+                    <div class="dash-section slds-m-bottom_medium">
+                        <div class="dash-section-hd">
+                            <div class="dash-section-title">
+                                <lightning-icon icon-name="utility:task" size="x-small"></lightning-icon>
+                                Add Commit
+                            </div>
+                            <lightning-button label="+ New Commit" variant="brand" onclick={openCommitForm} disabled={showCommitForm}></lightning-button>
+                        </div>
+                        <div class="dash-section-bd">
+                            <template lwc:if={showCommitForm}>
+                                <div class="commit-form">
+                                    <div class="slds-m-bottom_small">
+                                        <div class="ownership-label">Ownership</div>
+                                        <lightning-radio-group
+                                            name="ownership"
+                                            label=""
+                                            options={ownershipOptions}
+                                            value={newCommit.ownership}
+                                            type="button"
+                                            onchange={handleOwnershipChange}>
+                                        </lightning-radio-group>
+                                    </div>
+                                    <div class="slds-m-top_small">
+                                        <lightning-combobox name="commitType" label="Commit Type" value={newCommit.commitType} options={commitTypeOptions} onchange={handleCommitTypeChange} required></lightning-combobox>
+                                    </div>
+                                    <div class="slds-m-top_small">
+                                        <lightning-textarea name="description" label="Description" value={newCommit.description} placeholder="Describe the commit activity..." max-length="500" onchange={handleDescriptionChange} required></lightning-textarea>
+                                    </div>
+                                    <div class="slds-m-top_small search-wrap">
+                                        <lightning-input name="accountSearch" label="Target Account" value={newCommit.accountName} placeholder="Type to search shared accounts..." onchange={handleAccountSearch}></lightning-input>
+                                        <template lwc:if={hasAccountResults}>
+                                            <ul class="search-dropdown">
+                                                <template for:each={accountSearchResults} for:item="r">
+                                                    <li key={r.id} class="search-result" data-id={r.id} data-name={r.name} onclick={selectAccount}>{r.name}</li>
+                                                </template>
+                                            </ul>
+                                        </template>
+                                    </div>
+                                    <div class="slds-m-top_small">
+                                        <lightning-input type="number" name="committedCount" label="Committed Count" value={newCommit.committedCount} min="1" max="99" onchange={handleCountChange}></lightning-input>
+                                    </div>
+                                    <div class="slds-m-top_medium">
+                                        <lightning-button label="Cancel" onclick={closeCommitForm} class="slds-m-right_small"></lightning-button>
+                                        <lightning-button label="Save" variant="brand" onclick={saveNewCommit} disabled={isSaving}></lightning-button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Shared Commits -->
+                    <div class="dash-section slds-m-bottom_medium">
+                        <div class="dash-section-hd">
+                            <div class="dash-section-title">
+                                <span class="section-divider shared-divider">&#x1F517; Shared</span>
+                            </div>
+                            <lightning-badge label={sharedCountLabel}></lightning-badge>
+                        </div>
+                        <div class="dash-section-bd">
+                            <template lwc:if={hasSharedCommits}>
+                                <div class="commit-grid">
+                                    <template for:each={data.sharedCommits} for:item="c">
+                                        <div key={c.Id} class={c.commitCardClass}>
+                                            <div class="ctile-logo-row">
+                                                <div class="ctile-acct-name">{c.refName}</div>
+                                                <span class={c.statusDotClass}></span>
+                                            </div>
+                                            <div class="ctile-type">{c.Commit_Type__c}</div>
+                                            <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                            <div class="ctile-footer">
+                                                <span class="cc-progress">{c.progressLabel}</span>
+                                                <button class={c.toggleBtnClass} data-id={c.Id} data-list="shared" onclick={handleToggleComplete}>{c.toggleLabel}</button>
+                                                <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} data-list="shared" onclick={handleDeleteCommit}></lightning-button-icon>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template lwc:else>
+                                <p class="empty-msg">No shared commits this week.</p>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- AE-Only Commits -->
+                    <div class="dash-section slds-m-bottom_medium">
+                        <div class="dash-section-hd">
+                            <div class="dash-section-title">
+                                <span class="section-divider ae-divider">&#x1F9E0; AE Only</span>
+                            </div>
+                            <lightning-badge label={aeCountLabel}></lightning-badge>
+                        </div>
+                        <div class="dash-section-bd">
+                            <template lwc:if={hasAeCommits}>
+                                <div class="commit-grid">
+                                    <template for:each={data.aeCommits} for:item="c">
+                                        <div key={c.Id} class={c.commitCardClass}>
+                                            <div class="ctile-logo-row">
+                                                <div class="ctile-acct-name">{c.refName}</div>
+                                                <span class={c.statusDotClass}></span>
+                                            </div>
+                                            <div class="ctile-type">{c.Commit_Type__c}</div>
+                                            <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                            <div class="ctile-footer">
+                                                <span class="cc-progress">{c.progressLabel}</span>
+                                                <button class={c.toggleBtnClass} data-id={c.Id} data-list="ae" onclick={handleToggleComplete}>{c.toggleLabel}</button>
+                                                <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} data-list="ae" onclick={handleDeleteCommit}></lightning-button-icon>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template lwc:else>
+                                <p class="empty-msg">No AE-only commits on shared accounts this week.</p>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- GTMA-Only Commits -->
+                    <div class="dash-section slds-m-bottom_medium">
+                        <div class="dash-section-hd">
+                            <div class="dash-section-title">
+                                <span class="section-divider gtma-divider">&#x26A1; GTMA Only</span>
+                            </div>
+                            <lightning-badge label={gtmaCountLabel}></lightning-badge>
+                        </div>
+                        <div class="dash-section-bd">
+                            <template lwc:if={hasGtmaCommits}>
+                                <div class="commit-grid">
+                                    <template for:each={data.gtmaCommits} for:item="c">
+                                        <div key={c.Id} class={c.commitCardClass}>
+                                            <div class="ctile-logo-row">
+                                                <div class="ctile-acct-name">{c.refName}</div>
+                                                <span class={c.statusDotClass}></span>
+                                            </div>
+                                            <div class="ctile-type">{c.Commit_Type__c}</div>
+                                            <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                            <div class="ctile-footer">
+                                                <span class="cc-progress">{c.progressLabel}</span>
+                                                <button class={c.toggleBtnClass} data-id={c.Id} data-list="gtma" onclick={handleToggleComplete}>{c.toggleLabel}</button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template lwc:else>
+                                <p class="empty-msg">No GTMA-only commits on shared accounts this week.</p>
+                            </template>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+            </div>
+        </template>
+
+    </template>
+</template>

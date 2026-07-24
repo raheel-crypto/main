@@ -1,0 +1,643 @@
+<template>
+
+    <!-- Loading -->
+    <template lwc:if={isLoading}>
+        <div class="slds-p-around_large slds-align_absolute-center">
+            <lightning-spinner alternative-text="Loading" size="large"></lightning-spinner>
+        </div>
+    </template>
+
+    <!-- Error -->
+    <template lwc:if={hasError}>
+        <div class="slds-notify slds-notify_alert slds-alert_error slds-m-around_medium" role="alert">
+            <lightning-icon icon-name="utility:error" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+            {errorMessage}
+        </div>
+    </template>
+
+    <template lwc:if={isReady}>
+
+        <!-- ── Weekly Activity Target Header ── -->
+        <div class="target-header slds-m-around_medium slds-p-around_large">
+            <div class="slds-grid slds-wrap">
+
+                <!-- Title row -->
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_small">
+                    <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-center">
+                        <h1 class="target-title">Pipeline Generation &mdash; Weekly Activity</h1>
+                        <button class="refresh-btn" onclick={handleRefresh} disabled={isLoading} title="Refresh">
+                            &#x21BA;
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Week label + summary -->
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_x-small">
+                    <div class="slds-grid slds-grid_align-spread slds-grid_vertical-align-end">
+                        <span class="weekly-count">{weeklyHeaderLabel}</span>
+                        <template lwc:if={showProgressBar}>
+                            <span class="weekly-pct">{weeklyPercent}% complete</span>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Progress bar (only shown when target is set) -->
+                <template lwc:if={showProgressBar}>
+                    <div class="slds-col slds-size_1-of-1 slds-m-bottom_small">
+                        <div class="pg-bar-track">
+                            <div class="pg-bar-fill" style={weeklyProgressStyle}></div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Chips -->
+                <div class="slds-col slds-size_1-of-1 slds-m-bottom_small">
+                    <span class="chip">{data.weeklyTarget.total} commits tracked</span>
+                    <template lwc:if={data.weeklyTarget.target}>
+                        <span class="chip slds-m-left_x-small">Target: {data.weeklyTarget.target}</span>
+                    </template>
+                    <template lwc:if={isGTMA2}>
+                        <span class="chip chip--tier2 slds-m-left_x-small">Tier 2</span>
+                    </template>
+                </div>
+
+                <!-- Week navigation -->
+                <div class="slds-col slds-size_1-of-1">
+                    <div class="week-nav">
+                        <button class={lastWeekBtnClass} data-offset="-1" onclick={handleWeekNav}>Last Week</button>
+                        <button class={thisWeekBtnClass} data-offset="0"  onclick={handleWeekNav}>This Week</button>
+                        <button class={nextWeekBtnClass} data-offset="1"  onclick={handleWeekNav}>Next Week</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ── Tabset ── -->
+        <lightning-tabset class="slds-p-horizontal_medium" variant="scoped" value={activeTab} onselect={handleTabSelect}>
+
+            <!-- ════ TAB 1: WEEKLY DASHBOARD ════ -->
+            <lightning-tab label="Weekly Dashboard" value="dashboard" icon-name="utility:metrics">
+                <div class="tab-dark-bg">
+                <div class="slds-grid slds-gutters slds-wrap">
+
+                    <!-- LEFT COLUMN: Target Accounts -->
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
+
+                        <div class="dash-section slds-m-bottom_medium">
+                            <div class="dash-section-hd">
+                                <div class="dash-section-title">
+                                    <lightning-icon icon-name="standard:account" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                    Target Accounts
+                                </div>
+                                <lightning-badge label={accountCountLabel}></lightning-badge>
+                            </div>
+                            <div class="dash-section-bd">
+                                <template lwc:if={hasAccounts}>
+                                    <div class="card-grid">
+                                        <template for:each={data.targetAccounts} for:item="acct">
+                                            <div key={acct.id} class={acct.cardClass}>
+                                                <div class="acct-logo-row">
+                                                    <template lwc:if={acct.faviconUrl}>
+                                                        <img src={acct.faviconUrl} alt="" class="acct-favicon" />
+                                                    </template>
+                                                    <template lwc:else>
+                                                        <div class="acct-avatar" style={acct.avatarStyle}>{acct.avatarInitial}</div>
+                                                    </template>
+                                                    <a href={acct.sfUrl} target="_blank" class="card-sf-link" title="Open in Salesforce">
+                                                        <lightning-icon icon-name="utility:new_window" size="xx-small"></lightning-icon>
+                                                    </a>
+                                                </div>
+                                                <div class="card-name">{acct.name}</div>
+                                                <div class="card-meta">
+                                                    <template lwc:if={acct.showStatusPill}>
+                                                        <span class="pill pill--status">{acct.accountStatus}</span>
+                                                    </template>
+                                                    <template lwc:if={acct.isAETarget}>
+                                                        <span class="pill pill--ae-target">AE Target</span>
+                                                    </template>
+                                                </div>
+                                                <div class="card-financials">
+                                                    <template lwc:if={acct.showArr}>
+                                                        <span class="fin-item fin-arr">ARR {acct.arrFormatted}</span>
+                                                    </template>
+                                                    <template lwc:if={acct.tamFormatted}>
+                                                        <span class="fin-item">TAM {acct.tamFormatted}</span>
+                                                    </template>
+                                                </div>
+                                                <div class="card-stats">
+                                                    <span title="Contacts">
+                                                        <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                                                        {acct.contactCount}
+                                                    </span>
+                                                </div>
+                                                <div class="card-activity">
+                                                    <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
+                                                    <span class={acct.activityClass}>{acct.lastActivityDateFormatted}</span>
+                                                </div>
+                                                <div class="card-activity">
+                                                    <span class={acct.gongClass}>&#x1F3A7; {acct.lastGongCallDateFormatted}</span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template lwc:else>
+                                    <p class="empty-msg">No target accounts. Use the Accounts tab to flag some.</p>
+                                </template>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!-- end LEFT -->
+
+                    <!-- RIGHT COLUMN -->
+                    <div class="slds-col slds-size_1-of-2 slds-small-size_1-of-1">
+
+                        <!-- This Week's Commits -->
+                        <div class="dash-section slds-m-bottom_medium">
+                            <div class="dash-section-hd">
+                                <div class="dash-section-title">
+                                    <lightning-icon icon-name="utility:task" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                    This Week&rsquo;s Activity Commits
+                                </div>
+                                <div class="slds-grid slds-grid_vertical-align-center">
+                                    <template lwc:if={showMassCreate}>
+                                        <lightning-button label={massCreateLabel} variant="neutral" size="small" onclick={handleMassCreate} disabled={isMassCreating} class="slds-m-right_x-small" title="Create a Meeting Booked commit for every target account"></lightning-button>
+                                    </template>
+                                    <template lwc:if={showCarryForward}>
+                                        <lightning-button label={carryForwardLabel} variant="neutral" size="small" onclick={handleCarryForward} disabled={isCarryingForward} class="slds-m-right_x-small"></lightning-button>
+                                    </template>
+                                    <lightning-button label="+ Add Commit" variant="brand" onclick={openCommitForm} disabled={showCommitForm}></lightning-button>
+                                </div>
+                            </div>
+                            <div class="dash-section-bd">
+
+                                <!-- Commit Form -->
+                                <template lwc:if={showCommitForm}>
+                                    <div class="commit-form slds-m-bottom_medium slds-p-around_medium">
+                                        <h3 class="slds-text-heading_small slds-m-bottom_small">New Activity Commit</h3>
+                                        <div class="slds-m-top_small">
+                                            <lightning-combobox name="commitType" label="Activity Type" value={newCommit.commitType} options={commitTypeOptions} onchange={handleCommitTypeChange} required></lightning-combobox>
+                                        </div>
+                                        <div class="slds-m-top_small">
+                                            <lightning-textarea name="description" label="Description" value={newCommit.description} placeholder="e.g. First meeting with CFO at Acme to discuss Rogo" max-length="500" onchange={handleDescriptionChange} required></lightning-textarea>
+                                        </div>
+                                        <div class="slds-m-top_small search-wrap">
+                                            <lightning-input name="accountSearch" label="Target Account" value={newCommit.accountName} placeholder="Type to search your accounts..." onchange={handleAccountSearch}></lightning-input>
+                                            <template lwc:if={hasAccountResults}>
+                                                <ul class="search-dropdown">
+                                                    <template for:each={accountSearchResults} for:item="r">
+                                                        <li key={r.id} class="search-result" data-id={r.id} data-name={r.name} onclick={selectAccount}>{r.name}</li>
+                                                    </template>
+                                                </ul>
+                                            </template>
+                                        </div>
+                                        <div class="slds-m-top_small">
+                                            <lightning-input type="number" name="committedCount" label="Committed Count" value={newCommit.committedCount} min="1" max="99" onchange={handleCountChange}></lightning-input>
+                                        </div>
+                                        <div class="slds-m-top_medium">
+                                            <lightning-button label="Cancel" onclick={closeCommitForm} class="slds-m-right_small"></lightning-button>
+                                            <lightning-button label="Save Commit" variant="brand" onclick={saveNewCommit} disabled={isSaving}></lightning-button>
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <!-- Commit List -->
+                                <template lwc:if={hasCommits}>
+                                    <div class="commit-grid">
+                                        <template for:each={allCommits} for:item="c">
+                                            <div key={c.Id} class={c.commitCardClass}>
+                                                <div class="ctile-logo-row">
+                                                    <div class="ctile-acct-name">{c.refName}</div>
+                                                    <span class={c.statusDotClass} title={c.Completion_Status__c}></span>
+                                                </div>
+                                                <div class="ctile-type">{c.Commit_Type__c}</div>
+                                                <div class="ctile-desc">{c.Commit_Description__c}</div>
+                                                <div class="ctile-footer">
+                                                    <span class="cc-progress">{c.progressLabel}</span>
+                                                    <button class={c.toggleBtnClass} data-id={c.Id} onclick={handleToggleComplete}>{c.toggleLabel}</button>
+                                                    <lightning-button-icon icon-name="utility:delete" size="x-small" variant="bare-inverse" alternative-text="Remove" data-id={c.Id} onclick={handleDeleteCommit}></lightning-button-icon>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </template>
+                                <template lwc:else>
+                                    <p class="empty-msg">No activity commits yet this week.</p>
+                                </template>
+
+                            </div>
+                        </div>
+
+                        <!-- Last Week's Scorecard -->
+                        <div class="dash-section slds-m-bottom_medium">
+                            <div class="dash-section-hd">
+                                <div class="dash-section-title">
+                                    <lightning-icon icon-name="utility:chart" size="x-small" class="slds-m-right_x-small"></lightning-icon>
+                                    {scorecardLabel}&rsquo;s Scorecard
+                                </div>
+                            </div>
+                            <div class="dash-section-bd">
+                                <div class="slds-grid slds-gutters">
+                                    <div class="slds-col slds-size_1-of-2">
+                                        <div class="section-divider activity-divider slds-m-bottom_small">Activity</div>
+                                        <dl class="scorecard-dl">
+                                            <dt>Commits completed</dt><dd>{scorecard.commitsCompleted} / {scorecard.commitsTotal}</dd>
+                                            <dt>Accounts touched</dt><dd class="metric-green">{scorecard.accountsTouched}</dd>
+                                        </dl>
+                                    </div>
+                                    <div class="slds-col slds-size_1-of-2">
+                                        <div class="section-divider pipeline-divider slds-m-bottom_small">Pipeline</div>
+                                        <dl class="scorecard-dl">
+                                            <dt>Open opps on covered accounts</dt><dd class="metric-green">{scorecard.pipelineInfluence}</dd>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    <!-- end RIGHT -->
+
+                </div>
+                </div>
+            </lightning-tab>
+
+            <!-- ════ TAB 2: MY ACCOUNTS ════ -->
+            <lightning-tab label="My Accounts" value="accounts" icon-name="utility:target" onactive={handleAccountsTabActive}>
+                <div class="tab-dark-bg">
+
+                <!-- Loading cards -->
+                <template lwc:if={isLoadingCards}>
+                    <div class="slds-p-around_large slds-align_absolute-center">
+                        <lightning-spinner alternative-text="Loading accounts" size="medium"></lightning-spinner>
+                    </div>
+                </template>
+
+                <template lwc:if={accountCardsLoaded}>
+
+                    <!-- ── GTMA2: Search + Immediate-Save Targets ── -->
+                    <template lwc:if={isGTMA2}>
+
+                        <!-- Search section -->
+                        <div class="gtma2-search-section slds-p-around_medium">
+                            <div class="gtma2-search-label">Search &amp; Add Accounts</div>
+                            <div class="search-wrap">
+                                <lightning-input
+                                    type="search"
+                                    placeholder="Search any account by name..."
+                                    value={gtma2SearchTerm}
+                                    onchange={handleGTMA2Search}
+                                    variant="label-hidden"
+                                    class="gtma2-search-input">
+                                </lightning-input>
+                                <template lwc:if={isSearching}>
+                                    <div class="gtma2-search-spinner">
+                                        <lightning-spinner size="x-small" alternative-text="Searching"></lightning-spinner>
+                                    </div>
+                                </template>
+                                <template lwc:if={hasGTMA2SearchResults}>
+                                    <ul class="search-dropdown gtma2-search-dropdown">
+                                        <template for:each={gtma2SearchResults} for:item="r">
+                                            <li key={r.id} class="search-result gtma2-result">
+                                                <div class="gtma2-result-info">
+                                                    <template lwc:if={r.faviconUrl}>
+                                                        <img src={r.faviconUrl} alt="" class="gtma2-result-favicon" />
+                                                    </template>
+                                                    <template lwc:else>
+                                                        <div class="gtma2-result-avatar" style={r.avatarStyle}>{r.avatarInitial}</div>
+                                                    </template>
+                                                    <div class="gtma2-result-text">
+                                                        <span class="gtma2-result-name">{r.name}</span>
+                                                        <template lwc:if={r.accountStatus}>
+                                                            <span class="pill pill--status">{r.accountStatus}</span>
+                                                        </template>
+                                                    </div>
+                                                </div>
+                                                <button class="gtma2-add-btn" data-id={r.id} onclick={handleAddGTMA2Target}>+ Add</button>
+                                            </li>
+                                        </template>
+                                    </ul>
+                                </template>
+                                <template lwc:if={showGTMA2NoResults}>
+                                    <div class="gtma2-no-results">No accounts found</div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- GTMA2 current targets -->
+                        <div class="slds-p-horizontal_medium slds-p-bottom_medium">
+                            <div class="gtma2-targets-header slds-m-bottom_small">
+                                My Targets
+                                <span class="segment-count">({accountCards.length})</span>
+                            </div>
+                            <template lwc:if={hasAccountCards}>
+                                <div class="acct-cards-bg">
+                                    <div class="card-grid slds-p-around_small">
+                                        <template for:each={gtma2Cards} for:item="card">
+                                            <div key={card.id} class={card.cardClass}>
+                                                <div class="acct-logo-row">
+                                                    <template lwc:if={card.faviconUrl}>
+                                                        <img src={card.faviconUrl} alt="" class="acct-favicon" />
+                                                    </template>
+                                                    <template lwc:else>
+                                                        <div class="acct-avatar" style={card.avatarStyle}>{card.avatarInitial}</div>
+                                                    </template>
+                                                </div>
+                                                <div class="card-name">{card.name}</div>
+                                                <div class="card-meta slds-m-bottom_xx-small">
+                                                    <template lwc:if={card.accountStatus}>
+                                                        <span class="pill pill--status">{card.accountStatus}</span>
+                                                    </template>
+                                                    <template lwc:if={card.accountTier}>
+                                                        <span class="pill pill--tier">{card.accountTier}</span>
+                                                    </template>
+                                                </div>
+                                                <div class="card-financials">
+                                                    <template lwc:if={card.showArr}>
+                                                        <span class="fin-item fin-arr">ARR {card.arrFormatted}</span>
+                                                    </template>
+                                                </div>
+                                                <div class="card-stats">
+                                                    <span title="Contacts">
+                                                        <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                                                        {card.contactCount}
+                                                    </span>
+                                                    <span title="Open opps">
+                                                        <lightning-icon icon-name="utility:opportunity" size="xx-small"></lightning-icon>
+                                                        {card.openOppCount}
+                                                    </span>
+                                                </div>
+                                                <div class="card-activity">
+                                                    <template lwc:if={card.lastActivityDate}>
+                                                        <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
+                                                        {card.activityFmt}
+                                                    </template>
+                                                    <template lwc:else>
+                                                        <span class="stale-text">No activity</span>
+                                                    </template>
+                                                </div>
+                                                <div class="card-remove-row">
+                                                    <button class="gtma2-remove-btn" data-id={card.id} onclick={handleRemoveGTMA2Target}>&#x00D7; Remove</button>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                            <template lwc:else>
+                                <p class="empty-msg slds-p-vertical_medium">No target accounts yet. Use the search above to add accounts.</p>
+                            </template>
+                        </div>
+
+                    </template>
+                    <!-- end GTMA2 section -->
+
+                    <!-- ── GTMA1: Segmented picker with batch save ── -->
+                    <template lwc:else>
+
+                        <!-- Targeted accounts strip -->
+                        <template lwc:if={hasTargetedCards}>
+                            <div class="targeted-strip slds-p-horizontal_medium">
+                                <span class="targeted-strip-label">Targeted</span>
+                                <div class="targeted-strip-scroll">
+                                    <template for:each={targetedCards} for:item="card">
+                                        <div key={card.id} class="targeted-chip" data-id={card.id} onclick={handleCardToggle}>
+                                            <template lwc:if={card.faviconUrl}>
+                                                <img src={card.faviconUrl} alt="" class="tchip-favicon" />
+                                            </template>
+                                            <template lwc:else>
+                                                <div class="tchip-avatar" style={card.avatarStyle}>{card.avatarInitial}</div>
+                                            </template>
+                                            <span class="tchip-name">{card.name}</span>
+                                            <span class="tchip-x">&#x00D7;</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Toolbar -->
+                        <div class="slds-grid slds-grid_align-spread slds-p-around_medium slds-p-bottom_x-small card-toolbar slds-wrap">
+                            <div class="slds-col slds-grow">
+                                <lightning-input
+                                    type="search"
+                                    placeholder="Search by name, industry or status..."
+                                    value={cardSearchTerm}
+                                    onchange={handleCardSearch}
+                                    variant="label-hidden"
+                                    class="card-search">
+                                </lightning-input>
+                            </div>
+                            <div class="slds-col slds-no-flex slds-p-left_medium slds-grid slds-grid_vertical-align-center">
+                                <span class="slds-text-body_small metric-dark slds-m-right_small">{targetedCardCount} of {totalCardCount} targeted</span>
+                                <lightning-combobox
+                                    label="Sort by"
+                                    value={accountSortBy}
+                                    options={sortOptions}
+                                    onchange={handleSortChange}
+                                    variant="label-hidden"
+                                    class="sort-select">
+                                </lightning-combobox>
+                            </div>
+                        </div>
+
+                        <!-- Alpha filter strip -->
+                        <div class="alpha-strip slds-p-horizontal_medium slds-p-bottom_x-small">
+                            <template for:each={alphaLetters} for:item="l">
+                                <button key={l.key} class={l.btnClass} data-letter={l.key} onclick={handleAlphaFilter}>{l.label}</button>
+                            </template>
+                        </div>
+
+                        <!-- Segment sections -->
+                        <div class="slds-p-horizontal_medium acct-cards-bg">
+                            <template for:each={accountSegments} for:item="seg">
+                                <div key={seg.key} class="segment-section slds-m-bottom_large">
+                                    <div class="segment-header slds-m-bottom_small">
+                                        {seg.label}
+                                        <span class="segment-count">({seg.cards.length})</span>
+                                    </div>
+                                    <div class="card-grid">
+                                        <template for:each={seg.cards} for:item="card">
+                                            <div key={card.id} class={card.cardClass} data-id={card.id} onclick={handleCardToggle}>
+
+                                                <div class="acct-logo-row">
+                                                    <template lwc:if={card.faviconUrl}>
+                                                        <img src={card.faviconUrl} alt="" class="acct-favicon" />
+                                                    </template>
+                                                    <template lwc:else>
+                                                        <div class="acct-avatar" style={card.avatarStyle}>{card.avatarInitial}</div>
+                                                    </template>
+                                                    <div class="card-check">
+                                                        <template lwc:if={card.effectiveTargeted}>
+                                                            <lightning-icon icon-name="utility:check" size="x-small" alternative-text="Targeted"></lightning-icon>
+                                                        </template>
+                                                    </div>
+                                                </div>
+
+                                                <div class="card-name">{card.name}</div>
+
+                                                <div class="card-meta slds-m-bottom_xx-small">
+                                                    <template lwc:if={card.accountStatus}>
+                                                        <span class="pill pill--status">{card.accountStatus}</span>
+                                                    </template>
+                                                    <template lwc:if={card.accountTier}>
+                                                        <span class="pill pill--tier">{card.accountTier}</span>
+                                                    </template>
+                                                </div>
+
+                                                <div class="card-financials">
+                                                    <template lwc:if={card.showArr}>
+                                                        <span class="fin-item fin-arr">ARR {card.arrFormatted}</span>
+                                                    </template>
+                                                    <template lwc:if={card.tamFormatted}>
+                                                        <span class="fin-item">TAM {card.tamFormatted}</span>
+                                                    </template>
+                                                </div>
+
+                                                <div class="card-stats">
+                                                    <span title="Contacts">
+                                                        <lightning-icon icon-name="utility:people" size="xx-small"></lightning-icon>
+                                                        {card.contactCount}
+                                                    </span>
+                                                    <span title="Open opps">
+                                                        <lightning-icon icon-name="utility:opportunity" size="xx-small"></lightning-icon>
+                                                        {card.openOppCount}
+                                                    </span>
+                                                    <template lwc:if={card.bankerCount}>
+                                                        <span title="Bankers/Investors">
+                                                            <lightning-icon icon-name="utility:currency" size="xx-small"></lightning-icon>
+                                                            {card.bankerCount}
+                                                        </span>
+                                                    </template>
+                                                </div>
+
+                                                <div class="card-activity">
+                                                    <template lwc:if={card.lastActivityDate}>
+                                                        <lightning-icon icon-name="utility:event" size="xx-small" class="slds-m-right_xx-small"></lightning-icon>
+                                                        {card.activityFmt}
+                                                    </template>
+                                                    <template lwc:else>
+                                                        <span class="stale-text">No activity</span>
+                                                    </template>
+                                                </div>
+
+                                                <template lwc:if={card.isPending}>
+                                                    <div class="card-pending-label">
+                                                        <template lwc:if={card.effectiveTargeted}>+ will be targeted</template>
+                                                        <template lwc:else>click to undo</template>
+                                                    </div>
+                                                </template>
+
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <template lwc:if={hasNoSegments}>
+                                <p class="empty-msg slds-p-vertical_medium">No accounts match your search.</p>
+                            </template>
+                        </div>
+
+                        <!-- Sticky save bar -->
+                        <template lwc:if={hasPendingChanges}>
+                            <div class="save-bar">
+                                <span class="save-bar-label">{pendingCountLabel}</span>
+                                <lightning-button label="Discard" onclick={cancelTargetChanges} class="slds-m-right_small"></lightning-button>
+                                <lightning-button label={pendingLabel} variant="brand" onclick={saveTargetAccounts} disabled={isSavingTargets}></lightning-button>
+                            </div>
+                        </template>
+
+                    </template>
+                    <!-- end GTMA1 section -->
+
+                </template>
+
+                </div>
+            </lightning-tab>
+
+        </lightning-tabset>
+
+        <!-- ── Carry-Forward Selection Modal ── -->
+        <template lwc:if={showCarryModal}>
+            <div class="carry-modal-overlay" onclick={handleCarryCancel}></div>
+            <div class="carry-modal" role="dialog" aria-modal="true">
+                <div class="carry-modal-hd">
+                    <span class="carry-modal-title">{carryModalTitle}</span>
+                    <button class="carry-modal-close" onclick={handleCarryCancel} title="Close">&#x2715;</button>
+                </div>
+
+                <!-- Loading state -->
+                <template lwc:if={isLoadingCarry}>
+                    <div class="carry-modal-loading">
+                        <lightning-spinner size="small" alternative-text="Loading"></lightning-spinner>
+                    </div>
+                </template>
+
+                <!-- Empty state -->
+                <template lwc:if={noCarryCommits}>
+                    <p class="carry-modal-empty">No commits found in the prior week.</p>
+                </template>
+
+                <!-- Commit list -->
+                <template lwc:if={hasCarryIncomplete}>
+                    <div class="carry-section-label">Incomplete</div>
+                    <ul class="carry-commit-list">
+                        <template for:each={carryIncompleteCommits} for:item="c">
+                            <li key={c.Id} class="carry-commit-row">
+                                <input type="checkbox" class="carry-checkbox" data-id={c.Id}
+                                    checked={c.selected} onchange={handleCarryToggle} />
+                                <div class="carry-commit-info">
+                                    <span class="carry-commit-type">{c.Commit_Type__c}</span>
+                                    <template lwc:if={c.refName}>
+                                        <span class="carry-commit-acct">{c.refName}</span>
+                                    </template>
+                                    <template lwc:if={c.Commit_Description__c}>
+                                        <span class="carry-commit-desc">{c.Commit_Description__c}</span>
+                                    </template>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+
+                <template lwc:if={hasCarryCompleted}>
+                    <div class="carry-section-label carry-section-label--done">Completed</div>
+                    <ul class="carry-commit-list">
+                        <template for:each={carryCompletedCommits} for:item="c">
+                            <li key={c.Id} class="carry-commit-row carry-commit-row--done">
+                                <input type="checkbox" class="carry-checkbox" data-id={c.Id}
+                                    checked={c.selected} onchange={handleCarryToggle} />
+                                <div class="carry-commit-info">
+                                    <span class="carry-commit-type">{c.Commit_Type__c}</span>
+                                    <template lwc:if={c.refName}>
+                                        <span class="carry-commit-acct">{c.refName}</span>
+                                    </template>
+                                    <template lwc:if={c.Commit_Description__c}>
+                                        <span class="carry-commit-desc">{c.Commit_Description__c}</span>
+                                    </template>
+                                </div>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
+
+                <!-- Shortcuts + confirm -->
+                <div class="carry-modal-ft">
+                    <div class="carry-shortcuts">
+                        <button class="carry-shortcut-btn" onclick={handleCarrySelectAll}>Select All</button>
+                        <button class="carry-shortcut-btn" onclick={handleCarrySelectIncomplete}>Incomplete Only</button>
+                    </div>
+                    <div class="carry-actions">
+                        <button class="carry-cancel-btn" onclick={handleCarryCancel}>Cancel</button>
+                        <button class="carry-confirm-btn" onclick={handleCarryConfirm}
+                            disabled={isCarryingForward}>{carryConfirmLabel}</button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+    </template>
+</template>
