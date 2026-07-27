@@ -520,7 +520,14 @@ public with sharing class AccountDedupeScanController {
                     Error_Message__c = null
                 ));
             }
-            if (updates.isEmpty()) return 0;
+            if (updates.isEmpty()) {
+                String dbg = 'reqs=' + requests.size();
+                if (!requests.isEmpty()) {
+                    QueueRequest r0 = requests[0];
+                    dbg += ' r0=[g=' + r0.groupId + ',m=' + r0.masterId + ']';
+                }
+                throw new AuraHandledException('DEBUG ' + dbg);
+            }
             update updates;
             if (!Test.isRunningTest()) {
                 // Instantiate dynamically to avoid a circular compile-time
