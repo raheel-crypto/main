@@ -488,46 +488,38 @@ public with sharing class AccountDedupeScanController {
         }
     }
 
-    public class QueueRequest {
-        // Declared as String rather than Id: @AuraEnabled inner-class Id fields
-        // do not deserialize correctly from LWC imperative calls.
-        @AuraEnabled public String groupId;
-        @AuraEnabled public String masterId;
-        @AuraEnabled public String notes;
-    }
-
     /**
      * Stamp the picked master + notes onto each group and flip Status__c
      * to Queued so the AccountMergeQueueDrainer Queueable can absorb the
      * duplicates in the background using the MasterWinsFillNulls policy.
      * Enqueues a single drainer chain that will pick up everything just
      * queued — chained Queueables will keep draining until empty.
+     *
+     * Parameters use parallel List<String> arrays instead of a List<InnerClass>
+     * because @AuraEnabled inner-class deserialization silently nulls out fields
+     * in LWC imperative calls.
      */
     @AuraEnabled
-    public static Integer queueGroupsForMerge(List<QueueRequest> requests) {
+    public static Integer queueGroupsForMerge(List<String> groupIds, List<String> masterIds, List<String> notesList) {
         try {
-            if (requests == null || requests.isEmpty()) return 0;
+            if (groupIds == null || groupIds.isEmpty()) return 0;
             List<Dedupe_Group__c> updates = new List<Dedupe_Group__c>();
             DateTime now = System.now();
-            for (QueueRequest r : requests) {
-                if (r == null || String.isBlank(r.groupId) || String.isBlank(r.masterId)) continue;
+            for (Integer i = 0; i < groupIds.size(); i++) {
+                String gId = groupIds[i];
+                String mId = (masterIds != null && i < masterIds.size()) ? masterIds[i] : null;
+                if (String.isBlank(gId) || String.isBlank(mId)) continue;
+                String note = (notesList != null && i < notesList.size()) ? notesList[i] : null;
                 updates.add(new Dedupe_Group__c(
-                    Id = (Id) r.groupId,
-                    Master_Account__c = (Id) r.masterId,
+                    Id = (Id) gId,
+                    Master_Account__c = (Id) mId,
                     Status__c = 'Queued',
                     Queued_At__c = now,
-                    Merge_Notes__c = r.notes,
+                    Merge_Notes__c = note,
                     Error_Message__c = null
                 ));
             }
-            if (updates.isEmpty()) {
-                String dbg = 'reqs=' + requests.size();
-                if (!requests.isEmpty()) {
-                    QueueRequest r0 = requests[0];
-                    dbg += ' r0=[g=' + r0.groupId + ',m=' + r0.masterId + ']';
-                }
-                throw new AuraHandledException('DEBUG ' + dbg);
-            }
+            if (updates.isEmpty()) return 0;
             update updates;
             if (!Test.isRunningTest()) {
                 // Instantiate dynamically to avoid a circular compile-time

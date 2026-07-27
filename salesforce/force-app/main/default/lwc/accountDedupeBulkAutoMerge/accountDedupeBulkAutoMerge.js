@@ -163,13 +163,12 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
         );
         if (!ok) return;
         this.queueing = true;
-        // eslint-disable-next-line no-console
-        console.log('[BulkMerge] queueGroupsForMerge requests:', JSON.stringify(requests.slice(0, 5)));
-        // Strip LWC reactive-membrane proxy wrapping before sending to Apex.
-        // Without this, @track-derived Id values appear as null on the Apex side.
-        const plainRequests = JSON.parse(JSON.stringify(requests));
+        // Pass parallel arrays — @AuraEnabled silently nulls List<InnerClass> fields.
+        const groupIds  = requests.map(r => r.groupId);
+        const masterIds = requests.map(r => r.masterId);
+        const notesList = requests.map(r => r.notes);
         try {
-            const n = await queueGroupsForMerge({ requests: plainRequests });
+            const n = await queueGroupsForMerge({ groupIds, masterIds, notesList });
             if (n > 0) {
                 this.toast(
                     `Queued ${n} group${n === 1 ? '' : 's'}`,
@@ -179,10 +178,9 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
                 await this.load();
                 this._startPolling();
             } else {
-                const firstMaster = plainRequests[0] ? plainRequests[0].masterId : 'no requests';
                 this.toast(
-                    `Nothing queued (n=${n})`,
-                    `Sent ${plainRequests.length} req(s). First masterId: ${firstMaster}`,
+                    'Nothing queued',
+                    'All groups were skipped — master account could not be resolved.',
                     'warning'
                 );
             }

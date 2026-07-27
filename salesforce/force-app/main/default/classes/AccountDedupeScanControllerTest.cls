@@ -444,12 +444,10 @@ private class AccountDedupeScanControllerTest {
             new List<Id>{ acmes[0].Id, acmes[1].Id }, null, 'Open'
         );
 
-        AccountDedupeScanController.QueueRequest req = new AccountDedupeScanController.QueueRequest();
-        req.groupId = g.Id;
-        req.masterId = acmes[0].Id;
-        req.notes = 'integration test';
         Integer queued = AccountDedupeScanController.queueGroupsForMerge(
-            new List<AccountDedupeScanController.QueueRequest>{ req }
+            new List<String>{ g.Id },
+            new List<String>{ acmes[0].Id },
+            new List<String>{ 'integration test' }
         );
         System.assertEquals(1, queued);
 
@@ -464,9 +462,9 @@ private class AccountDedupeScanControllerTest {
 
     @IsTest
     static void queueGroupsForMerge_emptyInputs() {
-        System.assertEquals(0, AccountDedupeScanController.queueGroupsForMerge(null));
+        System.assertEquals(0, AccountDedupeScanController.queueGroupsForMerge(null, null, null));
         System.assertEquals(0,
-            AccountDedupeScanController.queueGroupsForMerge(new List<AccountDedupeScanController.QueueRequest>()));
+            AccountDedupeScanController.queueGroupsForMerge(new List<String>(), new List<String>(), new List<String>()));
     }
 
     @IsTest
