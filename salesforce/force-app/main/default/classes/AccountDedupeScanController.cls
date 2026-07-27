@@ -489,8 +489,10 @@ public with sharing class AccountDedupeScanController {
     }
 
     public class QueueRequest {
-        @AuraEnabled public Id groupId;
-        @AuraEnabled public Id masterId;
+        // Declared as String rather than Id: @AuraEnabled inner-class Id fields
+        // do not deserialize correctly from LWC imperative calls.
+        @AuraEnabled public String groupId;
+        @AuraEnabled public String masterId;
         @AuraEnabled public String notes;
     }
 
@@ -508,10 +510,10 @@ public with sharing class AccountDedupeScanController {
             List<Dedupe_Group__c> updates = new List<Dedupe_Group__c>();
             DateTime now = System.now();
             for (QueueRequest r : requests) {
-                if (r == null || r.groupId == null || r.masterId == null) continue;
+                if (r == null || String.isBlank(r.groupId) || String.isBlank(r.masterId)) continue;
                 updates.add(new Dedupe_Group__c(
-                    Id = r.groupId,
-                    Master_Account__c = r.masterId,
+                    Id = (Id) r.groupId,
+                    Master_Account__c = (Id) r.masterId,
                     Status__c = 'Queued',
                     Queued_At__c = now,
                     Merge_Notes__c = r.notes,
