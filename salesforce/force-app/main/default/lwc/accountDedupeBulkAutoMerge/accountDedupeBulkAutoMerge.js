@@ -179,9 +179,10 @@ export default class AccountDedupeBulkAutoMerge extends LightningElement {
                 await this.load();
                 this._startPolling();
             } else {
+                const firstMaster = plainRequests[0] ? plainRequests[0].masterId : 'no requests';
                 this.toast(
-                    'Nothing queued',
-                    'All groups were skipped — master account could not be resolved. Check the console for details.',
+                    `Nothing queued (n=${n})`,
+                    `Sent ${plainRequests.length} req(s). First masterId: ${firstMaster}`,
                     'warning'
                 );
             }
