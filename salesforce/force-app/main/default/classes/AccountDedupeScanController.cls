@@ -200,6 +200,7 @@ public with sharing class AccountDedupeScanController {
     @AuraEnabled(cacheable=false)
     public static List<AcrConflict> listAcrConflicts(Id groupId) {
         if (groupId == null) return new List<AcrConflict>();
+        if (!Schema.getGlobalDescribe().containsKey('AccountContactRelation')) return new List<AcrConflict>();
 
         Set<Id> accountIds = new Set<Id>();
         for (Dedupe_Group_Member__c m : [
@@ -212,34 +213,37 @@ public with sharing class AccountDedupeScanController {
         Map<Id, AcrConflict> byContact = new Map<Id, AcrConflict>();
         Map<Id, Set<Id>> accountsPerContact = new Map<Id, Set<Id>>();
 
-        for (AccountContactRelation acr : [
-            SELECT Id, AccountId, Account.Name, ContactId, Contact.Name, Contact.Email,
-                   Contact.Title, Roles, IsDirect
-            FROM AccountContactRelation
-            WHERE AccountId IN :accountIds
-            ORDER BY Contact.Name NULLS LAST
-            LIMIT 5000
-        ]) {
-            if (acr.ContactId == null) continue;
+        for (SObject acr : Database.query(
+            'SELECT Id, AccountId, Account.Name, ContactId, Contact.Name, Contact.Email, ' +
+            '       Contact.Title, Roles, IsDirect ' +
+            'FROM AccountContactRelation ' +
+            'WHERE AccountId IN :accountIds ' +
+            'ORDER BY Contact.Name NULLS LAST LIMIT 5000'
+        )) {
+            Id contactId = (Id) acr.get('ContactId');
+            if (contactId == null) continue;
 
-            if (!byContact.containsKey(acr.ContactId)) {
+            if (!byContact.containsKey(contactId)) {
+                SObject contact = acr.getSObject('Contact');
                 AcrConflict c = new AcrConflict();
-                c.contactId    = acr.ContactId;
-                c.contactName  = acr.Contact != null ? acr.Contact.Name : null;
-                c.contactEmail = acr.Contact != null ? acr.Contact.Email : null;
-                c.contactTitle = acr.Contact != null ? acr.Contact.Title : null;
+                c.contactId    = contactId;
+                c.contactName  = contact != null ? (String) contact.get('Name') : null;
+                c.contactEmail = contact != null ? (String) contact.get('Email') : null;
+                c.contactTitle = contact != null ? (String) contact.get('Title') : null;
                 c.relations    = new List<AcrRow>();
-                byContact.put(acr.ContactId, c);
-                accountsPerContact.put(acr.ContactId, new Set<Id>());
+                byContact.put(contactId, c);
+                accountsPerContact.put(contactId, new Set<Id>());
             }
+            SObject account = acr.getSObject('Account');
+            Id accountId = (Id) acr.get('AccountId');
             AcrRow row = new AcrRow();
-            row.relationId  = acr.Id;
-            row.accountId   = acr.AccountId;
-            row.accountName = acr.Account != null ? acr.Account.Name : null;
-            row.isDirect    = acr.IsDirect;
-            row.roles       = acr.Roles;
-            byContact.get(acr.ContactId).relations.add(row);
-            accountsPerContact.get(acr.ContactId).add(acr.AccountId);
+            row.relationId  = (Id) acr.get('Id');
+            row.accountId   = accountId;
+            row.accountName = account != null ? (String) account.get('Name') : null;
+            row.isDirect    = (Boolean) acr.get('IsDirect');
+            row.roles       = (String) acr.get('Roles');
+            byContact.get(contactId).relations.add(row);
+            accountsPerContact.get(contactId).add(accountId);
         }
 
         List<AcrConflict> out = new List<AcrConflict>();
@@ -272,6 +276,8 @@ public with sharing class AccountDedupeScanController {
         try {
             if (groupId == null) throw new AuraHandledException('Group is required.');
             if (masterAccountId == null) throw new AuraHandledException('Master account is required.');
+            // Contacts-to-Multiple-Accounts may not be enabled in all orgs.
+            if (!Schema.getGlobalDescribe().containsKey('AccountContactRelation')) return 0;
 
             Set<Id> accountIds = new Set<Id>();
             for (Dedupe_Group_Member__c m : [
@@ -284,73 +290,60 @@ public with sharing class AccountDedupeScanController {
             }
             if (accountIds.size() < 2) return 0;
 
-            Map<Id, List<AccountContactRelation>> byContact = new Map<Id, List<AccountContactRelation>>();
-            for (AccountContactRelation acr : [
-                SELECT Id, ContactId, AccountId, IsDirect
-                FROM AccountContactRelation
-                WHERE AccountId IN :accountIds
-            ]) {
-                if (acr.ContactId == null) continue;
-                if (!byContact.containsKey(acr.ContactId)) {
-                    byContact.put(acr.ContactId, new List<AccountContactRelation>());
-                }
-                byContact.get(acr.ContactId).add(acr);
+            // Use dynamic SOQL so the class compiles even without ACR enabled.
+            Map<Id, List<SObject>> byContact = new Map<Id, List<SObject>>();
+            for (SObject acr : Database.query(
+                'SELECT Id, ContactId, AccountId, IsDirect FROM AccountContactRelation WHERE AccountId IN :accountIds'
+            )) {
+                Id cid = (Id) acr.get('ContactId');
+                if (cid == null) continue;
+                if (!byContact.containsKey(cid)) byContact.put(cid, new List<SObject>());
+                byContact.get(cid).add(acr);
             }
 
-            List<AccountContactRelation> toDelete = new List<AccountContactRelation>();
+            List<SObject> toDelete = new List<SObject>();
             Set<Id> contactsToReparent = new Set<Id>();
 
             for (Id cid : byContact.keySet()) {
-                List<AccountContactRelation> rows = byContact.get(cid);
+                List<SObject> rows = byContact.get(cid);
                 if (rows.size() <= 1) continue;
 
-                AccountContactRelation directRow;
-                AccountContactRelation masterIndirect;
-                List<AccountContactRelation> dupeIndirect = new List<AccountContactRelation>();
-                for (AccountContactRelation r : rows) {
-                    if (r.IsDirect) {
+                SObject directRow;
+                SObject masterIndirect;
+                List<SObject> dupeIndirect = new List<SObject>();
+                for (SObject r : rows) {
+                    Boolean isDirect = (Boolean) r.get('IsDirect');
+                    Id acctId = (Id) r.get('AccountId');
+                    if (isDirect == true) {
                         directRow = r;
-                    } else if (r.AccountId == masterAccountId) {
+                    } else if (acctId == masterAccountId) {
                         masterIndirect = r;
                     } else {
                         dupeIndirect.add(r);
                     }
                 }
 
-                if (directRow != null && directRow.AccountId != masterAccountId) {
+                Id directAcctId = directRow != null ? (Id) directRow.get('AccountId') : null;
+                if (directRow != null && directAcctId != masterAccountId) {
                     // Direct ACR is on a dupe → reparent the contact to master.
-                    // Drop any indirect on master first so the reparent's
-                    // auto-created direct doesn't collide.
                     contactsToReparent.add(cid);
-                    if (masterIndirect != null) {
-                        toDelete.add(new AccountContactRelation(Id = masterIndirect.Id));
-                    }
-                    for (AccountContactRelation r : dupeIndirect) {
-                        toDelete.add(new AccountContactRelation(Id = r.Id));
-                    }
-                } else if (directRow != null && directRow.AccountId == masterAccountId) {
-                    // Contact is already directly on the master. Drop all dupes.
-                    for (AccountContactRelation r : dupeIndirect) {
-                        toDelete.add(new AccountContactRelation(Id = r.Id));
-                    }
+                    if (masterIndirect != null) toDelete.add(masterIndirect);
+                    toDelete.addAll(dupeIndirect);
+                } else if (directRow != null && directAcctId == masterAccountId) {
+                    // Already directly on master — drop all dupe indirects.
+                    toDelete.addAll(dupeIndirect);
                 } else if (masterIndirect != null) {
-                    // No direct ACR in the group; master already has an indirect.
-                    // Drop the dupe indirects.
-                    for (AccountContactRelation r : dupeIndirect) {
-                        toDelete.add(new AccountContactRelation(Id = r.Id));
-                    }
+                    // No direct; master has indirect — drop dupe indirects.
+                    toDelete.addAll(dupeIndirect);
                 } else if (dupeIndirect.size() > 1) {
-                    // No direct, no master ACR — keep the first dupe ACR (which
-                    // will migrate to master at merge time) and drop the rest.
-                    for (Integer i = 1; i < dupeIndirect.size(); i++) {
-                        toDelete.add(new AccountContactRelation(Id = dupeIndirect[i].Id));
-                    }
+                    // No direct, no master ACR — keep first dupe ACR, drop rest.
+                    for (Integer i = 1; i < dupeIndirect.size(); i++) toDelete.add(dupeIndirect[i]);
                 }
             }
 
             Integer cleaned = 0;
             if (!toDelete.isEmpty()) {
-                delete toDelete;
+                Database.delete(toDelete);
                 cleaned += toDelete.size();
             }
             if (!contactsToReparent.isEmpty()) {
