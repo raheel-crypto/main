@@ -93,13 +93,17 @@ public with sharing class AccountMergeQueueDrainer implements Queueable {
         }
 
         try {
-            // Consolidate every cross-account contact relation onto the
-            // master first so the Account merge doesn't trip over
-            // duplicate AccountContactRelation rows.
-            AccountDedupeScanController.cleanupAcrConflicts(groupId, masterId);
-
             Map<String, Id> fieldSourceMap = buildFillNullSources(masterId, allIds);
-            AccountDedupeService.mergeAccounts(masterId, dupeIds, fieldSourceMap);
+
+            // Merge one dupe at a time, cleaning up ACR conflicts before each
+            // merge. Batching multiple dupes into a single merge() call causes
+            // Salesforce to check ALL pairs (master-dupe AND dupe-dupe), and
+            // contacts that moved to master from a prior dupe can re-trigger
+            // conflicts with subsequent dupes. Sequential single merges avoid this.
+            for (Id dupeId : dupeIds) {
+                AccountDedupeScanController.cleanupAcrConflicts(groupId, masterId);
+                AccountDedupeService.mergeAccounts(masterId, new List<Id>{ dupeId }, fieldSourceMap);
+            }
             // mergeAccounts auto-marks the group Resolved via
             // AccountDedupeScanService.resolveGroups, so no extra DML here.
         } catch (Exception e) {
