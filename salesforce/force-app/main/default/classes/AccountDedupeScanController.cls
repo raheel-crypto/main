@@ -521,7 +521,12 @@ public with sharing class AccountDedupeScanController {
             if (updates.isEmpty()) return 0;
             update updates;
             if (!Test.isRunningTest()) {
-                System.enqueueJob(new AccountMergeQueueDrainer());
+                // Instantiate dynamically to avoid a circular compile-time
+                // dependency (drainer calls back into this class).
+                Type drainerType = Type.forName('AccountMergeQueueDrainer');
+                if (drainerType != null) {
+                    System.enqueueJob((Queueable) drainerType.newInstance());
+                }
             }
             return updates.size();
         } catch (Exception e) {
