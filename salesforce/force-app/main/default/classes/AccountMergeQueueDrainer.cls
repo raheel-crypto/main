@@ -95,13 +95,9 @@ public with sharing class AccountMergeQueueDrainer implements Queueable {
         try {
             Map<String, Id> fieldSourceMap = buildFillNullSources(masterId, allIds);
 
-            // Merge one dupe at a time, cleaning up ACR conflicts before each
-            // merge. Batching multiple dupes into a single merge() call causes
-            // Salesforce to check ALL pairs (master-dupe AND dupe-dupe), and
-            // contacts that moved to master from a prior dupe can re-trigger
-            // conflicts with subsequent dupes. Sequential single merges avoid this.
+            // Merge one dupe at a time; AccountDedupeService.mergeAccounts handles
+            // ACR conflict cleanup before each individual merge call.
             for (Id dupeId : dupeIds) {
-                AccountDedupeScanController.cleanupAcrConflicts(groupId, masterId);
                 AccountDedupeService.mergeAccounts(masterId, new List<Id>{ dupeId }, fieldSourceMap);
             }
             // mergeAccounts auto-marks the group Resolved via

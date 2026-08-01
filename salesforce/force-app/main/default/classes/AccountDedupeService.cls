@@ -154,21 +154,92 @@ public with sharing class AccountDedupeService {
         }
         Set<Id> groupsToResolve = AccountDedupeScanService.findOpenGroupsForAccounts(mergedAway);
 
-        // Apex merge accepts List<ID> for the duplicates argument, capped at 2 per call.
-        List<Id> chunk = new List<Id>();
+        // Clean up ACR conflicts and merge one dupe at a time.
+        // Batching multiple dupes into a single merge() call causes Salesforce to
+        // validate ALL pairs simultaneously; contacts that moved to master from an
+        // earlier dupe re-trigger conflicts with subsequent dupes in the same batch.
         for (Id dupId : duplicateIds) {
             if (dupId == null || dupId == masterId) continue;
-            chunk.add(dupId);
-            if (chunk.size() == 2) {
-                merge master chunk;
-                chunk = new List<Id>();
-            }
-        }
-        if (!chunk.isEmpty()) {
-            merge master chunk;
+            cleanupAcrConflictsForPair(masterId, dupId);
+            merge master new List<Id>{ dupId };
         }
 
         AccountDedupeScanService.resolveGroups(groupsToResolve);
+    }
+
+    /**
+     * Resolves AccountContactRelation conflicts between a master and a single
+     * dupe so the subsequent merge() call won't throw "same related contact".
+     *
+     * Cases handled:
+     *   - Contact primary on dupe → reparent to master; delete residual dupe ACR
+     *     left behind by Salesforce after the Contact.AccountId update.
+     *   - Contact primary on master → delete dupe's indirect ACR.
+     *   - No direct ACR, both sides have indirect → delete dupe's indirect ACR.
+     */
+    private static void cleanupAcrConflictsForPair(Id masterId, Id dupeId) {
+        if (!Schema.getGlobalDescribe().containsKey('AccountContactRelation')) return;
+        Set<Id> pairIds = new Set<Id>{ masterId, dupeId };
+
+        Map<Id, List<SObject>> byContact = new Map<Id, List<SObject>>();
+        for (SObject acr : Database.query(
+            'SELECT Id, ContactId, AccountId, IsDirect FROM AccountContactRelation WHERE AccountId IN :pairIds'
+        )) {
+            Id cid = (Id) acr.get('ContactId');
+            if (cid == null) continue;
+            if (!byContact.containsKey(cid)) byContact.put(cid, new List<SObject>());
+            byContact.get(cid).add(acr);
+        }
+
+        List<SObject> toDelete = new List<SObject>();
+        Set<Id> contactsToReparent = new Set<Id>();
+
+        for (Id cid : byContact.keySet()) {
+            List<SObject> rows = byContact.get(cid);
+            if (rows.size() <= 1) continue;
+
+            SObject directRow;
+            SObject masterAcr;
+            SObject dupeAcr;
+            for (SObject r : rows) {
+                Boolean isDirect = (Boolean) r.get('IsDirect');
+                Id acctId = (Id) r.get('AccountId');
+                if (isDirect == true) {
+                    directRow = r;
+                } else if (acctId == masterId) {
+                    masterAcr = r;
+                } else {
+                    dupeAcr = r;
+                }
+            }
+
+            Id directAcctId = directRow != null ? (Id) directRow.get('AccountId') : null;
+            if (directRow != null && directAcctId != masterId) {
+                contactsToReparent.add(cid);
+                if (masterAcr != null) toDelete.add(masterAcr);
+            } else if (directRow != null && directAcctId == masterId) {
+                if (dupeAcr != null) toDelete.add(dupeAcr);
+            } else {
+                if (masterAcr != null && dupeAcr != null) toDelete.add(dupeAcr);
+            }
+        }
+
+        if (!toDelete.isEmpty()) Database.delete(toDelete);
+
+        if (!contactsToReparent.isEmpty()) {
+            List<Contact> contactUpdates = new List<Contact>();
+            for (Id cid : contactsToReparent) {
+                contactUpdates.add(new Contact(Id = cid, AccountId = masterId));
+            }
+            update contactUpdates;
+            // Reparenting flips the dupe's IsDirect=true ACR to IsDirect=false
+            // but leaves it in place — delete it to prevent conflicts during merge.
+            Set<Id> dupeSet = new Set<Id>{ dupeId };
+            List<SObject> residual = Database.query(
+                'SELECT Id FROM AccountContactRelation WHERE ContactId IN :contactsToReparent AND AccountId IN :dupeSet'
+            );
+            if (!residual.isEmpty()) Database.delete(residual);
+        }
     }
 
     private static void applyCherryPickValues(Account master, Id masterId, Map<String, Id> fieldSourceMap) {
