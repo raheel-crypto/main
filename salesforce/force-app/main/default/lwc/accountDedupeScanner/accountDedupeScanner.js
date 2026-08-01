@@ -268,12 +268,11 @@ export default class AccountDedupeScanner extends NavigationMixin(LightningEleme
         }
         this.queueingGroup = true;
         try {
+            // Pass parallel arrays — @AuraEnabled silently nulls List<InnerClass> fields.
             await queueGroupsForMerge({
-                requests: [{
-                    groupId: this.expandedGroupId,
-                    masterId: this.expandedMasterId,
-                    notes: null
-                }]
+                groupIds:  [this.expandedGroupId],
+                masterIds: [this.expandedMasterId],
+                notesList: [null]
             });
             this.toast(
                 'Queued for auto-merge',

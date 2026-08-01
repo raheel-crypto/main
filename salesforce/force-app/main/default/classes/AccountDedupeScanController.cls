@@ -347,12 +347,29 @@ public with sharing class AccountDedupeScanController {
                 cleaned += toDelete.size();
             }
             if (!contactsToReparent.isEmpty()) {
-                List<Contact> updates = new List<Contact>();
+                List<Contact> contactUpdates = new List<Contact>();
                 for (Id cid : contactsToReparent) {
-                    updates.add(new Contact(Id = cid, AccountId = masterAccountId));
+                    contactUpdates.add(new Contact(Id = cid, AccountId = masterAccountId));
                 }
-                update updates;
+                update contactUpdates;
                 cleaned += contactsToReparent.size();
+                // When reparenting flips a contact's primary from dupe to master,
+                // Salesforce converts the dupe's IsDirect=true ACR to IsDirect=false
+                // but does NOT delete it.  That residual ACR triggers a
+                // "same related contact" error during the subsequent merge.
+                // Delete all remaining dupe ACRs for the reparented contacts now.
+                Set<Id> dupeAccountIds = new Set<Id>(accountIds);
+                dupeAccountIds.remove(masterAccountId);
+                if (!dupeAccountIds.isEmpty()) {
+                    List<SObject> residualAcrs = Database.query(
+                        'SELECT Id FROM AccountContactRelation ' +
+                        'WHERE ContactId IN :contactsToReparent AND AccountId IN :dupeAccountIds'
+                    );
+                    if (!residualAcrs.isEmpty()) {
+                        Database.delete(residualAcrs);
+                        cleaned += residualAcrs.size();
+                    }
+                }
             }
             return cleaned;
         } catch (Exception e) {
