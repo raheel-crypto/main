@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Named_Users__c</fullName>
+    <description>The specific individuals named to be provisioned / added, one per line, with email when given. Common on email-confirmation upsells ("add these 4 users: ...") and on some order forms. Placeholders like "One User TBD" are captured verbatim. For Customer Success / provisioning handoff.</description>
+    <label>Named Users</label>
+    <length>4096</length>
+    <required>false</required>
+    <type>LongTextArea</type>
+    <visibleLines>6</visibleLines>
+</CustomField>

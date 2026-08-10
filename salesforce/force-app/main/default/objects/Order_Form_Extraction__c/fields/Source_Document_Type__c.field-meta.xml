@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Source_Document_Type__c</fullName>
+    <description>What kind of document produced this extraction. "Email Confirmation" marks a lightweight upsell captured from a screenshot of a customer email asking to add seats/users (no fees, dates, or legal terms) - distinguishes it from a full "Order Form".</description>
+    <label>Source Document Type</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Order Form</fullName><default>false</default><label>Order Form</label></value>
+            <value><fullName>Email Confirmation</fullName><default>false</default><label>Email Confirmation</label></value>
+            <value><fullName>MSA / Agreement</fullName><default>false</default><label>MSA / Agreement</label></value>
+            <value><fullName>Rider / Amendment</fullName><default>false</default><label>Rider / Amendment</label></value>
+            <value><fullName>Other</fullName><default>false</default><label>Other</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

@@ -283,6 +283,52 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_emailConfirmationBasics() {
+        Opportunity opp = insertOpp('Seat Add Upsell', 'Closed Won');
+        // A PNG screenshot of the confirming email, prefixed signed__.
+        attachSignedFile(opp.Id, 'signed__email_add_users', 'png', Blob.valueOf('fake png'));
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Source_Document_Type' => 'Email Confirmation',
+            'Type' => 'Upsell',
+            'Seats_Added' => 4,
+            'Seat_Licenses' => 5,
+            'Named_Users' => 'Sean Kensil\nTatum McKelvey\nMike De Mayo\nAnthony Megaro\nOne User TBD',
+            'Requested_By_Name' => 'Mike De Mayo',
+            'Requested_By_Email' => 'mike@customer.com',
+            'Billing_Entity_Name' => 'Customer Co',
+            // Commercial/legal fields intentionally null on an email.
+            'License_Fees' => null,
+            'Annual_Recurring_Revenue' => null,
+            'Payment_Terms' => null
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Source_Document_Type__c, Seats_Added__c, Seat_Licenses__c, Named_Users__c,
+                   Requested_By_Name__c, Requested_By_Email__c, Billing_Entity_Name__c,
+                   License_Fees__c, Annual_Recurring_Revenue__c, Payment_Terms__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals('Email Confirmation', row.Source_Document_Type__c);
+        System.assertEquals(4, row.Seats_Added__c);
+        System.assertEquals(5, row.Seat_Licenses__c);
+        System.assert(row.Named_Users__c.contains('Sean Kensil') && row.Named_Users__c.contains('One User TBD'),
+            'Named users should be captured incl. placeholder: ' + row.Named_Users__c);
+        System.assertEquals('Mike De Mayo', row.Requested_By_Name__c);
+        System.assertEquals('mike@customer.com', row.Requested_By_Email__c);
+        System.assertEquals(null, row.License_Fees__c, 'Email has no fees');
+        System.assertEquals(null, row.Payment_Terms__c, 'Email has no payment terms');
+    }
+
+    @isTest
     static void extractionJob_populatesBillingEntity() {
         Opportunity opp = insertOpp('Macquarie Expansion', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__MacCap_Order');

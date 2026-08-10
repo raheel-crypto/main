@@ -37,6 +37,7 @@ JSON SCHEMA (return exactly these keys):
 
 {
   "_is_amendment": boolean,
+  "Source_Document_Type": "Order Form" | "Email Confirmation" | "MSA / Agreement" | "Rider / Amendment" | "Other" | null,
   "Type": "New Business" | "Renewal" | "Upsell" | "Downsell" | "Pilot" | "Contract Restructure" | null,
   "Contract_Start_Date": "YYYY-MM-DD" | null,
   "Contract_End_Date": "YYYY-MM-DD" | null,
@@ -69,6 +70,10 @@ JSON SCHEMA (return exactly these keys):
   "Unlimited_Lite_Stated": boolean | null,
   "Free_Max_Mid_Stated": boolean | null,
   "Free_Max_Mid_Amount": number | null,
+  "Seats_Added": number | null,
+  "Named_Users": "newline-separated list of individuals to provision, with email if given" | null,
+  "Requested_By_Name": "person who requested/authorized the change" | null,
+  "Requested_By_Email": "their email" | null,
   "Billing_Entity_Name": "legal contracting party / billing entity name" | null,
   "Billing_Entity_Reg_Id": "company/registration number if stated (ABN, company no., VAT)" | null,
   "Billing_Entity_Address": "billing address of the entity" | null,
@@ -141,6 +146,19 @@ SIGNATURE BLOCK GUIDANCE:
 - Customer_Signer_Name is the printed/typed name of the customer signer (not the counterparty organization name). If there are multiple customer signers, return the primary / most senior one; note the others in Special_Terms.
 - Customer_Signer_Title is exactly what appears near their name: "Managing Partner", "CFO", "Authorized Signatory", etc. Null if not present.
 - If only one party has signed (unusual for a fully executed order form), still return whichever date is present and leave the other null.
+
+DOCUMENT TYPE + EMAIL CONFIRMATIONS:
+- Set Source_Document_Type to what the CURRENT-deal document actually is: a full "Order Form" / Service Order; an "Email Confirmation" (a screenshot or export of a customer email asking to add seats/users); an "MSA / Agreement"; a "Rider / Amendment"; or "Other".
+- EMAIL CONFIRMATIONS are common for small upsells: the customer emails "please add these users" and the deal closes on that email alone. When the current-deal document is such an email:
+  * Extract only the basics that are actually present. Leave every commercial and legal field null (License_Fees, ARR, TCV, Payment_Terms, Credit_Terms, Renewal_Terms, Subprocessor_*, Signature dates for a contract, etc.) - an email is NOT a contract and you must not invent those.
+  * Seats_Added: the number of seats/users being ADDED (the delta, e.g. "add 4 additional users" -> 4).
+  * Seat_Licenses: the resulting TOTAL only if the email states it ("5 total" -> 5); otherwise null.
+  * Named_Users: list every named individual to be provisioned, one per line, including their email if shown and any placeholder verbatim (e.g. "One User TBD").
+  * Requested_By_Name / Requested_By_Email: the customer person asking for or confirming the change (the email sender). If the thread shows one party proposing and another confirming, prefer the customer who confirms.
+  * Billing_Entity_Name: infer from the email signature block and/or the sender's email DOMAIN (e.g. greencourtepartners.com -> "Green Court Partners"); note the basis in Extract_Evidence.
+  * Signature_Date: the date of the confirming email if visible.
+  * Type: almost always "Upsell" (a seat add on an existing account); defer to the Opportunity Type from DEAL CONTEXT as usual.
+  * Add an Extract_Evidence note stating this was extracted from an email confirmation and quoting the key line ("add 4 additional users (5 total)").
 
 ELA / PACKAGE / CREDITS / RATE LIMITING GUIDANCE (important):
 

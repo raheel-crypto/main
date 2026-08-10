@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Requested_By_Name__c</fullName>
+    <description>The customer-side person who requested / authorized the change, typically the sender of the confirming email (e.g. "Jason LeJeune, VP IT Operations"). For order forms this is usually the signer; for email confirmations it is the requester.</description>
+    <label>Requested By Name</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

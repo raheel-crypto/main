@@ -461,6 +461,11 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Billing_Entity_Reg_Id__c = truncate((String) extracted.get('Billing_Entity_Reg_Id'), 100);
         row.Billing_Entity_Address__c = truncate((String) extracted.get('Billing_Entity_Address'), 255);
         row.Billing_Entity_Jurisdiction__c = truncate((String) extracted.get('Billing_Entity_Jurisdiction'), 100);
+        row.Source_Document_Type__c = mapDocumentType((String) extracted.get('Source_Document_Type'));
+        row.Seats_Added__c = toDecimal(extracted.get('Seats_Added'));
+        row.Named_Users__c = truncate((String) extracted.get('Named_Users'), 4096);
+        row.Requested_By_Name__c = truncate((String) extracted.get('Requested_By_Name'), 255);
+        row.Requested_By_Email__c = truncate((String) extracted.get('Requested_By_Email'), 255);
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
@@ -602,6 +607,16 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             Integer days = Integer.valueOf(row.Contract_Length_Days__c);
             row.Contract_End_Date__c = row.Contract_Start_Date__c.addDays(days - 1);
         }
+    }
+
+    private static String mapDocumentType(String raw) {
+        if (String.isBlank(raw)) return null;
+        String s = raw.toLowerCase();
+        if (s.contains('email')) return 'Email Confirmation';
+        if (s.contains('order') || s.contains('service order')) return 'Order Form';
+        if (s.contains('rider') || s.contains('amendment')) return 'Rider / Amendment';
+        if (s.contains('msa') || s.contains('agreement') || s.contains('master')) return 'MSA / Agreement';
+        return 'Other';
     }
 
     private static String mapCreditsPeriod(String raw) {

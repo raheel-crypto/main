@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Seats_Added__c</fullName>
+    <description>Incremental seats/users being added by this document (the delta), as opposed to Seat_Licenses__c which holds the post-change total when stated. Email upsells usually express the delta ("add 4 additional users, 5 total") -> Seats_Added=4, Seat_Licenses=5.</description>
+    <label>Seats Added</label>
+    <precision>8</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>
