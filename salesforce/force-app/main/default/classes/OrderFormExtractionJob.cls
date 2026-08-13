@@ -124,7 +124,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static Opportunity loadParentOpp(Id opportunityId) {
         if (opportunityId == null) return null;
         List<Opportunity> opps = [
-            SELECT Id, Name, Type, CloseDate, Base_Opportunity__c,
+            SELECT Id, Name, Type, CloseDate, AccountId, Annual_Recurring_Revenue__c,
+                   Base_Opportunity__c,
                    Base_Opportunity__r.Name, Base_Opportunity__r.CloseDate,
                    Base_Opportunity__r.Annual_Recurring_Revenue__c
             FROM Opportunity WHERE Id = :opportunityId LIMIT 1
@@ -570,27 +571,40 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             return;
         }
 
-        if (parentOpp == null || parentOpp.Base_Opportunity__c == null) return;
-        Id baseOppId = parentOpp.Base_Opportunity__c;
-
-        // Preferred source: the base Opp's most recent successful OFE row.
+        if (parentOpp == null) return;
         Decimal baseARR = null;
-        List<Order_Form_Extraction__c> baseRows = [
-            SELECT Annual_Recurring_Revenue__c
-            FROM Order_Form_Extraction__c
-            WHERE Opportunity__c = :baseOppId
-              AND Extraction_Status__c = 'Success'
-              AND Annual_Recurring_Revenue__c != null
-            ORDER BY CreatedDate DESC
-            LIMIT 1
-        ];
-        if (!baseRows.isEmpty()) {
-            baseARR = baseRows[0].Annual_Recurring_Revenue__c;
-        } else if (parentOpp.Base_Opportunity__r != null) {
-            // Fallback: the base Opp's own Annual_Recurring_Revenue__c field.
-            // Useful for legacy bases that predate the signed__* convention.
-            baseARR = parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c;
+
+        // 1) Explicit Base_Opportunity linkage (typical for Upsells that expand
+        //    a specific Land/parent deal).
+        if (parentOpp.Base_Opportunity__c != null) {
+            List<Order_Form_Extraction__c> baseRows = [
+                SELECT Annual_Recurring_Revenue__c
+                FROM Order_Form_Extraction__c
+                WHERE Opportunity__c = :parentOpp.Base_Opportunity__c
+                  AND Extraction_Status__c = 'Success'
+                  AND Annual_Recurring_Revenue__c != null
+                ORDER BY CreatedDate DESC
+                LIMIT 1
+            ];
+            if (!baseRows.isEmpty()) {
+                baseARR = baseRows[0].Annual_Recurring_Revenue__c;
+            } else if (parentOpp.Base_Opportunity__r != null) {
+                baseARR = parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c;
+            }
         }
+
+        // 2) No base link (typical for Renewals - they renew the same
+        //    subscription rather than expanding a parent deal). The prior /
+        //    aggregate ARR is carried on THIS Opp's own Annual_Recurring_Revenue__c
+        //    at close time (e.g. Land 20k + Upsell 35k = 55k on the renewal opp,
+        //    renewing up to 81k). Use it as the base. The != totalARR guard
+        //    avoids a bogus 0 when the Opp ARR has already been set to the new
+        //    value by another process.
+        if (baseARR == null && parentOpp.Annual_Recurring_Revenue__c != null
+                && parentOpp.Annual_Recurring_Revenue__c != totalARR) {
+            baseARR = parentOpp.Annual_Recurring_Revenue__c;
+        }
+
         if (baseARR == null) return;
 
         row.Base_ARR__c = baseARR;

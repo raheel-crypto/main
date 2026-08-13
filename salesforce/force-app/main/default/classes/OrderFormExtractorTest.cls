@@ -642,6 +642,43 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_renewalUsesOwnArrAsBaseWhenNoBaseOpp() {
+        // Renewals have no Base_Opportunity__c. The prior/aggregate ARR is
+        // carried on the renewal Opp's own Annual_Recurring_Revenue__c (55k),
+        // renewing up to the extracted 81k -> incremental 26k.
+        Opportunity opp = new Opportunity(
+            Name = 'Renewal: Harbor View',
+            StageName = 'Closed Won',
+            CloseDate = Date.today(),
+            Type = 'Renewal',
+            Annual_Recurring_Revenue__c = 55000
+        );
+        insert opp;
+        attachSignedFile(opp.Id, 'signed__OF');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Renewal',
+            'Annual_Recurring_Revenue' => 81000
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Annual_Recurring_Revenue__c, Base_ARR__c, Incremental_ARR__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
+        ];
+        System.assertEquals(81000, row.Annual_Recurring_Revenue__c);
+        System.assertEquals(55000, row.Base_ARR__c, 'Base = renewal opp own ARR');
+        System.assertEquals(26000, row.Incremental_ARR__c, '81k - 55k = 26k');
+    }
+
+    @isTest
     static void extractionJob_incrementalEqualsTotalForNewBusiness() {
         Opportunity opp = insertOpp('Net New', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OF');

@@ -89,7 +89,10 @@ JSON SCHEMA (return exactly these keys):
 }
 
 RENEWAL FEE ESCALATOR:
-- Return the percentage by which fees increase at renewal, as a plain number (e.g. 5 for "increased by five percent (5%)", 3 for a 3% uplift).
+- Return the year-over-year percentage by which fees increase, as a plain number (e.g. 5 for "increased by five percent (5%)", 3 for a 3% uplift, 9.9 for "9.9% increase").
+- Capture the escalator whether it is:
+  (a) an at-RENEWAL uplift ("upon renewal, fees increase by 5%"), OR
+  (b) an IN-TERM annual step-up stated within the initial subscription period ("$81,000 per year for the first year, with a 9.9% increase to $89,000 for the second year"). Return 9.9 here. If only the two dollar amounts are given, compute the percentage: (year2 - year1) / year1 * 100, rounded to one decimal.
 - The clause may be on the Order Form ("License Fees ... increased by five percent (5%)"), buried in the MSA renewal section, or absent entirely.
 - If the contract caps the increase as "the lesser of X% or CPI" (or "greater of"), return the stated numeric percent (X) and describe the full cap language in Extract_Evidence.
 - If renewal is at "Rogo's then-current list pricing" with NO stated percentage, return null (there is no fixed escalator) and note that in Extract_Evidence.
