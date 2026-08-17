@@ -74,7 +74,8 @@ JSON SCHEMA (return exactly these keys):
   "Named_Users": "newline-separated list of individuals to provision, with email if given" | null,
   "Requested_By_Name": "person who requested/authorized the change" | null,
   "Requested_By_Email": "their email" | null,
-  "Billing_Entity_Name": "legal contracting party / billing entity name" | null,
+  "Billing_Entity_Name": "legal contracting party / billing ORGANIZATION name (never a person)" | null,
+  "Billing_Entity_Is_Derived": boolean,
   "Billing_Entity_Reg_Id": "company/registration number if stated (ABN, company no., VAT)" | null,
   "Billing_Entity_Address": "billing address of the entity" | null,
   "Billing_Entity_Jurisdiction": "jurisdiction / country of the entity" | null,
@@ -130,6 +131,13 @@ EXTRACT_EVIDENCE FIELD:
 
 BILLING ENTITY (contracting party) GUIDANCE:
 - Billing_Entity_Name is the specific LEGAL entity that contracts and pays - the customer party to the agreement. It is frequently NOT the common brand name and NOT the Salesforce account. E.g. the contracting party may be "Macquarie Group Services Australia Pty Ltd" or "Macquarie Global Services (USA) LLC" even though the customer is known simply as "Macquarie".
+- CRITICAL: Billing_Entity_Name must be an ORGANIZATION, never an individual person. Order forms are sometimes filled with a person's name in the "Customer:" field (e.g. "Amit Shah"). A value that looks like a personal name - a first name + last name with no corporate suffix (Inc / LLC / Ltd / Pty Ltd / GmbH / LP / Corp / Group / Partners / Capital / Holdings, etc.), especially one that matches the billing contact or the local-part of the AP email (amit.shah -> "Amit Shah") - is the billing CONTACT, not the entity. When that happens:
+  * Do NOT put the person in Billing_Entity_Name.
+  * Derive the real entity from the AP / billing email DOMAIN, turning it into a proper company name: amit.shah@applied-aerospace.com -> "Applied Aerospace"; jsmith@greencourtepartners.com -> "Green Court Partners". Strip the TLD, split on dots/hyphens, Title-Case the words.
+  * Corroborate with the Opportunity Name in DEAL CONTEXT and the file name (both often contain the real company).
+  * Set Billing_Entity_Is_Derived = true, and add an Extract_Evidence entry stating the Customer field held a person and the entity was derived from the email domain / opp / filename, with your confidence.
+  * If you genuinely cannot determine an organization, return null - never fall back to the person's name.
+- Set Billing_Entity_Is_Derived = false only when the entity name was stated verbatim as a company in the document (Customer field, preamble, or signature block). Set true whenever you inferred it (from email domain, opp name, or filename).
 - Find it in this order of preference, HIGHEST confidence first:
   (1) the labeled "Customer:" field;
   (2) the preamble/recital ("This Agreement is between <Entity> and Rogo Technologies, Inc.");

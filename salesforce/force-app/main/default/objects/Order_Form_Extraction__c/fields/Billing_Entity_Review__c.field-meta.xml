@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Billing_Entity_Review__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True when Billing_Entity_Name__c was DERIVED (from the AP email domain, opportunity name, or filename) rather than stated verbatim as a company in the document - typically because the order form's Customer field held a person's name. Flags rows a human (or the Tabs reconciliation) should verify.</description>
+    <label>Billing Entity Review</label>
+    <type>Checkbox</type>
+</CustomField>
