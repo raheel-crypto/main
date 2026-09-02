@@ -1246,6 +1246,24 @@ private class OrderFormExtractorTest {
         System.assertEquals(2, rows, 'maxOpps=2 should produce exactly 2 extraction rows');
     }
 
+    // ===== Doc relevance ranking (heap-budget drop order) =====
+
+    @isTest
+    static void docRelevanceRank_ordersComplianceDocsFirst() {
+        // Order form = most important (0); DPA/subprocessor = 1; MSA/MSSA = 2;
+        // NDA/W-9 = drop first (9); anything else = middle (5).
+        System.assertEquals(0, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__Rogo Order Form')));
+        System.assertEquals(0, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__Customer Agreement Form vFinal')));
+        System.assertEquals(1, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__Customer DPA')));
+        // subprocessor beats the addendum keyword (rank 1, not 2)
+        System.assertEquals(1, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__Subprocessor Addendum')));
+        System.assertEquals(2, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__MSSA Executed')));
+        System.assertEquals(2, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__Master Services Agreement')));
+        System.assertEquals(9, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__Mutual NDA')));
+        System.assertEquals(5, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'signed__Kickoff Notes')));
+        System.assertEquals(5, OrderFormExtractionJob.docRelevanceRank(new ContentVersion()));
+    }
+
     // ===== Picklist mapper =====
 
     @isTest

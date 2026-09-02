@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Docs_Dropped__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True when one or more attached files were NOT sent to extraction - skipped as an unsupported type, over the per-file byte cap, or dropped to fit the heap budget. Flags rows whose extracted values (including Sub_Processor_List__c) may be incomplete because a document was excluded; Error_Message__c lists which files. Review these opportunities.</description>
+    <label>Docs Dropped</label>
+    <type>Checkbox</type>
+</CustomField>

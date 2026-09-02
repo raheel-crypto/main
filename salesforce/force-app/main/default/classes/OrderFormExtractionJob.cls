@@ -72,6 +72,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 parentOpp == null ? null : parentOpp.Base_Opportunity__c,
                 currentFiles, baseFiles, skipped);
 
+            // Flag the row whenever any file was excluded (unsupported type, over
+            // the per-file cap, or dropped for the heap budget) so a possibly
+            // incomplete extraction - e.g. a null Sub_Processor_List__c because
+            // the DPA got dropped - is queryable, not buried in Error_Message__c.
+            row.Docs_Dropped__c = !skipped.isEmpty();
+
             if (currentFiles.isEmpty() && baseFiles.isEmpty()) {
                 row.Extraction_Status__c = 'No Document';
                 row.Error_Message__c = skipped.isEmpty()
@@ -189,22 +195,88 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             else currentCandidates.add(cv); // unknown linkage defaults to "current deal"
         }
 
-        // Second pass: fit within MAX_TOTAL_PDF_BYTES. Current-deal files come
-        // first (best-effort, all included). Base files fill remaining budget.
-        Integer usedBytes = 0;
+        // Second pass: fit EVERY file (current + base) within MAX_TOTAL_PDF_BYTES.
+        // The whole request is base64-encoded into one JSON string at ~3x the raw
+        // bytes in peak heap and the async heap ceiling is 12MB, so this budget
+        // MUST cover current-deal files too - not just base files (an opp with an
+        // Order Form + MSA + DPA + rider can otherwise blow heap with an
+        // uncatchable limit exception). Order files so the most extraction-
+        // relevant survive when over budget: current-deal files ahead of
+        // base/context files, and within each group the order form + legal / DPA /
+        // subprocessor / MSA docs ahead of incidental attachments (NDAs, W-9s).
+        // Whatever does not fit is dropped and recorded (Docs_Dropped__c flags it).
+        List<RankedDoc> ordered = new List<RankedDoc>();
         for (ContentVersion cv : currentCandidates) {
-            currentFilesOut.add(cv);
-            usedBytes += cv.VersionData.size();
+            ordered.add(new RankedDoc(docRelevanceRank(cv), cv.VersionData.size(), cv, true));
         }
         for (ContentVersion cv : baseCandidates) {
-            Integer sz = cv.VersionData.size();
-            if (usedBytes + sz > MAX_TOTAL_PDF_BYTES) {
-                skippedOut.add((cv.Title == null ? String.valueOf(cv.Id) : cv.Title) +
-                    ' (dropped to fit heap budget: ' + sz + ' bytes would put us over ' + MAX_TOTAL_PDF_BYTES + ')');
+            // +100 keeps all base/context files behind all current-deal files.
+            ordered.add(new RankedDoc(100 + docRelevanceRank(cv), cv.VersionData.size(), cv, false));
+        }
+        ordered.sort();
+
+        Integer usedBytes = 0;
+        for (RankedDoc rd : ordered) {
+            if (usedBytes + rd.size > MAX_TOTAL_PDF_BYTES) {
+                skippedOut.add((rd.cv.Title == null ? String.valueOf(rd.cv.Id) : rd.cv.Title) +
+                    ' (dropped to fit heap budget: ' + rd.size + ' bytes would put the request over the ' +
+                    MAX_TOTAL_PDF_BYTES + '-byte cap)');
                 continue;
             }
-            baseFilesOut.add(cv);
-            usedBytes += sz;
+            if (rd.isCurrent) currentFilesOut.add(rd.cv);
+            else baseFilesOut.add(rd.cv);
+            usedBytes += rd.size;
+        }
+    }
+
+    // Priority score for fitting files into the heap budget. Lower = keep first.
+    // Compliance-relevant docs (order form, DPA/subprocessor, MSA) rank ahead of
+    // incidental attachments so, when we must drop something, an NDA/W-9 goes
+    // before a contract. Keyword-based and deliberately forgiving - it only
+    // orders the drop queue, it does not decide what gets extracted.
+    @TestVisible
+    private static Integer docRelevanceRank(ContentVersion cv) {
+        String t = (cv != null && cv.Title != null) ? cv.Title.toLowerCase() : '';
+        if (t.contains('order form') || t.contains('order_form') || t.contains('orderform')
+            || t.contains('order-form') || t.contains('customer agreement form')) {
+            return 0; // commercial terms - usually the primary doc
+        }
+        if (t.contains('dpa') || t.contains('data processing') || t.contains('data protection')
+            || t.contains('subprocessor') || t.contains('sub-processor') || t.contains('sub processor')) {
+            return 1; // data-protection / subprocessor text - compliance critical
+        }
+        if (t.contains('msa') || t.contains('mssa') || t.contains('master') || t.contains('agreement')
+            || t.contains('schedule') || t.contains('addendum') || t.contains('rider')
+            || t.contains('amendment') || t.contains('saas') || t.contains('subscription')) {
+            return 2; // master / services / subscription agreements and riders
+        }
+        if (t.contains('nda') || t.contains('non-disclosure') || t.contains('nondisclosure')
+            || t.contains('w-9') || t.contains('w9') || t.contains('coi') || t.contains('insurance')
+            || t.contains('logo') || t.contains('certificate')) {
+            return 9; // incidental - drop these first
+        }
+        return 5; // unknown - middle priority
+    }
+
+    // Sortable wrapper: primary key rank (base/context files carry a +100 offset
+    // so they trail current-deal files), then size ascending so smaller files of
+    // equal rank pack in first.
+    private class RankedDoc implements Comparable {
+        Integer rank;
+        Integer size;
+        ContentVersion cv;
+        Boolean isCurrent;
+        RankedDoc(Integer rank, Integer size, ContentVersion cv, Boolean isCurrent) {
+            this.rank = rank;
+            this.size = size;
+            this.cv = cv;
+            this.isCurrent = isCurrent;
+        }
+        public Integer compareTo(Object o) {
+            RankedDoc other = (RankedDoc) o;
+            if (this.rank != other.rank) return this.rank < other.rank ? -1 : 1;
+            if (this.size != other.size) return this.size < other.size ? -1 : 1;
+            return 0;
         }
     }
 
