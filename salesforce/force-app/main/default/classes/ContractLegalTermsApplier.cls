@@ -58,6 +58,15 @@ public with sharing class ContractLegalTermsApplier {
         new LegalField('Credit_Overcommit_Obligation__c', 'Credit_Overcommit_Obligation__c', true)
     };
 
+    // Contact-info fields (NOT legal terms). Applied to the Contract too, but a
+    // changed primary contact is normal info churn, not a legal conflict: the
+    // latest order form wins and it never sets Needs_Legal_Review__c.
+    private static final List<LegalField> CONTACT_FIELDS = new List<LegalField>{
+        new LegalField('Primary_Contact__c', 'Primary_Contact__c', false),
+        new LegalField('Primary_Contact_Phone__c', 'Primary_Contact_Phone__c', false),
+        new LegalField('Primary_Contact_Email__c', 'Primary_Contact_Email__c', false)
+    };
+
     @InvocableMethod(
         label='Apply Order Form Legal Terms to Contract'
         description='Writes order form legal terms to the deal Contract; reconciles (never silently overwrites) on upsells.'
@@ -74,7 +83,8 @@ public with sharing class ContractLegalTermsApplier {
                    Renewal_Terms__c, Renewal_Fee_Escalator__c, Payment_Terms__c, Credit_Terms__c,
                    Rate_Limitable__c, Rate_Limit_Notes__c,
                    Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
-                   ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c
+                   ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
+                   Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c
             FROM Order_Form_Extraction__c
             WHERE Id IN :extractionIds
         ]);
@@ -115,7 +125,8 @@ public with sharing class ContractLegalTermsApplier {
                 SELECT Id, Renewal_Terms__c, Renewal_Fee_Escalator__c, Payment_Terms__c, Credit_Terms__c,
                        Rate_Limitable__c, Rate_Limit_Notes__c,
                        Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
-                       ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c
+                       ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
+                       Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c
                 FROM Contract WHERE Id IN :contractIds
             ]);
 
@@ -206,6 +217,14 @@ public with sharing class ContractLegalTermsApplier {
                 log.add('Wrote ' + f.contract + ' = ' + v);
             }
         }
+        // Contact info: straight write of whatever the order form states.
+        for (LegalField f : CONTACT_FIELDS) {
+            Object v = ofe.get(f.ofe);
+            if (v != null) {
+                changes.put(f.contract, v);
+                log.add('Wrote ' + f.contract + ' = ' + v);
+            }
+        }
         return false; // fresh contract never conflicts
     }
 
@@ -236,6 +255,21 @@ public with sharing class ContractLegalTermsApplier {
                         + '" - left contract unchanged, needs legal review');
             }
         }
+        // Contact info: latest order form wins - fill blanks and update changes,
+        // but a differing contact is NOT a legal conflict and never triggers review.
+        for (LegalField f : CONTACT_FIELDS) {
+            Object ofeVal = ofe.get(f.ofe);
+            if (ofeVal == null) continue; // order form silent -> preserve contract
+            Object curVal = current == null ? null : current.get(f.contract);
+            if (curVal == null) {
+                changes.put(f.contract, ofeVal);
+                log.add('Wrote ' + f.contract + ' = ' + ofeVal + ' (new)');
+            } else if (!sameValue(curVal, ofeVal)) {
+                changes.put(f.contract, ofeVal);
+                log.add('Updated ' + f.contract + ': "' + curVal + '" -> "' + ofeVal + '" (latest order form)');
+            }
+        }
+
         if (conflict) log.add('>>> One or more legal terms conflict with the existing contract. Review required.');
         return conflict;
     }

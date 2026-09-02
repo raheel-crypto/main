@@ -235,4 +235,50 @@ private class ContractLegalTermsApplierTest {
         Contract after = [SELECT Payment_Terms__c FROM Contract WHERE Id = :c.Id];
         System.assertEquals(null, after.Payment_Terms__c, 'Failed extraction should not write to the contract');
     }
+
+    @isTest
+    static void contactFields_freshWriteAndLatestWinsOnUpsell() {
+        Account a = makeAccount();
+
+        // New Business contract - empty; contact block should write straight through.
+        Contract nbContract = makeContract(a.Id, null);
+        Opportunity nbOpp = makeOpp(a.Id, 'New Business', nbContract.Id, null);
+        Order_Form_Extraction__c nbOfe = makeOfe(nbOpp.Id, new Map<String, Object>{
+            'Primary_Contact__c' => 'Eric Castillo',
+            'Primary_Contact_Phone__c' => '212-644-4200',
+            'Primary_Contact_Email__c' => 'ecastillo@liontree.com'
+        });
+
+        // Upsell contract - existing contact; latest order form should win, no review.
+        Contract upContract = makeContract(a.Id, new Map<String, Object>{
+            'Primary_Contact__c' => 'Old Contact',
+            'Primary_Contact_Email__c' => 'old@liontree.com'
+        });
+        Opportunity upOpp = makeOpp(a.Id, 'Upsell', upContract.Id, null);
+        Order_Form_Extraction__c upOfe = makeOfe(upOpp.Id, new Map<String, Object>{
+            'Primary_Contact__c' => 'New Contact',
+            'Primary_Contact_Phone__c' => '646-000-1111'    // fills a blank; silent on email
+        });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result nbRes = runOne(nbOfe.Id);
+        ContractLegalTermsApplier.Result upRes = runOne(upOfe.Id);
+        Test.stopTest();
+
+        System.assertEquals('Applied', nbRes.status);
+        Contract nbAfter = [SELECT Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c
+                            FROM Contract WHERE Id = :nbContract.Id];
+        System.assertEquals('Eric Castillo', nbAfter.Primary_Contact__c);
+        System.assertEquals('212-644-4200', nbAfter.Primary_Contact_Phone__c);
+        System.assertEquals('ecastillo@liontree.com', nbAfter.Primary_Contact_Email__c);
+
+        System.assertEquals('Reconciled', upRes.status);
+        System.assertEquals(false, upRes.needsReview, 'A changed contact must not trigger legal review');
+        Contract upAfter = [SELECT Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c, Needs_Legal_Review__c
+                            FROM Contract WHERE Id = :upContract.Id];
+        System.assertEquals('New Contact', upAfter.Primary_Contact__c, 'Latest order form wins');
+        System.assertEquals('646-000-1111', upAfter.Primary_Contact_Phone__c, 'Blank filled from order form');
+        System.assertEquals('old@liontree.com', upAfter.Primary_Contact_Email__c, 'Silent field preserved');
+        System.assertEquals(false, upAfter.Needs_Legal_Review__c);
+    }
 }

@@ -520,6 +520,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credit_Terms__c = OrderFormPicklistMapper.mapCreditTerms((String) extracted.get('Credit_Terms'));
         row.Pricing_Structure__c = truncate((String) extracted.get('Pricing_Structure'), 100);
         row.Billing_Contact_Email__c = (String) extracted.get('Billing_Contact_Email');
+        row.Primary_Contact__c = truncate((String) extracted.get('Primary_Contact_Name'), 255);
+        row.Primary_Contact_Phone__c = truncate((String) extracted.get('Primary_Contact_Phone'), 255);
+        row.Primary_Contact_Email__c = truncate((String) extracted.get('Primary_Contact_Email'), 80);
         Boolean ela = toBoolean(extracted.get('ELA'));
         row.ELA__c = ela == true;
         Boolean paid = toBoolean(extracted.get('Paid_Trial'));

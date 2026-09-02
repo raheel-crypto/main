@@ -55,6 +55,9 @@ JSON SCHEMA (return exactly these keys):
   "Credit_Terms": "Net-15" | "Net-30" | "Net-45" | "Net-60" | null,
   "Pricing_Structure": "Seats: Unlimited Usage, No Throttling" | "Seats: Unlimited Usage, with Throttling" | "Seats: Credit-Based Usage" | "ELA: Unlimited Usage, No Throttling" | "ELA: Unlimited Usage, with Throttling" | "ELA: Credit-Based Usage" | "Custom" | null,
   "Billing_Contact_Email": "email@example.com" | null,
+  "Primary_Contact_Name": "named individual point of contact for the deal (a person, not the AP/billing inbox)" | null,
+  "Primary_Contact_Phone": "that contact's phone number, as written" | null,
+  "Primary_Contact_Email": "that contact's email address" | null,
   "ELA": boolean | null,
   "Paid_Trial": boolean | null,
   "Trial_Price": number | null,
@@ -140,6 +143,12 @@ EXTRACT_EVIDENCE FIELD:
 - Include evidence for at minimum, when populated: Total_Contract_Value, Annual_Recurring_Revenue, Signature_Date, Subprocessor_Notice_Period_Days, Sub_Processor_List, Renewal_Terms (when mapped from customer language), Rate_Limitable_By_Rogo, Package_Tier when inferred, Unlimited_Lite_Stated / Free_Max_Mid_Stated when explicitly stated, any value that came from a rider overriding the base contract.
 - Skip evidence for trivial extractions: Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name, when they appear plainly in labeled fields at the top of the order form.
 - Keep total length well under 30,000 characters; use short excerpts, not full paragraphs.
+
+PRIMARY CONTACT (deal point of contact):
+- Order forms commonly have a two-column customer/contact table. The LEFT column is billing/entity info (Customer / legal entity name, Billing Address, Accounts Payable email) - already captured as Billing_Entity_* and Billing_Contact_Email. The RIGHT column is the deal's PRIMARY CONTACT: a named person with their phone and email.
+- Primary_Contact_Name = that person's full name (e.g. "Eric Castillo"). Primary_Contact_Phone = their phone. Primary_Contact_Email = their personal work email (e.g. ecastillo@company.com).
+- Do NOT confuse this with the Accounts Payable / billing inbox (which is Billing_Contact_Email, often a role address like LT-AP@company.com or ap@company.com). The primary contact is an individual; the AP email is where invoices go.
+- If the document has no distinct contact block, return null for all three - do not reuse the AP email or the signer unless they are clearly presented as the primary contact.
 
 BILLING ENTITY (contracting party) GUIDANCE:
 - Billing_Entity_Name is the specific LEGAL entity that contracts and pays - the customer party to the agreement. It is frequently NOT the common brand name and NOT the Salesforce account. E.g. the contracting party may be "Macquarie Group Services Australia Pty Ltd" or "Macquarie Global Services (USA) LLC" even though the customer is known simply as "Macquarie".
