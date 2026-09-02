@@ -30,13 +30,26 @@ Datetime RESCAN_CUTOFF = Datetime.newInstanceGmt(2026, 9, 2, 0, 0, 0);   // <-- 
 
 Integer CHUNK_SIZE = 50;   // hard cap = 50 (System.enqueueJob limit)
 
-// Step 1: every entity that has a signed__* file (ContentDocumentLink can't be
-// used in a semi-join, so query it directly and keep the Opportunity Ids).
+// Step 1: every Opp that has a signed__* file. ContentDocumentLink CANNOT be
+// filtered by ContentDocument.Title alone (implementation restriction: it must
+// be filtered by ContentDocumentId or LinkedEntityId with = or IN). So first
+// pull the signed__* ContentDocument Ids, then look up their links by those Ids.
+Set<Id> signedDocIds = new Set<Id>();
+for (ContentDocument cd : [SELECT Id FROM ContentDocument WHERE Title LIKE 'signed__%']) {
+    signedDocIds.add(cd.Id);
+}
+System.debug('--- signed__* ContentDocuments in the org: ' + signedDocIds.size());
+
+if (signedDocIds.isEmpty()) {
+    System.debug('--- No signed__* files anywhere in the org. Nothing to do.');
+    return;
+}
+
 Set<Id> oppIdsWithSignedFiles = new Set<Id>();
 for (ContentDocumentLink cdl : [
     SELECT LinkedEntityId
     FROM ContentDocumentLink
-    WHERE ContentDocument.Title LIKE 'signed__%'
+    WHERE ContentDocumentId IN :signedDocIds
 ]) {
     Id eid = cdl.LinkedEntityId;
     if (eid != null && String.valueOf(eid).startsWith('006')) {
@@ -46,7 +59,7 @@ for (ContentDocumentLink cdl : [
 System.debug('--- Opps anywhere with a signed__* file: ' + oppIdsWithSignedFiles.size());
 
 if (oppIdsWithSignedFiles.isEmpty()) {
-    System.debug('--- No signed__* files anywhere in the org. Nothing to do.');
+    System.debug('--- No signed__* files linked to any Opportunity. Nothing to do.');
     return;
 }
 
