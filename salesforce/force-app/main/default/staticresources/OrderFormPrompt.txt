@@ -170,6 +170,12 @@ SIGNATURE BLOCK GUIDANCE:
 - Customer_Signer_Title is exactly what appears near their name: "Managing Partner", "CFO", "Authorized Signatory", etc. Null if not present.
 - If only one party has signed (unusual for a fully executed order form), still return whichever date is present and leave the other null.
 
+MULTIPLE / MIXED DOCUMENTS:
+- You now receive EVERY document attached to the deal, not just the order form. A single deal may include an Order Form, an MSA / Master Agreement, a DPA / data-protection addendum, riders or schedules, and sometimes unrelated files (purchase orders, NDAs, W-9s, insurance certificates) or duplicate / draft / earlier-version copies of the same document.
+- Treat them as ONE deal. Pull each field from whichever document actually states it: commercial terms usually from the Order Form; legal terms and the approved subprocessor list usually from the MSA / DPA.
+- When you see DUPLICATES or a DRAFT + FINAL of the same document, use the EXECUTED / signed / most complete / latest version and ignore the superseded copy. Do NOT merge conflicting values from an old draft or an unexecuted redline.
+- IGNORE files that are not part of the agreement (a W-9, insurance certificate, logo, or a mutual NDA that carries no commercial or subprocessor terms) - extract nothing from them.
+
 DOCUMENT TYPE + EMAIL CONFIRMATIONS:
 - Set Source_Document_Type to what the CURRENT-deal document actually is: a full "Order Form" / Service Order; an "Email Confirmation" (a screenshot or export of a customer email asking to add seats/users); an "MSA / Agreement"; a "Rider / Amendment"; or "Other".
 - EMAIL CONFIRMATIONS are common for small upsells: the customer emails "please add these users" and the deal closes on that email alone. When the current-deal document is such an email:

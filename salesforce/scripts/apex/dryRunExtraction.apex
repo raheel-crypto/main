@@ -18,12 +18,12 @@ Id OPPORTUNITY_ID = '006XXXXXXXXXXXXXXX';   // <-- replace
 
 Integer CHUNK = 3000;
 
-// 1. Find signed__* files (current Opp + Base_Opportunity__c parent)
-Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllSignedDocuments(new Set<Id>{ OPPORTUNITY_ID });
+// 1. Find all documents (current Opp + Base_Opportunity__c parent)
+Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllDocuments(new Set<Id>{ OPPORTUNITY_ID });
 List<Id> docs = docsByOpp.get(OPPORTUNITY_ID);
 
 if (docs == null || docs.isEmpty()) {
-    System.debug('--- NO FILES: no signed__* attachments on Opportunity ' + OPPORTUNITY_ID + ' (or its base Opp)');
+    System.debug('--- NO FILES: no documents on Opportunity ' + OPPORTUNITY_ID + ' (or its base Opp)');
     return;
 }
 System.debug('--- ContentDocumentIds (' + docs.size() + '): ' + docs);

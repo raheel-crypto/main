@@ -55,7 +55,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         totalSeen += scope.size();
 
         Set<Id> oppIds = new Map<Id, Opportunity>(scope).keySet();
-        Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllSignedDocuments(oppIds);
+        Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllDocuments(oppIds);
 
         // Phase 1: callouts only. Build all rows in memory. NO DML yet -
         // otherwise the next callout fails with "uncommitted work pending".
@@ -79,7 +79,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
             'OrderFormBackfillBatch finished. ' +
             'Seen: ' + totalSeen + '; ' +
             'Processed: ' + totalProcessed + '; ' +
-            'Skipped (no signed__* file): ' + totalSkippedNoFile);
+            'Skipped (no documents): ' + totalSkippedNoFile);
     }
 
     public static Id run() {
@@ -90,8 +90,8 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         return Database.executeBatch(new OrderFormBackfillBatch(maxOpps), SCOPE_SIZE);
     }
 
-    // Re-scan the whole book: re-extract EVERY Closed Won Opp with a signed__*
-    // file, including ones already extracted, so newly-added fields (e.g.
+    // Re-scan the whole book: re-extract EVERY Closed Won Opp that has documents,
+    // including ones already extracted, so newly-added fields (e.g.
     // Sub_Processor_List__c) get populated. One call processes everything
     // unattended - no 50-Queueable-per-run cap. Each Opp gets a fresh row
     // appended; the newest row per Opp is the current truth.
