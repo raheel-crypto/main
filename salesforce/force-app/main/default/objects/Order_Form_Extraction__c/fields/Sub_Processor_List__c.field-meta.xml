@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Sub_Processor_List__c</fullName>
+    <description>The subprocessors the customer APPROVED / authorized in the executed contract (order form, MSA, DPA, exhibit, or rider), one per line, names verbatim. When the contract only incorporates an online list by reference, holds that reference prefixed with "By reference:". Null when no approved-subprocessor list appears in any attached document. Source of truth for the subprocessor-consent compliance review.</description>
+    <label>Sub Processor List</label>
+    <length>32768</length>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>LongTextArea</type>
+    <visibleLines>10</visibleLines>
+</CustomField>

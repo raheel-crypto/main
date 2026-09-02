@@ -481,6 +481,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     @TestVisible
     private static void populateSubprocessorFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
         row.Subprocessor_Restrictions__c = truncate((String) extracted.get('Subprocessor_Restrictions'), 255);
+        row.Sub_Processor_List__c = truncate(joinSubprocessorList(extracted.get('Sub_Processor_List')), 32768);
 
         Decimal notice = toDecimal(extracted.get('Subprocessor_Notice_Period_Days'));
         String evidence = (String) extracted.get('Extract_Evidence');
@@ -496,6 +497,36 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             evidence = String.isBlank(evidence) ? note : evidence + '\n\n' + note;
         }
         row.Extract_Evidence__c = truncate(evidence, 32768);
+    }
+
+    // Normalizes the extracted Sub_Processor_List into one approved subprocessor
+    // per line. Claude returns an array of names, but tolerate a plain string
+    // (or newline/comma-delimited string) too so a prompt tweak can't break it.
+    // Returns null when nothing meaningful was extracted (an absent list is a
+    // meaningful compliance signal - do not coerce to an empty string).
+    @TestVisible
+    private static String joinSubprocessorList(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        List<String> lines = new List<String>();
+        if (raw instanceof List<Object>) {
+            for (Object item : (List<Object>) raw) {
+                if (item == null) {
+                    continue;
+                }
+                String s = String.valueOf(item).trim();
+                if (String.isNotBlank(s)) {
+                    lines.add(s);
+                }
+            }
+        } else {
+            String s = String.valueOf(raw).trim();
+            if (String.isNotBlank(s)) {
+                lines.add(s);
+            }
+        }
+        return lines.isEmpty() ? null : String.join(lines, '\n');
     }
 
     @TestVisible

@@ -85,6 +85,7 @@ JSON SCHEMA (return exactly these keys):
   "Customer_Signer_Title": "title/role of the customer signer" | null,
   "Subprocessor_Notice_Period_Days": number | null,
   "Subprocessor_Restrictions": "short description (<=255 chars) of any non-standard subprocessor obligation, or null" | null,
+  "Sub_Processor_List": ["exact verbatim name of each approved / authorized subprocessor", ...] | null,
   "Renewal_Fee_Escalator_Percent": number | null,
   "Extract_Evidence": "structured evidence trail as described below, or null when nothing warrants explanation" | null
 }
@@ -119,13 +120,24 @@ SUBPROCESSOR_RESTRICTIONS (exceptional obligations):
 - Leave null when the contract only requires ordinary advance notice (that case is fully captured by the day count).
 - This is independent of the day count: a deal can have BOTH a 30-day notice AND a consent restriction.
 
+APPROVED SUBPROCESSOR LIST (Sub_Processor_List):
+- Return the list of subprocessors the customer has APPROVED / AUTHORIZED to process their data under this contract - i.e., the specific third parties Rogo is contractually permitted to use for this customer. This is a compliance-critical field: it is the source of truth for which subprocessors the customer actually agreed to.
+- Where the list lives varies - search ALL attached documents (order form, MSA, DPA, privacy addendum, exhibits, annexes, riders), not a fixed section:
+  * An explicit enumerated list or table of subprocessors ("Approved Subprocessors", "Authorized Sub-processors", "List of Subprocessors", "Third-Party Processors"), often in a DPA Exhibit/Annex/Schedule.
+  * Named subprocessors called out inline in a data-protection clause (e.g. "Customer authorizes the following Subprocessors: Amazon Web Services, OpenAI, Anthropic").
+  * Incorporation by REFERENCE to an online list (e.g. "the subprocessors listed at rogo.ai/subprocessors as of the Effective Date"). In that case return a single-element list containing the reference verbatim, prefixed with "By reference: " (e.g. "By reference: https://rogo.ai/subprocessors (as of Effective Date)") - do NOT invent the actual company names, since they are not in the document.
+- Return each approved subprocessor as its own array element, using the name EXACTLY as written in the document. If the doc gives a purpose/role alongside the name, you may append it after an em dash (e.g. "Amazon Web Services - cloud hosting"). Do not normalize, expand, or infer names that are not present.
+- Capture the list the CUSTOMER approved. If customer paper lists a different / narrower set than Rogo's standard, capture what the executed document says (note any material narrowing in Special_Terms).
+- Return null ONLY when no approved-subprocessor list or reference appears in any attached document. Do NOT default or invent - an absent list is meaningful for the compliance review.
+- Add an Extract_Evidence entry whenever you return a non-null value (quote the list header / clause and cite where it appears).
+
 EXTRACT_EVIDENCE FIELD:
 - Populate this ONLY for fields that required inference, computation, semantic search, or a picklist mapping - not for values that are obvious from the doc.
 - Format is your choice; a simple readable pattern is:
       ## <FieldName>
       "<short verbatim excerpt from the doc, <= ~300 chars>"
       [source: <where in the doc - section/exhibit/page/DocuSign envelope, if identifiable>]
-- Include evidence for at minimum, when populated: Total_Contract_Value, Annual_Recurring_Revenue, Signature_Date, Subprocessor_Notice_Period_Days, Renewal_Terms (when mapped from customer language), Rate_Limitable_By_Rogo, Package_Tier when inferred, Unlimited_Lite_Stated / Free_Max_Mid_Stated when explicitly stated, any value that came from a rider overriding the base contract.
+- Include evidence for at minimum, when populated: Total_Contract_Value, Annual_Recurring_Revenue, Signature_Date, Subprocessor_Notice_Period_Days, Sub_Processor_List, Renewal_Terms (when mapped from customer language), Rate_Limitable_By_Rogo, Package_Tier when inferred, Unlimited_Lite_Stated / Free_Max_Mid_Stated when explicitly stated, any value that came from a rider overriding the base contract.
 - Skip evidence for trivial extractions: Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name, when they appear plainly in labeled fields at the top of the order form.
 - Keep total length well under 30,000 characters; use short excerpts, not full paragraphs.
 
