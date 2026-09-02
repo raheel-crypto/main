@@ -174,12 +174,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             ContentVersion cv = versionByDocId.get(docId);
             if (cv == null || cv.VersionData == null) continue;
             if (getMediaType(cv) == null) {
-                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) + ' (unsupported: ' + cv.FileExtension + ')');
+                skippedOut.add((cv.Title == null ? String.valueOf(cv.Id) : cv.Title) + ' (unsupported: ' + cv.FileExtension + ')');
                 continue;
             }
             Integer sz = cv.VersionData.size();
             if (sz > MAX_PER_FILE_BYTES) {
-                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) +
+                skippedOut.add((cv.Title == null ? String.valueOf(cv.Id) : cv.Title) +
                     ' (too large: ' + sz + ' bytes; cap ' + MAX_PER_FILE_BYTES + ')');
                 continue;
             }
@@ -199,7 +199,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         for (ContentVersion cv : baseCandidates) {
             Integer sz = cv.VersionData.size();
             if (usedBytes + sz > MAX_TOTAL_PDF_BYTES) {
-                skippedOut.add((cv.Title == null ? cv.Id : cv.Title) +
+                skippedOut.add((cv.Title == null ? String.valueOf(cv.Id) : cv.Title) +
                     ' (dropped to fit heap budget: ' + sz + ' bytes would put us over ' + MAX_TOTAL_PDF_BYTES + ')');
                 continue;
             }
