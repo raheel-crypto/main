@@ -1246,6 +1246,39 @@ private class OrderFormExtractorTest {
         System.assertEquals(2, rows, 'maxOpps=2 should produce exactly 2 extraction rows');
     }
 
+    @isTest
+    static void runRerunFlagged_reextractsAndClearsFlaggedRow() {
+        Opportunity opp = insertOpp('Rerun Flagged', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+        // Pre-existing extraction the user checked Rerun__c on.
+        Order_Form_Extraction__c flaggedRow = new Order_Form_Extraction__c(
+            Opportunity__c = opp.Id,
+            Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now(),
+            Rerun__c = true
+        );
+        insert flaggedRow;
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business' });
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        Test.startTest();
+        OrderFormBackfillBatch.runRerunFlagged();
+        Test.stopTest();
+
+        // The flagged (superseded) row is deleted; exactly one fresh, unflagged row remains.
+        System.assertEquals(0, [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Id = :flaggedRow.Id],
+            'Flagged row should be deleted after re-extraction');
+        List<Order_Form_Extraction__c> rows = [
+            SELECT Id, Extraction_Status__c, Rerun__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id
+        ];
+        System.assertEquals(1, rows.size(), 'Exactly one fresh extraction row should remain');
+        System.assertEquals('Success', rows[0].Extraction_Status__c);
+        System.assertEquals(false, rows[0].Rerun__c, 'New row must not be flagged');
+    }
+
     // ===== Doc relevance ranking (heap-budget drop order) =====
 
     @isTest

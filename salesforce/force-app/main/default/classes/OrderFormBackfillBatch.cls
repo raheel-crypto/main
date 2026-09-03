@@ -7,6 +7,10 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
     private final Integer maxOpps;
     private final Boolean rescanMode;
     private final Datetime rescanCutoff;
+    // Set only by runRerunFlagged(): re-extract Opps whose OFE is flagged
+    // Rerun__c = true, then delete the flagged (superseded) rows. Stateful, so
+    // it survives across execute() calls once set before executeBatch.
+    private Boolean rerunFlagged = false;
     private Integer totalProcessed = 0;
     private Integer totalSkippedNoFile = 0;
     private Integer totalSeen = 0;
@@ -33,6 +37,14 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
     }
 
     public Database.QueryLocator start(Database.BatchableContext bc) {
+        if (rerunFlagged) {
+            // Only Opps whose extraction was flagged for re-run.
+            return Database.getQueryLocator(
+                'SELECT Id, Name FROM Opportunity ' +
+                'WHERE Id IN (SELECT Opportunity__c FROM Order_Form_Extraction__c WHERE Rerun__c = true) ' +
+                'ORDER BY CloseDate DESC'
+            );
+        }
         // Declared at method scope so the dynamic-SOQL bind :cutoff resolves.
         Datetime cutoff = (rescanCutoff != null) ? rescanCutoff : Datetime.now();
         String soql =
@@ -72,6 +84,19 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
 
         // Phase 2: bulk DML after all callouts.
         if (!rowsToInsert.isEmpty()) insert rowsToInsert;
+
+        // Rerun-flagged mode: delete the flagged (now-superseded) rows, but only
+        // for Opps we actually re-extracted, so a no-document Opp never loses its
+        // only extraction. New rows default Rerun__c = false, so this removes
+        // just the old flagged ones.
+        if (rerunFlagged && !rowsToInsert.isEmpty()) {
+            Set<Id> reExtracted = new Set<Id>();
+            for (Order_Form_Extraction__c r : rowsToInsert) reExtracted.add(r.Opportunity__c);
+            delete [
+                SELECT Id FROM Order_Form_Extraction__c
+                WHERE Rerun__c = true AND Opportunity__c IN :reExtracted
+            ];
+        }
     }
 
     public void finish(Database.BatchableContext bc) {
@@ -103,5 +128,16 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
     // first started so Opps already re-done in this pass are skipped.
     public static Id runRescan(Datetime cutoff) {
         return Database.executeBatch(new OrderFormBackfillBatch(true, cutoff, null), SCOPE_SIZE);
+    }
+
+    // Re-extract every Opp whose OFE is flagged Rerun__c = true (all documents),
+    // then delete the flagged superseded rows. One unattended pass - no
+    // 50-Queueable-per-run cap. Use this to re-do a targeted set (e.g. the opps
+    // extracted before all-document support landed) after checking Rerun__c on
+    // their extraction rows in a list view.
+    public static Id runRerunFlagged() {
+        OrderFormBackfillBatch b = new OrderFormBackfillBatch();
+        b.rerunFlagged = true;
+        return Database.executeBatch(b, SCOPE_SIZE);
     }
 }
