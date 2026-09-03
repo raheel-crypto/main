@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Rerun__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Manual ops flag: check to mark this extraction for re-run. The rerunFlaggedExtractions script re-extracts the linked Opportunity (reading its current documents) and deletes this flagged row - so the flag clears itself. Safe to leave unchecked; nothing reads it automatically.</description>
+    <label>Rerun</label>
+    <type>Checkbox</type>
+</CustomField>
