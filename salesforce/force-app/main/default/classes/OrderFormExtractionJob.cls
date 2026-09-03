@@ -126,6 +126,54 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         }
     }
 
+    /**
+     * Build a row from an Anthropic Messages response obtained OUTSIDE Apex - for
+     * documents too large for the Apex heap, extracted by a local Files-API job.
+     * No callout and NO VersionData load here (so the file size is irrelevant);
+     * it reuses the exact same parsing + field mapping as buildExtraction, so the
+     * resulting row is identical to an in-platform one. Caller inserts it.
+     */
+    public static Order_Form_Extraction__c buildFromResponseBody(
+            Id opportunityId, List<Id> contentDocumentIds, String responseBody) {
+        List<Id> docIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
+        Opportunity parentOpp = loadParentOpp(opportunityId);
+
+        // Titles only - never select VersionData (would blow heap on a big file).
+        List<String> names = new List<String>();
+        if (!docIds.isEmpty()) {
+            Map<Id, String> titleByDoc = new Map<Id, String>();
+            for (ContentVersion cv : [
+                SELECT ContentDocumentId, Title FROM ContentVersion
+                WHERE ContentDocumentId IN :docIds AND IsLatest = true
+            ]) {
+                titleByDoc.put(cv.ContentDocumentId, cv.Title);
+            }
+            for (Id d : docIds) if (titleByDoc.containsKey(d)) names.add(titleByDoc.get(d));
+        }
+
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(
+            Opportunity__c = opportunityId,
+            Content_Document_Id__c = truncate(joinIds(docIds), DOC_ID_LIMIT),
+            File_Name__c = truncate(String.join(names, '; '), FILE_NAME_LIMIT),
+            Extracted_At__c = System.now(),
+            Model__c = MODEL
+        );
+        row.Raw_Response__c = truncate(responseBody, RAW_RESPONSE_LIMIT);
+
+        try {
+            Map<String, Object> extracted = parseAssistantJson(responseBody);
+            row.Extracted_JSON__c = truncate(JSON.serializePretty(extracted), EXTRACTED_JSON_LIMIT);
+            populateExtractedFields(row, extracted);
+            overrideTypeFromOpp(row, parentOpp);
+            computeIncrementalARR(row, parentOpp);
+            row.Extraction_Status__c = 'Success';
+        } catch (Exception e) {
+            row.Extraction_Status__c = 'Parse Failed';
+            row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
+        }
+        return row;
+    }
+
     @TestVisible
     private static Opportunity loadParentOpp(Id opportunityId) {
         if (opportunityId == null) return null;

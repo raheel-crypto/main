@@ -1279,6 +1279,55 @@ private class OrderFormExtractorTest {
         System.assertEquals(false, rows[0].Rerun__c, 'New row must not be flagged');
     }
 
+    // ===== Off-platform large-doc path (buildFromResponseBody + REST) =====
+
+    @isTest
+    static void buildFromResponseBody_mapsFieldsWithoutCallout() {
+        Opportunity opp = insertOpp('Large Doc Opp', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Seat_Licenses' => 5,
+            'Sub_Processor_List' => new List<Object>{ 'Amazon Web Services', 'OpenAI' }
+        });
+
+        Test.startTest();
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(
+            opp.Id, new List<Id>(), body);
+        insert row;
+        Test.stopTest();
+
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(5, row.Seat_Licenses__c);
+        System.assertNotEquals(null, row.Sub_Processor_List__c);
+        System.assert(row.Sub_Processor_List__c.contains('Amazon Web Services'),
+            'Sub-processor list should be mapped from the passed-in response');
+    }
+
+    @isTest
+    static void rest_doPost_createsExtraction() {
+        Opportunity opp = insertOpp('Large Doc REST', 'Closed Won');
+        OrderFormExtractionRest.Payload p = new OrderFormExtractionRest.Payload();
+        p.opportunityId = opp.Id;
+        p.contentDocumentIds = new List<Id>();
+        p.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business', 'Seat_Licenses' => 3
+        });
+
+        RestRequest req = new RestRequest();
+        req.httpMethod = 'POST';
+        req.requestBody = Blob.valueOf(JSON.serialize(p));
+        RestContext.request = req;
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        OrderFormExtractionRest.ApiResult res = OrderFormExtractionRest.doPost();
+        Test.stopTest();
+
+        System.assertEquals('Success', res.status);
+        System.assertNotEquals(null, res.extractionId);
+        System.assertEquals(1, [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id]);
+    }
+
     // ===== Doc relevance ranking (heap-budget drop order) =====
 
     @isTest
