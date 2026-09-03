@@ -184,11 +184,13 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
         return None, [], None
 
     blocks.append({"type": "text", "text": deal_context(opp)})
-    raw = client.messages.with_raw_response.create(
+    resp = client.messages.create(
         model=model, max_tokens=MAX_TOKENS, system=system_prompt,
         messages=[{"role": "user", "content": blocks}],
     )
-    return raw.text, used_doc_ids, raw.parse()
+    # model_dump_json() reproduces the Messages API response body, which is what
+    # the Apex side (parseAssistantJson) expects.
+    return resp.model_dump_json(), used_doc_ids, resp
 
 
 def write_back(target_org, opp_id, doc_ids, response_body):
