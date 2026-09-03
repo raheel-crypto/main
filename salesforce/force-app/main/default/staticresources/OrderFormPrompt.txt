@@ -131,8 +131,12 @@ APPROVED SUBPROCESSOR LIST (Sub_Processor_List):
   * Incorporation by REFERENCE to an online list (e.g. "the subprocessors listed at rogo.ai/subprocessors as of the Effective Date"). In that case return a single-element list containing the reference verbatim, prefixed with "By reference: " (e.g. "By reference: https://rogo.ai/subprocessors (as of Effective Date)") - do NOT invent the actual company names, since they are not in the document.
 - Return each approved subprocessor as its own array element, using the name EXACTLY as written in the document. If the doc gives a purpose/role alongside the name, you may append it after an em dash (e.g. "Amazon Web Services - cloud hosting"). Do not normalize, expand, or infer names that are not present.
 - Capture the list the CUSTOMER approved. If customer paper lists a different / narrower set than Rogo's standard, capture what the executed document says (note any material narrowing in Special_Terms).
-- Return null ONLY when no approved-subprocessor list or reference appears in any attached document. Do NOT default or invent - an absent list is meaningful for the compliance review.
-- Add an Extract_Evidence entry whenever you return a non-null value (quote the list header / clause and cite where it appears).
+- When NO approved-subprocessor list or reference appears, do NOT return null - instead return a single-element array that states WHY, using EXACTLY one of these two strings verbatim so the compliance review can tell the cases apart:
+  * ["No sub-processors named in the document(s)"] - use when the documents DO contain data-protection / DPA / privacy / sub-processor terms, but those terms name no sub-processors and give no reference to a list.
+  * ["No DPA or data-protection terms in the provided document(s)"] - use when the documents contain NO data-protection / DPA / privacy / sub-processor section at all (e.g. an older MSA or an order form with no DPA attached).
+- Return null ONLY when sub-processors are not applicable to the document at all - e.g. an Email Confirmation upsell or a non-contract file - never as a stand-in for "none found" on a real contract.
+- Do NOT default or invent actual sub-processor names - an absent list is meaningful for the compliance review.
+- Add an Extract_Evidence entry whenever you return a non-null value: for a real list quote the header/clause and cite where it appears; for the two "none" strings, note whether a DPA/data-protection section was present and what it did (or did not) say about sub-processors.
 
 EXTRACT_EVIDENCE FIELD:
 - Populate this ONLY for fields that required inference, computation, semantic search, or a picklist mapping - not for values that are obvious from the doc.
