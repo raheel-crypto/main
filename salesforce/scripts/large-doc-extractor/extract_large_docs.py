@@ -73,38 +73,27 @@ PROMPT_PATH = (
 def sf_session(target_org):
     """Return (instance_url, access_token) from the sf CLI.
 
-    `sf org display` returns the CACHED access token without refreshing it, so
-    it's often expired (401). We use the sfdxAuthUrl (a refresh token) to mint a
-    fresh access token, falling back to the cached one if it isn't available.
+    `sf org display` hands back the CACHED access token WITHOUT refreshing it, so
+    it's often expired (401). Any CLI command that actually hits the API, though,
+    refreshes and persists a fresh token - so we run a throwaway query first to
+    force that refresh, then read the now-current token.
     """
+    warm = subprocess.run(
+        ["sf", "data", "query", "--query", "SELECT Id FROM Organization LIMIT 1",
+         "--target-org", target_org, "--json"],
+        capture_output=True, text=True,
+    )
+    if warm.returncode != 0:
+        sys.exit(f"sf data query (token refresh) failed:\n{warm.stderr or warm.stdout}")
+
     out = subprocess.run(
-        ["sf", "org", "display", "--target-org", target_org, "--verbose", "--json"],
+        ["sf", "org", "display", "--target-org", target_org, "--json"],
         capture_output=True, text=True,
     )
     if out.returncode != 0:
         sys.exit(f"sf org display failed:\n{out.stderr or out.stdout}")
     result = json.loads(out.stdout)["result"]
-    instance_url = result["instanceUrl"]
-
-    auth_url = result.get("sfdxAuthUrl")
-    if auth_url and auth_url.startswith("force://"):
-        # force://<clientId>:<clientSecret>:<refreshToken>@<instanceUrl>
-        creds = auth_url[len("force://"):].split("@", 1)[0]
-        client_id, client_secret, refresh_token = creds.split(":", 2)
-        r = requests.post(
-            f"{instance_url}/services/oauth2/token",
-            data={
-                "grant_type": "refresh_token",
-                "client_id": client_id or "PlatformCLI",
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-            }, timeout=60,
-        )
-        r.raise_for_status()
-        return instance_url, r.json()["access_token"]
-
-    # No refresh token available - use the cached access token as-is.
-    return instance_url, result["accessToken"]
+    return result["instanceUrl"], result["accessToken"]
 
 
 def sf_query(instance_url, token, soql):
