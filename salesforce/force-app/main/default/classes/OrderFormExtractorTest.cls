@@ -1328,6 +1328,41 @@ private class OrderFormExtractorTest {
         System.assertEquals(1, [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id]);
     }
 
+    @isTest
+    static void rest_doPost_nullOpportunityReturnsError() {
+        OrderFormExtractionRest.Payload p = new OrderFormExtractionRest.Payload();
+        p.contentDocumentIds = new List<Id>();
+        p.responseBody = 'x';
+
+        RestRequest req = new RestRequest();
+        req.httpMethod = 'POST';
+        req.requestBody = Blob.valueOf(JSON.serialize(p));   // opportunityId is null
+        RestContext.request = req;
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        OrderFormExtractionRest.ApiResult res = OrderFormExtractionRest.doPost();
+        Test.stopTest();
+
+        System.assertEquals('Error', res.status);
+        System.assertEquals(null, res.extractionId);
+    }
+
+    @isTest
+    static void rest_doPost_malformedBodyReturnsError() {
+        RestRequest req = new RestRequest();
+        req.httpMethod = 'POST';
+        req.requestBody = Blob.valueOf('this is not json');   // forces the catch
+        RestContext.request = req;
+        RestContext.response = new RestResponse();
+
+        Test.startTest();
+        OrderFormExtractionRest.ApiResult res = OrderFormExtractionRest.doPost();
+        Test.stopTest();
+
+        System.assertEquals('Error', res.status);
+    }
+
     // ===== Doc relevance ranking (heap-budget drop order) =====
 
     @isTest
