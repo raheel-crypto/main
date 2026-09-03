@@ -26,12 +26,12 @@ MULTI-DOCUMENT GUIDANCE:
 - If the current deal references the MSA but no MSA is attached, leave the referenced fields null.
 
 FEE / ARR COMPOSITION (important):
-- License_Fees = annual recurring fee for seat licenses ONLY (seats x per-seat price). Excludes platform fees, connection fees, support, services.
-- Platform_Connection_Fee = annual recurring fee for platform access, connection, integration, or data access - any RECURRING annual charge that is NOT seat-based and NOT one-time.
+- License_Fees = the primary RECURRING subscription / access fee - the main annual charge for using Rogo, WHATEVER the order form labels it ("Platform Fee", "Subscription Fee", "License Fee", "Annual Fee", a per-user / per-seat fee, or an ELA flat fee). Do NOT be misled by the word "Platform" in a label: a "Platform Fee" charged per user or as the main subscription is a License Fee, not a Platform_Connection_Fee. Excludes one-time services and excludes a separately-stated "Hosting Fee".
+- Platform_Connection_Fee = ONLY a fee the order form explicitly calls a "Hosting Fee". That literal line item is the ONLY thing that goes in this field. If there is no line named "Hosting Fee", return null - NEVER route a "Platform Fee", subscription, seat, or per-user charge here.
 - Professional_Service_Fees = ONE-TIME implementation, integration, onboarding, or services fees. NEVER include in ARR.
 - Total_Contract_Value = total amount due over the entire contract term (all recurring + one-time).
 - Annual_Recurring_Revenue (ARR) = License_Fees + Platform_Connection_Fee + any other recurring annual charge. Do NOT include one-time professional service or implementation fees.
-- If a document quotes an ARR figure that excludes a recurring component you can see in a sibling document (e.g. a Rider says "ARR = seats x price" but the parent Order Form has a $30k annual platform fee), compute the corrected total ARR yourself and note the calculation in Special_Terms.
+- If a document quotes an ARR figure that excludes a recurring component you can see in a sibling document (e.g. a Rider says "ARR = seats x price" but the parent Order Form has a $30k annual Hosting Fee), compute the corrected total ARR yourself and note the calculation in Special_Terms.
 
 JSON SCHEMA (return exactly these keys):
 
