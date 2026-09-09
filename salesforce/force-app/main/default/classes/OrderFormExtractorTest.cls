@@ -1279,6 +1279,60 @@ private class OrderFormExtractorTest {
         System.assertEquals(false, rows[0].Rerun__c, 'New row must not be flagged');
     }
 
+    @isTest
+    static void runRefresh_updatesLatestRowInPlace() {
+        Opportunity opp = insertOpp('Refresh In Place', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+        Order_Form_Extraction__c existing = new Order_Form_Extraction__c(
+            Opportunity__c = opp.Id, Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now(), Seat_Licenses__c = 1);
+        insert existing;
+        Id existingId = existing.Id;
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business', 'Seat_Licenses' => 9 });
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        Test.startTest();
+        OrderFormBackfillBatch.runRefresh(Datetime.now().addMinutes(1));
+        Test.stopTest();
+
+        List<Order_Form_Extraction__c> rows = [
+            SELECT Id, Seat_Licenses__c FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id];
+        System.assertEquals(1, rows.size(), 'Refresh must not create a new row');
+        System.assertEquals(existingId, rows[0].Id, 'Same row updated in place');
+        System.assertEquals(9, rows[0].Seat_Licenses__c, 'Row refreshed with the new values');
+    }
+
+    @isTest
+    static void runRefresh_failedRerunLeavesRowUntouched() {
+        Opportunity opp = insertOpp('Refresh Fail Safe', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+        Order_Form_Extraction__c existing = new Order_Form_Extraction__c(
+            Opportunity__c = opp.Id, Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now(), Seat_Licenses__c = 7);
+        insert existing;
+        Id existingId = existing.Id;
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.statusCode = 500;                       // force the re-extraction to fail
+        mock.responseBody = '{"error":"internal"}';
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        Test.startTest();
+        OrderFormBackfillBatch.runRefresh(Datetime.now().addMinutes(1));
+        Test.stopTest();
+
+        List<Order_Form_Extraction__c> rows = [
+            SELECT Id, Seat_Licenses__c, Extraction_Status__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id];
+        System.assertEquals(1, rows.size(), 'No new row on a failed rerun');
+        System.assertEquals(existingId, rows[0].Id, 'Same row');
+        System.assertEquals(7, rows[0].Seat_Licenses__c, 'A failed rerun must NOT overwrite the good row');
+        System.assertEquals('Success', rows[0].Extraction_Status__c, 'Existing Success status preserved');
+    }
+
     // ===== Off-platform large-doc path (buildFromResponseBody + REST) =====
 
     @isTest

@@ -11,8 +11,15 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
     // Rerun__c = true, then delete the flagged (superseded) rows. Stateful, so
     // it survives across execute() calls once set before executeBatch.
     private Boolean rerunFlagged = false;
+    // Set only by runRefresh(): re-extract the latest row per opp and UPDATE it
+    // in place (upsert on its Id), overwriting only when the fresh extraction
+    // succeeds - so no new duplicate rows and a failed rerun never clobbers good
+    // data. refreshCutoff makes a re-run resumable (skip opps already refreshed).
+    private Boolean refreshMode = false;
+    private Datetime refreshCutoff;
     private Integer totalProcessed = 0;
     private Integer totalSkippedNoFile = 0;
+    private Integer totalRefreshSkipped = 0;
     private Integer totalSeen = 0;
 
     public OrderFormBackfillBatch() {
@@ -46,7 +53,19 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
             );
         }
         // Declared at method scope so the dynamic-SOQL bind :cutoff resolves.
-        Datetime cutoff = (rescanCutoff != null) ? rescanCutoff : Datetime.now();
+        Datetime cutoff = (refreshMode ? refreshCutoff : rescanCutoff);
+        if (cutoff == null) cutoff = Datetime.now();
+        if (refreshMode) {
+            // Every Closed Won opp EXCEPT those already refreshed in this pass
+            // (an extraction row modified at/after the cutoff). execute() updates
+            // the latest row in place.
+            return Database.getQueryLocator(
+                'SELECT Id, Name FROM Opportunity ' +
+                'WHERE StageName = \'Closed Won\' ' +
+                'AND Id NOT IN (SELECT Opportunity__c FROM Order_Form_Extraction__c WHERE LastModifiedDate >= :cutoff) ' +
+                'ORDER BY CloseDate DESC'
+            );
+        }
         String soql =
             'SELECT Id, Name ' +
             'FROM Opportunity ' +
@@ -68,6 +87,11 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
 
         Set<Id> oppIds = new Map<Id, Opportunity>(scope).keySet();
         Map<Id, List<Id>> docsByOpp = OrderFormExtractor.findAllDocuments(oppIds);
+
+        if (refreshMode) {
+            executeRefresh(scope, oppIds, docsByOpp);
+            return;
+        }
 
         // Phase 1: callouts only. Build all rows in memory. NO DML yet -
         // otherwise the next callout fails with "uncommitted work pending".
@@ -99,12 +123,53 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         }
     }
 
+    // Refresh mode: re-extract the latest row per opp and update it IN PLACE.
+    // Overwrites only on a fresh Success (a failed rerun leaves the good row
+    // untouched); inserts only when the opp had no extraction at all. No new
+    // duplicate rows, so no dedupe needed afterward.
+    private void executeRefresh(List<Opportunity> scope, Set<Id> oppIds, Map<Id, List<Id>> docsByOpp) {
+        // Latest extraction row per opp (newest wins).
+        Map<Id, Order_Form_Extraction__c> latestByOpp = new Map<Id, Order_Form_Extraction__c>();
+        for (Order_Form_Extraction__c o : [
+            SELECT Id, Opportunity__c, LastModifiedDate
+            FROM Order_Form_Extraction__c
+            WHERE Opportunity__c IN :oppIds
+            ORDER BY CreatedDate ASC
+        ]) {
+            latestByOpp.put(o.Opportunity__c, o);
+        }
+
+        Datetime cutoff = (refreshCutoff != null) ? refreshCutoff : Datetime.now();
+        List<Order_Form_Extraction__c> toUpsert = new List<Order_Form_Extraction__c>();
+        for (Opportunity opp : scope) {
+            Order_Form_Extraction__c latest = latestByOpp.get(opp.Id);
+            if (latest != null && latest.LastModifiedDate >= cutoff) continue; // already refreshed this pass
+
+            List<Id> docs = docsByOpp.get(opp.Id);
+            if (docs == null || docs.isEmpty()) { totalSkippedNoFile++; continue; }
+
+            Order_Form_Extraction__c fresh = OrderFormExtractionJob.buildExtraction(opp.Id, docs);
+            if (fresh.Extraction_Status__c == 'Success') {
+                if (latest != null) fresh.Id = latest.Id;   // update in place (keeps Applied_*/Rerun__c)
+                toUpsert.add(fresh);
+                totalProcessed++;
+            } else if (latest == null) {
+                toUpsert.add(fresh);                          // no prior row - record the attempt
+                totalProcessed++;
+            } else {
+                totalRefreshSkipped++;                        // failed rerun - leave the good row untouched
+            }
+        }
+        if (!toUpsert.isEmpty()) upsert toUpsert;
+    }
+
     public void finish(Database.BatchableContext bc) {
         System.debug(LoggingLevel.INFO,
             'OrderFormBackfillBatch finished. ' +
             'Seen: ' + totalSeen + '; ' +
             'Processed: ' + totalProcessed + '; ' +
-            'Skipped (no documents): ' + totalSkippedNoFile);
+            'Skipped (no documents): ' + totalSkippedNoFile + '; ' +
+            'Refresh skipped (failed rerun, row kept): ' + totalRefreshSkipped);
     }
 
     public static Id run() {
@@ -138,6 +203,27 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
     public static Id runRerunFlagged() {
         OrderFormBackfillBatch b = new OrderFormBackfillBatch();
         b.rerunFlagged = true;
+        return Database.executeBatch(b, SCOPE_SIZE);
+    }
+
+    // Re-extract the LATEST row per Closed Won opp and update it in place - one
+    // current row per opp, refreshed with the latest prompt/mapping. Overwrites
+    // only on a fresh Success (failed reruns leave the existing row untouched);
+    // inserts only for opps that had no extraction. No duplicate rows, so no
+    // dedupe afterward. This is the cleanest way to re-apply prompt changes.
+    public static Id runRefresh() {
+        OrderFormBackfillBatch b = new OrderFormBackfillBatch();
+        b.refreshMode = true;
+        b.refreshCutoff = Datetime.now();
+        return Database.executeBatch(b, SCOPE_SIZE);
+    }
+
+    // Resume a partially-completed refresh: pass the timestamp of when the pass
+    // first started so opps already refreshed in this pass are skipped.
+    public static Id runRefresh(Datetime cutoff) {
+        OrderFormBackfillBatch b = new OrderFormBackfillBatch();
+        b.refreshMode = true;
+        b.refreshCutoff = cutoff;
         return Database.executeBatch(b, SCOPE_SIZE);
     }
 }
