@@ -88,4 +88,20 @@ public with sharing class OrderFormPicklistMapper {
         if (s.contains('custom')) return 'Custom';
         return null;
     }
+
+    // Rogo's right to use the customer's name/logo/marks for publicity.
+    // Defaults to 'Not Mentioned' (never null) - the field should always carry a
+    // value. Order matters: none -> conditions -> no -> yes.
+    public static String mapPublicityRights(String raw) {
+        if (String.isBlank(raw)) return 'Not Mentioned';
+        String s = raw.toLowerCase();
+        if (s.contains('not mentioned') || s.contains('not specified')
+            || s.contains('none') || s.contains('n/a') || s.contains('silent')) return 'Not Mentioned';
+        if (s.contains('condition') || s.contains('consent') || s.contains('approv')
+            || s.contains('restrict') || s.contains('opt out') || s.contains('opt-out')) return 'With Conditions';
+        if (s.startsWith('no') || s.contains('prohibit') || s.contains('not permit')
+            || s.contains('shall not') || s.contains('may not')) return 'No';
+        if (s.contains('yes') || s.contains('permit') || s.contains('grant') || s.contains('allow')) return 'Yes';
+        return 'Not Mentioned';
+    }
 }

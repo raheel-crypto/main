@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Logo_Publicity_Language__c</fullName>
+    <description>Verbatim contract language granting, denying, or conditioning Rogo's use of the customer's name / logo / marks for publicity or marketing. Lets a reviewer see the explicit basis for the Logo_Publicity_Rights__c value. Null when Not Mentioned.</description>
+    <label>Logo / Publicity Language</label>
+    <length>32768</length>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>LongTextArea</type>
+    <visibleLines>6</visibleLines>
+</CustomField>

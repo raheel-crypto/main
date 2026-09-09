@@ -65,6 +65,8 @@ JSON SCHEMA (return exactly these keys):
   "Credits_Purchased": number | null,
   "Credits_Period": "month" | "quarter" | "year" | "contract" | null,
   "Special_Terms": "free text summary of any non-standard clauses such as MFN, termination for convenience, indemnity carve-outs, data processing addenda, custom SLA, etc., or null if none" | null,
+  "Logo_Publicity_Rights": "Yes" | "No" | "With Conditions" | "Not Mentioned",
+  "Logo_Publicity_Language": "verbatim clause governing Rogo's use of the customer's name/logo/marks for publicity, or null" | null,
   "Package_Tier": "Enterprise" | "Team" | "Basic" | "Custom" | null,
   "Credit_Commit": boolean | null,
   "Credit_Overcommit_Obligation": boolean | null,
@@ -137,6 +139,15 @@ APPROVED SUBPROCESSOR LIST (Sub_Processor_List):
 - Return null ONLY when sub-processors are not applicable to the document at all - e.g. an Email Confirmation upsell or a non-contract file - never as a stand-in for "none found" on a real contract.
 - Do NOT default or invent actual sub-processor names - an absent list is meaningful for the compliance review.
 - Add an Extract_Evidence entry whenever you return a non-null value: for a real list quote the header/clause and cite where it appears; for the two "none" strings, note whether a DPA/data-protection section was present and what it did (or did not) say about sub-processors.
+
+LOGO / PUBLICITY RIGHTS:
+- Determine whether Rogo may use the CUSTOMER's name, logo, or trademarks for marketing / publicity / commercial purposes (customer lists, website, press releases, case studies, "reference customer"). Search the order form, MSA, and T&C - the clause is often titled "Publicity", "Marketing", "Use of Name/Marks", "Reference Customer", or sits in a general/miscellaneous section.
+- Set Logo_Publicity_Rights to exactly one of:
+  * "Yes" - Rogo is permitted to use the customer's name/logo/marks with NO conditions (e.g. "Customer grants Rogo the right to use Customer's name and logo in its marketing materials and customer lists").
+  * "With Conditions" - permitted but limited: prior written/email consent or approval required, logo-only (not name) or name-only, specific channels only, a right to revoke/opt out, approval of each use, etc. Consent-required counts as With Conditions, not No.
+  * "No" - expressly prohibited (e.g. "Rogo shall not use Customer's name, logo, or marks for any purpose").
+  * "Not Mentioned" - there is NO publicity / name / logo / marketing clause anywhere in the attached documents. Use this only when truly nothing addresses it.
+- Logo_Publicity_Language = the verbatim clause you based the answer on (quote it as written). Return null only when Logo_Publicity_Rights is "Not Mentioned".
 
 EXTRACT_EVIDENCE FIELD:
 - Populate this ONLY for fields that required inference, computation, semantic search, or a picklist mapping - not for values that are obvious from the doc.

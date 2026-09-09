@@ -1459,4 +1459,18 @@ private class OrderFormExtractorTest {
         System.assertEquals(null, OrderFormPicklistMapper.mapPricingStructure(null));
         System.assertEquals(null, OrderFormPicklistMapper.mapPricingStructure('something weird'));
     }
+
+    @isTest
+    static void picklistMapper_publicityRights() {
+        System.assertEquals('Yes', OrderFormPicklistMapper.mapPublicityRights('Yes'));
+        System.assertEquals('Yes', OrderFormPicklistMapper.mapPublicityRights('Rogo is granted the right to use the logo'));
+        System.assertEquals('No', OrderFormPicklistMapper.mapPublicityRights('No'));
+        System.assertEquals('No', OrderFormPicklistMapper.mapPublicityRights('Rogo shall not use Customer marks'));
+        System.assertEquals('With Conditions', OrderFormPicklistMapper.mapPublicityRights('With Conditions'));
+        System.assertEquals('With Conditions', OrderFormPicklistMapper.mapPublicityRights('permitted with prior written consent'));
+        System.assertEquals('With Conditions', OrderFormPicklistMapper.mapPublicityRights('allowed but Customer may opt out'));
+        System.assertEquals('Not Mentioned', OrderFormPicklistMapper.mapPublicityRights('Not Mentioned'));
+        System.assertEquals('Not Mentioned', OrderFormPicklistMapper.mapPublicityRights(null));
+        System.assertEquals('Not Mentioned', OrderFormPicklistMapper.mapPublicityRights('   '));
+    }
 }

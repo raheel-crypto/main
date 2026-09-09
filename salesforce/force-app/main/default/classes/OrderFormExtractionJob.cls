@@ -580,6 +580,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credits_Purchased__c = toDecimal(extracted.get('Credits_Purchased'));
         row.Credits_Period__c = mapCreditsPeriod((String) extracted.get('Credits_Period'));
         row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
+        row.Logo_Publicity_Rights__c = OrderFormPicklistMapper.mapPublicityRights((String) extracted.get('Logo_Publicity_Rights'));
+        row.Logo_Publicity_Language__c = truncate((String) extracted.get('Logo_Publicity_Language'), 32768);
         row.Renewal_Fee_Escalator__c = toDecimal(extracted.get('Renewal_Fee_Escalator_Percent'));
         row.Billing_Entity_Name__c = truncate((String) extracted.get('Billing_Entity_Name'), 255);
         row.Billing_Entity_Review__c = toBoolean(extracted.get('Billing_Entity_Is_Derived')) == true;
