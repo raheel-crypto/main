@@ -1,57 +1,60 @@
 // =============================================================================
-// De-duplicate Order Form Extractions (keep one row per Opportunity)
+// Cleanup: delete extractions older than each Opportunity's most recent Success
 // =============================================================================
-// Reprocessing appends a new OFE row each run, so an Opp can accumulate several.
-// This keeps ONE row per Opportunity - the most recent Success; if the Opp has
-// no Success row, the most recent row of any status - and deletes the rest.
+// Reprocessing appends a new OFE row each run, so opps have accumulated stale
+// history. This deletes, per Opportunity, every extraction row OLDER than that
+// opp's most recent SUCCESS - keeping the most recent Success and anything
+// newer. Opps that have NO Success row are left completely untouched (there's
+// no good row to anchor on - those are the failed / large-file / blank ones you
+// may still be working).
 //
 // SAFETY:
 //   * DRY RUN by default (DO_DELETE = false): prints what it WOULD delete.
 //     Review the counts, then set DO_DELETE = true to actually remove them.
-//   * Run only AFTER all reprocessing (runRerunFlagged, manual reruns) is
-//     finished, so the keeper is the final good row.
+//   * Loads only light fields (Id, Opportunity__c, CreatedDate, status) - no
+//     VersionData or long-text, so it's heap-safe at any volume.
 //   * If you apply OFEs to Contracts, a Contract's Latest_Order_Form_Extraction__c
-//     may point at a row this deletes -> re-run the applier afterward (or ask me
-//     to make the keeper prefer the already-applied row).
+//     may point at an older row this deletes -> re-run the applier afterward.
 //
 // Deletes up to 10,000 rows per run (Apex DML cap); re-run until it reports 0.
 //
 // Run: sf apex run --target-org rogo --file scripts/apex/dedupeExtractions.apex
+// (or paste into Dev Console -> Execute Anonymous)
 // =============================================================================
 
 Boolean DO_DELETE = false;   // <-- set true to actually delete
 
-Map<Id, List<Order_Form_Extraction__c>> byOpp = new Map<Id, List<Order_Form_Extraction__c>>();
+// 1. Most recent Success CreatedDate per Opportunity (the "keep line").
+Map<Id, Datetime> keepLineByOpp = new Map<Id, Datetime>();
 for (Order_Form_Extraction__c o : [
-    SELECT Id, Opportunity__c, Extraction_Status__c, CreatedDate
+    SELECT Opportunity__c, CreatedDate
     FROM Order_Form_Extraction__c
-    WHERE Opportunity__c != null
-    ORDER BY Opportunity__c, CreatedDate DESC   // newest first within each Opp
+    WHERE Extraction_Status__c = 'Success' AND Opportunity__c != null
+    ORDER BY CreatedDate ASC
 ]) {
-    if (!byOpp.containsKey(o.Opportunity__c)) byOpp.put(o.Opportunity__c, new List<Order_Form_Extraction__c>());
-    byOpp.get(o.Opportunity__c).add(o);
+    keepLineByOpp.put(o.Opportunity__c, o.CreatedDate);   // last (newest) wins
 }
 
+// 2. Any row older than its opp's keep line is stale - queue it for deletion.
 List<Order_Form_Extraction__c> toDelete = new List<Order_Form_Extraction__c>();
-Integer oppsWithDupes = 0;
-for (Id oppId : byOpp.keySet()) {
-    List<Order_Form_Extraction__c> rows = byOpp.get(oppId);   // newest first
-    if (rows.size() < 2) continue;
-    oppsWithDupes++;
-    Order_Form_Extraction__c keeper = null;
-    for (Order_Form_Extraction__c r : rows) {                 // first (newest) Success wins
-        if (r.Extraction_Status__c == 'Success') { keeper = r; break; }
+if (!keepLineByOpp.isEmpty()) {
+    for (Order_Form_Extraction__c o : [
+        SELECT Id, Opportunity__c, CreatedDate
+        FROM Order_Form_Extraction__c
+        WHERE Opportunity__c IN :keepLineByOpp.keySet()
+        ORDER BY CreatedDate ASC
+    ]) {
+        if (o.CreatedDate < keepLineByOpp.get(o.Opportunity__c)) {
+            toDelete.add(o);
+        }
     }
-    if (keeper == null) keeper = rows[0];                     // no Success -> newest of any
-    for (Order_Form_Extraction__c r : rows) if (r.Id != keeper.Id) toDelete.add(r);
 }
 
-System.debug('--- Opps total: ' + byOpp.size());
-System.debug('--- Opps with duplicates: ' + oppsWithDupes);
-System.debug('--- Redundant rows to delete: ' + toDelete.size());
+System.debug('--- Opps with a Success row: ' + keepLineByOpp.size());
+System.debug('--- Stale rows (older than the most recent Success): ' + toDelete.size());
 
 if (!DO_DELETE) {
-    System.debug('--- DRY RUN. Set DO_DELETE = true to remove the ' + toDelete.size() + ' redundant row(s).');
+    System.debug('--- DRY RUN. Set DO_DELETE = true to delete these ' + toDelete.size() + ' older row(s).');
     return;
 }
 
@@ -63,5 +66,5 @@ if (toDelete.size() > cap) {
     System.debug('--- Deleted ' + slice.size() + '; ' + (toDelete.size() - cap) + ' remaining - run again.');
 } else {
     delete toDelete;
-    System.debug('--- Deleted ' + toDelete.size() + ' redundant row(s). Done.');
+    System.debug('--- Deleted ' + toDelete.size() + ' stale row(s). Done.');
 }
