@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Subprocessor_List_Granularity__c</fullName>
+    <description>Provider = vendor named, new models free. Model = specific models named. Service scoped = vendor named WITH a function (the trap - capture scope verbatim in Sub_Processor_List__c).</description>
+    <label>Subprocessor List Granularity</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Provider</fullName><default>false</default><label>Provider</label></value>
+            <value><fullName>Model</fullName><default>false</default><label>Model</label></value>
+            <value><fullName>Service scoped</fullName><default>false</default><label>Service scoped</label></value>
+            <value><fullName>Not specified</fullName><default>false</default><label>Not specified</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

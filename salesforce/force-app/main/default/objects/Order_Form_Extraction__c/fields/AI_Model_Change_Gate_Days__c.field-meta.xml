@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>AI_Model_Change_Gate_Days__c</fullName>
+    <description>Notice period (days) from a clause that gates the MODEL itself, as opposed to the provider. Kept separate from Subprocessor_Notice_Period__c - they differ.</description>
+    <label>AI Model Change Gate Days</label>
+    <precision>4</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

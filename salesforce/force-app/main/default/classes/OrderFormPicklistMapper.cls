@@ -104,4 +104,80 @@ public with sharing class OrderFormPicklistMapper {
         if (s.contains('yes') || s.contains('permit') || s.contains('grant') || s.contains('allow')) return 'Yes';
         return 'Not Mentioned';
     }
+
+    // ===== LLM enablement gate mappers (all default to a safe "silence" value) =====
+
+    // Yes / No / Not specified. Check "not specified" first ("not" contains "no").
+    public static String mapYesNoNotSpecified(String raw) {
+        if (String.isBlank(raw)) return 'Not specified';
+        String s = raw.toLowerCase();
+        if (s.contains('not specified') || s.contains('n/a') || s.contains('silent') || s.contains('unknown')) return 'Not specified';
+        if (s.startsWith('yes') || s == 'true') return 'Yes';
+        if (s.startsWith('no') || s == 'false') return 'No';
+        return 'Not specified';
+    }
+
+    // Subprocessor_Gate_Type: strictest wins on ambiguity. consent > objection > notify > none.
+    public static String mapGateType(String raw) {
+        if (String.isBlank(raw)) return 'Not specified';
+        String s = raw.toLowerCase();
+        if (s.contains('consent') || s.contains('approval') || s.contains('approve')) return 'Consent required';
+        if (s.contains('objection') || s.contains('object')) return 'Notify with objection';
+        if (s.contains('notify') || s.contains('notice')) return 'Notify';
+        if (s == 'none' || s.contains('no gate') || s.contains('no restriction') || s.contains('freely')) return 'None';
+        return 'Not specified';
+    }
+
+    // Processing_Location_Gate: None / Notice / Consent / Not specified.
+    public static String mapLocationGate(String raw) {
+        if (String.isBlank(raw)) return 'Not specified';
+        String s = raw.toLowerCase();
+        if (s.contains('consent') || s.contains('approval') || s.contains('approve')) return 'Consent';
+        if (s.contains('notice') || s.contains('notify')) return 'Notice';
+        if (s == 'none' || s.contains('no gate') || s.contains('not fixed') || s.contains('anywhere')) return 'None';
+        return 'Not specified';
+    }
+
+    // Personal_Data_Disclosure_Gate: None / Notify / Consent / Not specified.
+    public static String mapDisclosureGate(String raw) {
+        if (String.isBlank(raw)) return 'Not specified';
+        String s = raw.toLowerCase();
+        if (s.contains('consent') || s.contains('approval') || s.contains('approve')) return 'Consent';
+        if (s.contains('notify') || s.contains('notice')) return 'Notify';
+        if (s == 'none' || s.contains('no gate')) return 'None';
+        return 'Not specified';
+    }
+
+    // Subprocessor_List_Location: default "Not listed".
+    public static String mapListLocation(String raw) {
+        if (String.isBlank(raw)) return 'Not listed';
+        String s = raw.toLowerCase();
+        if (s.contains('transaction')) return 'Transaction document';
+        if (s.contains('trust')) return 'Trust page';
+        if (s.contains('dpa') || s.contains('data processing') || s.contains('appendix') || s.contains('annex')) return 'DPA appendix';
+        if (s.contains('order form') || s.contains('order-form')) return 'Order form';
+        if (s.contains('schedule')) return 'Schedule';
+        if (s.contains('not listed') || s.contains('none') || s.contains('not found')) return 'Not listed';
+        return 'Not listed';
+    }
+
+    // Subprocessor_List_Granularity: Provider / Model / Service scoped / Not specified.
+    public static String mapListGranularity(String raw) {
+        if (String.isBlank(raw)) return 'Not specified';
+        String s = raw.toLowerCase();
+        if (s.contains('service scoped') || s.contains('service-scoped') || s.contains('scoped') || s.contains('function')) return 'Service scoped';
+        if (s.contains('model')) return 'Model';
+        if (s.contains('provider') || s.contains('vendor')) return 'Provider';
+        return 'Not specified';
+    }
+
+    // LLM_Gate_Confidence: default Low (route to review when unknown).
+    public static String mapConfidence(String raw) {
+        if (String.isBlank(raw)) return 'Low';
+        String s = raw.toLowerCase();
+        if (s.contains('high')) return 'High';
+        if (s.contains('medium') || s.contains('med')) return 'Medium';
+        if (s.contains('low')) return 'Low';
+        return 'Low';
+    }
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Subprocessor_Objection_Consequence__c</fullName>
+    <description>What happens if the client objects, and on what standard (good-faith cooperation vs not unreasonably withheld vs sole discretion). Null if there is no objection mechanism - do not write none required.</description>
+    <label>Subprocessor Objection Consequence</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

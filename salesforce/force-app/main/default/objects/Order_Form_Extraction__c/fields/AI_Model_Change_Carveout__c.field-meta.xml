@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>AI_Model_Change_Carveout__c</fullName>
+    <description>Exact boundary of any routine-update exclusion. An exclusion for updates that do not alter Model outputs does NOT cover a model upgrade. Over-permissive error here is the most expensive.</description>
+    <label>AI Model Change Carveout</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

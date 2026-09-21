@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Subprocessor_Gate_Type__c</fullName>
+    <description>Strictest gate that could apply to enabling a new inference provider, across ALL clauses (not just the subcontracting article). The single most decision-relevant field.</description>
+    <label>Subprocessor Gate Type</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>None</fullName><default>false</default><label>None</label></value>
+            <value><fullName>Notify</fullName><default>false</default><label>Notify</label></value>
+            <value><fullName>Notify with objection</fullName><default>false</default><label>Notify with objection</label></value>
+            <value><fullName>Consent required</fullName><default>false</default><label>Consent required</label></value>
+            <value><fullName>Not specified</fullName><default>false</default><label>Not specified</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

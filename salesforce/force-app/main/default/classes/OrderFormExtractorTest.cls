@@ -415,9 +415,13 @@ private class OrderFormExtractorTest {
         Opportunity opp = insertOpp('Cantor Pilot', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OrderForm');
 
-        String evidence = '## Subprocessor_Notice_Period_Days\n' +
-            '"Rogo shall provide Customer with no less than thirty (30) days\' prior written notice before adding, removing, or replacing any Subprocessor"\n' +
-            '[source: MSA Section 9(f)]\n';
+        // v2: Extract_Evidence arrives as a JSON object {field:{clause,quote}}.
+        Map<String, Object> evidence = new Map<String, Object>{
+            'Subprocessor_Notice_Period_Days' => new Map<String, Object>{
+                'clause' => 'MSA Section 9(f)',
+                'quote'  => 'Rogo shall provide Customer with no less than thirty (30) days\' prior written notice before adding, removing, or replacing any Subprocessor'
+            }
+        };
 
         MockAnthropic mock = new MockAnthropic();
         mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
@@ -444,7 +448,9 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
-    static void extractionJob_subprocessorDefaultsTo30WhenAbsent() {
+    static void extractionJob_subprocessorNoticeStaysNullWhenAbsent() {
+        // v2: a null day-count means NO notice obligation was found. We must NOT
+        // fabricate a 30-day default and must NOT treat it as zero.
         Opportunity opp = insertOpp('No Subproc Clause', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OrderForm');
 
@@ -466,15 +472,14 @@ private class OrderFormExtractorTest {
             SELECT Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Extract_Evidence__c
             FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
         ];
-        System.assertEquals(30, row.Subprocessor_Notice_Period__c, 'Absent clause defaults to 30');
-        System.assert(row.Extract_Evidence__c != null && row.Extract_Evidence__c.contains('Defaulted to 30'),
-            'Default should be noted in evidence: ' + row.Extract_Evidence__c);
+        System.assertEquals(null, row.Subprocessor_Notice_Period__c,
+            'Absent clause -> null (no obligation found), never a 30-day default');
     }
 
     @isTest
-    static void extractionJob_subprocessorConsentRestrictionWithDefault() {
-        // Truist-style: written consent required, no day count -> default 30
-        // for the notice period, restriction captured separately.
+    static void extractionJob_subprocessorConsentRestrictionNoNotice() {
+        // Truist-style: written consent required, no day count. The notice period
+        // stays null (v2: not defaulted) and the restriction is captured verbatim.
         Opportunity opp = insertOpp('Consent Required', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OrderForm');
 
@@ -496,7 +501,8 @@ private class OrderFormExtractorTest {
             SELECT Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c
             FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
         ];
-        System.assertEquals(30, row.Subprocessor_Notice_Period__c);
+        System.assertEquals(null, row.Subprocessor_Notice_Period__c,
+            'Consent-only clause has no day count -> null, not a 30-day default');
         System.assert(row.Subprocessor_Restrictions__c.contains('consent'),
             'Consent restriction should be captured: ' + row.Subprocessor_Restrictions__c);
     }
@@ -1526,5 +1532,188 @@ private class OrderFormExtractorTest {
         System.assertEquals('Not Mentioned', OrderFormPicklistMapper.mapPublicityRights('Not Mentioned'));
         System.assertEquals('Not Mentioned', OrderFormPicklistMapper.mapPublicityRights(null));
         System.assertEquals('Not Mentioned', OrderFormPicklistMapper.mapPublicityRights('   '));
+    }
+
+    // ===== v2 LLM-enablement-gate mappers =====
+
+    @isTest
+    static void picklistMapper_gateMappers() {
+        // Yes / No / Not specified. "not specified" must win over the "no" substring.
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapYesNoNotSpecified(null));
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapYesNoNotSpecified('not specified'));
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapYesNoNotSpecified('silent'));
+        System.assertEquals('Yes', OrderFormPicklistMapper.mapYesNoNotSpecified('Yes, prohibited'));
+        System.assertEquals('Yes', OrderFormPicklistMapper.mapYesNoNotSpecified('true'));
+        System.assertEquals('No', OrderFormPicklistMapper.mapYesNoNotSpecified('No'));
+        System.assertEquals('No', OrderFormPicklistMapper.mapYesNoNotSpecified('false'));
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapYesNoNotSpecified('maybe'));
+
+        // Gate type - strictest wins.
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapGateType(null));
+        System.assertEquals('Consent required', OrderFormPicklistMapper.mapGateType('prior written consent'));
+        System.assertEquals('Consent required', OrderFormPicklistMapper.mapGateType('customer approval required'));
+        System.assertEquals('Notify with objection', OrderFormPicklistMapper.mapGateType('notice with right to object'));
+        System.assertEquals('Notify', OrderFormPicklistMapper.mapGateType('30 days notice'));
+        System.assertEquals('None', OrderFormPicklistMapper.mapGateType('none'));
+        System.assertEquals('None', OrderFormPicklistMapper.mapGateType('may freely engage'));
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapGateType('ambiguous'));
+
+        // Location gate.
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapLocationGate(null));
+        System.assertEquals('Consent', OrderFormPicklistMapper.mapLocationGate('requires approval'));
+        System.assertEquals('Notice', OrderFormPicklistMapper.mapLocationGate('notice required'));
+        System.assertEquals('None', OrderFormPicklistMapper.mapLocationGate('processing anywhere'));
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapLocationGate('unclear'));
+
+        // Disclosure gate.
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapDisclosureGate(null));
+        System.assertEquals('Consent', OrderFormPicklistMapper.mapDisclosureGate('consent needed'));
+        System.assertEquals('Notify', OrderFormPicklistMapper.mapDisclosureGate('notify customer'));
+        System.assertEquals('None', OrderFormPicklistMapper.mapDisclosureGate('no gate'));
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapDisclosureGate('unclear'));
+
+        // List location - default "Not listed".
+        System.assertEquals('Not listed', OrderFormPicklistMapper.mapListLocation(null));
+        System.assertEquals('Transaction document', OrderFormPicklistMapper.mapListLocation('in the transaction doc'));
+        System.assertEquals('Trust page', OrderFormPicklistMapper.mapListLocation('on the trust page'));
+        System.assertEquals('DPA appendix', OrderFormPicklistMapper.mapListLocation('DPA annex 3'));
+        System.assertEquals('Order form', OrderFormPicklistMapper.mapListLocation('listed on the order form'));
+        System.assertEquals('Schedule', OrderFormPicklistMapper.mapListLocation('Schedule B'));
+        System.assertEquals('Not listed', OrderFormPicklistMapper.mapListLocation('nowhere'));
+
+        // List granularity.
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapListGranularity(null));
+        System.assertEquals('Service scoped', OrderFormPicklistMapper.mapListGranularity('service scoped'));
+        System.assertEquals('Service scoped', OrderFormPicklistMapper.mapListGranularity('scoped by function'));
+        System.assertEquals('Model', OrderFormPicklistMapper.mapListGranularity('per model'));
+        System.assertEquals('Provider', OrderFormPicklistMapper.mapListGranularity('by vendor'));
+        System.assertEquals('Not specified', OrderFormPicklistMapper.mapListGranularity('unclear'));
+
+        // Confidence - default Low.
+        System.assertEquals('Low', OrderFormPicklistMapper.mapConfidence(null));
+        System.assertEquals('High', OrderFormPicklistMapper.mapConfidence('high confidence'));
+        System.assertEquals('Medium', OrderFormPicklistMapper.mapConfidence('med'));
+        System.assertEquals('Low', OrderFormPicklistMapper.mapConfidence('low'));
+        System.assertEquals('Low', OrderFormPicklistMapper.mapConfidence('???'));
+    }
+
+    // ===== v2 subprocessor-list / evidence serialization =====
+
+    @isTest
+    static void mapSubprocessorListValue_allShapes() {
+        // List of {name,scope,is_ai} objects -> JSON.
+        List<Object> parties = new List<Object>{
+            new Map<String, Object>{ 'name' => 'Anthropic', 'scope' => 'LLM inference', 'is_ai' => true },
+            new Map<String, Object>{ 'name' => 'AWS', 'scope' => 'Hosting', 'is_ai' => false }
+        };
+        String asJson = OrderFormExtractionJob.mapSubprocessorListValue(parties);
+        System.assert(asJson.startsWith('['), 'A party list should serialize to a JSON array');
+        System.assert(asJson.contains('Anthropic') && asJson.contains('is_ai'), asJson);
+
+        // Empty list -> null (nothing named).
+        System.assertEquals(null, OrderFormExtractionJob.mapSubprocessorListValue(new List<Object>()));
+
+        // Sentinel string -> stored as-is.
+        System.assertEquals('By reference: https://rogo.ai/trust',
+            OrderFormExtractionJob.mapSubprocessorListValue('By reference: https://rogo.ai/trust'));
+        System.assertEquals('No sub-processors named in the executed documents.',
+            OrderFormExtractionJob.mapSubprocessorListValue('No sub-processors named in the executed documents.'));
+
+        // Blank / null -> null.
+        System.assertEquals(null, OrderFormExtractionJob.mapSubprocessorListValue('   '));
+        System.assertEquals(null, OrderFormExtractionJob.mapSubprocessorListValue(null));
+    }
+
+    @isTest
+    static void asEvidenceString_objectAndString() {
+        // JSON object {field:{clause,quote}} -> serialized JSON.
+        Map<String, Object> ev = new Map<String, Object>{
+            'Subprocessor_Gate_Type' => new Map<String, Object>{
+                'clause' => 'MSA 10.5', 'quote' => 'prior written consent'
+            }
+        };
+        String s = OrderFormExtractionJob.asEvidenceString(ev);
+        System.assert(s.contains('prior written consent'), s);
+        // Plain string -> as-is.
+        System.assertEquals('legacy evidence', OrderFormExtractionJob.asEvidenceString('legacy evidence'));
+        // Blank / null -> null.
+        System.assertEquals(null, OrderFormExtractionJob.asEvidenceString('   '));
+        System.assertEquals(null, OrderFormExtractionJob.asEvidenceString(null));
+    }
+
+    @isTest
+    static void buildFromResponseBody_mapsGateFields() {
+        Opportunity opp = insertOpp('Gate Fields Opp', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Resolved_Subprocessor_Term' => 'Subcontractor',
+            'Subprocessor_Gate_Type' => 'prior written consent',
+            'Consent_Revocable' => 'Yes',
+            'Subprocessor_Objection_Consequence' => 'Customer may terminate for convenience',
+            'Subprocessor_List_Location' => 'DPA appendix',
+            'Subprocessor_List_Granularity' => 'by vendor',
+            'AI_Model_Change_Gate_Days' => 45,
+            'AI_Model_Change_Documentation' => 'Change log maintained on trust page',
+            'AI_Model_Change_Carveout' => 'Emergency security patches exempt',
+            'AI_Change_Reporting_Trigger' => 'Yes',
+            'Processing_Location_Gate' => 'requires approval',
+            'Approved_Locations' => 'US, EU',
+            'Personal_Data_Disclosure_Gate' => 'notify customer',
+            'Release_Notice_Days' => 30,
+            'Release_Major_Notice_Days' => 90,
+            'Customer_Can_Defer_Release' => 'No',
+            'Material_Change_Notice' => 'Yes',
+            'AI_Training_Prohibition' => 'Yes',
+            'AI_Training_Flowdown_Required' => 'Yes',
+            'Model_Capability_Floor' => 'not specified',
+            'LLM_Gate_Confidence' => 'high'
+        });
+
+        Test.startTest();
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(
+            opp.Id, new List<Id>(), body);
+        insert row;
+        Test.stopTest();
+
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals('Subcontractor', row.Resolved_Subprocessor_Term__c);
+        System.assertEquals('Consent required', row.Subprocessor_Gate_Type__c);
+        System.assertEquals('Yes', row.Consent_Revocable__c);
+        System.assertEquals('DPA appendix', row.Subprocessor_List_Location__c);
+        System.assertEquals('Provider', row.Subprocessor_List_Granularity__c);
+        System.assertEquals(45, row.AI_Model_Change_Gate_Days__c);
+        System.assertEquals('Yes', row.AI_Change_Reporting_Trigger__c);
+        System.assertEquals('Consent', row.Processing_Location_Gate__c);
+        System.assertEquals('US, EU', row.Approved_Locations__c);
+        System.assertEquals('Notify', row.Personal_Data_Disclosure_Gate__c);
+        System.assertEquals(30, row.Release_Notice_Days__c);
+        System.assertEquals(90, row.Release_Major_Notice_Days__c);
+        System.assertEquals('No', row.Customer_Can_Defer_Release__c);
+        System.assertEquals('Yes', row.AI_Training_Prohibition__c);
+        System.assertEquals('Not specified', row.Model_Capability_Floor__c);
+        System.assertEquals('High', row.LLM_Gate_Confidence__c);
+    }
+
+    @isTest
+    static void buildFromResponseBody_gateDefaultsWhenSilent() {
+        // A response with no gate keys at all should still leave every restricted
+        // gate picklist at its safe "silence" default (never null / invalid).
+        Opportunity opp = insertOpp('Silent Gate Opp', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business' });
+
+        Test.startTest();
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(
+            opp.Id, new List<Id>(), body);
+        insert row;
+        Test.stopTest();
+
+        System.assertEquals('Not specified', row.Subprocessor_Gate_Type__c);
+        System.assertEquals('Not specified', row.Consent_Revocable__c);
+        System.assertEquals('Not listed', row.Subprocessor_List_Location__c);
+        System.assertEquals('Not specified', row.Subprocessor_List_Granularity__c);
+        System.assertEquals('Not specified', row.Processing_Location_Gate__c);
+        System.assertEquals('Not specified', row.Personal_Data_Disclosure_Gate__c);
+        System.assertEquals('Low', row.LLM_Gate_Confidence__c, 'Silence routes to review at Low confidence');
+        System.assertEquals(null, row.AI_Model_Change_Gate_Days__c, 'No day count -> null, not 0');
     }
 }

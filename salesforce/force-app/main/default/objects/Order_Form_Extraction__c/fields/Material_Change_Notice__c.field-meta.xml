@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Material_Change_Notice__c</fullName>
+    <description>Catch-all duty to report material changes to how the service is delivered. Usually generates obligations rather than blocking; non-performance feeds termination clauses.</description>
+    <label>Material Change Notice</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Yes</fullName><default>false</default><label>Yes</label></value>
+            <value><fullName>No</fullName><default>false</default><label>No</label></value>
+            <value><fullName>Not specified</fullName><default>false</default><label>Not specified</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

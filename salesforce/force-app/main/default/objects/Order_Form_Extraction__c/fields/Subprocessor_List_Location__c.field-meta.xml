@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Subprocessor_List_Location__c</fullName>
+    <description>Where the approved-provider list lives - drives amendment mechanics. Transaction document = the list is outside the MSA; flag for retrieval.</description>
+    <label>Subprocessor List Location</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>DPA appendix</fullName><default>false</default><label>DPA appendix</label></value>
+            <value><fullName>Order form</fullName><default>false</default><label>Order form</label></value>
+            <value><fullName>Schedule</fullName><default>false</default><label>Schedule</label></value>
+            <value><fullName>Transaction document</fullName><default>false</default><label>Transaction document</label></value>
+            <value><fullName>Trust page</fullName><default>false</default><label>Trust page</label></value>
+            <value><fullName>Not listed</fullName><default>false</default><label>Not listed</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

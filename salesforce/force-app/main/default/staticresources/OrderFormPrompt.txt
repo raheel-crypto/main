@@ -89,10 +89,31 @@ JSON SCHEMA (return exactly these keys):
   "Customer_Signer_Name": "full name as printed in the signature block" | null,
   "Customer_Signer_Title": "title/role of the customer signer" | null,
   "Subprocessor_Notice_Period_Days": number | null,
-  "Subprocessor_Restrictions": "short description (<=255 chars) of any non-standard subprocessor obligation, or null" | null,
-  "Sub_Processor_List": ["exact verbatim name of each approved / authorized subprocessor", ...] | null,
+  "Subprocessor_Restrictions": "free-text summary of non-standard subprocessor / third-party-engagement restrictions (consent standards, tiered/longer notice, objection rights, conflicting clauses not chosen), or null" | null,
+  "Sub_Processor_List": [{"name":"exact name as written","scope":"verbatim scope/function wording, or null","is_ai":true|false}, ...] | "By reference: <url>" | "No sub-processors named in the document(s)" | "No DPA or data-protection terms in the provided document(s)" | null,
   "Renewal_Fee_Escalator_Percent": number | null,
-  "Extract_Evidence": "structured evidence trail as described below, or null when nothing warrants explanation" | null
+  "Resolved_Subprocessor_Term": "the contract's own defined term for third parties it engages (see STEP 0)" | null,
+  "Subprocessor_Gate_Type": "None" | "Notify" | "Notify with objection" | "Consent required" | "Not specified",
+  "Consent_Revocable": "Yes" | "No" | "Not specified",
+  "Subprocessor_Objection_Consequence": "what happens if the client objects and on what standard, or null" | null,
+  "Subprocessor_List_Location": "DPA appendix" | "Order form" | "Schedule" | "Transaction document" | "Trust page" | "Not listed",
+  "Subprocessor_List_Granularity": "Provider" | "Model" | "Service scoped" | "Not specified",
+  "AI_Model_Change_Gate_Days": number | null,
+  "AI_Model_Change_Documentation": "what must accompany a model-change notice, or null" | null,
+  "AI_Model_Change_Carveout": "exact boundary of any routine-update exclusion, or null" | null,
+  "AI_Change_Reporting_Trigger": "Yes" | "No" | "Not specified",
+  "Processing_Location_Gate": "None" | "Notice" | "Consent" | "Not specified",
+  "Approved_Locations": "where processing is contractually fixed to, or null" | null,
+  "Personal_Data_Disclosure_Gate": "None" | "Notify" | "Consent" | "Not specified",
+  "Release_Notice_Days": number | null,
+  "Release_Major_Notice_Days": number | null,
+  "Customer_Can_Defer_Release": "Yes" | "No" | "Not specified",
+  "Material_Change_Notice": "Yes" | "No" | "Not specified",
+  "AI_Training_Prohibition": "Yes" | "No" | "Not specified",
+  "AI_Training_Flowdown_Required": "Yes" | "No" | "Not specified",
+  "Model_Capability_Floor": "Yes" | "No" | "Not specified",
+  "LLM_Gate_Confidence": "High" | "Medium" | "Low",
+  "Extract_Evidence": {"<field_name>": {"clause":"clause ref", "quote":"verbatim quote"}, ...} | null
 }
 
 RENEWAL FEE ESCALATOR:
@@ -114,7 +135,7 @@ SUBPROCESSOR NOTICE PERIOD:
   - Sometimes there is NO subprocessor-change notice period stated - return null in that case.
 - Search all attached documents (order form, MSA, DPA, riders) for the concept, not for a specific section number. Cue phrases: "Subprocessor", "sub-processor", "sub processor", "prior written notice", "add / remove / replace", "list of approved Subprocessors".
 - If multiple values conflict across documents, prefer the more specific / more recent one (Order Form special term > Rider > MSA); note the override in Special_Terms.
-- Return the plain day-count only. If the contract expresses the requirement as "prior written consent" / "approval" with NO day count, return null for Subprocessor_Notice_Period_Days (do NOT invent a number - Apex applies a default of 30). If it gives a day count, return it.
+- Return the plain day-count only. If the contract expresses the requirement as "prior written consent" / "approval" with NO day count, return null for Subprocessor_Notice_Period_Days (null means NO notice obligation was found - do NOT invent a number and do NOT treat it as zero). If it gives a day count, return it. If several clauses give DIFFERENT periods, return the LONGEST and note the others in Subprocessor_Restrictions.
 
 SUBPROCESSOR_RESTRICTIONS (exceptional obligations):
 - Populate Subprocessor_Restrictions ONLY when the contract imposes something BEYOND simple advance notice. Examples that qualify:
@@ -130,15 +151,47 @@ APPROVED SUBPROCESSOR LIST (Sub_Processor_List):
 - Where the list lives varies - search ALL attached documents (order form, MSA, DPA, privacy addendum, exhibits, annexes, riders), not a fixed section:
   * An explicit enumerated list or table of subprocessors ("Approved Subprocessors", "Authorized Sub-processors", "List of Subprocessors", "Third-Party Processors"), often in a DPA Exhibit/Annex/Schedule.
   * Named subprocessors called out inline in a data-protection clause (e.g. "Customer authorizes the following Subprocessors: Amazon Web Services, OpenAI, Anthropic").
-  * Incorporation by REFERENCE to an online list (e.g. "the subprocessors listed at rogo.ai/subprocessors as of the Effective Date"). In that case return a single-element list containing the reference verbatim, prefixed with "By reference: " (e.g. "By reference: https://rogo.ai/subprocessors (as of Effective Date)") - do NOT invent the actual company names, since they are not in the document.
-- Return each approved subprocessor as its own array element, using the name EXACTLY as written in the document. If the doc gives a purpose/role alongside the name, you may append it after an em dash (e.g. "Amazon Web Services - cloud hosting"). Do not normalize, expand, or infer names that are not present.
+  * Incorporation by REFERENCE to an online list (e.g. "the subprocessors listed at rogo.ai/subprocessors as of the Effective Date"). In that case set Sub_Processor_List to the STRING (not the object array) "By reference: <url>" (e.g. "By reference: https://rogo.ai/subprocessors (as of Effective Date)"), set Subprocessor_List_Location to "Trust page", and do NOT invent the actual company names.
+- Return each approved subprocessor as its own OBJECT: {"name": exact name as written, "scope": the function/role wording VERBATIM (e.g. "Cloud Service Provider", "LLM Inference", "TPU hosting via Compute Engine") or null if none given, "is_ai": true for an AI/LLM/inference provider else false}. Do NOT normalize or merge different scope strings - the same vendor may be scoped to compute in one contract and inference in another. Do not invent names not present.
 - Capture the list the CUSTOMER approved. If customer paper lists a different / narrower set than Rogo's standard, capture what the executed document says (note any material narrowing in Special_Terms).
-- When NO approved-subprocessor list or reference appears, do NOT return null - instead return a single-element array that states WHY, using EXACTLY one of these two strings verbatim so the compliance review can tell the cases apart:
-  * ["No sub-processors named in the document(s)"] - use when the documents DO contain data-protection / DPA / privacy / sub-processor terms, but those terms name no sub-processors and give no reference to a list.
-  * ["No DPA or data-protection terms in the provided document(s)"] - use when the documents contain NO data-protection / DPA / privacy / sub-processor section at all (e.g. an older MSA or an order form with no DPA attached).
+- When NO approved-subprocessor list or reference appears, do NOT return null - instead set Sub_Processor_List to EXACTLY one of these two STRINGS verbatim so the compliance review can tell the cases apart:
+  * "No sub-processors named in the document(s)" - use when the documents DO contain data-protection / DPA / privacy / sub-processor terms, but those terms name no sub-processors and give no reference to a list.
+  * "No DPA or data-protection terms in the provided document(s)" - use when the documents contain NO data-protection / DPA / privacy / sub-processor section at all (e.g. an older MSA or an order form with no DPA attached).
 - Return null ONLY when sub-processors are not applicable to the document at all - e.g. an Email Confirmation upsell or a non-contract file - never as a stand-in for "none found" on a real contract.
 - Do NOT default or invent actual sub-processor names - an absent list is meaningful for the compliance review.
 - Add an Extract_Evidence entry whenever you return a non-null value: for a real list quote the header/clause and cite where it appears; for the two "none" strings, note whether a DPA/data-protection section was present and what it did (or did not) say about sub-processors.
+
+LLM ENABLEMENT GATE EXTRACTION:
+Goal: determine what this contract requires before Rogo may begin using a new third-party LLM / inference provider, or a new model from an existing provider.
+
+STEP 0 - RESOLVE THE VOCABULARY. Before extracting any gate, identify the DEFINED TERM this contract uses for third parties the supplier engages to help deliver the service. Read the definitions section; look for a term defined to include "agents", "contractors", "of any kind or tier", "subcontractors", "sub-processors", "onward sub-processors", "service providers", "Cloud Provider", "Personnel", or "Representatives". Record it in Resolved_Subprocessor_Term, then run ALL gate extraction against THAT term - not the words "subprocessor" / "subcontractor". A contract that never says "subprocessor" almost always still gates third-party engagement under another name. Returning "no subprocessor provisions found" is a failure mode, not a valid result: if you cannot find the governing term, set LLM_Gate_Confidence = Low and flag for review rather than reporting absence.
+
+STEP 0B - MODEL-SPECIFIC CLAUSES. Separately from the subprocessor gate, search for any clause that gates the MODEL itself. Look for: "Model", "AI algorithm", "Generative AI Tool", "foundation model", "initial use", "material change to any Model", "version update", "alter Model outputs", "model risk", "model validation". These often sit in a services, warranties, or model-risk section far from the subcontracting article and may impose their own notice period and documentation package. Record in AI_Model_Change_Gate_Days and AI_Model_Change_Documentation. Capture any routine-update carve-out and its EXACT boundary in AI_Model_Change_Carveout - an exclusion for updates that "do not alter Model outputs" does NOT cover a model upgrade.
+
+WHERE TO LOOK (the operative clause frequently does NOT contain the words "AI", "model", or "LLM" - read these in full):
+  1. The definitions section (for STEP 0).
+  2. Any Subcontracting / Subprocessing / Personnel article in the main agreement.
+  3. The sub-processing clause of the DPA or privacy schedule.
+  4. Any approved-provider list - appendix, order form, schedule, OR a referenced transaction document.
+  5. Any clause fixing the location of hosting, processing, or support.
+  6. Any cloud-services schedule (often the LONGEST notice period; may expressly prevail over the general subcontracting terms).
+  7. Any AI / AI Capabilities / AI Tools / model-risk article.
+  8. Any support, updates, new-versions, or change-management schedule.
+
+GATE RULES:
+- Subprocessor_Gate_Type = the STRICTEST gate that applies to ANY aspect of engaging a new inference provider, across all clauses and schedules (not the subcontracting article alone). If subcontracting says "notify" but a DPA or cloud schedule requires consent, the answer is "Consent required".
+- "Consent required" = affirmative written approval needed. "Notify with objection" = notice plus a right to object. Do not conflate them.
+- Consent_Revocable = whether granted consent can be withdrawn or is subject to periodic re-approval.
+- Subprocessor_Objection_Consequence = the standard for objection ("good-faith cooperation" vs "not unreasonably withheld" vs "sole discretion"). Null if no objection mechanism - do not write "none".
+- Sub_Processor_List: capture each provider's scope wording VERBATIM in "scope"; set is_ai appropriately. Set Subprocessor_List_Location to where the list lives; if it is in a document NOT supplied, use "Transaction document" and set LLM_Gate_Confidence <= Medium. Set Subprocessor_List_Granularity (Provider / Model / Service scoped).
+- Watch for a clause gating a NEW SCOPE OF WORK for an already-approved provider - expanding a provider's role is often gated identically to adding a new one.
+- Processing_Location_Gate / Approved_Locations: whether processing location is fixed and to where. A US-only clause makes any non-US provider a separate gate.
+- Personal_Data_Disclosure_Gate: whether disclosing Personal Data to a new recipient needs its own approval (often stricter, in the DPA schedule).
+- Release_Notice_Days / Release_Major_Notice_Days / Customer_Can_Defer_Release: from any support/updates schedule. If the customer can defer/disable a release, a model change shipped as a feature is blocked even when the subprocessor clause is satisfied.
+- AI_Training_Prohibition / AI_Training_Flowdown_Required: whether customer data may train models, and whether Rogo must hold a no-training term in the PROVIDER's own contract.
+- Model_Capability_Floor: a commitment to maintain models at/above a capability tier. Material_Change_Notice: catch-all duty to report material changes to service delivery.
+- If the contract is silent on a picklist gate, return "Not specified" - NEVER "No"/"None" to mean "the contract didn't say".
+- If a clause cross-references a sub-clause that does not exist or has a severed enumeration, set LLM_Gate_Confidence = Low. Set Source_Document_Type to the document the GATE CLAUSE came from.
 
 LOGO / PUBLICITY RIGHTS:
 - Determine whether Rogo may use the CUSTOMER's name, logo, or trademarks for marketing / publicity / commercial purposes (customer lists, website, press releases, case studies, "reference customer"). Search the order form, MSA, and T&C - the clause is often titled "Publicity", "Marketing", "Use of Name/Marks", "Reference Customer", or sits in a general/miscellaneous section.
@@ -150,14 +203,10 @@ LOGO / PUBLICITY RIGHTS:
 - Logo_Publicity_Language = the verbatim clause you based the answer on (quote it as written). Return null only when Logo_Publicity_Rights is "Not Mentioned".
 
 EXTRACT_EVIDENCE FIELD:
-- Populate this ONLY for fields that required inference, computation, semantic search, or a picklist mapping - not for values that are obvious from the doc.
-- Format is your choice; a simple readable pattern is:
-      ## <FieldName>
-      "<short verbatim excerpt from the doc, <= ~300 chars>"
-      [source: <where in the doc - section/exhibit/page/DocuSign envelope, if identifiable>]
-- Include evidence for at minimum, when populated: Total_Contract_Value, Annual_Recurring_Revenue, Signature_Date, Subprocessor_Notice_Period_Days, Sub_Processor_List, Renewal_Terms (when mapped from customer language), Rate_Limitable_By_Rogo, Package_Tier when inferred, Unlimited_Lite_Stated / Free_Max_Mid_Stated when explicitly stated, any value that came from a rider overriding the base contract.
-- Skip evidence for trivial extractions: Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name, when they appear plainly in labeled fields at the top of the order form.
-- Keep total length well under 30,000 characters; use short excerpts, not full paragraphs.
+- Return Extract_Evidence as a JSON OBJECT keyed by field name; each value is { "clause": "<section / clause / exhibit ref>", "quote": "<short verbatim excerpt, <= ~300 chars>" }. Example: {"Subprocessor_Gate_Type": {"clause":"8.1(a)", "quote":"...90 days prior written notice..."}}.
+- REQUIRED for every LLM-gate field you return with a value other than "Not specified" / null (Subprocessor_Gate_Type, Subprocessor_Notice_Period_Days, Consent_Revocable, Subprocessor_Objection_Consequence, AI_Model_Change_Gate_Days, AI_Model_Change_Carveout, Processing_Location_Gate, Personal_Data_Disclosure_Gate, AI_Training_Prohibition, and the rest), and for Total_Contract_Value, Annual_Recurring_Revenue, Signature_Date, Sub_Processor_List, Renewal_Terms / Renewal_Fee_Escalator when inferred, and any value taken from a rider overriding the base contract.
+- Skip trivial extractions that appear plainly in labeled fields (Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name).
+- Keep each quote short and total length well under 30,000 characters. Return null only if there is genuinely nothing to cite.
 
 PRIMARY CONTACT (deal point of contact):
 - Order forms commonly have a two-column customer/contact table. The LEFT column is billing/entity info (Customer / legal entity name, Billing Address, Accounts Payable email) - already captured as Billing_Entity_* and Billing_Contact_Email. The RIGHT column is the deal's PRIMARY CONTACT: a named person with their phone and email.

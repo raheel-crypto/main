@@ -2,7 +2,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
     @TestVisible private static final String NAMED_CRED = 'callout:Anthropic_Claude';
     @TestVisible private static final String MODEL = 'claude-sonnet-4-6';
-    @TestVisible private static final Integer MAX_TOKENS = 4096;
+    // v2 gate spec adds ~21 fields plus an Extract_Evidence JSON object, so the
+    // response JSON roughly doubled. 4096 was truncating output on rich contracts.
+    @TestVisible private static final Integer MAX_TOKENS = 8192;
     @TestVisible private static final String PROMPT_RESOURCE = 'OrderFormPrompt';
     @TestVisible private static final Integer RAW_RESPONSE_LIMIT = 131072;
     @TestVisible private static final Integer EXTRACTED_JSON_LIMIT = 32768;
@@ -597,61 +599,74 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
         populateSubprocessorFields(row, extracted);
+        populateGateFields(row, extracted);
         row.Pricing_Structure__c = derivePricingStructure(row);
         deriveEndDate(row);
     }
 
-    @TestVisible private static final Integer DEFAULT_SUBPROCESSOR_NOTICE_DAYS = 30;
-
     @TestVisible
     private static void populateSubprocessorFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
-        row.Subprocessor_Restrictions__c = truncate((String) extracted.get('Subprocessor_Restrictions'), 255);
-        row.Sub_Processor_List__c = truncate(joinSubprocessorList(extracted.get('Sub_Processor_List')), 32768);
-
-        Decimal notice = toDecimal(extracted.get('Subprocessor_Notice_Period_Days'));
-        String evidence = (String) extracted.get('Extract_Evidence');
-        if (notice != null) {
-            row.Subprocessor_Notice_Period__c = notice;
-        } else {
-            // No explicit day count found: Rogo's standard is 30 days, so
-            // default rather than leaving it blank. Note the assumption in
-            // the evidence trail so Legal can tell defaulted from stated.
-            row.Subprocessor_Notice_Period__c = DEFAULT_SUBPROCESSOR_NOTICE_DAYS;
-            String note = '## Subprocessor_Notice_Period_Days\nDefaulted to ' +
-                DEFAULT_SUBPROCESSOR_NOTICE_DAYS + ' (no explicit day-count notice period found in the attached documents).';
-            evidence = String.isBlank(evidence) ? note : evidence + '\n\n' + note;
-        }
-        row.Extract_Evidence__c = truncate(evidence, 32768);
+        row.Subprocessor_Restrictions__c = truncate((String) extracted.get('Subprocessor_Restrictions'), 32768);
+        row.Sub_Processor_List__c = truncate(mapSubprocessorListValue(extracted.get('Sub_Processor_List')), 32768);
+        // Spec v2: a null day-count means NO notice obligation was found - do NOT
+        // default it to 30 and do NOT treat it as zero. Store exactly what was
+        // extracted (the LONGEST period when clauses conflict, per the prompt).
+        row.Subprocessor_Notice_Period__c = toDecimal(extracted.get('Subprocessor_Notice_Period_Days'));
+        row.Extract_Evidence__c = truncate(asEvidenceString(extracted.get('Extract_Evidence')), 32768);
     }
 
-    // Normalizes the extracted Sub_Processor_List into one approved subprocessor
-    // per line. Claude returns an array of names, but tolerate a plain string
-    // (or newline/comma-delimited string) too so a prompt tweak can't break it.
-    // Returns null when nothing meaningful was extracted (an absent list is a
-    // meaningful compliance signal - do not coerce to an empty string).
+    // Serializes the extracted Sub_Processor_List. When named parties exist the
+    // model returns an array of {name,scope,is_ai} objects -> store as JSON. When
+    // none exist it returns a sentinel STRING ("By reference: ...", "No sub-
+    // processors named...", "No DPA...") -> store as-is. null -> null.
     @TestVisible
-    private static String joinSubprocessorList(Object raw) {
-        if (raw == null) {
-            return null;
-        }
-        List<String> lines = new List<String>();
+    private static String mapSubprocessorListValue(Object raw) {
+        if (raw == null) return null;
         if (raw instanceof List<Object>) {
-            for (Object item : (List<Object>) raw) {
-                if (item == null) {
-                    continue;
-                }
-                String s = String.valueOf(item).trim();
-                if (String.isNotBlank(s)) {
-                    lines.add(s);
-                }
-            }
-        } else {
-            String s = String.valueOf(raw).trim();
-            if (String.isNotBlank(s)) {
-                lines.add(s);
-            }
+            List<Object> items = (List<Object>) raw;
+            return items.isEmpty() ? null : JSON.serialize(items);
         }
-        return lines.isEmpty() ? null : String.join(lines, '\n');
+        String s = String.valueOf(raw).trim();
+        return String.isBlank(s) ? null : s;
+    }
+
+    // Extract_Evidence may arrive as a JSON object {field:{clause,quote}} (v2) or
+    // a plain string (older prompt). Store a string either way.
+    @TestVisible
+    private static String asEvidenceString(Object raw) {
+        if (raw == null) return null;
+        if (raw instanceof String) {
+            String s = (String) raw;
+            return String.isBlank(s) ? null : s;
+        }
+        return JSON.serialize(raw);
+    }
+
+    // Maps the LLM-enablement-gate fields (spec v2). Picklists route through the
+    // mapper so a model variant can't write an invalid restricted value.
+    @TestVisible
+    private static void populateGateFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
+        row.Resolved_Subprocessor_Term__c = truncate((String) extracted.get('Resolved_Subprocessor_Term'), 100);
+        row.Subprocessor_Gate_Type__c = OrderFormPicklistMapper.mapGateType((String) extracted.get('Subprocessor_Gate_Type'));
+        row.Consent_Revocable__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('Consent_Revocable'));
+        row.Subprocessor_Objection_Consequence__c = truncate((String) extracted.get('Subprocessor_Objection_Consequence'), 255);
+        row.Subprocessor_List_Location__c = OrderFormPicklistMapper.mapListLocation((String) extracted.get('Subprocessor_List_Location'));
+        row.Subprocessor_List_Granularity__c = OrderFormPicklistMapper.mapListGranularity((String) extracted.get('Subprocessor_List_Granularity'));
+        row.AI_Model_Change_Gate_Days__c = toDecimal(extracted.get('AI_Model_Change_Gate_Days'));
+        row.AI_Model_Change_Documentation__c = truncate((String) extracted.get('AI_Model_Change_Documentation'), 32768);
+        row.AI_Model_Change_Carveout__c = truncate((String) extracted.get('AI_Model_Change_Carveout'), 255);
+        row.AI_Change_Reporting_Trigger__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Change_Reporting_Trigger'));
+        row.Processing_Location_Gate__c = OrderFormPicklistMapper.mapLocationGate((String) extracted.get('Processing_Location_Gate'));
+        row.Approved_Locations__c = truncate((String) extracted.get('Approved_Locations'), 255);
+        row.Personal_Data_Disclosure_Gate__c = OrderFormPicklistMapper.mapDisclosureGate((String) extracted.get('Personal_Data_Disclosure_Gate'));
+        row.Release_Notice_Days__c = toDecimal(extracted.get('Release_Notice_Days'));
+        row.Release_Major_Notice_Days__c = toDecimal(extracted.get('Release_Major_Notice_Days'));
+        row.Customer_Can_Defer_Release__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('Customer_Can_Defer_Release'));
+        row.Material_Change_Notice__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('Material_Change_Notice'));
+        row.AI_Training_Prohibition__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Training_Prohibition'));
+        row.AI_Training_Flowdown_Required__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Training_Flowdown_Required'));
+        row.Model_Capability_Floor__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('Model_Capability_Floor'));
+        row.LLM_Gate_Confidence__c = OrderFormPicklistMapper.mapConfidence((String) extracted.get('LLM_Gate_Confidence'));
     }
 
     @TestVisible

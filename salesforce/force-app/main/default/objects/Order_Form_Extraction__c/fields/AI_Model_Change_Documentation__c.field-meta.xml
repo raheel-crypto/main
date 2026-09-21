@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>AI_Model_Change_Documentation__c</fullName>
+    <description>What must accompany a model-change notice (e.g. BofA's nine categories: developmental evidence, supported applications, methodology, validation, performance tests, limitations, customisation rationale, executive summary, change control). Lead-time-relevant work.</description>
+    <label>AI Model Change Documentation</label>
+    <length>32768</length>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <type>LongTextArea</type>
+    <visibleLines>6</visibleLines>
+</CustomField>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Resolved_Subprocessor_Term__c</fullName>
+    <description>The contract's OWN defined term for third parties the supplier engages (e.g. onward sub-processor, subcontractor, Personnel, Cloud Provider). Null on an MSA row is a suspect v1-era extraction.</description>
+    <label>Resolved Subprocessor Term</label>
+    <length>100</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

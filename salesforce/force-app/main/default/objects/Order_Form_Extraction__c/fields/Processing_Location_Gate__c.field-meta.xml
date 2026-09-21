@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Processing_Location_Gate__c</fullName>
+    <description>Whether processing location is contractually fixed and what changing it requires. A US-only clause makes any non-US inference provider a separate gate.</description>
+    <label>Processing Location Gate</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>None</fullName><default>false</default><label>None</label></value>
+            <value><fullName>Notice</fullName><default>false</default><label>Notice</label></value>
+            <value><fullName>Consent</fullName><default>false</default><label>Consent</label></value>
+            <value><fullName>Not specified</fullName><default>false</default><label>Not specified</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

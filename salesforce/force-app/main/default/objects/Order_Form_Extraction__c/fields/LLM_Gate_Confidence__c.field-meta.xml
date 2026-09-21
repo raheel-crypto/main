@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>LLM_Gate_Confidence__c</fullName>
+    <description>Extraction confidence for the gate fields. Low/Medium when the gate clause is ambiguous, cross-references a missing sub-clause, depends on a scope string, or the provider list is in a doc not supplied. Route below High to human review.</description>
+    <label>LLM Gate Confidence</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>High</fullName><default>false</default><label>High</label></value>
+            <value><fullName>Medium</fullName><default>false</default><label>Medium</label></value>
+            <value><fullName>Low</fullName><default>false</default><label>Low</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
