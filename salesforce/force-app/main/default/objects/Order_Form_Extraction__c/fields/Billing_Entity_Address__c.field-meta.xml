@@ -3,7 +3,6 @@
     <fullName>Billing_Entity_Address__c</fullName>
     <description>Billing address of the contracting entity as stated on the order form (Billing Address / Bill to block). Null when not present.</description>
     <label>Billing Entity Address</label>
-    <length>255</length>
     <required>false</required>
     <type>TextArea</type>
 </CustomField>
