@@ -569,10 +569,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Payment_Terms__c = OrderFormPicklistMapper.mapPaymentTerms((String) extracted.get('Payment_Terms'));
         row.Credit_Terms__c = OrderFormPicklistMapper.mapCreditTerms((String) extracted.get('Credit_Terms'));
         row.Pricing_Structure__c = truncate((String) extracted.get('Pricing_Structure'), 100);
-        row.Billing_Contact_Email__c = (String) extracted.get('Billing_Contact_Email');
+        row.Billing_Contact_Email__c = sanitizeEmail(extracted.get('Billing_Contact_Email'));
         row.Primary_Contact__c = truncate((String) extracted.get('Primary_Contact_Name'), 255);
         row.Primary_Contact_Phone__c = truncate((String) extracted.get('Primary_Contact_Phone'), 255);
-        row.Primary_Contact_Email__c = truncate((String) extracted.get('Primary_Contact_Email'), 80);
+        row.Primary_Contact_Email__c = sanitizeEmail(extracted.get('Primary_Contact_Email'));
         Boolean ela = toBoolean(extracted.get('ELA'));
         row.ELA__c = ela == true;
         Boolean paid = toBoolean(extracted.get('Paid_Trial'));
@@ -594,7 +594,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Seats_Added__c = toDecimal(extracted.get('Seats_Added'));
         row.Named_Users__c = truncate((String) extracted.get('Named_Users'), 4096);
         row.Requested_By_Name__c = truncate((String) extracted.get('Requested_By_Name'), 255);
-        row.Requested_By_Email__c = truncate((String) extracted.get('Requested_By_Email'), 255);
+        row.Requested_By_Email__c = sanitizeEmail(extracted.get('Requested_By_Email'));
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
@@ -844,6 +844,28 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static String truncate(String s, Integer maxLen) {
         if (s == null) return null;
         return s.length() > maxLen ? s.substring(0, maxLen) : s;
+    }
+
+    // Email-typed fields (Primary/Billing/Requested_By contact email) reject any
+    // value that isn't a single valid address on upsert - and the model
+    // sometimes returns two addresses in one value ("a@x.com / b@x.com"), which
+    // failed the whole row with INVALID_EMAIL_ADDRESS. Return the FIRST
+    // syntactically valid address, or null - never a malformed string. An
+    // address longer than the 80-char Email limit is dropped (truncating an
+    // email just produces another invalid one).
+    private static final Pattern EMAIL_PATTERN =
+        Pattern.compile('[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}');
+    @TestVisible
+    private static String sanitizeEmail(Object raw) {
+        if (raw == null) return null;
+        String s = String.valueOf(raw);
+        if (String.isBlank(s)) return null;
+        Matcher m = EMAIL_PATTERN.matcher(s);
+        if (m.find()) {
+            String email = m.group();
+            return email.length() > 80 ? null : email;
+        }
+        return null;
     }
 
     public class OrderFormException extends Exception {}

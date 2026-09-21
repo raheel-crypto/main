@@ -1778,4 +1778,45 @@ private class OrderFormExtractorTest {
         System.assertEquals('Low', row.LLM_Gate_Confidence__c, 'Silence routes to review at Low confidence');
         System.assertEquals(null, row.AI_Model_Change_Gate_Days__c, 'No day count -> null, not 0');
     }
+
+    // ===== Email sanitization (INVALID_EMAIL_ADDRESS guard) =====
+
+    @isTest
+    static void sanitizeEmail_takesFirstValidAddress() {
+        // Two addresses jammed in one value -> take the first, so the Email
+        // field accepts it instead of failing the whole upsert.
+        System.assertEquals('ffontana@arcanopartners.com',
+            OrderFormExtractionJob.sanitizeEmail('ffontana@arcanopartners.com / rrodriguez@arcanopartners.com'));
+        System.assertEquals('a@x.com', OrderFormExtractionJob.sanitizeEmail('a@x.com, b@y.com'));
+        // Extracts a valid address out of surrounding prose.
+        System.assertEquals('jane.doe@example.co.uk',
+            OrderFormExtractionJob.sanitizeEmail('Contact: jane.doe@example.co.uk (billing)'));
+        // A single clean address passes through.
+        System.assertEquals('sole@firm.com', OrderFormExtractionJob.sanitizeEmail('sole@firm.com'));
+        // Nothing that looks like an email -> null (never a malformed string).
+        System.assertEquals(null, OrderFormExtractionJob.sanitizeEmail('see attached'));
+        System.assertEquals(null, OrderFormExtractionJob.sanitizeEmail('   '));
+        System.assertEquals(null, OrderFormExtractionJob.sanitizeEmail(null));
+    }
+
+    @isTest
+    static void buildFromResponseBody_sanitizesDoubleEmail() {
+        // End-to-end: a double-email value must not blow up the insert.
+        Opportunity opp = insertOpp('Double Email Opp', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Primary_Contact_Email' => 'ffontana@arcanopartners.com / rrodriguez@arcanopartners.com',
+            'Billing_Contact_Email' => 'ap@arcanopartners.com; backup@arcanopartners.com'
+        });
+
+        Test.startTest();
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(
+            opp.Id, new List<Id>(), body);
+        insert row; // would throw INVALID_EMAIL_ADDRESS without the sanitizer
+        Test.stopTest();
+
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals('ffontana@arcanopartners.com', row.Primary_Contact_Email__c);
+        System.assertEquals('ap@arcanopartners.com', row.Billing_Contact_Email__c);
+    }
 }
