@@ -45,9 +45,71 @@ private class OrderFormExtractorTest {
         }
     }
 
+    // The org has a validation rule that blocks creating an Opportunity at a
+    // closed stage ("You cannot create a closed Won Opportunity. Start at
+    // stage 1."). The rule is bypassed for holders of the Bypass_Validations
+    // custom permission, so grant it to the running test user. This runs in its
+    // own transaction (@testSetup), which (a) commits the assignment before each
+    // test method so the permission cache reflects it, and (b) keeps the
+    // setup-object DML from colliding (MIXED_DML) with the tests' record DML.
+    // Defensive: if the custom permission isn't present in this org, do nothing
+    // - a sandbox without the rule simply doesn't need the bypass.
+    @testSetup
+    static void grantValidationBypass() {
+        List<CustomPermission> perms = [
+            SELECT Id FROM CustomPermission WHERE DeveloperName = 'Bypass_Validations' LIMIT 1
+        ];
+        if (perms.isEmpty()) return;
+        PermissionSet ps = new PermissionSet(Name = 'OFE_Test_Bypass', Label = 'OFE Test Bypass');
+        insert ps;
+        insert new SetupEntityAccess(ParentId = ps.Id, SetupEntityId = perms[0].Id);
+        insert new PermissionSetAssignment(
+            AssigneeId = UserInfo.getUserId(), PermissionSetId = ps.Id
+        );
+    }
+
+    // Proven-open stage in this org (other tests insert opps here without
+    // tripping the closed-stage rule). Only used as the intermediate hop when
+    // the bypass permission isn't active.
+    private static final String SAFE_OPEN_STAGE = '4 - Proposal';
+
+    // Inserts an Opportunity even when it targets a closed stage. If the running
+    // user holds Bypass_Validations the direct insert is allowed; otherwise we
+    // insert at an open stage and then update to the target - the "cannot create
+    // a closed Won" rule fires on create only, and this is how a deal
+    // legitimately reaches Closed Won.
+    private static void insertOppSafely(Opportunity o) {
+        if (FeatureManagement.checkPermission('Bypass_Validations')) {
+            insert o;
+            return;
+        }
+        String target = o.StageName;
+        o.StageName = SAFE_OPEN_STAGE;
+        insert o;
+        if (target != SAFE_OPEN_STAGE) {
+            o.StageName = target;
+            update o;
+        }
+    }
+
+    private static void insertOppsSafely(List<Opportunity> os) {
+        if (FeatureManagement.checkPermission('Bypass_Validations')) {
+            insert os;
+            return;
+        }
+        List<String> targets = new List<String>();
+        for (Opportunity o : os) { targets.add(o.StageName); o.StageName = SAFE_OPEN_STAGE; }
+        insert os;
+        List<Opportunity> toClose = new List<Opportunity>();
+        for (Integer i = 0; i < os.size(); i++) {
+            if (targets[i] != SAFE_OPEN_STAGE) { os[i].StageName = targets[i]; toClose.add(os[i]); }
+        }
+        if (!toClose.isEmpty()) update toClose;
+    }
+
     private static Opportunity insertOpp(String name, String stage) {
         Opportunity o = new Opportunity(Name = name, StageName = stage, CloseDate = Date.today());
-        insert o;
+        insertOppSafely(o);
         return o;
     }
 
@@ -572,7 +634,7 @@ private class OrderFormExtractorTest {
             CloseDate = Date.today(),
             Type = 'Renewal'
         );
-        insert opp;
+        insertOppSafely(opp);
         attachSignedFile(opp.Id, 'signed__Renewal_Order_Form');
 
         // Claude misclassifies as Upsell (because the renewal adds seats).
@@ -659,7 +721,7 @@ private class OrderFormExtractorTest {
             Type = 'Renewal',
             Annual_Recurring_Revenue__c = 55000
         );
-        insert opp;
+        insertOppSafely(opp);
         attachSignedFile(opp.Id, 'signed__OF');
 
         MockAnthropic mock = new MockAnthropic();
@@ -1237,7 +1299,7 @@ private class OrderFormExtractorTest {
         for (Integer i = 0; i < 5; i++) {
             opps.add(new Opportunity(Name = 'Cap ' + i, StageName = 'Closed Won', CloseDate = Date.today()));
         }
-        insert opps;
+        insertOppsSafely(opps);
         for (Opportunity o : opps) attachSignedFile(o.Id, 'signed__OrderForm_' + o.Name);
 
         MockAnthropic mock = new MockAnthropic();
