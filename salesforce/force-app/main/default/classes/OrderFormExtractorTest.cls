@@ -1819,4 +1819,93 @@ private class OrderFormExtractorTest {
         System.assertEquals('ffontana@arcanopartners.com', row.Primary_Contact_Email__c);
         System.assertEquals('ap@arcanopartners.com', row.Billing_Contact_Email__c);
     }
+
+    // ===== Retry on malformed-JSON output =====
+
+    // Returns a malformed-JSON body on the first callout, a valid one after.
+    public class TwoShotMock implements HttpCalloutMock {
+        public String firstBody;
+        public String secondBody;
+        public Integer callCount = 0;
+        public HttpResponse respond(HttpRequest req) {
+            callCount++;
+            HttpResponse r = new HttpResponse();
+            r.setStatusCode(200);
+            r.setHeader('Content-Type', 'application/json');
+            r.setBody(callCount == 1 ? firstBody : secondBody);
+            return r;
+        }
+    }
+
+    @isTest
+    static void extractionJob_retriesOnceOnMalformedJson() {
+        Opportunity opp = insertOpp('Retry Opp', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        // First response: a text block whose JSON is invalid - a semicolon joins
+        // two strings, exactly the SG failure. deserialize throws -> triggers retry.
+        String badText = '{"Type": "New Business"; "note": "oops"}';
+        String badBody = JSON.serialize(new Map<String, Object>{
+            'model' => 'claude-sonnet-5', 'type' => 'message', 'role' => 'assistant',
+            'content' => new List<Object>{ new Map<String, Object>{ 'type' => 'text', 'text' => badText } },
+            'stop_reason' => 'end_turn'
+        });
+        String goodBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business', 'Seat_Licenses' => 9
+        });
+
+        TwoShotMock mock = new TwoShotMock();
+        mock.firstBody = badBody;
+        mock.secondBody = goodBody;
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Extraction_Status__c, Seat_Licenses__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id
+            ORDER BY Extracted_At__c DESC LIMIT 1
+        ];
+        System.assertEquals(2, mock.callCount, 'A malformed first response must trigger exactly one retry');
+        System.assertEquals('Success', row.Extraction_Status__c, 'The retry should recover to Success');
+        System.assertEquals(9, row.Seat_Licenses__c, 'Fields come from the retry response');
+    }
+
+    @isTest
+    static void extractionJob_parseFailsWhenBothAttemptsMalformed() {
+        Opportunity opp = insertOpp('Retry Fail Opp', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        String badText = '{"Type": "New Business"; "x": 1}';
+        String badBody = JSON.serialize(new Map<String, Object>{
+            'model' => 'claude-sonnet-5', 'type' => 'message', 'role' => 'assistant',
+            'content' => new List<Object>{ new Map<String, Object>{ 'type' => 'text', 'text' => badText } },
+            'stop_reason' => 'end_turn'
+        });
+
+        TwoShotMock mock = new TwoShotMock();
+        mock.firstBody = badBody;
+        mock.secondBody = badBody; // retry also malformed
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = [
+            SELECT Extraction_Status__c, Error_Message__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id
+            ORDER BY Extracted_At__c DESC LIMIT 1
+        ];
+        System.assertEquals(2, mock.callCount, 'Retried once');
+        System.assertEquals('Parse Failed', row.Extraction_Status__c);
+        System.assert(row.Error_Message__c.contains('original and retry'),
+            'Error should note both attempts failed: ' + row.Error_Message__c);
+    }
 }

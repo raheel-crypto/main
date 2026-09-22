@@ -109,9 +109,27 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             try {
                 extracted = parseAssistantJson(resp.getBody());
             } catch (Exception e) {
-                row.Extraction_Status__c = 'Parse Failed';
-                row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
-                return row;
+                // The model occasionally emits a single malformed-JSON character
+                // on a complex doc (e.g. a semicolon joining two strings inside an
+                // evidence quote), which fails the whole row even though the
+                // content is fine. Re-issue the same request once - a fresh
+                // generation almost always returns valid JSON. Reuses the already
+                // built body, so no VersionData reload.
+                try {
+                    HttpResponse retryResp = callAnthropic(body);
+                    row.HTTP_Status_Code__c = retryResp.getStatusCode();
+                    row.Raw_Response__c = truncate(retryResp.getBody(), RAW_RESPONSE_LIMIT);
+                    if (retryResp.getStatusCode() < 200 || retryResp.getStatusCode() >= 300) {
+                        row.Extraction_Status__c = 'API Failed';
+                        row.Error_Message__c = truncate('Retry HTTP ' + retryResp.getStatusCode() + ': ' + retryResp.getBody(), ERROR_MESSAGE_LIMIT);
+                        return row;
+                    }
+                    extracted = parseAssistantJson(retryResp.getBody());
+                } catch (Exception e2) {
+                    row.Extraction_Status__c = 'Parse Failed';
+                    row.Error_Message__c = truncate('Parse failed on original and retry. ' + e2.getMessage() + '\n' + e2.getStackTraceString(), ERROR_MESSAGE_LIMIT);
+                    return row;
+                }
             }
 
             row.Extracted_JSON__c = truncate(JSON.serializePretty(extracted), EXTRACTED_JSON_LIMIT);
