@@ -219,30 +219,40 @@ def row_list(list_binding, item_var):
 # ─── Widget 1: closeReadinessCard ────────────────────────────────────────
 
 readiness_body = envelope([
-    header("{!$attrs.opportunityName}", "{!$attrs.accountName}", "{!$attrs.statusLabel}", "{!$attrs.statusVariant}"),
-    row([stat("Stage", "{!$attrs.stageName}"), stat("Amount", "{!$attrs.amount}"),
-         stat("Close Date", "{!$attrs.closeDate}"), stat("Type", "{!$attrs.opportunityType}")], gap="lg", align="start"),
-    text("{!$attrs.statusMessage}", variant="body"),
-    callout("Signed order form required", "{!$attrs.signedDocumentText}", "error", "{!$attrs.missingSignedDocument}"),
-    with_if(row([icon("check-circle", "success"), text("Signed order form", variant="body", weight="semibold"),
-                 text("{!$attrs.signedDocumentText}", variant="body", color="muted")], gap="sm"), "{!$attrs.hasSignedDocument}"),
+    col([
+        header("{!$attrs.opportunityName}", "{!$attrs.accountName}", "{!$attrs.statusLabel}", "{!$attrs.statusVariant}"),
+        row([stat("Stage", "{!$attrs.stageName}"), stat("Amount", "{!$attrs.amount}"),
+             stat("Close Date", "{!$attrs.closeDate}"), stat("Type", "{!$attrs.opportunityType}")], gap="lg", align="start"),
+        text("{!$attrs.statusMessage}", variant="body"),
+    ], gap="md"),
+    col([
+        callout("Signed order form required", "{!$attrs.signedDocumentText}", "error", "{!$attrs.missingSignedDocument}"),
+        with_if(row([icon("check-circle", "success"), text("Signed order form", variant="body", weight="semibold"),
+                     text("{!$attrs.signedDocumentText}", variant="body", color="muted")], gap="sm"), "{!$attrs.hasSignedDocument}"),
+    ], gap="sm"),
     sep(),
-    text("Closed Won checklist", variant="h3"),
-    row_list("{!$attrs.checklist}", "$item"),
-    callout("Fields still needed", None, "warning", "{!$attrs.hasMissingFields}", body="{!$attrs.missingFieldsText}"),
-    with_if(row([
-        button("Close as Won", "primary", send("{!$attrs.closeWonPrompt}")),
-        button("Close as Lost", "secondary", send("{!$attrs.closeLostPrompt}")),
-        button("Open in Salesforce", "secondary", open_link("{!$attrs.opportunityUrl}")),
-    ], gap="sm"), "{!$attrs.canClose}"),
-    with_if(row([button("Open in Salesforce", "secondary", open_link("{!$attrs.opportunityUrl}"))], gap="sm"), "{!$attrs.isClosed}"),
+    col([
+        text("Closed Won checklist", variant="h3"),
+        row_list("{!$attrs.checklist}", "$item"),
+        callout("Fields still needed", None, "warning", "{!$attrs.hasMissingFields}", body="{!$attrs.missingFieldsText}"),
+    ], gap="sm"),
+    col([
+        with_if(row([
+            button("Close as Won", "primary", send("{!$attrs.closeWonPrompt}")),
+            button("Close as Lost", "secondary", send("{!$attrs.closeLostPrompt}")),
+            button("Open in Salesforce", "secondary", open_link("{!$attrs.opportunityUrl}")),
+        ], gap="sm"), "{!$attrs.canClose}"),
+        with_if(row([button("Open in Salesforce", "secondary", open_link("{!$attrs.opportunityUrl}"))], gap="sm"), "{!$attrs.isClosed}"),
+    ], gap="sm"),
 ])
 
 # ─── Widget 2: closeSubmissionCard ───────────────────────────────────────
 
 submission_body = envelope([
-    header("{!$attrs.headline}", "{!$attrs.opportunityName}", "{!$attrs.statusLabel}", "{!$attrs.statusVariant}"),
-    text("{!$attrs.message}", variant="body"),
+    col([
+        header("{!$attrs.headline}", "{!$attrs.opportunityName}", "{!$attrs.statusLabel}", "{!$attrs.statusVariant}"),
+        text("{!$attrs.message}", variant="body"),
+    ], gap="md"),
     with_if(col([
         sep(),
         text("AI recommendation", variant="h3"),
@@ -256,15 +266,19 @@ submission_body = envelope([
         row_list("{!$attrs.problems}", "$problem"),
     ], gap="sm"), "{!$attrs.hasProblems}"),
     sep(),
-    text("Values", variant="h3"),
-    row_list("{!$attrs.rows}", "$row"),
-    callout("Nothing saved yet", "Confirm to submit these values, or tell the agent what to change.", "info", "{!$attrs.isPreview}"),
-    with_if(row([
-        button("Confirm and submit", "primary", send("{!$attrs.confirmPrompt}")),
-        button("Change something", "secondary", send("{!$attrs.changePrompt}")),
-    ], gap="sm"), "{!$attrs.isPreview}"),
-    callout("Submitted", None, "success", "{!$attrs.isSubmitted}", body="{!$attrs.message}"),
-    row([button("Open in Salesforce", "secondary", open_link("{!$attrs.opportunityUrl}"))], gap="sm"),
+    col([
+        text("Values", variant="h3"),
+        row_list("{!$attrs.rows}", "$row"),
+    ], gap="sm"),
+    col([
+        callout("Nothing saved yet", "Confirm to submit these values, or tell the agent what to change.", "info", "{!$attrs.isPreview}"),
+        with_if(row([
+            button("Confirm and submit", "primary", send("{!$attrs.confirmPrompt}")),
+            button("Change something", "secondary", send("{!$attrs.changePrompt}")),
+        ], gap="sm"), "{!$attrs.isPreview}"),
+        callout("Submitted", None, "success", "{!$attrs.isSubmitted}", body="{!$attrs.message}"),
+        row([button("Open in Salesforce", "secondary", open_link("{!$attrs.opportunityUrl}"))], gap="sm"),
+    ], gap="sm"),
 ])
 
 # ─── Emit widgets ────────────────────────────────────────────────────────

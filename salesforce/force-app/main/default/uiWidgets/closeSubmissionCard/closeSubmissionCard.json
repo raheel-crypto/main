@@ -11,52 +11,60 @@
           },
           "children": [
             {
-              "definition": "tile/row",
+              "definition": "tile/column",
               "attributes": {
-                "gap": "md",
-                "align": "start",
-                "justify": "between"
+                "gap": "md"
               },
               "children": [
                 {
-                  "definition": "tile/column",
+                  "definition": "tile/row",
                   "attributes": {
-                    "gap": "xs",
-                    "width": "stretch"
+                    "gap": "md",
+                    "align": "start",
+                    "justify": "between"
                   },
                   "children": [
                     {
-                      "definition": "tile/text",
+                      "definition": "tile/column",
                       "attributes": {
-                        "text": "{!$attrs.headline}",
-                        "variant": "h2"
-                      }
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.headline}",
+                            "variant": "h2"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.opportunityName}",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        }
+                      ]
                     },
                     {
-                      "definition": "tile/text",
+                      "definition": "tile/badge",
                       "attributes": {
-                        "text": "{!$attrs.opportunityName}",
-                        "variant": "caption",
-                        "color": "muted"
+                        "label": "{!$attrs.statusLabel}",
+                        "variant": "{!$attrs.statusVariant}"
                       }
                     }
                   ]
                 },
                 {
-                  "definition": "tile/badge",
+                  "definition": "tile/text",
                   "attributes": {
-                    "label": "{!$attrs.statusLabel}",
-                    "variant": "{!$attrs.statusVariant}"
+                    "text": "{!$attrs.message}",
+                    "variant": "body"
                   }
                 }
               ]
-            },
-            {
-              "definition": "tile/text",
-              "attributes": {
-                "text": "{!$attrs.message}",
-                "variant": "body"
-              }
             },
             {
               "definition": "tile/column",
@@ -262,177 +270,193 @@
               }
             },
             {
-              "definition": "tile/text",
-              "attributes": {
-                "text": "Values",
-                "variant": "h3"
-              }
-            },
-            {
               "definition": "tile/column",
               "attributes": {
-                "gap": "xs"
-              },
-              "meta": {
-                "forEach": "{!$attrs.rows}",
-                "forItem": "$row"
+                "gap": "sm"
               },
               "children": [
                 {
-                  "definition": "tile/row",
+                  "definition": "tile/text",
                   "attributes": {
-                    "gap": "md",
-                    "align": "start",
-                    "justify": "between"
+                    "text": "Values",
+                    "variant": "h3"
+                  }
+                },
+                {
+                  "definition": "tile/column",
+                  "attributes": {
+                    "gap": "xs"
+                  },
+                  "meta": {
+                    "forEach": "{!$attrs.rows}",
+                    "forItem": "$row"
                   },
                   "children": [
                     {
-                      "definition": "tile/column",
+                      "definition": "tile/row",
                       "attributes": {
-                        "gap": "xs",
-                        "width": "stretch"
+                        "gap": "md",
+                        "align": "start",
+                        "justify": "between"
                       },
                       "children": [
                         {
-                          "definition": "tile/row",
+                          "definition": "tile/column",
                           "attributes": {
-                            "gap": "sm",
-                            "align": "center"
+                            "gap": "xs",
+                            "width": "stretch"
                           },
                           "children": [
                             {
-                              "definition": "tile/icon",
+                              "definition": "tile/row",
                               "attributes": {
-                                "name": "{!$row.icon}",
-                                "size": "sm",
-                                "color": "{!$row.color}",
-                                "alt": ""
-                              }
-                            },
-                            {
-                              "definition": "tile/text",
-                              "attributes": {
-                                "text": "{!$row.label}",
-                                "variant": "body",
-                                "weight": "semibold"
-                              }
+                                "gap": "sm",
+                                "align": "center"
+                              },
+                              "children": [
+                                {
+                                  "definition": "tile/icon",
+                                  "attributes": {
+                                    "name": "{!$row.icon}",
+                                    "size": "sm",
+                                    "color": "{!$row.color}",
+                                    "alt": ""
+                                  }
+                                },
+                                {
+                                  "definition": "tile/text",
+                                  "attributes": {
+                                    "text": "{!$row.label}",
+                                    "variant": "body",
+                                    "weight": "semibold"
+                                  }
+                                }
+                              ]
                             }
                           ]
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$row.value}",
+                            "variant": "body",
+                            "color": "muted"
+                          }
                         }
                       ]
-                    },
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "{!$row.value}",
-                        "variant": "body",
-                        "color": "muted"
-                      }
                     }
                   ]
                 }
               ]
             },
             {
-              "definition": "tile/callout",
+              "definition": "tile/column",
               "attributes": {
-                "title": "Nothing saved yet",
-                "variant": "info",
-                "description": "Confirm to submit these values, or tell the agent what to change."
-              },
-              "meta": {
-                "if": "{!$attrs.isPreview}"
-              }
-            },
-            {
-              "definition": "tile/row",
-              "attributes": {
-                "gap": "sm",
-                "align": "center"
+                "gap": "sm"
               },
               "children": [
                 {
-                  "definition": "tile/button",
+                  "definition": "tile/callout",
                   "attributes": {
-                    "label": "Confirm and submit",
-                    "variant": "primary",
-                    "actions": {
-                      "click": [
-                        {
-                          "definition": "action/sendMessage",
-                          "attributes": {
-                            "content": "{!$attrs.confirmPrompt}"
-                          }
-                        }
-                      ]
-                    }
+                    "title": "Nothing saved yet",
+                    "variant": "info",
+                    "description": "Confirm to submit these values, or tell the agent what to change."
+                  },
+                  "meta": {
+                    "if": "{!$attrs.isPreview}"
                   }
                 },
                 {
-                  "definition": "tile/button",
+                  "definition": "tile/row",
                   "attributes": {
-                    "label": "Change something",
-                    "variant": "secondary",
-                    "actions": {
-                      "click": [
-                        {
-                          "definition": "action/sendMessage",
-                          "attributes": {
-                            "content": "{!$attrs.changePrompt}"
-                          }
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Confirm and submit",
+                        "variant": "primary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/sendMessage",
+                              "attributes": {
+                                "content": "{!$attrs.confirmPrompt}"
+                              }
+                            }
+                          ]
                         }
-                      ]
-                    }
-                  }
-                }
-              ],
-              "meta": {
-                "if": "{!$attrs.isPreview}"
-              }
-            },
-            {
-              "definition": "tile/callout",
-              "attributes": {
-                "title": "Submitted",
-                "variant": "success"
-              },
-              "children": [
-                {
-                  "definition": "tile/text",
-                  "attributes": {
-                    "text": "{!$attrs.message}",
-                    "variant": "body"
-                  }
-                }
-              ],
-              "meta": {
-                "if": "{!$attrs.isSubmitted}"
-              }
-            },
-            {
-              "definition": "tile/row",
-              "attributes": {
-                "gap": "sm",
-                "align": "center"
-              },
-              "children": [
-                {
-                  "definition": "tile/button",
-                  "attributes": {
-                    "label": "Open in Salesforce",
-                    "variant": "secondary",
-                    "actions": {
-                      "click": [
-                        {
-                          "definition": "action/openLink",
-                          "attributes": {
-                            "url": "{!$attrs.opportunityUrl}",
-                            "target": "_blank"
-                          }
+                      }
+                    },
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Change something",
+                        "variant": "secondary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/sendMessage",
+                              "attributes": {
+                                "content": "{!$attrs.changePrompt}"
+                              }
+                            }
+                          ]
                         }
-                      ]
+                      }
                     }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.isPreview}"
                   }
+                },
+                {
+                  "definition": "tile/callout",
+                  "attributes": {
+                    "title": "Submitted",
+                    "variant": "success"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$attrs.message}",
+                        "variant": "body"
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.isSubmitted}"
+                  }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Open in Salesforce",
+                        "variant": "secondary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/openLink",
+                              "attributes": {
+                                "url": "{!$attrs.opportunityUrl}",
+                                "target": "_blank"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
                 }
               ]
             }

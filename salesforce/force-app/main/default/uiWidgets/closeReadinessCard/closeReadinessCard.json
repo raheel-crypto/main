@@ -11,227 +11,9 @@
           },
           "children": [
             {
-              "definition": "tile/row",
-              "attributes": {
-                "gap": "md",
-                "align": "start",
-                "justify": "between"
-              },
-              "children": [
-                {
-                  "definition": "tile/column",
-                  "attributes": {
-                    "gap": "xs",
-                    "width": "stretch"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "{!$attrs.opportunityName}",
-                        "variant": "h2"
-                      }
-                    },
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "{!$attrs.accountName}",
-                        "variant": "caption",
-                        "color": "muted"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "definition": "tile/badge",
-                  "attributes": {
-                    "label": "{!$attrs.statusLabel}",
-                    "variant": "{!$attrs.statusVariant}"
-                  }
-                }
-              ]
-            },
-            {
-              "definition": "tile/row",
-              "attributes": {
-                "gap": "lg",
-                "align": "start"
-              },
-              "children": [
-                {
-                  "definition": "tile/column",
-                  "attributes": {
-                    "gap": "xs",
-                    "width": "stretch"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "Stage",
-                        "variant": "caption",
-                        "color": "muted"
-                      }
-                    },
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "{!$attrs.stageName}",
-                        "variant": "h4"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "definition": "tile/column",
-                  "attributes": {
-                    "gap": "xs",
-                    "width": "stretch"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "Amount",
-                        "variant": "caption",
-                        "color": "muted"
-                      }
-                    },
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "{!$attrs.amount}",
-                        "variant": "h4"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "definition": "tile/column",
-                  "attributes": {
-                    "gap": "xs",
-                    "width": "stretch"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "Close Date",
-                        "variant": "caption",
-                        "color": "muted"
-                      }
-                    },
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "{!$attrs.closeDate}",
-                        "variant": "h4"
-                      }
-                    }
-                  ]
-                },
-                {
-                  "definition": "tile/column",
-                  "attributes": {
-                    "gap": "xs",
-                    "width": "stretch"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "Type",
-                        "variant": "caption",
-                        "color": "muted"
-                      }
-                    },
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "{!$attrs.opportunityType}",
-                        "variant": "h4"
-                      }
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "definition": "tile/text",
-              "attributes": {
-                "text": "{!$attrs.statusMessage}",
-                "variant": "body"
-              }
-            },
-            {
-              "definition": "tile/callout",
-              "attributes": {
-                "title": "Signed order form required",
-                "variant": "error",
-                "description": "{!$attrs.signedDocumentText}"
-              },
-              "meta": {
-                "if": "{!$attrs.missingSignedDocument}"
-              }
-            },
-            {
-              "definition": "tile/row",
-              "attributes": {
-                "gap": "sm",
-                "align": "center"
-              },
-              "children": [
-                {
-                  "definition": "tile/icon",
-                  "attributes": {
-                    "name": "check-circle",
-                    "size": "sm",
-                    "color": "success",
-                    "alt": ""
-                  }
-                },
-                {
-                  "definition": "tile/text",
-                  "attributes": {
-                    "text": "Signed order form",
-                    "variant": "body",
-                    "weight": "semibold"
-                  }
-                },
-                {
-                  "definition": "tile/text",
-                  "attributes": {
-                    "text": "{!$attrs.signedDocumentText}",
-                    "variant": "body",
-                    "color": "muted"
-                  }
-                }
-              ],
-              "meta": {
-                "if": "{!$attrs.hasSignedDocument}"
-              }
-            },
-            {
-              "definition": "tile/separator",
-              "attributes": {
-                "orientation": "horizontal"
-              }
-            },
-            {
-              "definition": "tile/text",
-              "attributes": {
-                "text": "Closed Won checklist",
-                "variant": "h3"
-              }
-            },
-            {
               "definition": "tile/column",
               "attributes": {
-                "gap": "xs"
-              },
-              "meta": {
-                "forEach": "{!$attrs.checklist}",
-                "forItem": "$item"
+                "gap": "md"
               },
               "children": [
                 {
@@ -250,157 +32,407 @@
                       },
                       "children": [
                         {
-                          "definition": "tile/row",
+                          "definition": "tile/text",
                           "attributes": {
-                            "gap": "sm",
-                            "align": "center"
-                          },
-                          "children": [
-                            {
-                              "definition": "tile/icon",
-                              "attributes": {
-                                "name": "{!$item.icon}",
-                                "size": "sm",
-                                "color": "{!$item.color}",
-                                "alt": ""
-                              }
-                            },
-                            {
-                              "definition": "tile/text",
-                              "attributes": {
-                                "text": "{!$item.label}",
-                                "variant": "body",
-                                "weight": "semibold"
-                              }
-                            }
-                          ]
+                            "text": "{!$attrs.opportunityName}",
+                            "variant": "h2"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.accountName}",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
                         }
                       ]
                     },
                     {
-                      "definition": "tile/text",
+                      "definition": "tile/badge",
                       "attributes": {
-                        "text": "{!$item.value}",
-                        "variant": "body",
-                        "color": "muted"
+                        "label": "{!$attrs.statusLabel}",
+                        "variant": "{!$attrs.statusVariant}"
                       }
                     }
                   ]
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "lg",
+                    "align": "start"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "Stage",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.stageName}",
+                            "variant": "h4"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "Amount",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.amount}",
+                            "variant": "h4"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "Close Date",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.closeDate}",
+                            "variant": "h4"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "Type",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.opportunityType}",
+                            "variant": "h4"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "{!$attrs.statusMessage}",
+                    "variant": "body"
+                  }
                 }
               ]
             },
             {
-              "definition": "tile/callout",
+              "definition": "tile/column",
               "attributes": {
-                "title": "Fields still needed",
-                "variant": "warning"
+                "gap": "sm"
+              },
+              "children": [
+                {
+                  "definition": "tile/callout",
+                  "attributes": {
+                    "title": "Signed order form required",
+                    "variant": "error",
+                    "description": "{!$attrs.signedDocumentText}"
+                  },
+                  "meta": {
+                    "if": "{!$attrs.missingSignedDocument}"
+                  }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/icon",
+                      "attributes": {
+                        "name": "check-circle",
+                        "size": "sm",
+                        "color": "success",
+                        "alt": ""
+                      }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "Signed order form",
+                        "variant": "body",
+                        "weight": "semibold"
+                      }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$attrs.signedDocumentText}",
+                        "variant": "body",
+                        "color": "muted"
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.hasSignedDocument}"
+                  }
+                }
+              ]
+            },
+            {
+              "definition": "tile/separator",
+              "attributes": {
+                "orientation": "horizontal"
+              }
+            },
+            {
+              "definition": "tile/column",
+              "attributes": {
+                "gap": "sm"
               },
               "children": [
                 {
                   "definition": "tile/text",
                   "attributes": {
-                    "text": "{!$attrs.missingFieldsText}",
-                    "variant": "body"
-                  }
-                }
-              ],
-              "meta": {
-                "if": "{!$attrs.hasMissingFields}"
-              }
-            },
-            {
-              "definition": "tile/row",
-              "attributes": {
-                "gap": "sm",
-                "align": "center"
-              },
-              "children": [
-                {
-                  "definition": "tile/button",
-                  "attributes": {
-                    "label": "Close as Won",
-                    "variant": "primary",
-                    "actions": {
-                      "click": [
-                        {
-                          "definition": "action/sendMessage",
-                          "attributes": {
-                            "content": "{!$attrs.closeWonPrompt}"
-                          }
-                        }
-                      ]
-                    }
+                    "text": "Closed Won checklist",
+                    "variant": "h3"
                   }
                 },
                 {
-                  "definition": "tile/button",
+                  "definition": "tile/column",
                   "attributes": {
-                    "label": "Close as Lost",
-                    "variant": "secondary",
-                    "actions": {
-                      "click": [
+                    "gap": "xs"
+                  },
+                  "meta": {
+                    "forEach": "{!$attrs.checklist}",
+                    "forItem": "$item"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/row",
+                      "attributes": {
+                        "gap": "md",
+                        "align": "start",
+                        "justify": "between"
+                      },
+                      "children": [
                         {
-                          "definition": "action/sendMessage",
+                          "definition": "tile/column",
                           "attributes": {
-                            "content": "{!$attrs.closeLostPrompt}"
+                            "gap": "xs",
+                            "width": "stretch"
+                          },
+                          "children": [
+                            {
+                              "definition": "tile/row",
+                              "attributes": {
+                                "gap": "sm",
+                                "align": "center"
+                              },
+                              "children": [
+                                {
+                                  "definition": "tile/icon",
+                                  "attributes": {
+                                    "name": "{!$item.icon}",
+                                    "size": "sm",
+                                    "color": "{!$item.color}",
+                                    "alt": ""
+                                  }
+                                },
+                                {
+                                  "definition": "tile/text",
+                                  "attributes": {
+                                    "text": "{!$item.label}",
+                                    "variant": "body",
+                                    "weight": "semibold"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$item.value}",
+                            "variant": "body",
+                            "color": "muted"
                           }
                         }
                       ]
                     }
-                  }
+                  ]
                 },
                 {
-                  "definition": "tile/button",
+                  "definition": "tile/callout",
                   "attributes": {
-                    "label": "Open in Salesforce",
-                    "variant": "secondary",
-                    "actions": {
-                      "click": [
-                        {
-                          "definition": "action/openLink",
-                          "attributes": {
-                            "url": "{!$attrs.opportunityUrl}",
-                            "target": "_blank"
-                          }
-                        }
-                      ]
+                    "title": "Fields still needed",
+                    "variant": "warning"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$attrs.missingFieldsText}",
+                        "variant": "body"
+                      }
                     }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.hasMissingFields}"
                   }
                 }
-              ],
-              "meta": {
-                "if": "{!$attrs.canClose}"
-              }
+              ]
             },
             {
-              "definition": "tile/row",
+              "definition": "tile/column",
               "attributes": {
-                "gap": "sm",
-                "align": "center"
+                "gap": "sm"
               },
               "children": [
                 {
-                  "definition": "tile/button",
+                  "definition": "tile/row",
                   "attributes": {
-                    "label": "Open in Salesforce",
-                    "variant": "secondary",
-                    "actions": {
-                      "click": [
-                        {
-                          "definition": "action/openLink",
-                          "attributes": {
-                            "url": "{!$attrs.opportunityUrl}",
-                            "target": "_blank"
-                          }
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Close as Won",
+                        "variant": "primary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/sendMessage",
+                              "attributes": {
+                                "content": "{!$attrs.closeWonPrompt}"
+                              }
+                            }
+                          ]
                         }
-                      ]
+                      }
+                    },
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Close as Lost",
+                        "variant": "secondary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/sendMessage",
+                              "attributes": {
+                                "content": "{!$attrs.closeLostPrompt}"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Open in Salesforce",
+                        "variant": "secondary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/openLink",
+                              "attributes": {
+                                "url": "{!$attrs.opportunityUrl}",
+                                "target": "_blank"
+                              }
+                            }
+                          ]
+                        }
+                      }
                     }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.canClose}"
+                  }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Open in Salesforce",
+                        "variant": "secondary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/openLink",
+                              "attributes": {
+                                "url": "{!$attrs.opportunityUrl}",
+                                "target": "_blank"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.isClosed}"
                   }
                 }
-              ],
-              "meta": {
-                "if": "{!$attrs.isClosed}"
-              }
+              ]
             }
           ]
         }
