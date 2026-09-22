@@ -90,7 +90,16 @@ force-app/main/default/
       Get_Account_Summary.genAiFunction-meta.xml   # Agent Action wrapping the Apex invocable
       input/schema.json            # accountId
       output/schema.json           # the 15 response fields, list typed to the inner Apex class
+  mcpServerDefinitions/
+    HXLAccounts.mcpServerDefinition-meta.xml       # the hosted MCP server: tool + UI resource wiring
 ```
+
+The MCP server definition is the piece that makes the card render. Its
+`<resources>` entry exposes the Lightning Type as an MCP Apps UI resource
+(`ui://widget/lightningType/c__getAccountSummary`), and the tool's
+`<uiResource>` links the tool to it. Without that link the tool returns
+plain JSON and the client narrates it as text. Creating the server in Setup
+does not set this link, so deploy this file over the server after creating it.
 
 The Agent Action is what the MCP Servers "Add Tools" picker lists. A bare
 Apex invocable does not appear there until it is wrapped as an Agent Action.
@@ -112,7 +121,15 @@ sf project deploy start --source-dir force-app/main/default/classes --test-level
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary
 sf project deploy start --source-dir force-app/main/default/genAiFunctions
+sf project deploy start --source-dir force-app/main/default/mcpServerDefinitions
 ```
+
+The last step updates the existing `HXLAccounts` server in place. After it,
+refresh the connector in the client (in Claude, remove and re-add the
+connector, or use its refresh tools option) so it picks up the UI resource.
+Clients cache widget templates by resource URI, so if a later widget change
+does not show up, copy the Lightning Type to a new name and point
+`<resourceUri>` at it.
 
 ### Register the tool (Setup, one time)
 

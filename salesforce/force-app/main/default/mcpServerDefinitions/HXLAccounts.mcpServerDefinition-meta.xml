@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<McpServerDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>HXL Account Widget</description>
+    <masterLabel>HXL-Accounts</masterLabel>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-GetAccountSummary</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>GetAccountSummary</operation>
+        </apiDefinition>
+        <descriptionOverride>Returns a summary of a Salesforce account: firmographics, owner, location, contact count, open pipeline totals, and the top open opportunities. Provide the Account Id (starts with 001). The result renders as an account summary card.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>GetAccountSummaryapex_GetAccountSummary</toolName>
+        <toolTitle>Get Account Summary</toolTitle>
+        <uiResource>accountSummaryCard</uiResource>
+    </tools>
+    <resources>
+        <resourceName>accountSummaryCard</resourceName>
+        <resourceUri>ui://widget/lightningType/c__getAccountSummary</resourceUri>
+        <resourceTitle>Account Summary Card</resourceTitle>
+        <description>HXL widget that renders an account summary: header with industry and type, firmographics, owner and location, open pipeline with top opportunities, and a link to the record.</description>
+    </resources>
+</McpServerDefinition>
