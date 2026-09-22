@@ -149,11 +149,34 @@ sf project deploy start --source-dir force-app/main/default/mcpServerDefinitions
 ```
 
 The last step updates the existing `HXLAccounts` server in place. After it,
-refresh the connector in the client (in Claude, remove and re-add the
-connector, or use its refresh tools option) so it picks up the UI resource.
-Clients cache widget templates by resource URI, so if a later widget change
-does not show up, copy the Lightning Type to a new name and point
-`<resourceUri>` at it.
+do both of these, in order, or cards stop rendering:
+
+1. Setup → MCP Servers → HXL-Accounts: deactivate, then activate again. The
+   running server keeps the old tool-to-resource wiring until it restarts.
+2. In Claude, remove the connector and add it back (a refresh is not enough).
+   Claude caches the tool list and its UI resource links from the first
+   connection.
+
+Clients also cache widget templates by resource URI, so if a later widget
+change does not show up after those two steps, copy the Lightning Type to a
+new name and point `<resourceUri>` at it.
+
+### If a card shows "Loading…" forever or "Couldn't render a rich UI"
+
+The card iframe is a generic Salesforce template. It shows "Loading…" until
+the tool result arrives with the hydrated widget definition in its `_meta`
+block (`salesforce/uiMetadata`). When that block is missing the server
+returned data but skipped the widget, which is what happens after a server
+redeploy until it is reactivated and the connector is re-added (see above).
+To see the raw server response, run the probe with the server URL from Setup:
+
+```
+cd ~/sf-visualizer/salesforce
+python3 scripts/mcp_probe.py "PASTE_SERVER_URL_HERE" GetCloseReadinessapex_GetCloseReadiness '{"inputs":[{"opportunityId":"006cv00000kSCgTAAW"}]}'
+```
+
+It prints whether `salesforce/uiMetadata` is present and saves the full
+result to `mcp_probe_last_result.json`.
 
 ### Register the tool (Setup, one time)
 
