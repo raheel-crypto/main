@@ -8,7 +8,7 @@
  * Currency and date fields are returned pre-formatted as text because the widget
  * expression language has no formatting functions.
  */
-public with sharing class GetAccountSummary {
+global with sharing class GetAccountSummary {
 
     private static final Integer TOP_OPPORTUNITY_LIMIT = 5;
     private static final String NOT_SET = 'Not set';
@@ -18,7 +18,7 @@ public with sharing class GetAccountSummary {
         description='Returns a summary of a Salesforce account: firmographics, owner, location, contact count, open pipeline totals, and the top open opportunities. Provide the Account Id.'
         category='Account'
     )
-    public static List<GetAccountSummaryResponse> getAccountSummary(List<GetAccountSummaryRequest> requests) {
+    global static List<GetAccountSummaryResponse> getAccountSummary(List<GetAccountSummaryRequest> requests) {
         Set<Id> accountIds = new Set<Id>();
         for (GetAccountSummaryRequest req : requests) {
             Id parsed = parseAccountId(req.accountId);
@@ -270,67 +270,67 @@ public with sharing class GetAccountSummary {
 
     // ─── DTOs ────────────────────────────────────────────────────────────
 
-    public class GetAccountSummaryRequest {
+    global class GetAccountSummaryRequest {
         @InvocableVariable(label='Account Id' description='The 15 or 18 character Id of the Account to summarize.' required=true)
-        public String accountId;
+        global String accountId;
     }
 
-    public class GetAccountSummaryResponse {
+    global class GetAccountSummaryResponse {
         @InvocableVariable(label='Account Name' description='Display name of the account.')
-        public String accountName;
+        global String accountName;
 
         @InvocableVariable(label='Industry' description='Industry of the account, or "Not set".')
-        public String industry;
+        global String industry;
 
         @InvocableVariable(label='Account Type' description='Account type such as Customer or Prospect. Defaults to "Account" when blank.')
-        public String type;
+        global String type;
 
         @InvocableVariable(label='Owner' description='Full name of the account owner.')
-        public String ownerName;
+        global String ownerName;
 
         @InvocableVariable(label='Location' description='Billing city and state or country, formatted for display.')
-        public String billingLocation;
+        global String billingLocation;
 
         @InvocableVariable(label='Website' description='Account website.')
-        public String website;
+        global String website;
 
         @InvocableVariable(label='Annual Revenue' description='Annual revenue formatted as compact currency, e.g. $45.6M.')
-        public String annualRevenue;
+        global String annualRevenue;
 
         @InvocableVariable(label='Employees' description='Number of employees.')
-        public Integer numberOfEmployees;
+        global Integer numberOfEmployees;
 
         @InvocableVariable(label='Contacts' description='Number of contacts on the account.')
-        public Integer contactCount;
+        global Integer contactCount;
 
         @InvocableVariable(label='Open Opportunities' description='Number of opportunities that are not closed.')
-        public Integer openOpportunityCount;
+        global Integer openOpportunityCount;
 
         @InvocableVariable(label='Open Pipeline' description='Sum of open opportunity amounts formatted as compact currency.')
-        public String openPipelineAmount;
+        global String openPipelineAmount;
 
         @InvocableVariable(label='Has Open Opportunities' description='True when at least one open opportunity exists.')
-        public Boolean hasOpenOpportunities;
+        global Boolean hasOpenOpportunities;
 
         @InvocableVariable(label='Pipeline Is Empty' description='True when there are no open opportunities.')
-        public Boolean isPipelineEmpty;
+        global Boolean isPipelineEmpty;
 
         @InvocableVariable(label='Top Open Opportunities' description='Up to five open opportunities ordered by amount.')
-        public List<OpportunitySummary> opportunities;
+        global List<OpportunitySummary> opportunities;
 
         @InvocableVariable(label='Account URL' description='Link to the account record in Salesforce.')
-        public String accountUrl;
+        global String accountUrl;
     }
 
-    public class OpportunitySummary {
-        @AuraEnabled public String name;
-        @AuraEnabled public String stageName;
-        @AuraEnabled public String amount;
-        @AuraEnabled public String closeDate;
+    global class OpportunitySummary {
+        @AuraEnabled global String name;
+        @AuraEnabled global String stageName;
+        @AuraEnabled global String amount;
+        @AuraEnabled global String closeDate;
 
-        public OpportunitySummary() {}
+        global OpportunitySummary() {}
 
-        public OpportunitySummary(Opportunity opp) {
+        global OpportunitySummary(Opportunity opp) {
             this.name = opp.Name;
             this.stageName = defaultIfBlank(opp.StageName, NOT_SET);
             this.amount = opp.Amount == null ? NOT_SET : formatCurrency(opp.Amount);

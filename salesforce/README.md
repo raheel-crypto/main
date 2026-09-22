@@ -105,12 +105,39 @@ sf project deploy start --source-dir force-app/main/default/lightningTypes/getAc
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary
 ```
 
-### Register the tool
+### Register the tool (Setup, one time)
 
-After the deploy, create a custom MCP server in Setup (search Setup for
-"MCP") and add the **Get Account Summary** Apex action as a tool. Connect an
-MCP Apps compatible client to that server and ask it to summarize an account
-by Id.
+Salesforce hosts the MCP server for you. Create one and add the Apex action
+as a tool:
+
+1. Setup → Quick Find → **MCP Servers** → **Salesforce Servers** tab →
+   **Create Salesforce MCP Server**. Give it a name such as `Rogo Account Tools`.
+2. On the server, **Add Server Assets** → **Add Tools** → pick the Apex action
+   **Get Account Summary** → save.
+3. Copy the server URL shown on the server page. Hosted servers follow the
+   pattern `https://<my-domain>.my.salesforce.com/services/mcp/...`.
+
+The Apex class is declared `global` because hosted MCP tools built from Apex
+actions require it.
+
+### Let Claude (or another client) log in
+
+External clients authenticate with OAuth through an External Client App:
+
+1. Setup → Quick Find → **External Client App Manager** → **New External Client App**.
+2. Enable OAuth. Callback URL for Claude: `https://claude.ai/api/mcp/auth_callback`.
+3. Scopes: **Access Model Context Protocol (mcp)**, **Manage user data via APIs (api)**,
+   **Perform requests at any time (refresh_token, offline_access)**.
+4. Under flow settings, require **PKCE** and enable **JSON Web Token (JWT)-based
+   access tokens**.
+5. Save, then open the app's settings and copy the **Consumer Key**. The consumer
+   secret is optional for Claude when PKCE is on.
+
+In Claude (claude.ai → Settings → Connectors → Add custom connector) paste the
+server URL from the MCP server page, the consumer key as the OAuth client ID,
+and the secret if you copied it. Complete the Salesforce login when prompted.
+Then ask Claude to summarize an account by Id, for example
+"Summarize account 001cv000017KYtuAAG". The response renders as the card.
 
 ### Verify the action shape from the org
 
