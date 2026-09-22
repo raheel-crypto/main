@@ -1,0 +1,112 @@
+{
+  "title": "Account Summary Card",
+  "description": "Input contract for the Account Summary Card widget: account header fields, firmographics, owner and location, open pipeline totals, the top open opportunities, and the record URL.",
+  "type": "object",
+  "properties": {
+    "attributes": {
+      "lightning:type": "lightning__objectType",
+      "properties": {
+        "accountName": {
+          "title": "Account Name",
+          "description": "Display name of the account, shown as the card heading.",
+          "lightning:type": "lightning__textType"
+        },
+        "industry": {
+          "title": "Industry",
+          "description": "Industry picklist value on the account.",
+          "lightning:type": "lightning__textType"
+        },
+        "type": {
+          "title": "Account Type",
+          "description": "Account Type picklist value, such as Customer, Prospect, or Partner. Rendered as a badge.",
+          "lightning:type": "lightning__textType"
+        },
+        "ownerName": {
+          "title": "Owner",
+          "description": "Full name of the account owner.",
+          "lightning:type": "lightning__textType"
+        },
+        "billingLocation": {
+          "title": "Location",
+          "description": "Billing city and state or country, pre-formatted for display.",
+          "lightning:type": "lightning__textType"
+        },
+        "website": {
+          "title": "Website",
+          "description": "Account website domain.",
+          "lightning:type": "lightning__textType"
+        },
+        "annualRevenue": {
+          "title": "Annual Revenue",
+          "description": "Annual revenue, pre-formatted as a currency string for display.",
+          "lightning:type": "lightning__textType"
+        },
+        "numberOfEmployees": {
+          "title": "Employees",
+          "description": "Number of employees on the account.",
+          "lightning:type": "lightning__numberType"
+        },
+        "contactCount": {
+          "title": "Contacts",
+          "description": "Count of contacts related to the account.",
+          "lightning:type": "lightning__numberType"
+        },
+        "openOpportunityCount": {
+          "title": "Open Opportunities",
+          "description": "Count of opportunities that are not closed.",
+          "lightning:type": "lightning__numberType"
+        },
+        "openPipelineAmount": {
+          "title": "Open Pipeline",
+          "description": "Sum of open opportunity amounts, pre-formatted as a currency string for display.",
+          "lightning:type": "lightning__textType"
+        },
+        "hasOpenOpportunities": {
+          "title": "Has Open Opportunities",
+          "description": "True when at least one open opportunity exists. Controls whether the opportunity list renders.",
+          "lightning:type": "lightning__booleanType"
+        },
+        "isPipelineEmpty": {
+          "title": "Pipeline Is Empty",
+          "description": "True when there are no open opportunities. Controls the empty-state callout.",
+          "lightning:type": "lightning__booleanType"
+        },
+        "opportunities": {
+          "title": "Top Open Opportunities",
+          "description": "Open opportunities to list on the card, typically the top few by amount.",
+          "lightning:type": "lightning__listType",
+          "items": {
+            "lightning:type": "lightning__objectType",
+            "properties": {
+              "name": {
+                "title": "Opportunity Name",
+                "description": "Name of the opportunity.",
+                "lightning:type": "lightning__textType"
+              },
+              "stageName": {
+                "title": "Stage",
+                "description": "Current sales stage.",
+                "lightning:type": "lightning__textType"
+              },
+              "amount": {
+                "title": "Amount",
+                "description": "Opportunity amount, pre-formatted as a currency string for display.",
+                "lightning:type": "lightning__textType"
+              },
+              "closeDate": {
+                "title": "Close Date",
+                "description": "Expected close date, pre-formatted for display.",
+                "lightning:type": "lightning__textType"
+              }
+            }
+          }
+        },
+        "accountUrl": {
+          "title": "Account URL",
+          "description": "Full URL of the account record in Salesforce, used by the Open in Salesforce button.",
+          "lightning:type": "lightning__textType"
+        }
+      }
+    }
+  }
+}

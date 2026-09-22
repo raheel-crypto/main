@@ -1,0 +1,4 @@
+# Salesforce CLI ignore rules for this project
+package.xml
+**/.DS_Store
+**/*.md

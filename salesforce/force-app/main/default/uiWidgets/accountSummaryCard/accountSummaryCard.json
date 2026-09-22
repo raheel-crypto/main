@@ -1,0 +1,278 @@
+{
+  "type": "lightning__agentforceWidget",
+  "contentBody": {
+    "widgetBody": {
+      "definition": "tile/widget",
+      "children": [
+        {
+          "definition": "tile/column",
+          "attributes": { "gap": "md" },
+          "children": [
+            {
+              "definition": "tile/row",
+              "attributes": { "gap": "md", "justify": "between", "align": "start" },
+              "children": [
+                {
+                  "definition": "tile/column",
+                  "attributes": { "gap": "xs", "width": "stretch" },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.accountName}", "variant": "h2" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.industry}", "variant": "caption", "color": "muted" }
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/badge",
+                  "attributes": { "label": "{!$attrs.type}", "variant": "primary" }
+                }
+              ]
+            },
+            {
+              "definition": "tile/separator",
+              "attributes": { "orientation": "horizontal" }
+            },
+            {
+              "definition": "tile/row",
+              "attributes": { "gap": "lg", "align": "start", "isWrapped": true },
+              "children": [
+                {
+                  "definition": "tile/column",
+                  "attributes": { "gap": "xs", "width": "stretch" },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "Annual Revenue", "variant": "caption", "color": "muted" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.annualRevenue}", "variant": "h4" }
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/column",
+                  "attributes": { "gap": "xs", "width": "stretch" },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "Employees", "variant": "caption", "color": "muted" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.numberOfEmployees}", "variant": "h4" }
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/column",
+                  "attributes": { "gap": "xs", "width": "stretch" },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "Contacts", "variant": "caption", "color": "muted" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.contactCount}", "variant": "h4" }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "definition": "tile/column",
+              "attributes": { "gap": "xs" },
+              "children": [
+                {
+                  "definition": "tile/row",
+                  "attributes": { "gap": "sm", "align": "center" },
+                  "children": [
+                    {
+                      "definition": "tile/icon",
+                      "attributes": { "name": "user", "size": "sm", "color": "muted", "alt": "" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "Owner", "variant": "body", "weight": "semibold" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.ownerName}", "variant": "body" }
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": { "gap": "sm", "align": "center" },
+                  "children": [
+                    {
+                      "definition": "tile/icon",
+                      "attributes": { "name": "map-pin", "size": "sm", "color": "muted", "alt": "" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "Location", "variant": "body", "weight": "semibold" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.billingLocation}", "variant": "body" }
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": { "gap": "sm", "align": "center" },
+                  "children": [
+                    {
+                      "definition": "tile/icon",
+                      "attributes": { "name": "globe", "size": "sm", "color": "muted", "alt": "" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "Website", "variant": "body", "weight": "semibold" }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": { "text": "{!$attrs.website}", "variant": "body" }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "definition": "tile/separator",
+              "attributes": { "orientation": "horizontal" }
+            },
+            {
+              "definition": "tile/row",
+              "attributes": { "gap": "md", "justify": "between", "align": "center" },
+              "children": [
+                {
+                  "definition": "tile/text",
+                  "attributes": { "text": "Open Pipeline", "variant": "h3" }
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": { "text": "{!$attrs.openPipelineAmount}", "variant": "h4", "color": "primary" }
+                }
+              ]
+            },
+            {
+              "definition": "tile/row",
+              "attributes": { "gap": "sm", "align": "center" },
+              "children": [
+                {
+                  "definition": "tile/text",
+                  "attributes": { "text": "{!$attrs.openOpportunityCount}", "variant": "body", "weight": "semibold" }
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": { "text": "open opportunities", "variant": "body", "color": "muted" }
+                }
+              ]
+            },
+            {
+              "definition": "tile/callout",
+              "meta": { "if": "{!$attrs.isPipelineEmpty}" },
+              "attributes": {
+                "title": "No open opportunities",
+                "description": "This account has no open pipeline right now.",
+                "variant": "info"
+              }
+            },
+            {
+              "definition": "tile/column",
+              "meta": { "if": "{!$attrs.hasOpenOpportunities}" },
+              "attributes": { "gap": "sm" },
+              "children": [
+                {
+                  "definition": "tile/container",
+                  "meta": { "forEach": "{!$attrs.opportunities}", "forItem": "$opp" },
+                  "attributes": { "variant": "emphasis" },
+                  "children": [
+                    {
+                      "definition": "tile/row",
+                      "attributes": { "gap": "md", "justify": "between", "align": "start" },
+                      "children": [
+                        {
+                          "definition": "tile/column",
+                          "attributes": { "gap": "xs", "width": "stretch" },
+                          "children": [
+                            {
+                              "definition": "tile/text",
+                              "attributes": { "text": "{!$opp.name}", "variant": "body", "weight": "semibold" }
+                            },
+                            {
+                              "definition": "tile/badge",
+                              "attributes": { "label": "{!$opp.stageName}", "variant": "outline" }
+                            }
+                          ]
+                        },
+                        {
+                          "definition": "tile/column",
+                          "attributes": { "gap": "xs", "align": "end" },
+                          "children": [
+                            {
+                              "definition": "tile/text",
+                              "attributes": { "text": "{!$opp.amount}", "variant": "body", "weight": "semibold" }
+                            },
+                            {
+                              "definition": "tile/text",
+                              "attributes": { "text": "{!$opp.closeDate}", "variant": "caption", "color": "muted" }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "definition": "tile/row",
+              "attributes": { "gap": "sm", "align": "center", "justify": "start" },
+              "children": [
+                {
+                  "definition": "tile/button",
+                  "attributes": {
+                    "label": "Open in Salesforce",
+                    "variant": "primary",
+                    "iconName": "external-link",
+                    "actions": {
+                      "click": [
+                        {
+                          "definition": "action/openLink",
+                          "attributes": { "url": "{!$attrs.accountUrl}", "target": "_blank" }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "definition": "tile/button",
+                  "attributes": {
+                    "label": "Show all opportunities",
+                    "variant": "secondary",
+                    "actions": {
+                      "click": [
+                        {
+                          "definition": "action/sendMessage",
+                          "attributes": { "content": "Show me all open opportunities for this account with stage, amount, and close date." }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
