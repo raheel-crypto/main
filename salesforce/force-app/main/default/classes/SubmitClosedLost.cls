@@ -48,7 +48,6 @@ public with sharing class SubmitClosedLost {
             ai = OpportunityCloseService.runAiAnalysis(opp.Id, 'Loss', true);
             if (ai != null && ai.success != true) {
                 res.aiFailureReason = OpportunityCloseService.textOrNotSet(ai.summary);
-            res.aiFailed = true;
                 res.aiFailed = true;
                 ai = null;
             }
