@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Checks whether an Opportunity is ready to be closed: whether a signed order form is attached and which Closed Won fields still need values. Read-only. Use before closing an opportunity.</description>
+    <invocationTarget>GetCloseReadiness</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <isConfirmationRequired>false</isConfirmationRequired>
+    <isIncludeInProgressIndicator>true</isIncludeInProgressIndicator>
+    <masterLabel>Get Close Readiness</masterLabel>
+    <progressIndicatorMessage>Checking the opportunity...</progressIndicatorMessage>
+</GenAiFunction>

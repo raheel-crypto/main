@@ -1,0 +1,58 @@
+{
+  "required": [
+    "opportunityId"
+  ],
+  "unevaluatedProperties": false,
+  "properties": {
+    "opportunityId": {
+      "title": "Opportunity Id",
+      "description": "The 15 or 18 character Salesforce Id of the Opportunity. Starts with 006.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "confirm": {
+      "title": "Confirm",
+      "description": "False or omitted previews without saving. True performs the close. Only set true after the user has reviewed the preview.",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "primaryReason": {
+      "title": "CL Primary Reason",
+      "description": "Required picklist: Bad Fit Disqualified, Budget Financial, Business Change, Competitive Loss, Duplicate, No Need, No Show / Buyer Canceled, Product / Technical Gap, Security Compliance, Timing Priority, Wrong Authority.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "secondaryReason": {
+      "title": "CL Secondary Reason",
+      "description": "Optional picklist: Hebbia, Claude, Perplexity, BlueFlame, Internal Build, Inaccuracy / Hallucination, Latency / Performance, Missing 3P Data, Missing 1P Data, Budget Not Approved, Funding Shifted, Perceived price too high.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "finalCompetitor": {
+      "title": "Final Competitor",
+      "description": "Optional picklist: AlphaSense, BlueFlame, ChatGPT, Claude, Hebbia, Internal Build, ModelML, Perplexity.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "notes": {
+      "title": "CL Notes",
+      "description": "Why the deal was lost. Defaults to the AI narrative when blank.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "lobDivision": {
+      "title": "LOB/Division",
+      "description": "Required picklist: Investment Banking, Commercial Banking, Corporate Banking, Corporate Finance, Wealth Management, Asset Management, Private Equity, Private Credit, Hedge Fund, Venture Capital / Ventures, Corporate Development, Sales & Trading / Markets.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

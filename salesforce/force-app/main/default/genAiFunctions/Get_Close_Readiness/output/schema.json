@@ -1,0 +1,226 @@
+{
+  "unevaluatedProperties": false,
+  "properties": {
+    "opportunityId": {
+      "title": "Opportunity Id",
+      "description": "Opportunity Id",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "opportunityName": {
+      "title": "Opportunity Name",
+      "description": "Opportunity Name",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "accountName": {
+      "title": "Account Name",
+      "description": "Account Name",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "stageName": {
+      "title": "Stage",
+      "description": "Stage",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "amount": {
+      "title": "Amount",
+      "description": "Amount",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "closeDate": {
+      "title": "Close Date",
+      "description": "Close Date",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "opportunityType": {
+      "title": "Opportunity Type",
+      "description": "Opportunity Type",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "ownerName": {
+      "title": "Owner",
+      "description": "Owner",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "statusLabel": {
+      "title": "Status Label",
+      "description": "Status Label",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "statusVariant": {
+      "title": "Status Variant",
+      "description": "Status Variant",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "statusMessage": {
+      "title": "Status Message",
+      "description": "Status Message",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "isClosed": {
+      "title": "Is Closed",
+      "description": "Is Closed",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "canClose": {
+      "title": "Can Close",
+      "description": "Can Close",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "isRestructure": {
+      "title": "Is Contract Restructure",
+      "description": "Is Contract Restructure",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "hasSignedDocument": {
+      "title": "Has Signed Document",
+      "description": "Has Signed Document",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "missingSignedDocument": {
+      "title": "Missing Signed Document",
+      "description": "Missing Signed Document",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "signedDocumentText": {
+      "title": "Signed Document Text",
+      "description": "Signed Document Text",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "hasMissingFields": {
+      "title": "Has Missing Fields",
+      "description": "Has Missing Fields",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "missingFieldCount": {
+      "title": "Missing Field Count",
+      "description": "Missing Field Count",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__integerType"
+    },
+    "missingFieldsText": {
+      "title": "Missing Fields Text",
+      "description": "Missing Fields Text",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "checklist": {
+      "title": "Checklist",
+      "description": "Checklist",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "maxItems": 2000,
+      "items": {
+        "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+      },
+      "lightning:type": "lightning__listType"
+    },
+    "closeWonPrompt": {
+      "title": "Close Won Prompt",
+      "description": "Close Won Prompt",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "closeLostPrompt": {
+      "title": "Close Lost Prompt",
+      "description": "Close Lost Prompt",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "opportunityUrl": {
+      "title": "Opportunity URL",
+      "description": "Opportunity URL",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

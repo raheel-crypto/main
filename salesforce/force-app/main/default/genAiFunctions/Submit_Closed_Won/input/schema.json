@@ -1,0 +1,219 @@
+{
+  "required": [
+    "opportunityId"
+  ],
+  "unevaluatedProperties": false,
+  "properties": {
+    "opportunityId": {
+      "title": "Opportunity Id",
+      "description": "The 15 or 18 character Salesforce Id of the Opportunity. Starts with 006.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "confirm": {
+      "title": "Confirm",
+      "description": "False or omitted previews without saving. True performs the close. Only set true after the user has reviewed the preview.",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "lobDivision": {
+      "title": "LOB/Division",
+      "description": "Picklist: Investment Banking, Commercial Banking, Corporate Banking, Corporate Finance, Wealth Management, Asset Management, Private Equity, Private Credit, Hedge Fund, Venture Capital / Ventures, Corporate Development, Sales & Trading / Markets.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "pricingStructure": {
+      "title": "Pricing Structure",
+      "description": "Picklist: Seats: Unlimited Usage, No Throttling; Seats: Unlimited Usage, with Throttling; Seats: Credit-Based Usage; ELA: Unlimited Usage, No Throttling; ELA: Unlimited Usage, with Throttling; ELA: Credit-Based Usage; Custom.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "dealDescription": {
+      "title": "Deal Description",
+      "description": "What was sold.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "purchaseDriver": {
+      "title": "Purchase Driver",
+      "description": "Why the customer bought.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "rolloutTimeline": {
+      "title": "Rollout Timeline",
+      "description": "Picklist: Immediate, Delayed, Phased.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "successCriteria": {
+      "title": "Success Criteria",
+      "description": "How the customer will judge success.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "upsellPotential": {
+      "title": "Upsell Potential",
+      "description": "Picklist: Yes, No, Maybe.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "implementationNotes": {
+      "title": "Implementation Notes",
+      "description": "Notes for the implementation team.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "keyRisks": {
+      "title": "Key Risks",
+      "description": "Risks to the account.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "amount": {
+      "title": "Amount",
+      "description": "Opportunity amount.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "contractStartDate": {
+      "title": "Contract Start Date",
+      "description": "YYYY-MM-DD.",
+      "lightning:type": "lightning__dateType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "contractEndDate": {
+      "title": "Contract End Date",
+      "description": "YYYY-MM-DD. Must be after the start date.",
+      "lightning:type": "lightning__dateType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "contractLengthMonths": {
+      "title": "Contract Length (Months)",
+      "description": "Whole months.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "annualRecurringRevenue": {
+      "title": "Annual Recurring Revenue",
+      "description": "ARR.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "totalContractValue": {
+      "title": "Total Contract Value",
+      "description": "TCV.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "licenseFee": {
+      "title": "License Fee",
+      "description": "Annual license fee.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "platformConnectionFee": {
+      "title": "Platform Connection Fee",
+      "description": "Platform connection fee.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "professionalServicesFees": {
+      "title": "Professional Services Fees",
+      "description": "Professional services fees.",
+      "lightning:type": "lightning__numberType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "seatLicenses": {
+      "title": "Seat Licenses",
+      "description": "Number of seats.",
+      "lightning:type": "lightning__integerType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "paymentTerms": {
+      "title": "Payment Terms",
+      "description": "Picklist: Annual, Semi-Annual, Quarterly, Monthly.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "creditTerms": {
+      "title": "Credit Terms",
+      "description": "Picklist: Net-15, Net-30, Net-45, Net-60.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "billingNotes": {
+      "title": "Billing Notes",
+      "description": "Under 255 characters.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "billingContactEmail": {
+      "title": "Billing Contact Email",
+      "description": "Email address of the billing contact.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "renewalTerms": {
+      "title": "Renewal Terms",
+      "description": "Picklist: Auto-renew (90-day), Auto-renew (60-day), Auto-renew (30-day), Manual renewal.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "isEla": {
+      "title": "ELA",
+      "description": "True for an enterprise license agreement.",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "optOut": {
+      "title": "Opt Out",
+      "description": "True when the contract has an opt-out clause.",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "optOutDate": {
+      "title": "Opt-Out Date",
+      "description": "YYYY-MM-DD. Required when Opt Out is true.",
+      "lightning:type": "lightning__dateType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
+    "willingToProvideReferences": {
+      "title": "Willing to Provide References",
+      "description": "Whether the account will act as a reference.",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

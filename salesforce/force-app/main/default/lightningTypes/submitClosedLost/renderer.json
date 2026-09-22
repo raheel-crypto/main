@@ -1,0 +1,34 @@
+{
+  "renderer": {
+    "componentOverrides": {
+      "$": {
+        "definition": "@widget/c/closeSubmissionCard",
+        "attributes": {
+          "opportunityId": "{!$attrs.outputValues.opportunityId}",
+          "opportunityName": "{!$attrs.outputValues.opportunityName}",
+          "accountName": "{!$attrs.outputValues.accountName}",
+          "status": "{!$attrs.outputValues.status}",
+          "statusLabel": "{!$attrs.outputValues.statusLabel}",
+          "statusVariant": "{!$attrs.outputValues.statusVariant}",
+          "headline": "{!$attrs.outputValues.headline}",
+          "message": "{!$attrs.outputValues.message}",
+          "isPreview": "{!$attrs.outputValues.isPreview}",
+          "isSubmitted": "{!$attrs.outputValues.isSubmitted}",
+          "isBlocked": "{!$attrs.outputValues.isBlocked}",
+          "hasProblems": "{!$attrs.outputValues.hasProblems}",
+          "problems": "{!$attrs.outputValues.problems}",
+          "rows": "{!$attrs.outputValues.rows}",
+          "hasRecommendation": "{!$attrs.outputValues.hasRecommendation}",
+          "aiSummary": "{!$attrs.outputValues.aiSummary}",
+          "recommendedReason": "{!$attrs.outputValues.recommendedReason}",
+          "recommendedCompetitor": "{!$attrs.outputValues.recommendedCompetitor}",
+          "recommendedNarrative": "{!$attrs.outputValues.recommendedNarrative}",
+          "aiConfidence": "{!$attrs.outputValues.aiConfidence}",
+          "confirmPrompt": "{!$attrs.outputValues.confirmPrompt}",
+          "changePrompt": "{!$attrs.outputValues.changePrompt}",
+          "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"
+        }
+      }
+    }
+  }
+}

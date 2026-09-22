@@ -1,0 +1,16 @@
+{
+  "required": [
+    "opportunityId"
+  ],
+  "unevaluatedProperties": false,
+  "properties": {
+    "opportunityId": {
+      "title": "Opportunity Id",
+      "description": "The 15 or 18 character Salesforce Id of the Opportunity. Starts with 006.",
+      "lightning:type": "lightning__textType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

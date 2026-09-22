@@ -1,0 +1,35 @@
+{
+  "renderer": {
+    "componentOverrides": {
+      "$": {
+        "definition": "@widget/c/closeReadinessCard",
+        "attributes": {
+          "opportunityId": "{!$attrs.outputValues.opportunityId}",
+          "opportunityName": "{!$attrs.outputValues.opportunityName}",
+          "accountName": "{!$attrs.outputValues.accountName}",
+          "stageName": "{!$attrs.outputValues.stageName}",
+          "amount": "{!$attrs.outputValues.amount}",
+          "closeDate": "{!$attrs.outputValues.closeDate}",
+          "opportunityType": "{!$attrs.outputValues.opportunityType}",
+          "ownerName": "{!$attrs.outputValues.ownerName}",
+          "statusLabel": "{!$attrs.outputValues.statusLabel}",
+          "statusVariant": "{!$attrs.outputValues.statusVariant}",
+          "statusMessage": "{!$attrs.outputValues.statusMessage}",
+          "isClosed": "{!$attrs.outputValues.isClosed}",
+          "canClose": "{!$attrs.outputValues.canClose}",
+          "isRestructure": "{!$attrs.outputValues.isRestructure}",
+          "hasSignedDocument": "{!$attrs.outputValues.hasSignedDocument}",
+          "missingSignedDocument": "{!$attrs.outputValues.missingSignedDocument}",
+          "signedDocumentText": "{!$attrs.outputValues.signedDocumentText}",
+          "hasMissingFields": "{!$attrs.outputValues.hasMissingFields}",
+          "missingFieldCount": "{!$attrs.outputValues.missingFieldCount}",
+          "missingFieldsText": "{!$attrs.outputValues.missingFieldsText}",
+          "checklist": "{!$attrs.outputValues.checklist}",
+          "closeWonPrompt": "{!$attrs.outputValues.closeWonPrompt}",
+          "closeLostPrompt": "{!$attrs.outputValues.closeLostPrompt}",
+          "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"
+        }
+      }
+    }
+  }
+}

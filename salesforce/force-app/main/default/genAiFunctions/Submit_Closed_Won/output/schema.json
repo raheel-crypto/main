@@ -1,0 +1,221 @@
+{
+  "unevaluatedProperties": false,
+  "properties": {
+    "opportunityId": {
+      "title": "Opportunity Id",
+      "description": "Opportunity Id",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "opportunityName": {
+      "title": "Opportunity Name",
+      "description": "Opportunity Name",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "accountName": {
+      "title": "Account Name",
+      "description": "Account Name",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "status": {
+      "title": "Status",
+      "description": "Status",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "statusLabel": {
+      "title": "Status Label",
+      "description": "Status Label",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "statusVariant": {
+      "title": "Status Variant",
+      "description": "Status Variant",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "headline": {
+      "title": "Headline",
+      "description": "Headline",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "message": {
+      "title": "Message",
+      "description": "Message",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "isPreview": {
+      "title": "Is Preview",
+      "description": "Is Preview",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "isSubmitted": {
+      "title": "Is Submitted",
+      "description": "Is Submitted",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "isBlocked": {
+      "title": "Is Blocked",
+      "description": "Is Blocked",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "hasProblems": {
+      "title": "Has Problems",
+      "description": "Has Problems",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "problems": {
+      "title": "Problems",
+      "description": "Problems",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "maxItems": 2000,
+      "items": {
+        "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+      },
+      "lightning:type": "lightning__listType"
+    },
+    "rows": {
+      "title": "Rows",
+      "description": "Rows",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "maxItems": 2000,
+      "items": {
+        "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+      },
+      "lightning:type": "lightning__listType"
+    },
+    "hasRecommendation": {
+      "title": "Has AI Recommendation",
+      "description": "Has AI Recommendation",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "aiSummary": {
+      "title": "AI Summary",
+      "description": "AI Summary",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "recommendedReason": {
+      "title": "Recommended Reason",
+      "description": "Recommended Reason",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "recommendedCompetitor": {
+      "title": "Recommended Competitor",
+      "description": "Recommended Competitor",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "recommendedNarrative": {
+      "title": "Recommended Narrative",
+      "description": "Recommended Narrative",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "aiConfidence": {
+      "title": "AI Confidence",
+      "description": "AI Confidence",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "confirmPrompt": {
+      "title": "Confirm Prompt",
+      "description": "Confirm Prompt",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "changePrompt": {
+      "title": "Change Prompt",
+      "description": "Change Prompt",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "opportunityUrl": {
+      "title": "Opportunity URL",
+      "description": "Opportunity URL",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    }
+  },
+  "lightning:type": "lightning__objectType"
+}

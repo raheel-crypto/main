@@ -1,0 +1,444 @@
+{
+  "type": "lightning__agentforceWidget",
+  "contentBody": {
+    "widgetBody": {
+      "definition": "tile/widget",
+      "children": [
+        {
+          "definition": "tile/column",
+          "attributes": {
+            "gap": "md"
+          },
+          "children": [
+            {
+              "definition": "tile/row",
+              "attributes": {
+                "gap": "md",
+                "align": "start",
+                "justify": "between"
+              },
+              "children": [
+                {
+                  "definition": "tile/column",
+                  "attributes": {
+                    "gap": "xs",
+                    "width": "stretch"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$attrs.headline}",
+                        "variant": "h2"
+                      }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$attrs.opportunityName}",
+                        "variant": "caption",
+                        "color": "muted"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/badge",
+                  "attributes": {
+                    "label": "{!$attrs.statusLabel}",
+                    "variant": "{!$attrs.statusVariant}"
+                  }
+                }
+              ]
+            },
+            {
+              "definition": "tile/text",
+              "attributes": {
+                "text": "{!$attrs.message}",
+                "variant": "body"
+              }
+            },
+            {
+              "definition": "tile/column",
+              "attributes": {
+                "gap": "sm"
+              },
+              "children": [
+                {
+                  "definition": "tile/separator",
+                  "attributes": {
+                    "orientation": "horizontal"
+                  }
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "AI recommendation",
+                    "variant": "h3"
+                  }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "lg",
+                    "align": "start"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "Recommended reason",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.recommendedReason}",
+                            "variant": "h4"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "Recommended competitor",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.recommendedCompetitor}",
+                            "variant": "h4"
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "Confidence",
+                            "variant": "caption",
+                            "color": "muted"
+                          }
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$attrs.aiConfidence}",
+                            "variant": "h4"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "{!$attrs.recommendedNarrative}",
+                    "variant": "body",
+                    "color": "muted"
+                  }
+                }
+              ],
+              "meta": {
+                "if": "{!$attrs.hasRecommendation}"
+              }
+            },
+            {
+              "definition": "tile/column",
+              "attributes": {
+                "gap": "sm"
+              },
+              "children": [
+                {
+                  "definition": "tile/callout",
+                  "attributes": {
+                    "title": "Fix these before submitting",
+                    "variant": "error",
+                    "description": "Nothing has been saved."
+                  }
+                },
+                {
+                  "definition": "tile/column",
+                  "attributes": {
+                    "gap": "xs"
+                  },
+                  "meta": {
+                    "forEach": "{!$attrs.problems}",
+                    "forItem": "$problem"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/row",
+                      "attributes": {
+                        "gap": "md",
+                        "align": "start",
+                        "justify": "between"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/column",
+                          "attributes": {
+                            "gap": "xs",
+                            "width": "stretch"
+                          },
+                          "children": [
+                            {
+                              "definition": "tile/row",
+                              "attributes": {
+                                "gap": "sm",
+                                "align": "center"
+                              },
+                              "children": [
+                                {
+                                  "definition": "tile/icon",
+                                  "attributes": {
+                                    "name": "{!$problem.icon}",
+                                    "size": "sm",
+                                    "color": "{!$problem.color}",
+                                    "alt": ""
+                                  }
+                                },
+                                {
+                                  "definition": "tile/text",
+                                  "attributes": {
+                                    "text": "{!$problem.label}",
+                                    "variant": "body",
+                                    "weight": "semibold"
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "definition": "tile/text",
+                          "attributes": {
+                            "text": "{!$problem.value}",
+                            "variant": "body",
+                            "color": "muted"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ],
+              "meta": {
+                "if": "{!$attrs.hasProblems}"
+              }
+            },
+            {
+              "definition": "tile/separator",
+              "attributes": {
+                "orientation": "horizontal"
+              }
+            },
+            {
+              "definition": "tile/text",
+              "attributes": {
+                "text": "Values",
+                "variant": "h3"
+              }
+            },
+            {
+              "definition": "tile/column",
+              "attributes": {
+                "gap": "xs"
+              },
+              "meta": {
+                "forEach": "{!$attrs.rows}",
+                "forItem": "$row"
+              },
+              "children": [
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "md",
+                    "align": "start",
+                    "justify": "between"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/column",
+                      "attributes": {
+                        "gap": "xs",
+                        "width": "stretch"
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/row",
+                          "attributes": {
+                            "gap": "sm",
+                            "align": "center"
+                          },
+                          "children": [
+                            {
+                              "definition": "tile/icon",
+                              "attributes": {
+                                "name": "{!$row.icon}",
+                                "size": "sm",
+                                "color": "{!$row.color}",
+                                "alt": ""
+                              }
+                            },
+                            {
+                              "definition": "tile/text",
+                              "attributes": {
+                                "text": "{!$row.label}",
+                                "variant": "body",
+                                "weight": "semibold"
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$row.value}",
+                        "variant": "body",
+                        "color": "muted"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "definition": "tile/callout",
+              "attributes": {
+                "title": "Nothing saved yet",
+                "variant": "info",
+                "description": "Confirm to submit these values, or tell the agent what to change."
+              },
+              "meta": {
+                "if": "{!$attrs.isPreview}"
+              }
+            },
+            {
+              "definition": "tile/row",
+              "attributes": {
+                "gap": "sm",
+                "align": "center"
+              },
+              "children": [
+                {
+                  "definition": "tile/button",
+                  "attributes": {
+                    "label": "Confirm and submit",
+                    "variant": "primary",
+                    "actions": {
+                      "click": [
+                        {
+                          "definition": "action/sendMessage",
+                          "attributes": {
+                            "content": "{!$attrs.confirmPrompt}"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "definition": "tile/button",
+                  "attributes": {
+                    "label": "Change something",
+                    "variant": "secondary",
+                    "actions": {
+                      "click": [
+                        {
+                          "definition": "action/sendMessage",
+                          "attributes": {
+                            "content": "{!$attrs.changePrompt}"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "meta": {
+                "if": "{!$attrs.isPreview}"
+              }
+            },
+            {
+              "definition": "tile/callout",
+              "attributes": {
+                "title": "Submitted",
+                "variant": "success"
+              },
+              "children": [
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "{!$attrs.message}",
+                    "variant": "body"
+                  }
+                }
+              ],
+              "meta": {
+                "if": "{!$attrs.isSubmitted}"
+              }
+            },
+            {
+              "definition": "tile/row",
+              "attributes": {
+                "gap": "sm",
+                "align": "center"
+              },
+              "children": [
+                {
+                  "definition": "tile/button",
+                  "attributes": {
+                    "label": "Open in Salesforce",
+                    "variant": "secondary",
+                    "actions": {
+                      "click": [
+                        {
+                          "definition": "action/openLink",
+                          "attributes": {
+                            "url": "{!$attrs.opportunityUrl}",
+                            "target": "_blank"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

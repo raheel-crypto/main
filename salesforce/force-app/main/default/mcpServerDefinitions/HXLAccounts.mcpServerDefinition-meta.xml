@@ -18,10 +18,76 @@
         <toolTitle>Get Account Summary</toolTitle>
         <uiResource>accountSummaryCard</uiResource>
     </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-GetCloseReadiness</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>GetCloseReadiness</operation>
+        </apiDefinition>
+        <descriptionOverride>Checks whether an Opportunity can be closed: whether a signed order form is attached and which Closed Won fields still need values. Read-only. Call this first when a user wants to close a deal. Provide the Opportunity Id (starts with 006).</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>true</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>true</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>GetCloseReadinessapex_GetCloseReadiness</toolName>
+        <toolTitle>Get Close Readiness</toolTitle>
+        <uiResource>closeReadinessCard</uiResource>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-SubmitClosedWon</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>SubmitClosedWon</operation>
+        </apiDefinition>
+        <descriptionOverride>Submits an Opportunity as Closed Won like the Close Opportunity screen flow. Call without confirm to validate and preview; the user reviews the card, then call again with confirm=true to write the finance and handoff fields, notify RevOps in Slack, and queue order form extraction. RevOps stamps the stage. Requires a signed order form on the record. Blank inputs keep existing values.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>SubmitClosedWonapex_SubmitClosedWon</toolName>
+        <toolTitle>Submit Closed Won</toolTitle>
+        <uiResource>closeSubmissionCardWon</uiResource>
+    </tools>
+    <tools>
+        <apiDefinition>
+            <apiIdentifier>aa:apex-SubmitClosedLost</apiIdentifier>
+            <apiSource>API_CATALOG</apiSource>
+            <operation>SubmitClosedLost</operation>
+        </apiDefinition>
+        <descriptionOverride>Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to get the AI-recommended loss reason, competitor, and narrative and preview the values; the user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative.</descriptionOverride>
+        <destructive>false</destructive>
+        <idempotent>false</idempotent>
+        <openWorld>false</openWorld>
+        <readOnly>false</readOnly>
+        <returnDirect>false</returnDirect>
+        <toolName>SubmitClosedLostapex_SubmitClosedLost</toolName>
+        <toolTitle>Submit Closed Lost</toolTitle>
+        <uiResource>closeSubmissionCardLost</uiResource>
+    </tools>
     <resources>
         <resourceName>accountSummaryCard</resourceName>
         <resourceUri>ui://widget/lightningType/c__getAccountSummary</resourceUri>
         <resourceTitle>Account Summary Card</resourceTitle>
         <description>HXL widget that renders an account summary: header with industry and type, firmographics, owner and location, open pipeline with top opportunities, and a link to the record.</description>
+    </resources>
+    <resources>
+        <resourceName>closeReadinessCard</resourceName>
+        <resourceUri>ui://widget/lightningType/c__getCloseReadiness</resourceUri>
+        <resourceTitle>Close Readiness Card</resourceTitle>
+        <description>HXL widget showing whether an opportunity can be closed: status, signed order form check, Closed Won field checklist, and buttons to start Closed Won or Closed Lost.</description>
+    </resources>
+    <resources>
+        <resourceName>closeSubmissionCardWon</resourceName>
+        <resourceUri>ui://widget/lightningType/c__submitClosedWon</resourceUri>
+        <resourceTitle>Closed Won Submission Card</resourceTitle>
+        <description>HXL widget showing the preview, validation problems, or result of a Closed Won submission, with confirm and change buttons.</description>
+    </resources>
+    <resources>
+        <resourceName>closeSubmissionCardLost</resourceName>
+        <resourceUri>ui://widget/lightningType/c__submitClosedLost</resourceUri>
+        <resourceTitle>Closed Lost Submission Card</resourceTitle>
+        <description>HXL widget showing the AI recommendation, preview, validation problems, or result of a Closed Lost submission, with confirm and change buttons.</description>
     </resources>
 </McpServerDefinition>

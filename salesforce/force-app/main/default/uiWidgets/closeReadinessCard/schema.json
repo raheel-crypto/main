@@ -1,0 +1,129 @@
+{
+  "title": "Close Readiness Card",
+  "description": "Shows whether an opportunity can be closed: status, signed order form, and a checklist of Closed Won fields.",
+  "type": "object",
+  "properties": {
+    "attributes": {
+      "lightning:type": "lightning__objectType",
+      "properties": {
+        "opportunityId": {
+          "title": "Opportunity Id",
+          "lightning:type": "lightning__textType"
+        },
+        "opportunityName": {
+          "title": "Opportunity Name",
+          "lightning:type": "lightning__textType"
+        },
+        "accountName": {
+          "title": "Account Name",
+          "lightning:type": "lightning__textType"
+        },
+        "stageName": {
+          "title": "Stage",
+          "lightning:type": "lightning__textType"
+        },
+        "amount": {
+          "title": "Amount",
+          "lightning:type": "lightning__textType"
+        },
+        "closeDate": {
+          "title": "Close Date",
+          "lightning:type": "lightning__textType"
+        },
+        "opportunityType": {
+          "title": "Opportunity Type",
+          "lightning:type": "lightning__textType"
+        },
+        "ownerName": {
+          "title": "Owner",
+          "lightning:type": "lightning__textType"
+        },
+        "statusLabel": {
+          "title": "Status Label",
+          "lightning:type": "lightning__textType"
+        },
+        "statusVariant": {
+          "title": "Status Variant",
+          "lightning:type": "lightning__textType"
+        },
+        "statusMessage": {
+          "title": "Status Message",
+          "lightning:type": "lightning__multilineTextType"
+        },
+        "isClosed": {
+          "title": "Is Closed",
+          "lightning:type": "lightning__booleanType"
+        },
+        "canClose": {
+          "title": "Can Close",
+          "lightning:type": "lightning__booleanType"
+        },
+        "isRestructure": {
+          "title": "Is Contract Restructure",
+          "lightning:type": "lightning__booleanType"
+        },
+        "hasSignedDocument": {
+          "title": "Has Signed Document",
+          "lightning:type": "lightning__booleanType"
+        },
+        "missingSignedDocument": {
+          "title": "Missing Signed Document",
+          "lightning:type": "lightning__booleanType"
+        },
+        "signedDocumentText": {
+          "title": "Signed Document Text",
+          "lightning:type": "lightning__multilineTextType"
+        },
+        "hasMissingFields": {
+          "title": "Has Missing Fields",
+          "lightning:type": "lightning__booleanType"
+        },
+        "missingFieldCount": {
+          "title": "Missing Field Count",
+          "lightning:type": "lightning__numberType"
+        },
+        "missingFieldsText": {
+          "title": "Missing Fields Text",
+          "lightning:type": "lightning__multilineTextType"
+        },
+        "checklist": {
+          "title": "Checklist",
+          "lightning:type": "lightning__listType",
+          "items": {
+            "lightning:type": "lightning__objectType",
+            "properties": {
+              "label": {
+                "title": "Label",
+                "lightning:type": "lightning__textType"
+              },
+              "value": {
+                "title": "Value",
+                "lightning:type": "lightning__multilineTextType"
+              },
+              "icon": {
+                "title": "Icon",
+                "lightning:type": "lightning__textType"
+              },
+              "color": {
+                "title": "Color",
+                "lightning:type": "lightning__textType"
+              }
+            }
+          }
+        },
+        "closeWonPrompt": {
+          "title": "Close Won Prompt",
+          "lightning:type": "lightning__multilineTextType"
+        },
+        "closeLostPrompt": {
+          "title": "Close Lost Prompt",
+          "lightning:type": "lightning__multilineTextType"
+        },
+        "opportunityUrl": {
+          "title": "Opportunity URL",
+          "lightning:type": "lightning__textType"
+        }
+      }
+    }
+  }
+}

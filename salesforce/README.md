@@ -42,6 +42,28 @@ on). It expects the flat attribute set defined in `schema.json`:
 Currency and date values are passed pre-formatted because tile blocks render
 strings as-is and the widget expression language has no formatting functions.
 
+## Close Opportunity from an agent
+
+An agent-driven port of the `Close_Opportunity_Button` screen flow. Three
+tools on the same MCP server, each rendering an HXL card:
+
+| Tool | Apex | Card | What it does |
+|---|---|---|---|
+| Get Close Readiness | `GetCloseReadiness` | `closeReadinessCard` | Read-only. Header, signed-order-form check, checklist of the 27 Closed Won fields, buttons to start Won or Lost. |
+| Submit Closed Won | `SubmitClosedWon` | `closeSubmissionCard` | Validates and previews without `confirm`; with `confirm=true` writes the finance and handoff fields, sets the Account references flag, sends the RevOps Slack, queues order form extraction. Does not stamp the stage (RevOps does), except Contract Restructure which closes directly. Requires a signed order form on the record. |
+| Submit Closed Lost | `SubmitClosedLost` | `closeSubmissionCard` | Runs the AI loss analysis and previews without `confirm`; with `confirm=true` stamps Closed Lost with reasons, notes, LOB, prior stage, and AI fields. |
+
+Shared logic lives in `OpportunityCloseService`; the Slack callout runs after
+commit in `CloseWonNotificationJob`. Submissions are tagged with a new
+`Agent` value on `CW_Submission_Source__c`. Blank tool inputs keep the values
+already on the record, so the agent only asks for what is missing. The
+signed-document check accepts both the `__signed` prefix the flow searches for
+and the `signed__` prefix it renames uploads to.
+
+Supporting metadata is generated from one field list by
+`scripts/gen_close_metadata.py` so the Apex responses, Lightning Types,
+widget schemas, renderers, and Agent Action schemas stay in sync.
+
 ## Deploying
 
 Install the Salesforce CLI once:
@@ -111,15 +133,17 @@ How a request flows: an agent calls the MCP tool → the org runs
 
 ### Deploy order
 
-The envelope type references the response type, and the renderer references
-the widget, so deploy in this order. Production orgs require Apex tests to run
-on deploy, hence the test flags on the first step.
+Envelope types reference response types, renderers reference widgets, and the
+server definition references everything, so deploy in this order. Production
+orgs require Apex tests to run on deploy, hence the test flags.
 
 ```
 cd ~/sf-visualizer/salesforce
-sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest
-sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse
-sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary
+sf project deploy start --source-dir force-app/main/default/objects
+sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest --tests OpportunityCloseServiceTest --tests GetCloseReadinessTest --tests SubmitClosedWonTest --tests SubmitClosedLostTest
+sf project deploy start --source-dir force-app/main/default/uiWidgets
+sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse --source-dir force-app/main/default/lightningTypes/getCloseReadinessResponse --source-dir force-app/main/default/lightningTypes/submitClosedWonResponse --source-dir force-app/main/default/lightningTypes/submitClosedLostResponse
+sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary --source-dir force-app/main/default/lightningTypes/getCloseReadiness --source-dir force-app/main/default/lightningTypes/submitClosedWon --source-dir force-app/main/default/lightningTypes/submitClosedLost
 sf project deploy start --source-dir force-app/main/default/genAiFunctions
 sf project deploy start --source-dir force-app/main/default/mcpServerDefinitions
 ```

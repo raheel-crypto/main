@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Submits an Opportunity as Closed Won the way the Close Opportunity screen flow does: validates the finance and handoff fields, requires a signed order form on the record, previews when confirm is false, and on confirm writes the fields, notifies RevOps in Slack, and queues order form extraction. RevOps stamps the stage. Blank inputs keep existing values.</description>
+    <invocationTarget>SubmitClosedWon</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <isConfirmationRequired>false</isConfirmationRequired>
+    <isIncludeInProgressIndicator>true</isIncludeInProgressIndicator>
+    <masterLabel>Submit Closed Won</masterLabel>
+    <progressIndicatorMessage>Submitting Closed Won...</progressIndicatorMessage>
+</GenAiFunction>

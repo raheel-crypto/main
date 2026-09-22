@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GenAiFunction xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Closes an Opportunity as Closed Lost the way the Close Opportunity screen flow does. Without confirm it returns the AI-recommended loss reason, competitor, and narrative plus a preview; with confirm it stamps Closed Lost with the reasons, notes, and LOB/Division. Blank inputs keep existing values.</description>
+    <invocationTarget>SubmitClosedLost</invocationTarget>
+    <invocationTargetType>apex</invocationTargetType>
+    <isConfirmationRequired>false</isConfirmationRequired>
+    <isIncludeInProgressIndicator>true</isIncludeInProgressIndicator>
+    <masterLabel>Submit Closed Lost</masterLabel>
+    <progressIndicatorMessage>Analyzing the loss...</progressIndicatorMessage>
+</GenAiFunction>

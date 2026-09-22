@@ -1,0 +1,104 @@
+{
+  "title": "Submit Closed Won Response",
+  "description": "Response fields from the SubmitClosedWon invocable action. Rendered by the closeSubmissionCard widget.",
+  "type": "object",
+  "lightning:type": "lightning__objectType",
+  "lightning:tags": [
+    "mcp"
+  ],
+  "unevaluatedProperties": false,
+  "properties": {
+    "opportunityId": {
+      "title": "Opportunity Id",
+      "lightning:type": "lightning__textType"
+    },
+    "opportunityName": {
+      "title": "Opportunity Name",
+      "lightning:type": "lightning__textType"
+    },
+    "accountName": {
+      "title": "Account Name",
+      "lightning:type": "lightning__textType"
+    },
+    "status": {
+      "title": "Status",
+      "lightning:type": "lightning__textType"
+    },
+    "statusLabel": {
+      "title": "Status Label",
+      "lightning:type": "lightning__textType"
+    },
+    "statusVariant": {
+      "title": "Status Variant",
+      "lightning:type": "lightning__textType"
+    },
+    "headline": {
+      "title": "Headline",
+      "lightning:type": "lightning__textType"
+    },
+    "message": {
+      "title": "Message",
+      "lightning:type": "lightning__multilineTextType"
+    },
+    "isPreview": {
+      "title": "Is Preview",
+      "lightning:type": "lightning__booleanType"
+    },
+    "isSubmitted": {
+      "title": "Is Submitted",
+      "lightning:type": "lightning__booleanType"
+    },
+    "isBlocked": {
+      "title": "Is Blocked",
+      "lightning:type": "lightning__booleanType"
+    },
+    "hasProblems": {
+      "title": "Has Problems",
+      "lightning:type": "lightning__booleanType"
+    },
+    "problems": {
+      "title": "Problems",
+      "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+    },
+    "rows": {
+      "title": "Rows",
+      "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+    },
+    "hasRecommendation": {
+      "title": "Has AI Recommendation",
+      "lightning:type": "lightning__booleanType"
+    },
+    "aiSummary": {
+      "title": "AI Summary",
+      "lightning:type": "lightning__multilineTextType"
+    },
+    "recommendedReason": {
+      "title": "Recommended Reason",
+      "lightning:type": "lightning__textType"
+    },
+    "recommendedCompetitor": {
+      "title": "Recommended Competitor",
+      "lightning:type": "lightning__textType"
+    },
+    "recommendedNarrative": {
+      "title": "Recommended Narrative",
+      "lightning:type": "lightning__multilineTextType"
+    },
+    "aiConfidence": {
+      "title": "AI Confidence",
+      "lightning:type": "lightning__textType"
+    },
+    "confirmPrompt": {
+      "title": "Confirm Prompt",
+      "lightning:type": "lightning__multilineTextType"
+    },
+    "changePrompt": {
+      "title": "Change Prompt",
+      "lightning:type": "lightning__multilineTextType"
+    },
+    "opportunityUrl": {
+      "title": "Opportunity URL",
+      "lightning:type": "lightning__textType"
+    }
+  }
+}

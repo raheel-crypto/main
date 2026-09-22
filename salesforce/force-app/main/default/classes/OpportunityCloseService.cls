@@ -1,0 +1,348 @@
+/**
+ * Shared logic for the agent-driven Close Opportunity experience.
+ *
+ * Mirrors the production Close_Opportunity_Button screen flow:
+ *  - Closed Won collects the finance + handoff fields, requires a signed order
+ *    form already attached to the Opportunity, writes the fields, notifies
+ *    RevOps in Slack, and queues order-form extraction. It does NOT stamp
+ *    Closed Won; RevOps does that after validating (Contract Restructure is
+ *    the exception and closes directly).
+ *  - Closed Lost stamps Closed Lost with the reasons, notes, LOB, prior stage,
+ *    and the AI loss-analysis fields.
+ *
+ * Used by GetCloseReadiness, SubmitClosedWon, and SubmitClosedLost.
+ */
+public with sharing class OpportunityCloseService {
+
+    /** Tests set this to skip the Claude and Slack callouts. */
+    @TestVisible
+    public static Boolean disableExternalCalls = false;
+
+    public static final String STAGE_WON = 'Closed Won';
+    public static final String STAGE_LOST = 'Closed Lost';
+    public static final String TYPE_RESTRUCTURE = 'Contract Restructure';
+    public static final String SUBMISSION_SOURCE = 'Agent';
+    public static final String NOT_SET = 'Not set';
+
+    // ─── Field specification for the Closed Won form ─────────────────────
+
+    public class FieldSpec {
+        public String key;      // camelCase name used by the tool inputs
+        public String apiName;  // Opportunity field
+        public String label;
+        public String kind;     // text, longtext, picklist, currency, number, date, boolean, email
+        public Boolean required;
+        public FieldSpec(String key, String apiName, String label, String kind, Boolean required) {
+            this.key = key; this.apiName = apiName; this.label = label; this.kind = kind; this.required = required;
+        }
+    }
+
+    private static List<FieldSpec> wonSpecs;
+
+    /** The Closed Won fields in the order the screen flow shows them. */
+    public static List<FieldSpec> wonFieldSpecs() {
+        if (wonSpecs == null) {
+            wonSpecs = new List<FieldSpec>{
+                new FieldSpec('lobDivision', 'LOB_Division__c', 'LOB/Division', 'picklist', true),
+                new FieldSpec('pricingStructure', 'Pricing_Structure__c', 'Pricing Structure', 'picklist', true),
+                new FieldSpec('dealDescription', 'Deal_Description__c', 'Deal Description', 'longtext', true),
+                new FieldSpec('purchaseDriver', 'Purchase_Driver__c', 'Purchase Driver', 'longtext', true),
+                new FieldSpec('rolloutTimeline', 'Rollout_Timeline__c', 'Rollout Timeline', 'picklist', true),
+                new FieldSpec('successCriteria', 'Success_Criteria__c', 'Success Criteria', 'longtext', true),
+                new FieldSpec('upsellPotential', 'Upsell_Potential__c', 'Upsell Potential', 'picklist', true),
+                new FieldSpec('implementationNotes', 'Implementation_Notes__c', 'Implementation Notes', 'longtext', true),
+                new FieldSpec('keyRisks', 'Key_Risks__c', 'Key Risks', 'longtext', true),
+                new FieldSpec('amount', 'Amount', 'Amount', 'currency', true),
+                new FieldSpec('contractStartDate', 'Contract_Start_Date__c', 'Contract Start Date', 'date', true),
+                new FieldSpec('contractEndDate', 'Contract_End_Date__c', 'Contract End Date', 'date', true),
+                new FieldSpec('contractLengthMonths', 'Contract_Length_Mos__c', 'Contract Length (Months)', 'number', true),
+                new FieldSpec('annualRecurringRevenue', 'Annual_Recurring_Revenue__c', 'Annual Recurring Revenue', 'currency', true),
+                new FieldSpec('totalContractValue', 'Total_Contract_Value__c', 'Total Contract Value', 'currency', true),
+                new FieldSpec('licenseFee', 'License_Fees__c', 'License Fee', 'currency', true),
+                new FieldSpec('platformConnectionFee', 'Platform_Connection_Fee__c', 'Platform Connection Fee', 'currency', true),
+                new FieldSpec('professionalServicesFees', 'Professional_Service_Fees__c', 'Professional Services Fees', 'currency', true),
+                new FieldSpec('seatLicenses', 'Seat_Licenses__c', 'Seat Licenses', 'number', true),
+                new FieldSpec('paymentTerms', 'Payment_Terms__c', 'Payment Terms', 'picklist', true),
+                new FieldSpec('creditTerms', 'Credit_Terms__c', 'Credit Terms', 'picklist', true),
+                new FieldSpec('billingNotes', 'Billing_Notes__c', 'Billing Notes', 'longtext', true),
+                new FieldSpec('billingContactEmail', 'Billing_Contact__c', 'Billing Contact', 'email', true),
+                new FieldSpec('renewalTerms', 'Renewal_Terms__c', 'Renewal Terms', 'picklist', true),
+                new FieldSpec('isEla', 'ELA__c', 'ELA', 'boolean', true),
+                new FieldSpec('optOut', 'Opt_Out__c', 'Opt Out', 'boolean', true),
+                new FieldSpec('optOutDate', 'Opt_Out_Date__c', 'Opt-Out Date', 'date', false)
+            };
+        }
+        return wonSpecs;
+    }
+
+    // ─── Queries ─────────────────────────────────────────────────────────
+
+    public static Opportunity loadOpportunity(Id opportunityId) {
+        List<Opportunity> opps = [
+            SELECT Id, Name, StageName, IsClosed, IsWon, Amount, CloseDate, Type, OwnerId, Owner.Name,
+                   AccountId, Account.Name, Account.Provide_References__c,
+                   LOB_Division__c, Pricing_Structure__c, Deal_Description__c, Purchase_Driver__c,
+                   Rollout_Timeline__c, Success_Criteria__c, Upsell_Potential__c, Implementation_Notes__c,
+                   Key_Risks__c, Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Mos__c,
+                   Annual_Recurring_Revenue__c, Total_Contract_Value__c, License_Fees__c,
+                   Platform_Connection_Fee__c, Professional_Service_Fees__c, Seat_Licenses__c,
+                   Payment_Terms__c, Credit_Terms__c, Billing_Notes__c, Billing_Contact__c, Renewal_Terms__c,
+                   ELA__c, Opt_Out__c, Opt_Out_Date__c,
+                   CL_Primary_Reason__c, CL_Secondary_Reason__c, Final_Competitor__c, CL_Notes__c,
+                   CL_Reason_AI__c, CL_Narrative_AI__c, CL_Details_AI__c, CL_Confidence_AI__c,
+                   Evidence_Tier_AI__c, Next_Step_AI__c
+            FROM Opportunity
+            WHERE Id = :opportunityId
+            LIMIT 1
+        ];
+        return opps.isEmpty() ? null : opps[0];
+    }
+
+    public static Id parseOpportunityId(String raw) {
+        if (String.isBlank(raw)) {
+            return null;
+        }
+        try {
+            Id parsed = Id.valueOf(raw.trim());
+            return parsed.getSobjectType() == Opportunity.SObjectType ? parsed : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Titles of documents on the Opportunity that mark a signed order form.
+     * The screen flow searches for "__signed" but renames uploads to "signed__",
+     * so both prefixes count.
+     */
+    public static List<String> signedDocumentTitles(Id opportunityId) {
+        List<String> titles = new List<String>();
+        for (ContentDocumentLink cdl : [
+            SELECT ContentDocument.Title
+            FROM ContentDocumentLink
+            WHERE LinkedEntityId = :opportunityId
+            ORDER BY SystemModstamp DESC
+        ]) {
+            String t = cdl.ContentDocument.Title;
+            if (t != null && (t.toLowerCase().startsWith('__signed') || t.toLowerCase().startsWith('signed__'))) {
+                titles.add(t);
+            }
+        }
+        return titles;
+    }
+
+    public static Boolean isRestructure(Opportunity opp) {
+        return opp != null && opp.Type == TYPE_RESTRUCTURE;
+    }
+
+    // ─── Validation helpers ──────────────────────────────────────────────
+
+    /**
+     * Returns the canonical active picklist value matching the input
+     * (case-insensitive on value or label), or null when it is not valid.
+     */
+    public static String matchPicklist(String fieldApiName, String input) {
+        if (String.isBlank(input)) {
+            return null;
+        }
+        Schema.SObjectField f = Schema.SObjectType.Opportunity.fields.getMap().get(fieldApiName);
+        if (f == null) {
+            return null;
+        }
+        String needle = input.trim().toLowerCase();
+        for (Schema.PicklistEntry pe : f.getDescribe().getPicklistValues()) {
+            if (!pe.isActive()) {
+                continue;
+            }
+            if (pe.getValue().toLowerCase() == needle || pe.getLabel().toLowerCase() == needle) {
+                return pe.getValue();
+            }
+        }
+        return null;
+    }
+
+    public static String picklistOptions(String fieldApiName) {
+        List<String> vals = new List<String>();
+        Schema.SObjectField f = Schema.SObjectType.Opportunity.fields.getMap().get(fieldApiName);
+        if (f != null) {
+            for (Schema.PicklistEntry pe : f.getDescribe().getPicklistValues()) {
+                if (pe.isActive()) {
+                    vals.add(pe.getValue());
+                }
+            }
+        }
+        return String.join(vals, ', ');
+    }
+
+    public static Boolean isValidEmail(String email) {
+        return String.isNotBlank(email)
+            && Pattern.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$', email.trim());
+    }
+
+    // ─── Formatting ──────────────────────────────────────────────────────
+
+    public static String formatCurrency(Decimal amount) {
+        if (amount == null) {
+            return NOT_SET;
+        }
+        String symbol = currencySymbol();
+        String sign = amount < 0 ? '-' : '';
+        return sign + symbol + amount.abs().setScale(0, RoundingMode.HALF_UP).format();
+    }
+
+    public static String formatNumber(Decimal n) {
+        return n == null ? NOT_SET : n.setScale(0, RoundingMode.HALF_UP).format();
+    }
+
+    public static String formatDate(Date d) {
+        return d == null ? NOT_SET : d.format();
+    }
+
+    public static String formatBoolean(Boolean b) {
+        return b == true ? 'Yes' : 'No';
+    }
+
+    public static String textOrNotSet(String s) {
+        return String.isBlank(s) ? NOT_SET : s;
+    }
+
+    public static String currencySymbol() {
+        String iso = UserInfo.getDefaultCurrency();
+        if (iso == 'USD' || iso == 'CAD' || iso == 'AUD') {
+            return '$';
+        }
+        if (iso == 'EUR') {
+            return '€';
+        }
+        if (iso == 'GBP') {
+            return '£';
+        }
+        return iso == null ? '' : iso + ' ';
+    }
+
+    /** Display value of a Closed Won field as currently stored on the record. */
+    public static String displayValue(FieldSpec spec, Opportunity opp) {
+        Object v = opp.get(spec.apiName);
+        if (spec.kind == 'currency') {
+            return formatCurrency((Decimal) v);
+        }
+        if (spec.kind == 'number') {
+            return formatNumber((Decimal) v);
+        }
+        if (spec.kind == 'date') {
+            return formatDate((Date) v);
+        }
+        if (spec.kind == 'boolean') {
+            return formatBoolean((Boolean) v);
+        }
+        return textOrNotSet((String) v);
+    }
+
+    public static Boolean hasValue(FieldSpec spec, Opportunity opp) {
+        Object v = opp.get(spec.apiName);
+        if (spec.kind == 'boolean') {
+            return true; // a checkbox always has a value
+        }
+        if (v == null) {
+            return false;
+        }
+        return !(v instanceof String) || String.isNotBlank((String) v);
+    }
+
+    public static String recordUrl(Id recordId) {
+        return URL.getOrgDomainUrl().toExternalForm() + '/' + recordId;
+    }
+
+    // ─── Prompts the widget buttons send back to the agent ───────────────
+
+    public static String closeWonPrompt(Opportunity opp) {
+        return 'Close opportunity ' + opp.Id + ' (' + opp.Name + ') as Closed Won. Ask me for any missing fields first.';
+    }
+
+    public static String closeLostPrompt(Opportunity opp) {
+        return 'Close opportunity ' + opp.Id + ' (' + opp.Name + ') as Closed Lost. Show me the recommended reason first.';
+    }
+
+    public static String confirmWonPrompt(Opportunity opp) {
+        return 'Confirm and submit Closed Won for opportunity ' + opp.Id + ' with the values shown in the preview.';
+    }
+
+    public static String confirmLostPrompt(Opportunity opp) {
+        return 'Confirm and submit Closed Lost for opportunity ' + opp.Id + ' with the values shown in the preview.';
+    }
+
+    public static String changePrompt(Opportunity opp) {
+        return 'I want to change some values before submitting the close for opportunity ' + opp.Id + '.';
+    }
+
+    // ─── External calls (Claude analysis, RevOps Slack) ──────────────────
+
+    /**
+     * Runs DealScoreAIController in Win or Loss mode. Returns null when
+     * external calls are disabled (tests) or the analysis fails.
+     */
+    public static DealScoreAIController.ForensicResult runAiAnalysis(Id opportunityId, String mode, Boolean writeBackNewFields) {
+        if (disableExternalCalls) {
+            return null;
+        }
+        try {
+            DealScoreAIController.ForensicRequest req = new DealScoreAIController.ForensicRequest();
+            req.opportunityId = opportunityId;
+            req.mode = mode;
+            req.writeBackNewFields = writeBackNewFields;
+            List<DealScoreAIController.ForensicResult> results =
+                DealScoreAIController.getForensicAnalysis(new List<DealScoreAIController.ForensicRequest>{ req });
+            if (results != null && !results.isEmpty() && results[0].success == true) {
+                return results[0];
+            }
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'AI analysis skipped: ' + e.getMessage());
+        }
+        return null;
+    }
+
+    /** Queues the RevOps Slack notification (a callout, so it runs after commit). */
+    public static void notifyRevOpsAfterCommit(Id opportunityId) {
+        if (disableExternalCalls) {
+            return;
+        }
+        System.enqueueJob(new CloseWonNotificationJob(opportunityId));
+    }
+
+    /** Queues order-form extraction, exactly as the screen flow does after success. */
+    public static void queueOrderFormExtraction(Id opportunityId) {
+        if (disableExternalCalls) {
+            return;
+        }
+        try {
+            OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+            req.opportunityId = opportunityId;
+            OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        } catch (Exception e) {
+            System.debug(LoggingLevel.WARN, 'Order form extraction not queued: ' + e.getMessage());
+        }
+    }
+
+    // ─── Shared output row ───────────────────────────────────────────────
+
+    /** A label/value pair rendered as a row in the widgets. */
+    public class Row {
+        @AuraEnabled public String label;
+        @AuraEnabled public String value;
+        @AuraEnabled public String icon;
+        @AuraEnabled public String color;
+        public Row() {}
+        public Row(String label, String value) {
+            this.label = label;
+            this.value = value;
+            this.icon = 'check-circle';
+            this.color = 'success';
+        }
+        public Row(String label, String value, String icon, String color) {
+            this.label = label;
+            this.value = value;
+            this.icon = icon;
+            this.color = color;
+        }
+    }
+}
