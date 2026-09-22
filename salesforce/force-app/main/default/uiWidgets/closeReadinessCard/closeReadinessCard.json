@@ -247,69 +247,23 @@
                   }
                 },
                 {
-                  "definition": "tile/column",
+                  "definition": "tile/table",
                   "attributes": {
-                    "gap": "xs"
-                  },
-                  "meta": {
-                    "forEach": "{!$attrs.checklist}",
-                    "forItem": "$item"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/row",
-                      "attributes": {
-                        "gap": "md",
-                        "align": "start",
-                        "justify": "between"
+                    "caption": "Closed Won field checklist",
+                    "size": "sm",
+                    "appearance": "default",
+                    "columns": [
+                      {
+                        "key": "label",
+                        "header": "Field"
                       },
-                      "children": [
-                        {
-                          "definition": "tile/column",
-                          "attributes": {
-                            "gap": "xs",
-                            "width": "stretch"
-                          },
-                          "children": [
-                            {
-                              "definition": "tile/row",
-                              "attributes": {
-                                "gap": "sm",
-                                "align": "center"
-                              },
-                              "children": [
-                                {
-                                  "definition": "tile/icon",
-                                  "attributes": {
-                                    "name": "{!$item.icon}",
-                                    "size": "sm",
-                                    "color": "{!$item.color}",
-                                    "alt": ""
-                                  }
-                                },
-                                {
-                                  "definition": "tile/text",
-                                  "attributes": {
-                                    "text": "{!$item.label}",
-                                    "variant": "body",
-                                    "weight": "semibold"
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "definition": "tile/text",
-                          "attributes": {
-                            "text": "{!$item.value}",
-                            "variant": "body",
-                            "color": "muted"
-                          }
-                        }
-                      ]
-                    }
-                  ]
+                      {
+                        "key": "value",
+                        "header": "Current value"
+                      }
+                    ],
+                    "rows": "{!$attrs.checklist}"
+                  }
                 },
                 {
                   "definition": "tile/callout",

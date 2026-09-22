@@ -95,6 +95,11 @@ public with sharing class SubmitClosedWon {
 
         // Confirmed: AI win analysis first (callout), then the writes.
         DealScoreAIController.ForensicResult ai = OpportunityCloseService.runAiAnalysis(opp.Id, 'Win', false);
+        if (ai != null && ai.success != true) {
+            res.aiFailureReason = OpportunityCloseService.textOrNotSet(ai.summary);
+            res.aiFailed = true;
+            ai = null;
+        }
 
         Opportunity upd = new Opportunity(Id = opp.Id);
         upd.LOB_Division__c = (String) values.get('lobDivision');
@@ -264,6 +269,8 @@ public with sharing class SubmitClosedWon {
         r.recommendedCompetitor = OpportunityCloseService.NOT_SET;
         r.recommendedNarrative = OpportunityCloseService.NOT_SET;
         r.aiConfidence = OpportunityCloseService.NOT_SET;
+        r.aiFailed = false;
+        r.aiFailureReason = '';
         r.confirmPrompt = '';
         r.changePrompt = '';
         return r;
@@ -330,6 +337,8 @@ public with sharing class SubmitClosedWon {
         @InvocableVariable(label='Recommended Competitor' description='Not used for Closed Won.') public String recommendedCompetitor;
         @InvocableVariable(label='Recommended Narrative' description='Not used for Closed Won.') public String recommendedNarrative;
         @InvocableVariable(label='AI Confidence' description='AI win confidence when available.') public String aiConfidence;
+        @InvocableVariable(label='AI Failed' description='True when the AI analysis could not run.') public Boolean aiFailed;
+        @InvocableVariable(label='AI Failure Reason' description='Why the AI win analysis is unavailable, when it failed.') public String aiFailureReason;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

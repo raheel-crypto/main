@@ -46,6 +46,12 @@ public with sharing class SubmitClosedLost {
         DealScoreAIController.ForensicResult ai = null;
         if (!confirm || String.isBlank(opp.CL_Reason_AI__c)) {
             ai = OpportunityCloseService.runAiAnalysis(opp.Id, 'Loss', true);
+            if (ai != null && ai.success != true) {
+                res.aiFailureReason = OpportunityCloseService.textOrNotSet(ai.summary);
+            res.aiFailed = true;
+                res.aiFailed = true;
+                ai = null;
+            }
             if (ai != null) {
                 // Persist the summary the flow stores in CL_Details_AI__c.
                 if (String.isNotBlank(ai.summary)) {
@@ -175,6 +181,8 @@ public with sharing class SubmitClosedLost {
         r.recommendedCompetitor = OpportunityCloseService.NOT_SET;
         r.recommendedNarrative = OpportunityCloseService.NOT_SET;
         r.aiConfidence = OpportunityCloseService.NOT_SET;
+        r.aiFailed = false;
+        r.aiFailureReason = '';
         r.confirmPrompt = '';
         r.changePrompt = '';
         return r;
@@ -220,6 +228,8 @@ public with sharing class SubmitClosedLost {
         @InvocableVariable(label='Recommended Competitor') public String recommendedCompetitor;
         @InvocableVariable(label='Recommended Narrative' description='AI-written loss narrative, the default for CL Notes.') public String recommendedNarrative;
         @InvocableVariable(label='AI Confidence') public String aiConfidence;
+        @InvocableVariable(label='AI Failed' description='True when the AI analysis could not run.') public Boolean aiFailed;
+        @InvocableVariable(label='AI Failure Reason' description='Why the AI recommendation is unavailable, when it failed.') public String aiFailureReason;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

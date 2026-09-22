@@ -24,6 +24,8 @@
           "recommendedCompetitor": "{!$attrs.outputValues.recommendedCompetitor}",
           "recommendedNarrative": "{!$attrs.outputValues.recommendedNarrative}",
           "aiConfidence": "{!$attrs.outputValues.aiConfidence}",
+          "aiFailed": "{!$attrs.outputValues.aiFailed}",
+          "aiFailureReason": "{!$attrs.outputValues.aiFailureReason}",
           "confirmPrompt": "{!$attrs.outputValues.confirmPrompt}",
           "changePrompt": "{!$attrs.outputValues.changePrompt}",
           "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"

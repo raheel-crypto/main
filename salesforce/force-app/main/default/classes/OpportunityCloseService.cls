@@ -278,8 +278,9 @@ public with sharing class OpportunityCloseService {
     // ─── External calls (Claude analysis, RevOps Slack) ──────────────────
 
     /**
-     * Runs DealScoreAIController in Win or Loss mode. Returns null when
-     * external calls are disabled (tests) or the analysis fails.
+     * Runs DealScoreAIController in Win or Loss mode. Returns null when external
+     * calls are disabled (tests). On failure returns a result with success=false
+     * and the reason in summary so the card can show why no recommendation exists.
      */
     public static DealScoreAIController.ForensicResult runAiAnalysis(Id opportunityId, String mode, Boolean writeBackNewFields) {
         if (disableExternalCalls) {
@@ -292,11 +293,15 @@ public with sharing class OpportunityCloseService {
             req.writeBackNewFields = writeBackNewFields;
             List<DealScoreAIController.ForensicResult> results =
                 DealScoreAIController.getForensicAnalysis(new List<DealScoreAIController.ForensicRequest>{ req });
-            if (results != null && !results.isEmpty() && results[0].success == true) {
+            if (results != null && !results.isEmpty()) {
+                // success=false carries the failure reason in summary; callers surface it.
                 return results[0];
             }
         } catch (Exception e) {
-            System.debug(LoggingLevel.WARN, 'AI analysis skipped: ' + e.getMessage());
+            DealScoreAIController.ForensicResult failed = new DealScoreAIController.ForensicResult();
+            failed.success = false;
+            failed.summary = 'AI analysis could not run: ' + e.getTypeName() + ': ' + e.getMessage();
+            return failed;
         }
         return null;
     }

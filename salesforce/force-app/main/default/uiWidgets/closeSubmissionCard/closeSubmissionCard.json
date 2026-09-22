@@ -180,6 +180,25 @@
               }
             },
             {
+              "definition": "tile/callout",
+              "attributes": {
+                "title": "AI analysis unavailable",
+                "variant": "warning"
+              },
+              "children": [
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "{!$attrs.aiFailureReason}",
+                    "variant": "body"
+                  }
+                }
+              ],
+              "meta": {
+                "if": "{!$attrs.aiFailed}"
+              }
+            },
+            {
               "definition": "tile/column",
               "attributes": {
                 "gap": "sm"
@@ -194,69 +213,23 @@
                   }
                 },
                 {
-                  "definition": "tile/column",
+                  "definition": "tile/table",
                   "attributes": {
-                    "gap": "xs"
-                  },
-                  "meta": {
-                    "forEach": "{!$attrs.problems}",
-                    "forItem": "$problem"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/row",
-                      "attributes": {
-                        "gap": "md",
-                        "align": "start",
-                        "justify": "between"
+                    "caption": "Problems to fix",
+                    "size": "sm",
+                    "appearance": "default",
+                    "columns": [
+                      {
+                        "key": "label",
+                        "header": "Field"
                       },
-                      "children": [
-                        {
-                          "definition": "tile/column",
-                          "attributes": {
-                            "gap": "xs",
-                            "width": "stretch"
-                          },
-                          "children": [
-                            {
-                              "definition": "tile/row",
-                              "attributes": {
-                                "gap": "sm",
-                                "align": "center"
-                              },
-                              "children": [
-                                {
-                                  "definition": "tile/icon",
-                                  "attributes": {
-                                    "name": "{!$problem.icon}",
-                                    "size": "sm",
-                                    "color": "{!$problem.color}",
-                                    "alt": ""
-                                  }
-                                },
-                                {
-                                  "definition": "tile/text",
-                                  "attributes": {
-                                    "text": "{!$problem.label}",
-                                    "variant": "body",
-                                    "weight": "semibold"
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "definition": "tile/text",
-                          "attributes": {
-                            "text": "{!$problem.value}",
-                            "variant": "body",
-                            "color": "muted"
-                          }
-                        }
-                      ]
-                    }
-                  ]
+                      {
+                        "key": "value",
+                        "header": "Issue"
+                      }
+                    ],
+                    "rows": "{!$attrs.problems}"
+                  }
                 }
               ],
               "meta": {
@@ -283,69 +256,23 @@
                   }
                 },
                 {
-                  "definition": "tile/column",
+                  "definition": "tile/table",
                   "attributes": {
-                    "gap": "xs"
-                  },
-                  "meta": {
-                    "forEach": "{!$attrs.rows}",
-                    "forItem": "$row"
-                  },
-                  "children": [
-                    {
-                      "definition": "tile/row",
-                      "attributes": {
-                        "gap": "md",
-                        "align": "start",
-                        "justify": "between"
+                    "caption": "Values to be written",
+                    "size": "sm",
+                    "appearance": "default",
+                    "columns": [
+                      {
+                        "key": "label",
+                        "header": "Field"
                       },
-                      "children": [
-                        {
-                          "definition": "tile/column",
-                          "attributes": {
-                            "gap": "xs",
-                            "width": "stretch"
-                          },
-                          "children": [
-                            {
-                              "definition": "tile/row",
-                              "attributes": {
-                                "gap": "sm",
-                                "align": "center"
-                              },
-                              "children": [
-                                {
-                                  "definition": "tile/icon",
-                                  "attributes": {
-                                    "name": "{!$row.icon}",
-                                    "size": "sm",
-                                    "color": "{!$row.color}",
-                                    "alt": ""
-                                  }
-                                },
-                                {
-                                  "definition": "tile/text",
-                                  "attributes": {
-                                    "text": "{!$row.label}",
-                                    "variant": "body",
-                                    "weight": "semibold"
-                                  }
-                                }
-                              ]
-                            }
-                          ]
-                        },
-                        {
-                          "definition": "tile/text",
-                          "attributes": {
-                            "text": "{!$row.value}",
-                            "variant": "body",
-                            "color": "muted"
-                          }
-                        }
-                      ]
-                    }
-                  ]
+                      {
+                        "key": "value",
+                        "header": "Value"
+                      }
+                    ],
+                    "rows": "{!$attrs.rows}"
+                  }
                 }
               ]
             },

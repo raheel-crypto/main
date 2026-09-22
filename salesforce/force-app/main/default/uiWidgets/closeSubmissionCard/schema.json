@@ -128,6 +128,14 @@
           "title": "AI Confidence",
           "lightning:type": "lightning__textType"
         },
+        "aiFailed": {
+          "title": "AI Failed",
+          "lightning:type": "lightning__booleanType"
+        },
+        "aiFailureReason": {
+          "title": "AI Failure Reason",
+          "lightning:type": "lightning__multilineTextType"
+        },
         "confirmPrompt": {
           "title": "Confirm Prompt",
           "lightning:type": "lightning__multilineTextType"

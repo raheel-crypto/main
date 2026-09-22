@@ -37,6 +37,7 @@ SUBMISSION = [
     ("hasRecommendation", "bool", "Has AI Recommendation"), ("aiSummary", "long", "AI Summary"),
     ("recommendedReason", "text", "Recommended Reason"), ("recommendedCompetitor", "text", "Recommended Competitor"),
     ("recommendedNarrative", "long", "Recommended Narrative"), ("aiConfidence", "text", "AI Confidence"),
+    ("aiFailed", "bool", "AI Failed"), ("aiFailureReason", "long", "AI Failure Reason"),
     ("confirmPrompt", "long", "Confirm Prompt"), ("changePrompt", "long", "Change Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
@@ -202,18 +203,13 @@ def envelope(children):
             "contentBody": {"widgetBody": {"definition": "tile/widget", "children": [col(children)]}}}
 
 
-def row_list(list_binding, item_var):
-    """Iterates a Row list: icon + label on the left, value on the right."""
-    return {
-        "definition": "tile/column", "attributes": {"gap": "xs"},
-        "meta": {"forEach": list_binding, "forItem": item_var},
-        "children": [row([
-            col([row([icon("{!" + item_var + ".icon}", "{!" + item_var + ".color}"),
-                      text("{!" + item_var + ".label}", variant="body", weight="semibold")], gap="sm")],
-                gap="xs", width="stretch"),
-            text("{!" + item_var + ".value}", variant="body", color="muted"),
-        ], justify="between", align="start")],
-    }
+def table(list_binding, caption, first_header, second_header):
+    """Renders a Row list as a native table (two columns), far smaller than one block tree per row."""
+    return {"definition": "tile/table", "attributes": {
+        "caption": caption, "size": "sm", "appearance": "default",
+        "columns": [{"key": "label", "header": first_header}, {"key": "value", "header": second_header}],
+        "rows": list_binding,
+    }}
 
 
 # ─── Widget 1: closeReadinessCard ────────────────────────────────────────
@@ -233,7 +229,7 @@ readiness_body = envelope([
     sep(),
     col([
         text("Closed Won checklist", variant="h3"),
-        row_list("{!$attrs.checklist}", "$item"),
+        table("{!$attrs.checklist}", "Closed Won field checklist", "Field", "Current value"),
         callout("Fields still needed", None, "warning", "{!$attrs.hasMissingFields}", body="{!$attrs.missingFieldsText}"),
     ], gap="sm"),
     col([
@@ -261,14 +257,15 @@ submission_body = envelope([
              stat("Confidence", "{!$attrs.aiConfidence}")], gap="lg", align="start"),
         text("{!$attrs.recommendedNarrative}", variant="body", color="muted"),
     ], gap="sm"), "{!$attrs.hasRecommendation}"),
+    callout("AI analysis unavailable", None, "warning", "{!$attrs.aiFailed}", body="{!$attrs.aiFailureReason}"),
     with_if(col([
         callout("Fix these before submitting", "Nothing has been saved.", "error"),
-        row_list("{!$attrs.problems}", "$problem"),
+        table("{!$attrs.problems}", "Problems to fix", "Field", "Issue"),
     ], gap="sm"), "{!$attrs.hasProblems}"),
     sep(),
     col([
         text("Values", variant="h3"),
-        row_list("{!$attrs.rows}", "$row"),
+        table("{!$attrs.rows}", "Values to be written", "Field", "Value"),
     ], gap="sm"),
     col([
         callout("Nothing saved yet", "Confirm to submit these values, or tell the agent what to change.", "info", "{!$attrs.isPreview}"),

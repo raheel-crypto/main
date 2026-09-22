@@ -189,6 +189,24 @@
       "copilotAction:useHydratedPrompt": false,
       "lightning:type": "lightning__textType"
     },
+    "aiFailed": {
+      "title": "AI Failed",
+      "description": "AI Failed",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "aiFailureReason": {
+      "title": "AI Failure Reason",
+      "description": "AI Failure Reason",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
     "confirmPrompt": {
       "title": "Confirm Prompt",
       "description": "Confirm Prompt",
