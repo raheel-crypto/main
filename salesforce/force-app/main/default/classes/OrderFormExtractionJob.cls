@@ -491,6 +491,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return JSON.serialize(new Map<String, Object>{
             'model' => MODEL,
             'max_tokens' => MAX_TOKENS,
+            // Sonnet 5 runs adaptive thinking by default; on a ~280K-token
+            // contract it burned the ENTIRE max_tokens budget on thinking and
+            // never emitted the JSON (stop_reason=max_tokens, 0 text tokens).
+            // This is deterministic field extraction - the prompt encodes the
+            // rules - so disable thinking: all output tokens go to the JSON, and
+            // it matches Sonnet 4.6's default (no-thinking) behavior we validated.
+            'thinking' => new Map<String, Object>{ 'type' => 'disabled' },
             'system' => systemPrompt,
             'messages' => new List<Object>{ userMessage }
         });
