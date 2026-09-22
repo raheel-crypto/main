@@ -187,8 +187,9 @@ as a tool:
    **Create Salesforce MCP Server**. Give it a name such as `Rogo Account Tools`.
 2. On the server, **Add Server Assets** → **Add Tools** → pick the Apex action
    **Get Account Summary** → save.
-3. Copy the server URL shown on the server page. Hosted servers follow the
-   pattern `https://<my-domain>.my.salesforce.com/services/mcp/...`.
+3. Copy the server URL shown on the server page. Custom hosted servers follow
+   the pattern `https://api.salesforce.com/platform/mcp/v1/custom/<ServerApiName>`;
+   this project's server is `.../custom/HXLAccounts`.
 
 If **Get Account Summary** is not listed, confirm the `genAiFunctions` deploy
 succeeded: Setup → Agentforce Assets → Actions should show it.
