@@ -1,7 +1,13 @@
 public with sharing class OrderFormExtractionJob implements Queueable, Database.AllowsCallouts {
 
     @TestVisible private static final String NAMED_CRED = 'callout:Anthropic_Claude';
-    @TestVisible private static final String MODEL = 'claude-sonnet-4-6';
+    // Sonnet 5: newer generation and cheaper than Sonnet 4.6 ($2/$10 vs $3/$15
+    // per MTok). Extraction is a scan-and-pull workload, so a newer-gen model at
+    // lower cost is the right tier (Opus is overkill; Haiku under-judges the
+    // strictest-gate roll-up). The callout sends no prefill/budget_tokens/thinking,
+    // so this is a clean model swap. NOTE: Sonnet 5 runs adaptive thinking by
+    // default; validated on the SG/Macquarie/WF/BofA set before fleet-wide use.
+    @TestVisible private static final String MODEL = 'claude-sonnet-5';
     // v2 gate spec adds ~21 fields plus an Extract_Evidence JSON object, so the
     // response JSON roughly doubled. 4096 was truncating output on rich contracts.
     @TestVisible private static final Integer MAX_TOKENS = 8192;

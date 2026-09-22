@@ -10,7 +10,7 @@ private class OrderFormExtractorTest {
             'id' => 'msg_test',
             'type' => 'message',
             'role' => 'assistant',
-            'model' => 'claude-sonnet-4-6',
+            'model' => 'claude-sonnet-5',
             'content' => new List<Object>{ textBlock },
             'stop_reason' => 'end_turn',
             'usage' => new Map<String, Object>{ 'input_tokens' => 100, 'output_tokens' => 200 }
