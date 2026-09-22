@@ -1,0 +1,145 @@
+{
+    "unevaluatedProperties": false,
+    "properties": {
+        "accountName": {
+            "title": "Account Name",
+            "description": "Display name of the account.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "industry": {
+            "title": "Industry",
+            "description": "Industry of the account, or \"Not set\".",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "type": {
+            "title": "Account Type",
+            "description": "Account type such as Customer or Prospect. Defaults to \"Account\" when blank.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "ownerName": {
+            "title": "Owner",
+            "description": "Full name of the account owner.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "billingLocation": {
+            "title": "Location",
+            "description": "Billing city and state or country, formatted for display.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "website": {
+            "title": "Website",
+            "description": "Account website.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "annualRevenue": {
+            "title": "Annual Revenue",
+            "description": "Annual revenue formatted as compact currency, e.g. $45.6M.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "numberOfEmployees": {
+            "title": "Employees",
+            "description": "Number of employees.",
+            "lightning:type": "lightning__integerType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "contactCount": {
+            "title": "Contacts",
+            "description": "Number of contacts on the account.",
+            "lightning:type": "lightning__integerType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "openOpportunityCount": {
+            "title": "Open Opportunities",
+            "description": "Number of opportunities that are not closed.",
+            "lightning:type": "lightning__integerType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "openPipelineAmount": {
+            "title": "Open Pipeline",
+            "description": "Sum of open opportunity amounts formatted as compact currency.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "hasOpenOpportunities": {
+            "title": "Has Open Opportunities",
+            "description": "True when at least one open opportunity exists.",
+            "lightning:type": "lightning__booleanType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "isPipelineEmpty": {
+            "title": "Pipeline Is Empty",
+            "description": "True when there are no open opportunities.",
+            "lightning:type": "lightning__booleanType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "opportunities": {
+            "title": "Top Open Opportunities",
+            "description": "Up to five open opportunities ordered by amount, each with name, stage, amount, and close date.",
+            "maxItems": 2000,
+            "items": {
+                "lightning:type": "@apexClassType/c__GetAccountSummary$OpportunitySummary"
+            },
+            "lightning:type": "lightning__listType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        },
+        "accountUrl": {
+            "title": "Account URL",
+            "description": "Link to the account record in Salesforce.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isDisplayable": true,
+            "copilotAction:isUsedByPlanner": true,
+            "copilotAction:useHydratedPrompt": false
+        }
+    },
+    "lightning:type": "lightning__objectType"
+}

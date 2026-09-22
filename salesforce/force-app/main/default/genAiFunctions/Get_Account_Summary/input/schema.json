@@ -1,0 +1,14 @@
+{
+    "required": ["accountId"],
+    "unevaluatedProperties": false,
+    "properties": {
+        "accountId": {
+            "title": "Account Id",
+            "description": "The 15 or 18 character Salesforce Id of the Account to summarize. Starts with 001.",
+            "lightning:type": "lightning__textType",
+            "lightning:isPII": false,
+            "copilotAction:isUserInput": false
+        }
+    },
+    "lightning:type": "lightning__objectType"
+}

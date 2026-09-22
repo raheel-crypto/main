@@ -85,7 +85,15 @@ force-app/main/default/
     getAccountSummary/
       schema.json                  # CLT: invocable-action envelope (actionName, isSuccess, outputValues)
       renderer.json                # points at @widget/c/accountSummaryCard, binds outputValues.<field>
+  genAiFunctions/
+    Get_Account_Summary/
+      Get_Account_Summary.genAiFunction-meta.xml   # Agent Action wrapping the Apex invocable
+      input/schema.json            # accountId
+      output/schema.json           # the 15 response fields, list typed to the inner Apex class
 ```
+
+The Agent Action is what the MCP Servers "Add Tools" picker lists. A bare
+Apex invocable does not appear there until it is wrapped as an Agent Action.
 
 How a request flows: an agent calls the MCP tool → the org runs
 `GetAccountSummary.getAccountSummary` → the result envelope matches the
@@ -103,6 +111,7 @@ cd ~/sf-visualizer/salesforce
 sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary
+sf project deploy start --source-dir force-app/main/default/genAiFunctions
 ```
 
 ### Register the tool (Setup, one time)
@@ -117,8 +126,8 @@ as a tool:
 3. Copy the server URL shown on the server page. Hosted servers follow the
    pattern `https://<my-domain>.my.salesforce.com/services/mcp/...`.
 
-The Apex class is declared `global` because hosted MCP tools built from Apex
-actions require it.
+If **Get Account Summary** is not listed, confirm the `genAiFunctions` deploy
+succeeded: Setup → Agentforce Assets → Actions should show it.
 
 ### Let Claude (or another client) log in
 
