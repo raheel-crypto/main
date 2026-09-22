@@ -72,15 +72,51 @@ sf project retrieve preview
 
 ## Wiring the widget to an MCP tool
 
-The bundle only defines the UI. To make it appear when an agent calls a tool,
-the org also needs:
+The widget bundle only defines the UI. The rest of the chain lives alongside it:
 
-1. An Apex class with an `@InvocableMethod` that returns the fields above.
-2. A custom MCP server in Setup that exposes that invocable action as a tool.
-3. Two object-based Custom Lightning Types under `lightningTypes/` (one for the
-   response fields, one for the invocable-action envelope) plus a
-   `renderer.json` in the envelope type that points at
-   `@widget/c/accountSummaryCard` and binds each attribute from
-   `{!$attrs.outputValues.<field>}`.
+```
+force-app/main/default/
+  classes/
+    GetAccountSummary.cls          # @InvocableMethod that builds the card data
+    GetAccountSummaryTest.cls      # unit tests (required for production deploys)
+  lightningTypes/
+    getAccountSummaryResponse/
+      schema.json                  # CLT: the invocable response fields (1:1 with the widget)
+    getAccountSummary/
+      schema.json                  # CLT: invocable-action envelope (actionName, isSuccess, outputValues)
+      renderer.json                # points at @widget/c/accountSummaryCard, binds outputValues.<field>
+```
 
-Those pieces are not in this folder yet.
+How a request flows: an agent calls the MCP tool → the org runs
+`GetAccountSummary.getAccountSummary` → the result envelope matches the
+`getAccountSummary` Lightning Type → its renderer hands the fields to the
+`accountSummaryCard` widget → the host paints it natively.
+
+### Deploy order
+
+The envelope type references the response type, and the renderer references
+the widget, so deploy in this order. Production orgs require Apex tests to run
+on deploy, hence the test flags on the first step.
+
+```
+cd ~/sf-visualizer/salesforce
+sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest
+sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse
+sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary
+```
+
+### Register the tool
+
+After the deploy, create a custom MCP server in Setup (search Setup for
+"MCP") and add the **Get Account Summary** Apex action as a tool. Connect an
+MCP Apps compatible client to that server and ask it to summarize an account
+by Id.
+
+### Verify the action shape from the org
+
+```
+sf api request rest '/services/data/v67.0/actions/custom/apex/GetAccountSummary'
+```
+
+The `outputs` array should list the fifteen response fields, with
+`opportunities` showing `apexClass: GetAccountSummary$OpportunitySummary`.

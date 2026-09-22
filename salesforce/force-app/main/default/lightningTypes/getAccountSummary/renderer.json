@@ -1,0 +1,26 @@
+{
+  "renderer": {
+    "componentOverrides": {
+      "$": {
+        "definition": "@widget/c/accountSummaryCard",
+        "attributes": {
+          "accountName": "{!$attrs.outputValues.accountName}",
+          "industry": "{!$attrs.outputValues.industry}",
+          "type": "{!$attrs.outputValues.type}",
+          "ownerName": "{!$attrs.outputValues.ownerName}",
+          "billingLocation": "{!$attrs.outputValues.billingLocation}",
+          "website": "{!$attrs.outputValues.website}",
+          "annualRevenue": "{!$attrs.outputValues.annualRevenue}",
+          "numberOfEmployees": "{!$attrs.outputValues.numberOfEmployees}",
+          "contactCount": "{!$attrs.outputValues.contactCount}",
+          "openOpportunityCount": "{!$attrs.outputValues.openOpportunityCount}",
+          "openPipelineAmount": "{!$attrs.outputValues.openPipelineAmount}",
+          "hasOpenOpportunities": "{!$attrs.outputValues.hasOpenOpportunities}",
+          "isPipelineEmpty": "{!$attrs.outputValues.isPipelineEmpty}",
+          "opportunities": "{!$attrs.outputValues.opportunities}",
+          "accountUrl": "{!$attrs.outputValues.accountUrl}"
+        }
+      }
+    }
+  }
+}

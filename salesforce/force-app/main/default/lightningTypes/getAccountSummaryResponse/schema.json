@@ -1,0 +1,25 @@
+{
+  "title": "Get Account Summary Response",
+  "description": "Response fields from the GetAccountSummary invocable action (GetAccountSummaryResponse). Rendered by the accountSummaryCard widget.",
+  "type": "object",
+  "lightning:type": "lightning__objectType",
+  "lightning:tags": ["mcp"],
+  "unevaluatedProperties": false,
+  "properties": {
+    "accountName": { "title": "Account Name", "lightning:type": "lightning__textType" },
+    "industry": { "title": "Industry", "lightning:type": "lightning__textType" },
+    "type": { "title": "Account Type", "lightning:type": "lightning__textType" },
+    "ownerName": { "title": "Owner", "lightning:type": "lightning__textType" },
+    "billingLocation": { "title": "Location", "lightning:type": "lightning__textType" },
+    "website": { "title": "Website", "lightning:type": "lightning__textType" },
+    "annualRevenue": { "title": "Annual Revenue", "lightning:type": "lightning__textType" },
+    "numberOfEmployees": { "title": "Employees", "lightning:type": "lightning__integerType" },
+    "contactCount": { "title": "Contacts", "lightning:type": "lightning__integerType" },
+    "openOpportunityCount": { "title": "Open Opportunities", "lightning:type": "lightning__integerType" },
+    "openPipelineAmount": { "title": "Open Pipeline", "lightning:type": "lightning__textType" },
+    "hasOpenOpportunities": { "title": "Has Open Opportunities", "lightning:type": "lightning__booleanType" },
+    "isPipelineEmpty": { "title": "Pipeline Is Empty", "lightning:type": "lightning__booleanType" },
+    "opportunities": { "title": "Top Open Opportunities", "lightning:type": "@apexClassType/c__GetAccountSummary$OpportunitySummary" },
+    "accountUrl": { "title": "Account URL", "lightning:type": "lightning__textType" }
+  }
+}
