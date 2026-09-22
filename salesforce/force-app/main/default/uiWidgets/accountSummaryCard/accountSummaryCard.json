@@ -242,7 +242,6 @@
                   "attributes": {
                     "label": "Open in Salesforce",
                     "variant": "primary",
-                    "iconName": "external-link",
                     "actions": {
                       "click": [
                         {
