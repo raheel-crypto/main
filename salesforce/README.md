@@ -7,7 +7,7 @@ separate from the visualizer app in `client/`, `server/`, and `mcp-server/`.
 
 ```
 salesforce/
-  sfdx-project.json                      # SFDX project config (API 68.0)
+  sfdx-project.json                      # SFDX project config (API version must match the org)
   force-app/main/default/uiWidgets/
     accountSummaryCard/
       accountSummaryCard.json            # widget envelope + UEM tree (tile/* blocks)
