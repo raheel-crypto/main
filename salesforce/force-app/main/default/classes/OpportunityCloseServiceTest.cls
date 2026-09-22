@@ -123,6 +123,43 @@ public class OpportunityCloseServiceTest {
         System.assertEquals(null, OpportunityCloseService.parseOpportunityId(null));
     }
 
+    /** Stub invokers so the Slack job's callout path runs without a callout. */
+    private class EmptyInvoker extends CloseWonNotificationJob.Invoker {
+        public override List<Invocable.Action.Result> invoke(Invocable.Action action) {
+            return new List<Invocable.Action.Result>();
+        }
+    }
+
+    private class ThrowingInvoker extends CloseWonNotificationJob.Invoker {
+        public override List<Invocable.Action.Result> invoke(Invocable.Action action) {
+            throw new CalloutException('simulated outage');
+        }
+    }
+
+    @IsTest
+    static void slackJobReportsFailureWhenServiceReturnsNothing() {
+        OpportunityCloseService.disableExternalCalls = false;
+        CloseWonNotificationJob.invoker = new EmptyInvoker();
+        Account a = makeAccount();
+        Opportunity o = makeBareOpportunity(a.Id);
+        Test.startTest();
+        System.enqueueJob(new CloseWonNotificationJob(o.Id));
+        Test.stopTest();
+        System.assertEquals(false, CloseWonNotificationJob.lastRunSucceeded);
+    }
+
+    @IsTest
+    static void slackJobSurvivesAnException() {
+        OpportunityCloseService.disableExternalCalls = false;
+        CloseWonNotificationJob.invoker = new ThrowingInvoker();
+        Account a = makeAccount();
+        Opportunity o = makeBareOpportunity(a.Id);
+        Test.startTest();
+        System.enqueueJob(new CloseWonNotificationJob(o.Id));
+        Test.stopTest();
+        System.assertEquals(false, CloseWonNotificationJob.lastRunSucceeded, 'Exception is caught, not rethrown');
+    }
+
     @IsTest
     static void externalCallsAreSkippedWhenDisabled() {
         OpportunityCloseService.disableExternalCalls = true;

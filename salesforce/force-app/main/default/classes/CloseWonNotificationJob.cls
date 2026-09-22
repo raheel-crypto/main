@@ -5,6 +5,18 @@
  */
 public with sharing class CloseWonNotificationJob implements Queueable, Database.AllowsCallouts {
 
+    public static final String ACTION_NAME = 'RogoQuoteBotSigned.notifySignedOrderForm';
+
+    /** Wraps the external-service invocation so tests can stub it. */
+    public virtual class Invoker {
+        public virtual List<Invocable.Action.Result> invoke(Invocable.Action action) {
+            return action.invoke();
+        }
+    }
+
+    @TestVisible
+    private static Invoker invoker = new Invoker();
+
     @TestVisible
     private static Boolean lastRunSucceeded;
 
@@ -15,17 +27,15 @@ public with sharing class CloseWonNotificationJob implements Queueable, Database
     }
 
     public void execute(QueueableContext ctx) {
-        if (Test.isRunningTest() || OpportunityCloseService.disableExternalCalls) {
+        if (OpportunityCloseService.disableExternalCalls) {
             lastRunSucceeded = true;
             return;
         }
         try {
-            Invocable.Action action = Invocable.Action.createCustomAction(
-                'externalService', 'RogoQuoteBotSigned.notifySignedOrderForm'
-            );
+            Invocable.Action action = Invocable.Action.createCustomAction('externalService', ACTION_NAME);
             action.setInvocationParameter('opportunity_id', String.valueOf(opportunityId));
-            List<Invocable.Action.Result> results = action.invoke();
-            lastRunSucceeded = !results.isEmpty() && results[0].isSuccess();
+            List<Invocable.Action.Result> results = invoker.invoke(action);
+            lastRunSucceeded = results != null && !results.isEmpty() && results[0].isSuccess();
             if (!lastRunSucceeded) {
                 System.debug(LoggingLevel.ERROR, 'RevOps Slack notification failed: ' + results);
             }
