@@ -32,6 +32,7 @@
           "hasLobChoices": "{!$attrs.outputValues.hasLobChoices}",
           "needsSignedDocument": "{!$attrs.outputValues.needsSignedDocument}",
           "filesUrl": "{!$attrs.outputValues.filesUrl}",
+          "uploadUrl": "{!$attrs.outputValues.uploadUrl}",
           "aiRunning": "{!$attrs.outputValues.aiRunning}",
           "aiStatusText": "{!$attrs.outputValues.aiStatusText}",
           "confirmPrompt": "{!$attrs.outputValues.confirmPrompt}",

@@ -14,6 +14,8 @@ declare module "express-session" {
     };
     mcpToken?: string;
     mcpCodeVerifier?: string;
+    /** Client path to return to after the Salesforce login redirect (e.g. /upload?opp=006...). */
+    returnTo?: string;
   }
 }
 

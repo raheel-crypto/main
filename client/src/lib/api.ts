@@ -98,6 +98,25 @@ export const api = {
       body: JSON.stringify({ jobId, objectName, fieldMapping }),
     }),
 
+  // Agent close tools: signed order form upload
+  getCloseDocOpportunity: (oppId: string) =>
+    request<CloseDocOpportunity>(`/api/close-docs/opportunity/${encodeURIComponent(oppId)}`),
+  uploadSignedOrderForm: (oppId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetch(`/api/close-docs/opportunity/${encodeURIComponent(oppId)}/signed-order-form`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message);
+      }
+      return res.json() as Promise<SignedOrderFormUploadResult>;
+    });
+  },
+
   // MCP auth status
   getMcpAuthStatus: () => request<{ configured: boolean; connected: boolean }>("/auth/mcp-status"),
 
@@ -395,6 +414,29 @@ export interface BulkJobResults {
   unmatched: Record<string, string>[];
   duplicates: { csvRow: Record<string, string>; sfIds: string[]; sfNames: string[] }[];
   updateFailures: { id: string; error: string }[];
+}
+
+export interface SignedDocument {
+  contentDocumentId: string;
+  title: string;
+  fileExtension: string | null;
+  createdDate: string;
+}
+
+export interface CloseDocOpportunity {
+  id: string;
+  name: string;
+  accountName: string | null;
+  stageName: string;
+  isClosed: boolean;
+  signedDocuments: SignedDocument[];
+}
+
+export interface SignedOrderFormUploadResult {
+  ok: boolean;
+  title: string;
+  contentVersionId: string;
+  opportunity: CloseDocOpportunity;
 }
 
 export interface SFMcpTool {

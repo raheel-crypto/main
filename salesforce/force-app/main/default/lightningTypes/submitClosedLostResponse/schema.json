@@ -120,6 +120,10 @@
       "title": "Files URL",
       "lightning:type": "lightning__textType"
     },
+    "uploadUrl": {
+      "title": "Upload URL",
+      "lightning:type": "lightning__textType"
+    },
     "aiRunning": {
       "title": "AI Running",
       "lightning:type": "lightning__booleanType"

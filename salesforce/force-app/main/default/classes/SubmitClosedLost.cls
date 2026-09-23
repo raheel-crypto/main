@@ -216,6 +216,7 @@ public with sharing class SubmitClosedLost {
         r.hasLobChoices = false;
         r.needsSignedDocument = false;
         r.filesUrl = '';
+        r.uploadUrl = '';
         r.aiRunning = false;
         r.aiStatusText = '';
         r.confirmPrompt = '';
@@ -274,7 +275,8 @@ public with sharing class SubmitClosedLost {
         @InvocableVariable(label='LOB/Division Choices' description='Buttons for LOB/Division when it was not set explicitly: the account-based suggestion first, then common LOBs.') public List<OpportunityCloseService.Choice> lobChoices;
         @InvocableVariable(label='Has LOB/Division Choices') public Boolean hasLobChoices;
         @InvocableVariable(label='Needs Signed Document' description='Always false for Closed Lost; present so the same card renders Won and Lost.') public Boolean needsSignedDocument;
-        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list, where the signed order form is uploaded.') public String filesUrl;
+        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list in Salesforce.') public String filesUrl;
+        @InvocableVariable(label='Upload URL' description='Link to the upload page for the signed order form (sf-visualizer), or the Files list when not configured.') public String uploadUrl;
         @InvocableVariable(label='AI Running' description='True while the background AI analysis is running; refresh the preview to see its result.') public Boolean aiRunning;
         @InvocableVariable(label='AI Status Text' description='Plain-English progress of the background AI analysis.') public String aiStatusText;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
@@ -290,6 +292,7 @@ public with sharing class SubmitClosedLost {
             accountName = opp.Account == null ? OpportunityCloseService.NOT_SET : opp.Account.Name;
             opportunityUrl = OpportunityCloseService.recordUrl(opp.Id);
             filesUrl = OpportunityCloseService.filesUrl(opp.Id);
+            uploadUrl = OpportunityCloseService.uploadUrl(opp.Id);
         }
 
         public Response notFound(String requested) {
@@ -297,6 +300,7 @@ public with sharing class SubmitClosedLost {
             accountName = String.isBlank(requested) ? 'No Opportunity Id was provided' : 'No opportunity with Id ' + requested;
             opportunityUrl = URL.getOrgDomainUrl().toExternalForm();
             filesUrl = opportunityUrl;
+            uploadUrl = opportunityUrl;
             isBlocked = true;
             return finish('NotFound', 'Not found', 'error', 'Opportunity not found', 'Check the Id and try again.');
         }

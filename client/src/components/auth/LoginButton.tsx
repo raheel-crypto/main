@@ -1,8 +1,14 @@
 import { useState } from "react";
 import { cn } from "../../lib/utils";
 
-export function LoginButton() {
+interface LoginButtonProps {
+  /** Same-site path to land on after login, e.g. /upload?opp=006... */
+  returnTo?: string;
+}
+
+export function LoginButton({ returnTo }: LoginButtonProps = {}) {
   const [env, setEnv] = useState<"production" | "sandbox">("production");
+  const loginHref = `/auth/login?env=${env}${returnTo ? `&returnTo=${encodeURIComponent(returnTo)}` : ""}`;
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
@@ -62,7 +68,7 @@ export function LoginButton() {
           )}
 
           <a
-            href={`/auth/login?env=${env}`}
+            href={loginHref}
             className={cn(
               "inline-flex w-full items-center justify-center gap-2 rounded-lg px-6 py-3 text-sm font-medium text-white transition-colors",
               env === "production"

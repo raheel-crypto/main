@@ -260,9 +260,32 @@ public with sharing class OpportunityCloseService {
             + 'missing field in a single message, grouped into deal details, contract dates and money, and billing.';
     }
 
-    /** Deep link to the opportunity's Files related list, where the signed order form gets uploaded. */
+    /** Deep link to the opportunity's Files related list, the fallback place to upload the signed order form. */
     public static String filesUrl(Id opportunityId) {
         return URL.getOrgDomainUrl().toExternalForm() + '/lightning/r/Opportunity/' + opportunityId + '/related/AttachedContentDocuments/view';
+    }
+
+    /**
+     * The sf-visualizer upload page for this opportunity (Agent_Close_Setting__mdt.Default
+     * Upload_Page_URL__c + ?opp=Id). Falls back to the Salesforce Files list when the
+     * setting is blank, so the card button always leads somewhere useful.
+     */
+    public static String uploadUrl(Id opportunityId) {
+        String base = uploadPageBase();
+        if (String.isBlank(base)) {
+            return filesUrl(opportunityId);
+        }
+        return base + (base.contains('?') ? '&' : '?') + 'opp=' + opportunityId;
+    }
+
+    @TestVisible private static String uploadPageBaseOverride;
+
+    private static String uploadPageBase() {
+        if (uploadPageBaseOverride != null) {
+            return uploadPageBaseOverride;
+        }
+        Agent_Close_Setting__mdt setting = Agent_Close_Setting__mdt.getInstance('Default');
+        return setting == null ? null : setting.Upload_Page_URL__c;
     }
 
     public static String closeLostPrompt(Opportunity opp) {

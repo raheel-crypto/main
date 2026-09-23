@@ -198,8 +198,26 @@
                     {
                       "definition": "tile/button",
                       "attributes": {
-                        "label": "Attach signed order form",
+                        "label": "Upload signed order form",
                         "variant": "primary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/openLink",
+                              "attributes": {
+                                "url": "{!$attrs.uploadUrl}",
+                                "target": "_blank"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Open Files in Salesforce",
+                        "variant": "secondary",
                         "actions": {
                           "click": [
                             {
@@ -212,16 +230,19 @@
                           ]
                         }
                       }
-                    },
-                    {
-                      "definition": "tile/text",
-                      "attributes": {
-                        "text": "Opens the opportunity Files. Upload a file whose name starts with __signed, then check again.",
-                        "variant": "caption",
-                        "color": "muted"
-                      }
                     }
                   ],
+                  "meta": {
+                    "if": "{!$attrs.missingSignedDocument}"
+                  }
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "Drop the signed file on the upload page; it is saved to this opportunity with the __signed name. Then check again.",
+                    "variant": "caption",
+                    "color": "muted"
+                  },
                   "meta": {
                     "if": "{!$attrs.missingSignedDocument}"
                   }

@@ -274,6 +274,15 @@
       "copilotAction:useHydratedPrompt": false,
       "lightning:type": "lightning__textType"
     },
+    "uploadUrl": {
+      "title": "Upload URL",
+      "description": "Upload URL",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
     "closeWonPrompt": {
       "title": "Close Won Prompt",
       "description": "Close Won Prompt",

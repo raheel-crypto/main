@@ -78,7 +78,7 @@ public with sharing class SubmitClosedWon {
         if (signed.isEmpty()) {
             res.needsSignedDocument = true;
             problems.add(0, new OpportunityCloseService.Row('Signed order form',
-                'No signed order form is attached. Use the Attach signed order form button to open the opportunity Files, upload the file (name starting with __signed), then try again.',
+                'No signed order form is attached. Use the Upload signed order form button, drop the file there, then try again.',
                 'alert-circle', 'error'));
         }
 
@@ -282,6 +282,7 @@ public with sharing class SubmitClosedWon {
         r.hasLobChoices = false;
         r.needsSignedDocument = false;
         r.filesUrl = '';
+        r.uploadUrl = '';
         r.aiRunning = false;
         r.aiStatusText = '';
         r.refreshPrompt = '';
@@ -359,7 +360,8 @@ public with sharing class SubmitClosedWon {
         @InvocableVariable(label='LOB/Division Choices' description='Buttons for LOB/Division when it was not set explicitly: the account-based suggestion first, then common LOBs.') public List<OpportunityCloseService.Choice> lobChoices;
         @InvocableVariable(label='Has LOB/Division Choices') public Boolean hasLobChoices;
         @InvocableVariable(label='Needs Signed Document' description='True when submission is blocked because no signed order form is attached.') public Boolean needsSignedDocument;
-        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list, where the signed order form is uploaded.') public String filesUrl;
+        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list in Salesforce.') public String filesUrl;
+        @InvocableVariable(label='Upload URL' description='Link to the upload page for the signed order form (sf-visualizer), or the Files list when not configured.') public String uploadUrl;
         @InvocableVariable(label='AI Running' description='True after submit while the background AI win summary is being generated.') public Boolean aiRunning;
         @InvocableVariable(label='AI Status Text' description='Plain-English progress of the background AI analysis.') public String aiStatusText;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
@@ -375,6 +377,7 @@ public with sharing class SubmitClosedWon {
             accountName = opp.Account == null ? OpportunityCloseService.NOT_SET : opp.Account.Name;
             opportunityUrl = OpportunityCloseService.recordUrl(opp.Id);
             filesUrl = OpportunityCloseService.filesUrl(opp.Id);
+            uploadUrl = OpportunityCloseService.uploadUrl(opp.Id);
         }
 
         public Response notFound(String requested) {
@@ -382,6 +385,7 @@ public with sharing class SubmitClosedWon {
             accountName = String.isBlank(requested) ? 'No Opportunity Id was provided' : 'No opportunity with Id ' + requested;
             opportunityUrl = URL.getOrgDomainUrl().toExternalForm();
             filesUrl = opportunityUrl;
+            uploadUrl = opportunityUrl;
             isBlocked = true;
             return finish('NotFound', 'Not found', 'error', 'Opportunity not found', 'Check the Id and try again.');
         }

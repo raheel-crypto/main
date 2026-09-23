@@ -79,6 +79,7 @@ private class SubmitClosedWonTest {
         System.assertEquals(true, res.hasProblems);
         System.assertEquals('Signed order form', res.problems[0].label, 'Signed doc problem listed first');
         System.assertEquals(true, res.needsSignedDocument);
+        System.assert(res.uploadUrl.contains(o.Id), 'Upload link carries the opportunity');
         System.assertEquals(true, res.hasLobChoices, 'Bare deal has no LOB, so LOB buttons are offered');
         System.assert(res.lobChoices[0].prompt.contains('Closed Won'));
         Set<String> labels = new Set<String>();

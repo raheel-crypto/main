@@ -51,6 +51,12 @@ private class GetCloseReadinessTest {
         System.assert(res.missingFieldsText.contains('Purchase Driver'));
         System.assertEquals(res.missingFieldCount, res.neededRows.size());
         System.assert(res.filesUrl.contains(o.Id) && res.filesUrl.contains('AttachedContentDocuments'));
+        System.assert(res.uploadUrl.contains(o.Id), 'Upload link carries the opportunity: ' + res.uploadUrl);
+
+        OpportunityCloseService.uploadPageBaseOverride = 'https://visualizer.example.com/upload';
+        System.assertEquals('https://visualizer.example.com/upload?opp=' + o.Id, OpportunityCloseService.uploadUrl(o.Id));
+        OpportunityCloseService.uploadPageBaseOverride = '';
+        System.assertEquals(OpportunityCloseService.filesUrl(o.Id), OpportunityCloseService.uploadUrl(o.Id), 'Blank setting falls back to the Files list');
         System.assertEquals(res.checklist.size(), res.neededRows.size() + res.completeRows.size());
         System.assertEquals(res.completeRows.size(), res.completedCount);
         System.assert(res.neededTitle.startsWith('Needed ('));

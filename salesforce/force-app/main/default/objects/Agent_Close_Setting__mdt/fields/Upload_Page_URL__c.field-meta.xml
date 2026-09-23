@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Upload_Page_URL__c</fullName>
+    <description>Base URL of the sf-visualizer upload page for signed order forms. The close cards append ?opp=&lt;Opportunity Id&gt;. Leave blank to link to the opportunity Files list in Salesforce instead.</description>
+    <externalId>false</externalId>
+    <fieldManageability>DeveloperControlled</fieldManageability>
+    <inlineHelpText>Example: http://localhost:5173/upload for local development, or the hosted visualizer URL.</inlineHelpText>
+    <label>Upload Page URL</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

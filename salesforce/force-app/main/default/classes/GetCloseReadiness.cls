@@ -54,6 +54,7 @@ public with sharing class GetCloseReadiness {
             res.closeLostPrompt = 'Which opportunity should I close?';
             res.opportunityUrl = URL.getOrgDomainUrl().toExternalForm();
             res.filesUrl = res.opportunityUrl;
+            res.uploadUrl = res.opportunityUrl;
             return res;
         }
 
@@ -67,6 +68,7 @@ public with sharing class GetCloseReadiness {
         res.ownerName = opp.Owner == null ? OpportunityCloseService.NOT_SET : opp.Owner.Name;
         res.opportunityUrl = OpportunityCloseService.recordUrl(opp.Id);
         res.filesUrl = OpportunityCloseService.filesUrl(opp.Id);
+        res.uploadUrl = OpportunityCloseService.uploadUrl(opp.Id);
         res.isClosed = opp.IsClosed;
         res.canClose = !opp.IsClosed;
         res.isRestructure = OpportunityCloseService.isRestructure(opp);
@@ -119,7 +121,7 @@ public with sharing class GetCloseReadiness {
         } else if (res.missingSignedDocument) {
             res.statusLabel = 'Blocked';
             res.statusVariant = 'error';
-            res.statusMessage = 'A signed order form must be attached before this can be closed Won. Use the Attach signed order form button to open the opportunity Files, upload a file whose name starts with __signed, then check again.';
+            res.statusMessage = 'A signed order form must be attached before this can be closed Won. Use the Upload signed order form button, drop the file there, then check again.';
         } else if (res.hasMissingFields) {
             res.statusLabel = 'Fields needed';
             res.statusVariant = 'warning';
@@ -166,7 +168,8 @@ public with sharing class GetCloseReadiness {
         @InvocableVariable(label='Needed Title' description='Accordion title for the needed fields, with the count.') public String neededTitle;
         @InvocableVariable(label='Complete Title' description='Accordion title for the complete fields, with the count.') public String completeTitle;
         @InvocableVariable(label='Progress Label' description='Label for the progress bar, e.g. 4 of 27 Closed Won fields complete.') public String progressLabel;
-        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list, where the signed order form is uploaded.') public String filesUrl;
+        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list in Salesforce.') public String filesUrl;
+        @InvocableVariable(label='Upload URL' description='Link to the upload page for the signed order form (sf-visualizer), or the Files list when not configured.') public String uploadUrl;
         @InvocableVariable(label='Close Won Prompt') public String closeWonPrompt;
         @InvocableVariable(label='Close Lost Prompt') public String closeLostPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

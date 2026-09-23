@@ -124,6 +124,10 @@
       "title": "Files URL",
       "lightning:type": "lightning__textType"
     },
+    "uploadUrl": {
+      "title": "Upload URL",
+      "lightning:type": "lightning__textType"
+    },
     "closeWonPrompt": {
       "title": "Close Won Prompt",
       "lightning:type": "lightning__multilineTextType"

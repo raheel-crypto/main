@@ -21,6 +21,13 @@ router.get("/login", (req, res) => {
   const env = (req.query.env as string) === "sandbox" ? "sandbox" : "production";
   const { url, codeVerifier } = getAuthorizationUrl(env);
 
+  // Only same-site paths may be used as a post-login destination.
+  const returnTo = req.query.returnTo;
+  req.session.returnTo =
+    typeof returnTo === "string" && returnTo.startsWith("/") && !returnTo.startsWith("//")
+      ? returnTo
+      : undefined;
+
   (req.session as any).codeVerifier = codeVerifier;
   (req.session as any).pendingEnv = env;
   req.session.save(() => {
@@ -48,8 +55,10 @@ router.get("/callback", async (req, res) => {
     delete (req.session as any).codeVerifier;
     delete (req.session as any).pendingEnv;
     delete req.session.mcpToken;
+    const returnTo = req.session.returnTo;
+    delete req.session.returnTo;
 
-    res.redirect(config.clientUrl);
+    res.redirect(config.clientUrl + (returnTo ?? ""));
   } catch (error: any) {
     console.error("OAuth callback error:", error);
     res.redirect(

@@ -74,9 +74,17 @@ Fewer round trips:
   "Retry AI analysis" button when the analysis failed.
 - **Every choice-button prompt** tells the agent to keep the other preview
   values and to ask for anything still missing in a single message.
-- **Attach signed order form** deep-links to the opportunity's Files related
-  list. Agents cannot upload binaries through an MCP tool call, so the upload
-  itself stays in Salesforce; the card just takes the rep straight there.
+- **Upload signed order form** opens the visualizer's upload page
+  (`/upload?opp=<Id>`), which saves the dropped file to the opportunity as a
+  `__signed` ContentVersion (the FirstPublishLocationId link) and tells the rep
+  to check the deal again. Agents cannot carry a file through an MCP tool call,
+  so this small page is the bridge. Its base URL lives in the
+  `Agent_Close_Setting.Default` custom metadata record (`Upload_Page_URL__c`,
+  `http://localhost:5173/upload` for local development); blank falls back to
+  the opportunity's Files list, which the card also offers as a secondary
+  button. Server side: `server/src/routes/closeDocs.ts`; client side:
+  `client/src/pages/UploadSignedOrderFormPage.tsx`. The page survives the
+  Salesforce login redirect through `returnTo`.
 
 The AI analysis runs in the background. The Claude callout inside the shared
 `DealScoreAIController` can take longer than an MCP tool call is allowed to
@@ -182,6 +190,7 @@ orgs require Apex tests to run on deploy, hence the test flags.
 ```
 cd ~/sf-visualizer/salesforce
 sf project deploy start --source-dir force-app/main/default/objects
+sf project deploy start --source-dir force-app/main/default/customMetadata
 sf project deploy start --source-dir force-app/main/default/permissionsets
 sf org assign permset --name Agent_Close_Tools
 sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest --tests OpportunityCloseServiceTest --tests GetCloseReadinessTest --tests SubmitClosedWonTest --tests SubmitClosedLostTest --tests DealScoreAIControllerTest

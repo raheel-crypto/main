@@ -42,7 +42,11 @@ Remind the user to press `Ctrl+C` in each terminal window before restarting.
   `force-app/main/default/permissionsets/Agent_Close_Tools.permissionset-meta.xml`
   (or a new permission set), deploy it with the field, and give the user the
   `sf org assign permset` command.
-- Deploy order for the close tools: objects → permissionsets → classes →
-  uiWidgets → response Lightning Types → envelope Lightning Types →
+- Deploy order for the close tools: objects → customMetadata → permissionsets →
+  classes → uiWidgets → response Lightning Types → envelope Lightning Types →
   genAiFunctions → (only if changed) mcpServerDefinitions, then reactivate the
   server and remove/re-add the connector in Claude.
+- The signed order form upload page lives in the visualizer at `/upload?opp=<Id>`
+  (client page `UploadSignedOrderFormPage`, server route `/api/close-docs`). The
+  cards get its URL from the `Agent_Close_Setting.Default` custom metadata record
+  (`Upload_Page_URL__c`), so a hosted deployment only needs that value changed.

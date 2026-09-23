@@ -35,7 +35,7 @@ READINESS = [
     ("neededRows", "rows", "Needed Rows"), ("completeRows", "rows", "Complete Rows"),
     ("completedCount", "int", "Completed Count"), ("totalFieldCount", "int", "Total Field Count"),
     ("neededTitle", "text", "Needed Title"), ("completeTitle", "text", "Complete Title"),
-    ("progressLabel", "text", "Progress Label"), ("filesUrl", "text", "Files URL"),
+    ("progressLabel", "text", "Progress Label"), ("filesUrl", "text", "Files URL"), ("uploadUrl", "text", "Upload URL"),
     ("closeWonPrompt", "long", "Close Won Prompt"), ("closeLostPrompt", "long", "Close Lost Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
@@ -52,6 +52,7 @@ SUBMISSION = [
     ("reasonChoices", "choices", "Loss Reason Choices"), ("hasReasonChoices", "bool", "Has Loss Reason Choices"),
     ("lobChoices", "choices", "LOB/Division Choices"), ("hasLobChoices", "bool", "Has LOB/Division Choices"),
     ("needsSignedDocument", "bool", "Needs Signed Document"), ("filesUrl", "text", "Files URL"),
+    ("uploadUrl", "text", "Upload URL"),
     ("aiRunning", "bool", "AI Running"), ("aiStatusText", "long", "AI Status Text"),
     ("confirmPrompt", "long", "Confirm Prompt"), ("changePrompt", "long", "Change Prompt"),
     ("refreshPrompt", "long", "Refresh Prompt"), ("retryPrompt", "long", "Retry Prompt"),
@@ -266,9 +267,11 @@ readiness_body = envelope([
     col([
         callout("Signed order form required", "{!$attrs.signedDocumentText}", "error", "{!$attrs.missingSignedDocument}"),
         with_if(row([
-            button("Attach signed order form", "primary", open_link("{!$attrs.filesUrl}")),
-            text("Opens the opportunity Files. Upload a file whose name starts with __signed, then check again.", variant="caption", color="muted"),
+            button("Upload signed order form", "primary", open_link("{!$attrs.uploadUrl}")),
+            button("Open Files in Salesforce", "secondary", open_link("{!$attrs.filesUrl}")),
         ], gap="sm"), "{!$attrs.missingSignedDocument}"),
+        with_if(text("Drop the signed file on the upload page; it is saved to this opportunity with the __signed name. Then check again.",
+                     variant="caption", color="muted"), "{!$attrs.missingSignedDocument}"),
         with_if(row([icon("check-circle", "success"), text("Signed order form", variant="body", weight="semibold"),
                      text("{!$attrs.signedDocumentText}", variant="body", color="muted")], gap="sm"), "{!$attrs.hasSignedDocument}"),
     ], gap="sm"),
@@ -321,9 +324,11 @@ submission_body = envelope([
     with_if(col([
         callout("Signed order form required", "Closed Won needs the signed order form attached to the opportunity.", "error"),
         row([
-            button("Attach signed order form", "primary", open_link("{!$attrs.filesUrl}")),
-            text("Opens the opportunity Files. Upload a file whose name starts with __signed, then try again.", variant="caption", color="muted"),
+            button("Upload signed order form", "primary", open_link("{!$attrs.uploadUrl}")),
+            button("Open Files in Salesforce", "secondary", open_link("{!$attrs.filesUrl}")),
         ], gap="sm"),
+        text("Drop the signed file on the upload page; it is saved to this opportunity with the __signed name. Then try again.",
+             variant="caption", color="muted"),
     ], gap="sm"), "{!$attrs.needsSignedDocument}"),
     col([
         with_if(col([

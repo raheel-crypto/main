@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { UploadSignedOrderFormPage } from "./pages/UploadSignedOrderFormPage";
 import { AppLayout } from "./components/layout/AppLayout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ObjectsPage } from "./pages/ObjectsPage";
@@ -21,6 +22,10 @@ import { LoginButton } from "./components/auth/LoginButton";
 
 export default function App() {
   const { data: auth, isLoading } = useSalesforceAuth();
+  const location = useLocation();
+  // The upload page is opened from a card in the agent; it renders standalone
+  // (no sidebar) and survives the login redirect via returnTo.
+  const isUploadPage = location.pathname.startsWith("/upload");
 
   if (isLoading) {
     return (
@@ -31,7 +36,16 @@ export default function App() {
   }
 
   if (!auth?.authenticated) {
-    return <LoginButton />;
+    return <LoginButton returnTo={isUploadPage ? location.pathname + location.search : undefined} />;
+  }
+
+  if (isUploadPage) {
+    return (
+      <Routes>
+        <Route path="/upload" element={<UploadSignedOrderFormPage instanceUrl={auth.user!.instanceUrl} />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    );
   }
 
   return (
