@@ -1,6 +1,6 @@
 {
   "title": "Close Readiness Card",
-  "description": "Shows whether an opportunity can be closed: status, signed order form, and a checklist of Closed Won fields.",
+  "description": "Shows whether an opportunity can be closed: status, signed order form, a progress bar, and the Closed Won fields grouped into needed and complete.",
   "type": "object",
   "properties": {
     "attributes": {
@@ -110,6 +110,76 @@
               }
             }
           }
+        },
+        "neededRows": {
+          "title": "Needed Rows",
+          "lightning:type": "lightning__listType",
+          "items": {
+            "lightning:type": "lightning__objectType",
+            "properties": {
+              "label": {
+                "title": "Label",
+                "lightning:type": "lightning__textType"
+              },
+              "value": {
+                "title": "Value",
+                "lightning:type": "lightning__multilineTextType"
+              },
+              "icon": {
+                "title": "Icon",
+                "lightning:type": "lightning__textType"
+              },
+              "color": {
+                "title": "Color",
+                "lightning:type": "lightning__textType"
+              }
+            }
+          }
+        },
+        "completeRows": {
+          "title": "Complete Rows",
+          "lightning:type": "lightning__listType",
+          "items": {
+            "lightning:type": "lightning__objectType",
+            "properties": {
+              "label": {
+                "title": "Label",
+                "lightning:type": "lightning__textType"
+              },
+              "value": {
+                "title": "Value",
+                "lightning:type": "lightning__multilineTextType"
+              },
+              "icon": {
+                "title": "Icon",
+                "lightning:type": "lightning__textType"
+              },
+              "color": {
+                "title": "Color",
+                "lightning:type": "lightning__textType"
+              }
+            }
+          }
+        },
+        "completedCount": {
+          "title": "Completed Count",
+          "lightning:type": "lightning__numberType"
+        },
+        "totalFieldCount": {
+          "title": "Total Field Count",
+          "lightning:type": "lightning__numberType"
+        },
+        "neededTitle": {
+          "title": "Needed Title",
+          "lightning:type": "lightning__textType"
+        },
+        "completeTitle": {
+          "title": "Complete Title",
+          "lightning:type": "lightning__textType"
+        },
+        "progressLabel": {
+          "title": "Progress Label",
+          "lightning:type": "lightning__textType"
         },
         "closeWonPrompt": {
           "title": "Close Won Prompt",

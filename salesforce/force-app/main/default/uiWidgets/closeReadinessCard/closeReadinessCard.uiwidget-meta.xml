@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <UiWidgetBundle xmlns="http://soap.sforce.com/2006/04/metadata">
     <masterLabel>Close Readiness Card</masterLabel>
-    <description>Whether an opportunity can be closed from the agent: status badge, signed order form check, Closed Won field checklist, and buttons to start Closed Won or Closed Lost.</description>
+    <description>Whether an opportunity can be closed from the agent: status badge, signed order form check, completion progress, Closed Won fields grouped into needed and complete, and buttons to start Closed Won or Closed Lost.</description>
     <widgetType>JSON</widgetType>
 </UiWidgetBundle>

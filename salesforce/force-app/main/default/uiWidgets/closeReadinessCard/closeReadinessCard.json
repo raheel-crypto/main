@@ -247,42 +247,92 @@
                   }
                 },
                 {
-                  "definition": "tile/table",
+                  "definition": "tile/progress",
                   "attributes": {
-                    "caption": "Closed Won field checklist",
+                    "label": "{!$attrs.progressLabel}",
+                    "value": "{!$attrs.completedCount}",
+                    "max": "{!$attrs.totalFieldCount}",
+                    "shape": "linear",
                     "size": "sm",
-                    "appearance": "default",
-                    "columns": [
-                      {
-                        "key": "label",
-                        "header": "Field"
-                      },
-                      {
-                        "key": "value",
-                        "header": "Current value"
-                      }
-                    ],
-                    "rows": "{!$attrs.checklist}"
+                    "color": "primary"
                   }
                 },
                 {
-                  "definition": "tile/callout",
+                  "definition": "tile/text",
                   "attributes": {
-                    "title": "Fields still needed",
-                    "variant": "warning"
-                  },
+                    "text": "{!$attrs.progressLabel}",
+                    "variant": "caption",
+                    "color": "muted"
+                  }
+                },
+                {
+                  "definition": "tile/accordion",
+                  "attributes": {},
                   "children": [
                     {
-                      "definition": "tile/text",
+                      "definition": "tile/accordionitem",
                       "attributes": {
-                        "text": "{!$attrs.missingFieldsText}",
-                        "variant": "body"
+                        "title": "{!$attrs.neededTitle}",
+                        "isExpanded": true,
+                        "iconName": "alert-circle",
+                        "iconAlt": ""
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/table",
+                          "attributes": {
+                            "caption": "Fields that still need a value",
+                            "size": "sm",
+                            "appearance": "default",
+                            "columns": [
+                              {
+                                "key": "label",
+                                "header": "Field"
+                              },
+                              {
+                                "key": "value",
+                                "header": "Status"
+                              }
+                            ],
+                            "rows": "{!$attrs.neededRows}"
+                          }
+                        }
+                      ],
+                      "meta": {
+                        "if": "{!$attrs.hasMissingFields}"
                       }
+                    },
+                    {
+                      "definition": "tile/accordionitem",
+                      "attributes": {
+                        "title": "{!$attrs.completeTitle}",
+                        "isExpanded": false,
+                        "iconName": "check-circle",
+                        "iconAlt": ""
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/table",
+                          "attributes": {
+                            "caption": "Fields that already have a value",
+                            "size": "sm",
+                            "appearance": "default",
+                            "columns": [
+                              {
+                                "key": "label",
+                                "header": "Field"
+                              },
+                              {
+                                "key": "value",
+                                "header": "Current value"
+                              }
+                            ],
+                            "rows": "{!$attrs.completeRows}"
+                          }
+                        }
+                      ]
                     }
-                  ],
-                  "meta": {
-                    "if": "{!$attrs.hasMissingFields}"
-                  }
+                  ]
                 }
               ]
             },

@@ -275,6 +275,55 @@ public with sharing class OpportunityCloseService {
         return 'I want to change some values before submitting the close for opportunity ' + opp.Id + '.';
     }
 
+    public static String lostReasonPrompt(Opportunity opp, String reason) {
+        return 'Close opportunity ' + opp.Id + ' (' + opp.Name + ') as Closed Lost with CL Primary Reason "' + reason
+            + '". Keep the recommended competitor and narrative unless I say otherwise, then show me the preview.';
+    }
+
+    public static String otherReasonPrompt(Opportunity opp) {
+        return 'I want a different loss reason for opportunity ' + opp.Id + '. List the CL Primary Reason options and ask me which one applies.';
+    }
+
+    // ─── Loss reason choice buttons ──────────────────────────────────────
+
+    /** Reasons offered as buttons when the AI has no recommendation, most common first. */
+    @TestVisible private static final List<String> COMMON_LOSS_REASONS = new List<String>{
+        'Competitive Loss', 'Budget Financial', 'Timing Priority', 'No Need', 'Product / Technical Gap'
+    };
+    @TestVisible private static final Integer MAX_REASON_ALTERNATIVES = 3;
+
+    /**
+     * The recommended reason (if any) as the primary choice, then up to three
+     * common alternatives, then an "Other reason" button that asks the agent to
+     * list every option. Only active picklist values are offered.
+     */
+    public static List<Choice> lostReasonChoices(Opportunity opp, String recommendedReason) {
+        List<Choice> choices = new List<Choice>();
+        Set<String> used = new Set<String>();
+        Boolean hasRecommendation = String.isNotBlank(recommendedReason) && recommendedReason != NOT_SET
+            && matchPicklist('CL_Primary_Reason__c', recommendedReason) != null;
+        if (hasRecommendation) {
+            String canonical = matchPicklist('CL_Primary_Reason__c', recommendedReason);
+            choices.add(new Choice('Use recommended: ' + canonical, lostReasonPrompt(opp, canonical), 'primary'));
+            used.add(canonical);
+        }
+        Integer alternatives = 0;
+        for (String reason : COMMON_LOSS_REASONS) {
+            if (alternatives >= MAX_REASON_ALTERNATIVES) {
+                break;
+            }
+            String canonical = matchPicklist('CL_Primary_Reason__c', reason);
+            if (canonical == null || used.contains(canonical)) {
+                continue;
+            }
+            choices.add(new Choice(canonical, lostReasonPrompt(opp, canonical), 'secondary'));
+            used.add(canonical);
+            alternatives++;
+        }
+        choices.add(new Choice('Other reason', otherReasonPrompt(opp), 'secondary'));
+        return choices;
+    }
+
     // ─── External calls (Claude analysis, RevOps Slack) ──────────────────
 
     /**
@@ -348,6 +397,19 @@ public with sharing class OpportunityCloseService {
             this.value = value;
             this.icon = icon;
             this.color = color;
+        }
+    }
+
+    /** A button the widget renders; clicking it sends the prompt back to the agent. */
+    public class Choice {
+        @AuraEnabled public String label;
+        @AuraEnabled public String prompt;
+        @AuraEnabled public String variant;
+        public Choice() {}
+        public Choice(String label, String prompt, String variant) {
+            this.label = label;
+            this.prompt = prompt;
+            this.variant = variant;
         }
     }
 }

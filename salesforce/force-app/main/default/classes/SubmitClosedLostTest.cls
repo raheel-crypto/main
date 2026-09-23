@@ -28,6 +28,12 @@ private class SubmitClosedLostTest {
         System.assertEquals(true, p.isPreview);
         System.assertEquals(false, p.hasRecommendation, 'No AI in tests');
         System.assertEquals(7, p.rows.size());
+        System.assertEquals(true, p.hasReasonChoices);
+        System.assertEquals(4, p.reasonChoices.size(), 'Three common reasons plus Other when there is no recommendation');
+        System.assertEquals('Competitive Loss', p.reasonChoices[0].label);
+        System.assert(p.reasonChoices[0].prompt.contains(o.Id));
+        System.assert(p.reasonChoices[0].prompt.contains('"Competitive Loss"'));
+        System.assertEquals('Other reason', p.reasonChoices[3].label);
         System.assertEquals('3 - POV', [SELECT StageName FROM Opportunity WHERE Id = :o.Id].StageName, 'Preview must not save');
 
         SubmitClosedLost.Request confirm = request(o.Id, true);
@@ -38,6 +44,7 @@ private class SubmitClosedLostTest {
         SubmitClosedLost.Response c = run(confirm);
 
         System.assertEquals('Submitted', c.status);
+        System.assertEquals(false, c.hasReasonChoices, 'No reason buttons once submitted');
         Opportunity saved = [
             SELECT StageName, CL_Primary_Reason__c, Final_Competitor__c, CL_Notes__c, LOB_Division__c, Close_Lost_from_Stage__c
             FROM Opportunity WHERE Id = :o.Id
@@ -86,5 +93,30 @@ private class SubmitClosedLostTest {
         SubmitClosedLost.Request bad = new SubmitClosedLost.Request();
         bad.opportunityId = 'nope';
         System.assertEquals('NotFound', run(bad).status);
+    }
+
+    @IsTest
+    static void recommendedReasonLeadsTheChoices() {
+        OpportunityCloseService.disableExternalCalls = true;
+        Account a = OpportunityCloseServiceTest.makeAccount();
+        Opportunity o = OpportunityCloseServiceTest.makeBareOpportunity(a.Id);
+
+        List<OpportunityCloseService.Choice> choices = OpportunityCloseService.lostReasonChoices(o, 'budget financial');
+
+        System.assertEquals(5, choices.size(), 'Recommended + three alternatives + Other');
+        System.assertEquals('Use recommended: Budget Financial', choices[0].label);
+        System.assertEquals('primary', choices[0].variant);
+        System.assert(choices[0].prompt.contains('"Budget Financial"'));
+        Set<String> labels = new Set<String>();
+        for (OpportunityCloseService.Choice c : choices) {
+            System.assert(labels.add(c.label), 'Duplicate choice ' + c.label);
+            System.assertNotEquals(null, c.prompt);
+        }
+        System.assert(!labels.contains('Budget Financial'), 'Recommended reason is not repeated as an alternative');
+        System.assertEquals('Other reason', choices[4].label);
+
+        List<OpportunityCloseService.Choice> noRec = OpportunityCloseService.lostReasonChoices(o, OpportunityCloseService.NOT_SET);
+        System.assertEquals(4, noRec.size());
+        System.assertEquals('secondary', noRec[0].variant);
     }
 }

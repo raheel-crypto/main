@@ -49,9 +49,9 @@ tools on the same MCP server, each rendering an HXL card:
 
 | Tool | Apex | Card | What it does |
 |---|---|---|---|
-| Get Close Readiness | `GetCloseReadiness` | `closeReadinessCard` | Read-only. Header, signed-order-form check, checklist of the 27 Closed Won fields, buttons to start Won or Lost. |
+| Get Close Readiness | `GetCloseReadiness` | `closeReadinessCard` | Read-only. Header, signed-order-form check, a progress bar of Closed Won fields completed, the 27 fields grouped into "Needed" (expanded) and "Complete" (collapsed) accordion sections, buttons to start Won or Lost. |
 | Submit Closed Won | `SubmitClosedWon` | `closeSubmissionCard` | Validates and previews without `confirm`; with `confirm=true` writes the finance and handoff fields, sets the Account references flag, sends the RevOps Slack, queues order form extraction. Does not stamp the stage (RevOps does), except Contract Restructure which closes directly. Requires a signed order form on the record. |
-| Submit Closed Lost | `SubmitClosedLost` | `closeSubmissionCard` | Runs the AI loss analysis and previews without `confirm`; with `confirm=true` stamps Closed Lost with reasons, notes, LOB, prior stage, and AI fields. |
+| Submit Closed Lost | `SubmitClosedLost` | `closeSubmissionCard` | Runs the AI loss analysis and previews without `confirm`; with `confirm=true` stamps Closed Lost with reasons, notes, LOB, prior stage, and AI fields. The preview offers loss-reason choice buttons: the AI recommendation first, then up to three common alternatives, then "Other reason". Each button sends a prompt that re-runs the preview with that reason. |
 
 Shared logic lives in `OpportunityCloseService`; the Slack callout runs after
 commit in `CloseWonNotificationJob`. Submissions are tagged with a new

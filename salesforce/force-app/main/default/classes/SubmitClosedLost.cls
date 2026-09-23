@@ -66,6 +66,12 @@ public with sharing class SubmitClosedLost {
         res.aiConfidence = firstNonBlank(ai == null ? null : ai.confidence, opp.CL_Confidence_AI__c);
         res.hasRecommendation = res.recommendedReason != OpportunityCloseService.NOT_SET;
 
+        // Choice buttons: offered whenever the reason can still change (preview or blocked).
+        if (!confirm) {
+            res.reasonChoices = OpportunityCloseService.lostReasonChoices(opp, res.recommendedReason);
+            res.hasReasonChoices = !res.reasonChoices.isEmpty();
+        }
+
         // Merge inputs over existing values (notes default to the AI narrative, like the flow).
         String primary = pick(req.primaryReason, opp.CL_Primary_Reason__c);
         String secondary = pick(req.secondaryReason, opp.CL_Secondary_Reason__c);
@@ -182,6 +188,8 @@ public with sharing class SubmitClosedLost {
         r.aiConfidence = OpportunityCloseService.NOT_SET;
         r.aiFailed = false;
         r.aiFailureReason = '';
+        r.reasonChoices = new List<OpportunityCloseService.Choice>();
+        r.hasReasonChoices = false;
         r.confirmPrompt = '';
         r.changePrompt = '';
         return r;
@@ -229,6 +237,8 @@ public with sharing class SubmitClosedLost {
         @InvocableVariable(label='AI Confidence') public String aiConfidence;
         @InvocableVariable(label='AI Failed' description='True when the AI analysis could not run.') public Boolean aiFailed;
         @InvocableVariable(label='AI Failure Reason' description='Why the AI recommendation is unavailable, when it failed.') public String aiFailureReason;
+        @InvocableVariable(label='Loss Reason Choices' description='Buttons for the recommended CL Primary Reason plus common alternatives. Each carries the prompt the button sends.') public List<OpportunityCloseService.Choice> reasonChoices;
+        @InvocableVariable(label='Has Loss Reason Choices' description='True on preview and blocked responses, when the user can still pick a reason.') public Boolean hasReasonChoices;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

@@ -24,6 +24,13 @@ private class GetCloseReadinessTest {
         System.assertEquals(0, res.missingFieldCount);
         System.assertEquals(true, res.canClose);
         System.assertEquals(27, res.checklist.size());
+        System.assertEquals(27, res.totalFieldCount);
+        System.assertEquals(27, res.completedCount);
+        System.assertEquals(27, res.completeRows.size());
+        System.assertEquals(0, res.neededRows.size());
+        System.assertEquals('Needed (0)', res.neededTitle);
+        System.assertEquals('Complete (27)', res.completeTitle);
+        System.assertEquals('27 of 27 Closed Won fields complete', res.progressLabel);
         System.assert(res.closeWonPrompt.contains(o.Id));
         System.assert(res.opportunityUrl.endsWith(o.Id));
         System.assertEquals('Close Test Co', res.accountName);
@@ -42,6 +49,10 @@ private class GetCloseReadinessTest {
         System.assertEquals(true, res.hasMissingFields);
         System.assert(res.missingFieldCount > 20, 'Most fields should be missing, got ' + res.missingFieldCount);
         System.assert(res.missingFieldsText.contains('Purchase Driver'));
+        System.assertEquals(res.missingFieldCount, res.neededRows.size());
+        System.assertEquals(res.checklist.size(), res.neededRows.size() + res.completeRows.size());
+        System.assertEquals(res.completeRows.size(), res.completedCount);
+        System.assert(res.neededTitle.startsWith('Needed ('));
         Boolean sawNeeded = false;
         for (OpportunityCloseService.Row row : res.checklist) {
             if (row.value == 'Needed') {
@@ -87,5 +98,7 @@ private class GetCloseReadinessTest {
         GetCloseReadiness.Response missing = run('not-an-id');
         System.assertEquals('Not found', missing.statusLabel);
         System.assertEquals(false, missing.canClose);
+        System.assert(missing.totalFieldCount > 0, 'Progress max must stay positive for the widget');
+        System.assertEquals(0, missing.completedCount);
     }
 }

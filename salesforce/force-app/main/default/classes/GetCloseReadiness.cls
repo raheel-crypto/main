@@ -21,6 +21,13 @@ public with sharing class GetCloseReadiness {
     private static Response build(Request req) {
         Response res = new Response();
         res.checklist = new List<OpportunityCloseService.Row>();
+        res.neededRows = new List<OpportunityCloseService.Row>();
+        res.completeRows = new List<OpportunityCloseService.Row>();
+        res.totalFieldCount = OpportunityCloseService.wonFieldSpecs().size();
+        res.completedCount = 0;
+        res.neededTitle = 'Needed';
+        res.completeTitle = 'Complete';
+        res.progressLabel = 'Closed Won fields complete';
         Id oppId = OpportunityCloseService.parseOpportunityId(req.opportunityId);
         Opportunity opp = oppId == null ? null : OpportunityCloseService.loadOpportunity(oppId);
         if (opp == null) {
@@ -77,15 +84,23 @@ public with sharing class GetCloseReadiness {
             Boolean present = OpportunityCloseService.hasValue(spec, opp);
             String value = OpportunityCloseService.displayValue(spec, opp);
             if (present || !needed) {
-                res.checklist.add(new OpportunityCloseService.Row(spec.label, value, 'check-circle', 'success'));
+                OpportunityCloseService.Row done = new OpportunityCloseService.Row(spec.label, value, 'check-circle', 'success');
+                res.checklist.add(done);
+                res.completeRows.add(done);
             } else {
-                res.checklist.add(new OpportunityCloseService.Row(spec.label, 'Needed', 'alert-circle', 'warning'));
+                OpportunityCloseService.Row gap = new OpportunityCloseService.Row(spec.label, 'Needed', 'alert-circle', 'warning');
+                res.checklist.add(gap);
+                res.neededRows.add(gap);
                 missing.add(spec.label);
             }
         }
         res.missingFieldCount = missing.size();
         res.hasMissingFields = !missing.isEmpty();
         res.missingFieldsText = missing.isEmpty() ? 'All Closed Won fields have values' : String.join(missing, ', ');
+        res.completedCount = res.completeRows.size();
+        res.neededTitle = 'Needed (' + res.neededRows.size() + ')';
+        res.completeTitle = 'Complete (' + res.completedCount + ')';
+        res.progressLabel = res.completedCount + ' of ' + res.totalFieldCount + ' Closed Won fields complete';
 
         if (opp.IsClosed) {
             res.statusLabel = opp.IsWon ? 'Already Closed Won' : 'Already Closed Lost';
@@ -138,6 +153,13 @@ public with sharing class GetCloseReadiness {
         @InvocableVariable(label='Missing Field Count') public Integer missingFieldCount;
         @InvocableVariable(label='Missing Fields Text' description='Comma-separated labels of the Closed Won fields that still need values.') public String missingFieldsText;
         @InvocableVariable(label='Checklist' description='Every Closed Won field with its current value and whether it is present.') public List<OpportunityCloseService.Row> checklist;
+        @InvocableVariable(label='Needed Rows' description='The Closed Won fields that still need a value.') public List<OpportunityCloseService.Row> neededRows;
+        @InvocableVariable(label='Complete Rows' description='The Closed Won fields that already have a value, with the value.') public List<OpportunityCloseService.Row> completeRows;
+        @InvocableVariable(label='Completed Count' description='Number of Closed Won fields that have a value.') public Integer completedCount;
+        @InvocableVariable(label='Total Field Count' description='Number of Closed Won fields checked.') public Integer totalFieldCount;
+        @InvocableVariable(label='Needed Title' description='Accordion title for the needed fields, with the count.') public String neededTitle;
+        @InvocableVariable(label='Complete Title' description='Accordion title for the complete fields, with the count.') public String completeTitle;
+        @InvocableVariable(label='Progress Label' description='Label for the progress bar, e.g. 4 of 27 Closed Won fields complete.') public String progressLabel;
         @InvocableVariable(label='Close Won Prompt') public String closeWonPrompt;
         @InvocableVariable(label='Close Lost Prompt') public String closeLostPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

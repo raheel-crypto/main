@@ -207,6 +207,28 @@
       "copilotAction:useHydratedPrompt": false,
       "lightning:type": "lightning__textType"
     },
+    "reasonChoices": {
+      "title": "Loss Reason Choices",
+      "description": "Loss Reason Choices",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "maxItems": 2000,
+      "items": {
+        "lightning:type": "@apexClassType/c__OpportunityCloseService$Choice"
+      },
+      "lightning:type": "lightning__listType"
+    },
+    "hasReasonChoices": {
+      "title": "Has Loss Reason Choices",
+      "description": "Has Loss Reason Choices",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
     "confirmPrompt": {
       "title": "Confirm Prompt",
       "description": "Confirm Prompt",

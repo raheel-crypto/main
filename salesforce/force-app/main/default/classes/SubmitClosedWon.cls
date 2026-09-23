@@ -271,6 +271,8 @@ public with sharing class SubmitClosedWon {
         r.aiConfidence = OpportunityCloseService.NOT_SET;
         r.aiFailed = false;
         r.aiFailureReason = '';
+        r.reasonChoices = new List<OpportunityCloseService.Choice>();
+        r.hasReasonChoices = false;
         r.confirmPrompt = '';
         r.changePrompt = '';
         return r;
@@ -339,6 +341,8 @@ public with sharing class SubmitClosedWon {
         @InvocableVariable(label='AI Confidence' description='AI win confidence when available.') public String aiConfidence;
         @InvocableVariable(label='AI Failed' description='True when the AI analysis could not run.') public Boolean aiFailed;
         @InvocableVariable(label='AI Failure Reason' description='Why the AI win analysis is unavailable, when it failed.') public String aiFailureReason;
+        @InvocableVariable(label='Loss Reason Choices' description='Always empty for Closed Won; present so the same card renders Won and Lost.') public List<OpportunityCloseService.Choice> reasonChoices;
+        @InvocableVariable(label='Has Loss Reason Choices' description='Always false for Closed Won.') public Boolean hasReasonChoices;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

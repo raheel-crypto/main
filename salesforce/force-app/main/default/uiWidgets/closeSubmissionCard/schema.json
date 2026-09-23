@@ -1,6 +1,6 @@
 {
   "title": "Close Submission Card",
-  "description": "Preview, problems, or result of a Closed Won or Closed Lost submission, with confirm and change buttons.",
+  "description": "Preview, problems, or result of a Closed Won or Closed Lost submission, with loss reason choice buttons and confirm and change buttons.",
   "type": "object",
   "properties": {
     "attributes": {
@@ -135,6 +135,31 @@
         "aiFailureReason": {
           "title": "AI Failure Reason",
           "lightning:type": "lightning__multilineTextType"
+        },
+        "reasonChoices": {
+          "title": "Loss Reason Choices",
+          "lightning:type": "lightning__listType",
+          "items": {
+            "lightning:type": "lightning__objectType",
+            "properties": {
+              "label": {
+                "title": "Label",
+                "lightning:type": "lightning__textType"
+              },
+              "prompt": {
+                "title": "Prompt",
+                "lightning:type": "lightning__multilineTextType"
+              },
+              "variant": {
+                "title": "Variant",
+                "lightning:type": "lightning__textType"
+              }
+            }
+          }
+        },
+        "hasReasonChoices": {
+          "title": "Has Loss Reason Choices",
+          "lightning:type": "lightning__booleanType"
         },
         "confirmPrompt": {
           "title": "Confirm Prompt",

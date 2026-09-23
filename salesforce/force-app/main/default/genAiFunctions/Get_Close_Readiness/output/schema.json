@@ -194,6 +194,77 @@
       },
       "lightning:type": "lightning__listType"
     },
+    "neededRows": {
+      "title": "Needed Rows",
+      "description": "Needed Rows",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "maxItems": 2000,
+      "items": {
+        "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+      },
+      "lightning:type": "lightning__listType"
+    },
+    "completeRows": {
+      "title": "Complete Rows",
+      "description": "Complete Rows",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "maxItems": 2000,
+      "items": {
+        "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+      },
+      "lightning:type": "lightning__listType"
+    },
+    "completedCount": {
+      "title": "Completed Count",
+      "description": "Completed Count",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__integerType"
+    },
+    "totalFieldCount": {
+      "title": "Total Field Count",
+      "description": "Total Field Count",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__integerType"
+    },
+    "neededTitle": {
+      "title": "Needed Title",
+      "description": "Needed Title",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "completeTitle": {
+      "title": "Complete Title",
+      "description": "Complete Title",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "progressLabel": {
+      "title": "Progress Label",
+      "description": "Progress Label",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
     "closeWonPrompt": {
       "title": "Close Won Prompt",
       "description": "Close Won Prompt",

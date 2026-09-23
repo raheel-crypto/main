@@ -92,6 +92,34 @@
       "title": "Checklist",
       "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
     },
+    "neededRows": {
+      "title": "Needed Rows",
+      "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+    },
+    "completeRows": {
+      "title": "Complete Rows",
+      "lightning:type": "@apexClassType/c__OpportunityCloseService$Row"
+    },
+    "completedCount": {
+      "title": "Completed Count",
+      "lightning:type": "lightning__integerType"
+    },
+    "totalFieldCount": {
+      "title": "Total Field Count",
+      "lightning:type": "lightning__integerType"
+    },
+    "neededTitle": {
+      "title": "Needed Title",
+      "lightning:type": "lightning__textType"
+    },
+    "completeTitle": {
+      "title": "Complete Title",
+      "lightning:type": "lightning__textType"
+    },
+    "progressLabel": {
+      "title": "Progress Label",
+      "lightning:type": "lightning__textType"
+    },
     "closeWonPrompt": {
       "title": "Close Won Prompt",
       "lightning:type": "lightning__multilineTextType"

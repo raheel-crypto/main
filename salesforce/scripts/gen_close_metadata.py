@@ -13,8 +13,15 @@ ROW_ITEM_PROPS = {
     "icon": {"title": "Icon", "lightning:type": "lightning__textType"},
     "color": {"title": "Color", "lightning:type": "lightning__textType"},
 }
+CHOICE_TYPE = "@apexClassType/c__OpportunityCloseService$Choice"
+CHOICE_ITEM_PROPS = {
+    "label": {"title": "Label", "lightning:type": "lightning__textType"},
+    "prompt": {"title": "Prompt", "lightning:type": "lightning__multilineTextType"},
+    "variant": {"title": "Variant", "lightning:type": "lightning__textType"},
+}
+LIST_KINDS = {"rows": (ROW_TYPE, ROW_ITEM_PROPS), "choices": (CHOICE_TYPE, CHOICE_ITEM_PROPS)}
 
-# kind: text | long | bool | int | rows
+# kind: text | long | bool | int | rows | choices
 READINESS = [
     ("opportunityId", "text", "Opportunity Id"), ("opportunityName", "text", "Opportunity Name"),
     ("accountName", "text", "Account Name"), ("stageName", "text", "Stage"), ("amount", "text", "Amount"),
@@ -25,6 +32,10 @@ READINESS = [
     ("missingSignedDocument", "bool", "Missing Signed Document"), ("signedDocumentText", "long", "Signed Document Text"),
     ("hasMissingFields", "bool", "Has Missing Fields"), ("missingFieldCount", "int", "Missing Field Count"),
     ("missingFieldsText", "long", "Missing Fields Text"), ("checklist", "rows", "Checklist"),
+    ("neededRows", "rows", "Needed Rows"), ("completeRows", "rows", "Complete Rows"),
+    ("completedCount", "int", "Completed Count"), ("totalFieldCount", "int", "Total Field Count"),
+    ("neededTitle", "text", "Needed Title"), ("completeTitle", "text", "Complete Title"),
+    ("progressLabel", "text", "Progress Label"),
     ("closeWonPrompt", "long", "Close Won Prompt"), ("closeLostPrompt", "long", "Close Lost Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
@@ -38,12 +49,13 @@ SUBMISSION = [
     ("recommendedReason", "text", "Recommended Reason"), ("recommendedCompetitor", "text", "Recommended Competitor"),
     ("recommendedNarrative", "long", "Recommended Narrative"), ("aiConfidence", "text", "AI Confidence"),
     ("aiFailed", "bool", "AI Failed"), ("aiFailureReason", "long", "AI Failure Reason"),
+    ("reasonChoices", "choices", "Loss Reason Choices"), ("hasReasonChoices", "bool", "Has Loss Reason Choices"),
     ("confirmPrompt", "long", "Confirm Prompt"), ("changePrompt", "long", "Change Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
 
 CLT_TYPES = {"text": "lightning__textType", "long": "lightning__multilineTextType", "bool": "lightning__booleanType",
-             "int": "lightning__integerType", "rows": ROW_TYPE}
+             "int": "lightning__integerType", "rows": ROW_TYPE, "choices": CHOICE_TYPE}
 WIDGET_TYPES = {"text": "lightning__textType", "long": "lightning__multilineTextType", "bool": "lightning__booleanType",
                 "int": "lightning__numberType"}
 ACTION_TYPES = {"text": "lightning__textType", "long": "lightning__textType", "bool": "lightning__booleanType",
@@ -59,9 +71,9 @@ def w(path, content):
 def widget_schema(title, desc, fields):
     props = {}
     for key, kind, label in fields:
-        if kind == "rows":
+        if kind in LIST_KINDS:
             props[key] = {"title": label, "lightning:type": "lightning__listType",
-                          "items": {"lightning:type": "lightning__objectType", "properties": ROW_ITEM_PROPS}}
+                          "items": {"lightning:type": "lightning__objectType", "properties": LIST_KINDS[kind][1]}}
         else:
             props[key] = {"title": label, "lightning:type": WIDGET_TYPES[kind]}
     return {"title": title, "description": desc, "type": "object",
@@ -93,8 +105,8 @@ def action_output(fields):
         p = {"title": label, "description": label, "lightning:isPII": False,
              "copilotAction:isDisplayable": True, "copilotAction:isUsedByPlanner": True,
              "copilotAction:useHydratedPrompt": False}
-        if kind == "rows":
-            p.update({"maxItems": 2000, "items": {"lightning:type": ROW_TYPE}, "lightning:type": "lightning__listType"})
+        if kind in LIST_KINDS:
+            p.update({"maxItems": 2000, "items": {"lightning:type": LIST_KINDS[kind][0]}, "lightning:type": "lightning__listType"})
         else:
             p["lightning:type"] = ACTION_TYPES[kind]
         props[key] = p
@@ -211,6 +223,32 @@ def table(list_binding, caption, first_header, second_header):
         "rows": list_binding,
     }}
 
+def progress(label_b, value_b, max_b, color="primary"):
+    return {"definition": "tile/progress", "attributes": {
+        "label": label_b, "value": value_b, "max": max_b, "shape": "linear", "size": "sm", "color": color}}
+
+def accordion(items):
+    return {"definition": "tile/accordion", "attributes": {}, "children": items}
+
+def accordion_item(title_b, children, icon_name=None, expanded=False, cond=None):
+    attrs = {"title": title_b, "isExpanded": expanded}
+    if icon_name:
+        attrs["iconName"] = icon_name
+        attrs["iconAlt"] = ""
+    node = {"definition": "tile/accordionitem", "attributes": attrs, "children": children}
+    if cond:
+        node["meta"] = {"if": cond}
+    return node
+
+def markdown(source_b):
+    return {"definition": "tile/markdown", "attributes": {"source": source_b}}
+
+def choice_buttons(list_binding, item="$choice"):
+    """One button per Choice: label and variant come from the item, the click sends the item's prompt."""
+    node = button("{!" + item + ".label}", "{!" + item + ".variant}", send("{!" + item + ".prompt}"))
+    node["meta"] = {"forEach": list_binding, "forItem": item}
+    return node
+
 
 # ─── Widget 1: closeReadinessCard ────────────────────────────────────────
 
@@ -229,8 +267,14 @@ readiness_body = envelope([
     sep(),
     col([
         text("Closed Won checklist", variant="h3"),
-        table("{!$attrs.checklist}", "Closed Won field checklist", "Field", "Current value"),
-        callout("Fields still needed", None, "warning", "{!$attrs.hasMissingFields}", body="{!$attrs.missingFieldsText}"),
+        progress("{!$attrs.progressLabel}", "{!$attrs.completedCount}", "{!$attrs.totalFieldCount}"),
+        text("{!$attrs.progressLabel}", variant="caption", color="muted"),
+        accordion([
+            accordion_item("{!$attrs.neededTitle}", [table("{!$attrs.neededRows}", "Fields that still need a value", "Field", "Status")],
+                           icon_name="alert-circle", expanded=True, cond="{!$attrs.hasMissingFields}"),
+            accordion_item("{!$attrs.completeTitle}", [table("{!$attrs.completeRows}", "Fields that already have a value", "Field", "Current value")],
+                           icon_name="check-circle", expanded=False),
+        ]),
     ], gap="sm"),
     col([
         with_if(row([
@@ -255,9 +299,17 @@ submission_body = envelope([
         row([stat("Recommended reason", "{!$attrs.recommendedReason}"),
              stat("Recommended competitor", "{!$attrs.recommendedCompetitor}"),
              stat("Confidence", "{!$attrs.aiConfidence}")], gap="lg", align="start"),
-        text("{!$attrs.recommendedNarrative}", variant="body", color="muted"),
+        markdown("{!$attrs.recommendedNarrative}"),
+        accordion([
+            accordion_item("AI analysis details", [markdown("{!$attrs.aiSummary}")], icon_name="file-text", expanded=False),
+        ]),
     ], gap="sm"), "{!$attrs.hasRecommendation}"),
     callout("AI analysis unavailable", None, "warning", "{!$attrs.aiFailed}", body="{!$attrs.aiFailureReason}"),
+    with_if(col([
+        text("Pick the loss reason", variant="h3"),
+        text("Choose a reason to preview with it, or ask for the full list.", variant="caption", color="muted"),
+        row([choice_buttons("{!$attrs.reasonChoices}")], gap="sm", isWrapped=True),
+    ], gap="sm"), "{!$attrs.hasReasonChoices}"),
     with_if(col([
         callout("Fix these before submitting", "Nothing has been saved.", "error"),
         table("{!$attrs.problems}", "Problems to fix", "Field", "Issue"),
@@ -282,15 +334,15 @@ submission_body = envelope([
 
 w(f"{PKG}/uiWidgets/closeReadinessCard/closeReadinessCard.json", readiness_body)
 w(f"{PKG}/uiWidgets/closeReadinessCard/schema.json", widget_schema(
-    "Close Readiness Card", "Shows whether an opportunity can be closed: status, signed order form, and a checklist of Closed Won fields.", READINESS))
+    "Close Readiness Card", "Shows whether an opportunity can be closed: status, signed order form, a progress bar, and the Closed Won fields grouped into needed and complete.", READINESS))
 w(f"{PKG}/uiWidgets/closeReadinessCard/closeReadinessCard.uiwidget-meta.xml", widget_meta(
-    "Close Readiness Card", "Whether an opportunity can be closed from the agent: status badge, signed order form check, Closed Won field checklist, and buttons to start Closed Won or Closed Lost."))
+    "Close Readiness Card", "Whether an opportunity can be closed from the agent: status badge, signed order form check, completion progress, Closed Won fields grouped into needed and complete, and buttons to start Closed Won or Closed Lost."))
 
 w(f"{PKG}/uiWidgets/closeSubmissionCard/closeSubmissionCard.json", submission_body)
 w(f"{PKG}/uiWidgets/closeSubmissionCard/schema.json", widget_schema(
-    "Close Submission Card", "Preview, problems, or result of a Closed Won or Closed Lost submission, with confirm and change buttons.", SUBMISSION))
+    "Close Submission Card", "Preview, problems, or result of a Closed Won or Closed Lost submission, with loss reason choice buttons and confirm and change buttons.", SUBMISSION))
 w(f"{PKG}/uiWidgets/closeSubmissionCard/closeSubmissionCard.uiwidget-meta.xml", widget_meta(
-    "Close Submission Card", "Preview, validation problems, or result of submitting an opportunity as Closed Won or Closed Lost, with an AI recommendation section and confirm buttons."))
+    "Close Submission Card", "Preview, validation problems, or result of submitting an opportunity as Closed Won or Closed Lost, with an AI recommendation section, loss reason choice buttons, and confirm buttons."))
 
 # ─── Emit Lightning Types + renderers ───────────────────────────────────
 

@@ -26,6 +26,8 @@
           "aiConfidence": "{!$attrs.outputValues.aiConfidence}",
           "aiFailed": "{!$attrs.outputValues.aiFailed}",
           "aiFailureReason": "{!$attrs.outputValues.aiFailureReason}",
+          "reasonChoices": "{!$attrs.outputValues.reasonChoices}",
+          "hasReasonChoices": "{!$attrs.outputValues.hasReasonChoices}",
           "confirmPrompt": "{!$attrs.outputValues.confirmPrompt}",
           "changePrompt": "{!$attrs.outputValues.changePrompt}",
           "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"

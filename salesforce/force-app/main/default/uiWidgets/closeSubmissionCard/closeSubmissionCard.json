@@ -167,12 +167,33 @@
                   ]
                 },
                 {
-                  "definition": "tile/text",
+                  "definition": "tile/markdown",
                   "attributes": {
-                    "text": "{!$attrs.recommendedNarrative}",
-                    "variant": "body",
-                    "color": "muted"
+                    "source": "{!$attrs.recommendedNarrative}"
                   }
+                },
+                {
+                  "definition": "tile/accordion",
+                  "attributes": {},
+                  "children": [
+                    {
+                      "definition": "tile/accordionitem",
+                      "attributes": {
+                        "title": "AI analysis details",
+                        "isExpanded": false,
+                        "iconName": "file-text",
+                        "iconAlt": ""
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/markdown",
+                          "attributes": {
+                            "source": "{!$attrs.aiSummary}"
+                          }
+                        }
+                      ]
+                    }
+                  ]
                 }
               ],
               "meta": {
@@ -196,6 +217,63 @@
               ],
               "meta": {
                 "if": "{!$attrs.aiFailed}"
+              }
+            },
+            {
+              "definition": "tile/column",
+              "attributes": {
+                "gap": "sm"
+              },
+              "children": [
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "Pick the loss reason",
+                    "variant": "h3"
+                  }
+                },
+                {
+                  "definition": "tile/text",
+                  "attributes": {
+                    "text": "Choose a reason to preview with it, or ask for the full list.",
+                    "variant": "caption",
+                    "color": "muted"
+                  }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "sm",
+                    "align": "center",
+                    "isWrapped": true
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "{!$choice.label}",
+                        "variant": "{!$choice.variant}",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/sendMessage",
+                              "attributes": {
+                                "content": "{!$choice.prompt}"
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "meta": {
+                        "forEach": "{!$attrs.reasonChoices}",
+                        "forItem": "$choice"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "meta": {
+                "if": "{!$attrs.hasReasonChoices}"
               }
             },
             {

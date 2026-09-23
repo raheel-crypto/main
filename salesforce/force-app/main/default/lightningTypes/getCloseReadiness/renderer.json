@@ -25,6 +25,13 @@
           "missingFieldCount": "{!$attrs.outputValues.missingFieldCount}",
           "missingFieldsText": "{!$attrs.outputValues.missingFieldsText}",
           "checklist": "{!$attrs.outputValues.checklist}",
+          "neededRows": "{!$attrs.outputValues.neededRows}",
+          "completeRows": "{!$attrs.outputValues.completeRows}",
+          "completedCount": "{!$attrs.outputValues.completedCount}",
+          "totalFieldCount": "{!$attrs.outputValues.totalFieldCount}",
+          "neededTitle": "{!$attrs.outputValues.neededTitle}",
+          "completeTitle": "{!$attrs.outputValues.completeTitle}",
+          "progressLabel": "{!$attrs.outputValues.progressLabel}",
           "closeWonPrompt": "{!$attrs.outputValues.closeWonPrompt}",
           "closeLostPrompt": "{!$attrs.outputValues.closeLostPrompt}",
           "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"

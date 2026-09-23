@@ -96,6 +96,14 @@
       "title": "AI Failure Reason",
       "lightning:type": "lightning__multilineTextType"
     },
+    "reasonChoices": {
+      "title": "Loss Reason Choices",
+      "lightning:type": "@apexClassType/c__OpportunityCloseService$Choice"
+    },
+    "hasReasonChoices": {
+      "title": "Has Loss Reason Choices",
+      "lightning:type": "lightning__booleanType"
+    },
     "confirmPrompt": {
       "title": "Confirm Prompt",
       "lightning:type": "lightning__multilineTextType"
