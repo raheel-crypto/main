@@ -45,11 +45,12 @@ public with sharing class SubmitClosedLost {
         // callout can outlast an MCP tool call. The controller writes CL_Reason_AI__c,
         // CL_Narrative_AI__c and Final_Competitor__c to the record; this tool only
         // reads them. On preview: start the job when nothing has run yet (or on an
-        // explicit retry), report progress while it runs, report failure otherwise.
+        // explicit retry), report progress while it runs, and after a failure show
+        // the reason with a Retry button rather than restarting silently.
         // On confirm: never wait; close with whatever the record holds.
         Boolean haveAi = String.isNotBlank(opp.CL_Reason_AI__c);
         OpportunityCloseService.AiState state = OpportunityCloseService.aiState(opp);
-        if (!confirm && (req.retryAi == true || (!haveAi && !state.running))) {
+        if (!confirm && (req.retryAi == true || (!haveAi && !state.running && !state.failed))) {
             if (OpportunityCloseService.startAiAnalysis(opp, 'Loss')) {
                 res.aiRunning = true;
                 res.aiStatusText = 'The AI loss analysis has started in the background. It usually takes about 30 seconds. '
