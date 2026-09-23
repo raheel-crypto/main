@@ -112,13 +112,13 @@ private class SubmitClosedLostTest {
         System.assertEquals(true, first.aiRunning, 'First preview starts the analysis');
         System.assert(first.aiStatusText.contains('started'));
         System.assert(first.refreshPrompt.contains(o.Id));
-        System.assertEquals(1, Limits.getQueueableJobs(), 'One job queued');
+        System.assertEquals(1, OpportunityCloseService.aiJobsStarted, 'One analysis job started');
         System.assert([SELECT Agent_AI_Status__c FROM Opportunity WHERE Id = :o.Id].Agent_AI_Status__c.startsWith(CloseAiAnalysisJob.RUNNING_PREFIX));
 
         SubmitClosedLost.Response second = run(request(o.Id, false));
         System.assertEquals(true, second.aiRunning, 'Still running');
         System.assert(second.aiStatusText.contains('still running'));
-        System.assertEquals(1, Limits.getQueueableJobs(), 'A running analysis is not queued twice');
+        System.assertEquals(1, OpportunityCloseService.aiJobsStarted, 'A running analysis is not started twice');
 
         // Confirm never waits for the AI and never starts it.
         SubmitClosedLost.Request confirm = request(o.Id, true);
@@ -128,7 +128,7 @@ private class SubmitClosedLostTest {
         SubmitClosedLost.Response c = run(confirm);
         System.assertEquals('Submitted', c.status);
         System.assertEquals(false, c.aiRunning);
-        System.assertEquals(1, Limits.getQueueableJobs());
+        System.assertEquals(1, OpportunityCloseService.aiJobsStarted, 'Confirm never starts the analysis');
     }
 
     @IsTest
@@ -147,14 +147,14 @@ private class SubmitClosedLostTest {
         for (OpportunityCloseService.Choice ch : failed.reasonChoices) {
             System.assertNotEquals('Retry AI analysis', ch.label, 'Retry is its own button, not a reason');
         }
-        System.assertEquals(0, Limits.getQueueableJobs(), 'A failed analysis is not restarted silently');
+        System.assertEquals(0, OpportunityCloseService.aiJobsStarted, 'A failed analysis is not restarted silently');
 
         SubmitClosedLost.Request retry = request(o.Id, false);
         retry.retryAi = true;
         SubmitClosedLost.Response retried = run(retry);
         System.assertEquals(true, retried.aiRunning);
         System.assertEquals(false, retried.aiFailed);
-        System.assertEquals(1, Limits.getQueueableJobs());
+        System.assertEquals(1, OpportunityCloseService.aiJobsStarted, 'Retry starts exactly one job');
     }
 
     @IsTest
@@ -174,7 +174,7 @@ private class SubmitClosedLostTest {
         System.assertEquals('Competitive Loss', p.recommendedReason);
         System.assertEquals('Hebbia', p.recommendedCompetitor);
         System.assertEquals('Use recommended: Competitive Loss', p.reasonChoices[0].label);
-        System.assertEquals(0, Limits.getQueueableJobs());
+        System.assertEquals(0, OpportunityCloseService.aiJobsStarted, 'No job when the record already has a recommendation');
     }
 
     @IsTest

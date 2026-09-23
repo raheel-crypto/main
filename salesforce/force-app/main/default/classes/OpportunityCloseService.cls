@@ -357,6 +357,9 @@ public with sharing class OpportunityCloseService {
      * false when the job could not be queued (governor limit), in which case the
      * status is left untouched.
      */
+    /** Number of analysis jobs this transaction started; tests read it because org triggers queue jobs of their own. */
+    @TestVisible private static Integer aiJobsStarted = 0;
+
     public static Boolean startAiAnalysis(Opportunity opp, String mode) {
         if (Limits.getQueueableJobs() >= Limits.getLimitQueueableJobs()) {
             return false;
@@ -364,6 +367,7 @@ public with sharing class OpportunityCloseService {
         update new Opportunity(Id = opp.Id,
             Agent_AI_Status__c = CloseAiAnalysisJob.RUNNING_PREFIX + Datetime.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\''));
         System.enqueueJob(new CloseAiAnalysisJob(opp.Id, mode));
+        aiJobsStarted++;
         return true;
     }
 
