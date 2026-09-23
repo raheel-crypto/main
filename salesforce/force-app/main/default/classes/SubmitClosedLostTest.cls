@@ -77,6 +77,8 @@ private class SubmitClosedLostTest {
         System.assert(labels.contains('CL Notes'));
         System.assert(labels.contains('LOB/Division'));
         System.assertEquals('3 - POV', [SELECT StageName FROM Opportunity WHERE Id = :o.Id].StageName);
+        System.assertEquals(true, res.hasReasonChoices, 'A blocked confirm still offers reason buttons');
+        System.assertEquals('Competitive Loss', res.reasonChoices[0].label);
     }
 
     @IsTest

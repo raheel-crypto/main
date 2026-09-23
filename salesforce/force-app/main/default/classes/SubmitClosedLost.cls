@@ -66,11 +66,15 @@ public with sharing class SubmitClosedLost {
         res.aiConfidence = firstNonBlank(ai == null ? null : ai.confidence, opp.CL_Confidence_AI__c);
         res.hasRecommendation = res.recommendedReason != OpportunityCloseService.NOT_SET;
 
-        // Choice buttons: offered whenever the reason can still change (preview or blocked).
-        if (!confirm) {
-            res.reasonChoices = OpportunityCloseService.lostReasonChoices(opp, res.recommendedReason);
-            res.hasReasonChoices = !res.reasonChoices.isEmpty();
+        // Choice buttons: offered on every response that does not submit (preview or
+        // blocked), whatever the confirm flag was, so a blocked confirm still gets them.
+        // When the AI analysis failed, a retry button rides along.
+        res.reasonChoices = OpportunityCloseService.lostReasonChoices(opp, res.recommendedReason);
+        if (res.aiFailed) {
+            res.reasonChoices.add(new OpportunityCloseService.Choice('Retry AI analysis',
+                OpportunityCloseService.retryAiPrompt(opp), 'secondary'));
         }
+        res.hasReasonChoices = true;
 
         // Merge inputs over existing values (notes default to the AI narrative, like the flow).
         String primary = pick(req.primaryReason, opp.CL_Primary_Reason__c);
@@ -135,6 +139,8 @@ public with sharing class SubmitClosedLost {
         }
         update upd;
 
+        res.reasonChoices = new List<OpportunityCloseService.Choice>();
+        res.hasReasonChoices = false;
         res.isSubmitted = true;
         return res.finish('Submitted', 'Closed Lost', 'success', 'Opportunity closed Lost',
             'The opportunity is now Closed Lost with the reasons and notes recorded.');

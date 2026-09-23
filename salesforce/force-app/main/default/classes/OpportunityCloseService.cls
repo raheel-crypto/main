@@ -280,6 +280,10 @@ public with sharing class OpportunityCloseService {
             + '". Keep the recommended competitor and narrative unless I say otherwise, then show me the preview.';
     }
 
+    public static String retryAiPrompt(Opportunity opp) {
+        return 'Run the AI loss analysis again for opportunity ' + opp.Id + ' and show me the Closed Lost preview.';
+    }
+
     public static String otherReasonPrompt(Opportunity opp) {
         return 'I want a different loss reason for opportunity ' + opp.Id + '. List the CL Primary Reason options and ask me which one applies.';
     }
