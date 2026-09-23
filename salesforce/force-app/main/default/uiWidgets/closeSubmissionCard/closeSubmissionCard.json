@@ -201,23 +201,79 @@
               }
             },
             {
-              "definition": "tile/callout",
+              "definition": "tile/column",
               "attributes": {
-                "title": "AI analysis unavailable",
-                "variant": "warning"
+                "gap": "sm"
               },
               "children": [
                 {
-                  "definition": "tile/text",
+                  "definition": "tile/callout",
                   "attributes": {
-                    "text": "{!$attrs.aiFailureReason}",
-                    "variant": "body"
+                    "title": "AI analysis running",
+                    "variant": "info"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$attrs.aiStatusText}",
+                        "variant": "body"
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.aiRunning}"
+                  }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Refresh preview",
+                        "variant": "secondary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/sendMessage",
+                              "attributes": {
+                                "content": "{!$attrs.refreshPrompt}"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.aiRunning}"
+                  }
+                },
+                {
+                  "definition": "tile/callout",
+                  "attributes": {
+                    "title": "AI analysis unavailable",
+                    "variant": "warning"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "{!$attrs.aiFailureReason}",
+                        "variant": "body"
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.aiFailed}"
                   }
                 }
-              ],
-              "meta": {
-                "if": "{!$attrs.aiFailed}"
-              }
+              ]
             },
             {
               "definition": "tile/column",

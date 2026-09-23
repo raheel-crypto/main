@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Agent_AI_Status__c</fullName>
+    <description>Agent close tools: state of the background AI deal analysis. "Running since &lt;time&gt;" while queued, "Failed &lt;time&gt;: &lt;reason&gt;" when it failed, blank once it has succeeded.</description>
+    <externalId>false</externalId>
+    <inlineHelpText>Set by the agent close tools while the AI analysis runs in the background. Safe to ignore.</inlineHelpText>
+    <label>Agent AI Status</label>
+    <length>255</length>
+    <required>false</required>
+    <trackFeedHistory>false</trackFeedHistory>
+    <trackHistory>false</trackHistory>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

@@ -90,7 +90,7 @@ public with sharing class OpportunityCloseService {
                    ELA__c, Opt_Out__c, Opt_Out_Date__c,
                    CL_Primary_Reason__c, CL_Secondary_Reason__c, Final_Competitor__c, CL_Notes__c,
                    CL_Reason_AI__c, CL_Narrative_AI__c, CL_Details_AI__c, CL_Confidence_AI__c,
-                   Evidence_Tier_AI__c, Next_Step_AI__c
+                   Evidence_Tier_AI__c, Next_Step_AI__c, Agent_AI_Status__c
             FROM Opportunity
             WHERE Id = :opportunityId
             LIMIT 1
@@ -300,7 +300,79 @@ public with sharing class OpportunityCloseService {
     }
 
     public static String retryAiPrompt(Opportunity opp) {
-        return 'Run the AI loss analysis again for opportunity ' + opp.Id + ' and show me the Closed Lost preview.';
+        return 'Retry the AI loss analysis for opportunity ' + opp.Id + ' (call Submit Closed Lost with retryAi=true) and show me the '
+            + 'Closed Lost preview.' + ONE_MESSAGE_TAIL;
+    }
+
+    public static String refreshLostPrompt(Opportunity opp) {
+        return 'Show me the Closed Lost preview for opportunity ' + opp.Id + ' again; the AI analysis should be done now.' + ONE_MESSAGE_TAIL;
+    }
+
+    // ─── Background AI analysis ──────────────────────────────────────────
+
+    /** A running analysis older than this is treated as lost and started again. */
+    @TestVisible private static final Integer AI_STALE_MINUTES = 3;
+
+    /** Parsed view of Opportunity.Agent_AI_Status__c. */
+    public class AiState {
+        public Boolean running = false;
+        public Boolean failed = false;
+        public String reason;
+        public Datetime since;
+    }
+
+    public static AiState aiState(Opportunity opp) {
+        AiState s = new AiState();
+        String raw = opp == null ? null : opp.Agent_AI_Status__c;
+        if (String.isBlank(raw)) {
+            return s;
+        }
+        if (raw.startsWith(CloseAiAnalysisJob.RUNNING_PREFIX)) {
+            s.since = parseIso(raw.substring(CloseAiAnalysisJob.RUNNING_PREFIX.length()).trim());
+            Boolean stale = s.since == null || s.since.addMinutes(AI_STALE_MINUTES) < Datetime.now();
+            if (stale) {
+                s.failed = true;
+                s.reason = 'The previous AI analysis did not finish.';
+            } else {
+                s.running = true;
+            }
+        } else if (raw.startsWith(CloseAiAnalysisJob.FAILED_PREFIX)) {
+            s.failed = true;
+            Integer colon = raw.indexOf(': ');
+            s.reason = colon > 0 ? raw.substring(colon + 2) : raw;
+        }
+        return s;
+    }
+
+    private static Datetime parseIso(String iso) {
+        try {
+            return (Datetime) JSON.deserialize('"' + iso + '"', Datetime.class);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Marks the opportunity as analysing and queues the background job. Returns
+     * false when the job could not be queued (governor limit), in which case the
+     * status is left untouched.
+     */
+    public static Boolean startAiAnalysis(Opportunity opp, String mode) {
+        if (Limits.getQueueableJobs() >= Limits.getLimitQueueableJobs()) {
+            return false;
+        }
+        update new Opportunity(Id = opp.Id,
+            Agent_AI_Status__c = CloseAiAnalysisJob.RUNNING_PREFIX + Datetime.now().formatGmt('yyyy-MM-dd\'T\'HH:mm:ss\'Z\''));
+        System.enqueueJob(new CloseAiAnalysisJob(opp.Id, mode));
+        return true;
+    }
+
+    public static String secondsAgoText(Datetime since) {
+        if (since == null) {
+            return '';
+        }
+        Long secs = (Datetime.now().getTime() - since.getTime()) / 1000;
+        return ' It started ' + secs + ' seconds ago.';
     }
 
     public static String otherReasonPrompt(Opportunity opp) {

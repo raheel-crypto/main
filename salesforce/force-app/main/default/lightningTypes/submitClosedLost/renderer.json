@@ -32,8 +32,11 @@
           "hasLobChoices": "{!$attrs.outputValues.hasLobChoices}",
           "needsSignedDocument": "{!$attrs.outputValues.needsSignedDocument}",
           "filesUrl": "{!$attrs.outputValues.filesUrl}",
+          "aiRunning": "{!$attrs.outputValues.aiRunning}",
+          "aiStatusText": "{!$attrs.outputValues.aiStatusText}",
           "confirmPrompt": "{!$attrs.outputValues.confirmPrompt}",
           "changePrompt": "{!$attrs.outputValues.changePrompt}",
+          "refreshPrompt": "{!$attrs.outputValues.refreshPrompt}",
           "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"
         }
       }

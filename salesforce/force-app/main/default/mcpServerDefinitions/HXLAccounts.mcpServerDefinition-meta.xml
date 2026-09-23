@@ -56,7 +56,7 @@
             <apiSource>API_CATALOG</apiSource>
             <operation>SubmitClosedLost</operation>
         </apiDefinition>
-        <descriptionOverride>Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to get the AI-recommended loss reason, competitor, and narrative and preview the values; the user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative; a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.</descriptionOverride>
+        <descriptionOverride>Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to preview: the first call starts the AI loss analysis in the background (about 30 seconds) and returns immediately; a later preview call shows the recommended reason, competitor, and narrative. The user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative; a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.</descriptionOverride>
         <destructive>false</destructive>
         <idempotent>false</idempotent>
         <openWorld>false</openWorld>

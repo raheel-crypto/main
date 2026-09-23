@@ -103,6 +103,84 @@ private class SubmitClosedLostTest {
     }
 
     @IsTest
+    static void previewStartsBackgroundAiOnceAndReportsProgress() {
+        OpportunityCloseService.disableExternalCalls = true;
+        Account a = OpportunityCloseServiceTest.makeAccount();
+        Opportunity o = OpportunityCloseServiceTest.makeBareOpportunity(a.Id);
+
+        SubmitClosedLost.Response first = run(request(o.Id, false));
+        System.assertEquals(true, first.aiRunning, 'First preview starts the analysis');
+        System.assert(first.aiStatusText.contains('started'));
+        System.assert(first.refreshPrompt.contains(o.Id));
+        System.assertEquals(1, Limits.getQueueableJobs(), 'One job queued');
+        System.assert([SELECT Agent_AI_Status__c FROM Opportunity WHERE Id = :o.Id].Agent_AI_Status__c.startsWith(CloseAiAnalysisJob.RUNNING_PREFIX));
+
+        SubmitClosedLost.Response second = run(request(o.Id, false));
+        System.assertEquals(true, second.aiRunning, 'Still running');
+        System.assert(second.aiStatusText.contains('still running'));
+        System.assertEquals(1, Limits.getQueueableJobs(), 'A running analysis is not queued twice');
+
+        // Confirm never waits for the AI and never starts it.
+        SubmitClosedLost.Request confirm = request(o.Id, true);
+        confirm.primaryReason = 'No Need';
+        confirm.notes = 'Went quiet';
+        confirm.lobDivision = 'Private Equity';
+        SubmitClosedLost.Response c = run(confirm);
+        System.assertEquals('Submitted', c.status);
+        System.assertEquals(false, c.aiRunning);
+        System.assertEquals(1, Limits.getQueueableJobs());
+    }
+
+    @IsTest
+    static void failedAiShowsReasonAndRetryStartsAgain() {
+        OpportunityCloseService.disableExternalCalls = true;
+        Account a = OpportunityCloseServiceTest.makeAccount();
+        Opportunity o = OpportunityCloseServiceTest.makeBareOpportunity(a.Id);
+        o.Agent_AI_Status__c = CloseAiAnalysisJob.FAILED_PREFIX + '2026-09-23T10:00:00Z: AI analysis failed: Read timed out';
+        update o;
+
+        SubmitClosedLost.Response failed = run(request(o.Id, false));
+        System.assertEquals(true, failed.aiFailed);
+        System.assertEquals(false, failed.aiRunning);
+        System.assert(failed.aiFailureReason.contains('Read timed out'), failed.aiFailureReason);
+        Boolean sawRetry = false;
+        for (OpportunityCloseService.Choice ch : failed.reasonChoices) {
+            if (ch.label == 'Retry AI analysis') {
+                sawRetry = ch.prompt.contains('retryAi=true');
+            }
+        }
+        System.assert(sawRetry, 'Retry button offered with a retryAi prompt');
+        System.assertEquals(0, Limits.getQueueableJobs(), 'A failed analysis is not restarted silently');
+
+        SubmitClosedLost.Request retry = request(o.Id, false);
+        retry.retryAi = true;
+        SubmitClosedLost.Response retried = run(retry);
+        System.assertEquals(true, retried.aiRunning);
+        System.assertEquals(false, retried.aiFailed);
+        System.assertEquals(1, Limits.getQueueableJobs());
+    }
+
+    @IsTest
+    static void recommendationComesFromRecordFields() {
+        OpportunityCloseService.disableExternalCalls = true;
+        Account a = OpportunityCloseServiceTest.makeAccount();
+        Opportunity o = OpportunityCloseServiceTest.makeBareOpportunity(a.Id);
+        o.CL_Reason_AI__c = 'Competitive Loss';
+        o.CL_Narrative_AI__c = 'Lost to Hebbia on price.';
+        o.Final_Competitor__c = 'Hebbia';
+        o.CL_Confidence_AI__c = 'High';
+        update o;
+
+        SubmitClosedLost.Response p = run(request(o.Id, false));
+        System.assertEquals(true, p.hasRecommendation);
+        System.assertEquals(false, p.aiRunning, 'Nothing to run when the record already holds a recommendation');
+        System.assertEquals('Competitive Loss', p.recommendedReason);
+        System.assertEquals('Hebbia', p.recommendedCompetitor);
+        System.assertEquals('Use recommended: Competitive Loss', p.reasonChoices[0].label);
+        System.assertEquals(0, Limits.getQueueableJobs());
+    }
+
+    @IsTest
     static void lobDefaultsFromAccountBusinessType() {
         OpportunityCloseService.disableExternalCalls = true;
         Account a = OpportunityCloseServiceTest.makeAccount();

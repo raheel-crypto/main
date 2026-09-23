@@ -269,6 +269,24 @@
       "copilotAction:useHydratedPrompt": false,
       "lightning:type": "lightning__textType"
     },
+    "aiRunning": {
+      "title": "AI Running",
+      "description": "AI Running",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "aiStatusText": {
+      "title": "AI Status Text",
+      "description": "AI Status Text",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
     "confirmPrompt": {
       "title": "Confirm Prompt",
       "description": "Confirm Prompt",
@@ -281,6 +299,15 @@
     "changePrompt": {
       "title": "Change Prompt",
       "description": "Change Prompt",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
+    "refreshPrompt": {
+      "title": "Refresh Prompt",
+      "description": "Refresh Prompt",
       "lightning:isPII": false,
       "copilotAction:isDisplayable": true,
       "copilotAction:isUsedByPlanner": true,

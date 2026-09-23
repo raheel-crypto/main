@@ -120,12 +120,24 @@
       "title": "Files URL",
       "lightning:type": "lightning__textType"
     },
+    "aiRunning": {
+      "title": "AI Running",
+      "lightning:type": "lightning__booleanType"
+    },
+    "aiStatusText": {
+      "title": "AI Status Text",
+      "lightning:type": "lightning__multilineTextType"
+    },
     "confirmPrompt": {
       "title": "Confirm Prompt",
       "lightning:type": "lightning__multilineTextType"
     },
     "changePrompt": {
       "title": "Change Prompt",
+      "lightning:type": "lightning__multilineTextType"
+    },
+    "refreshPrompt": {
+      "title": "Refresh Prompt",
       "lightning:type": "lightning__multilineTextType"
     },
     "opportunityUrl": {

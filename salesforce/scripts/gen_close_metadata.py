@@ -52,7 +52,9 @@ SUBMISSION = [
     ("reasonChoices", "choices", "Loss Reason Choices"), ("hasReasonChoices", "bool", "Has Loss Reason Choices"),
     ("lobChoices", "choices", "LOB/Division Choices"), ("hasLobChoices", "bool", "Has LOB/Division Choices"),
     ("needsSignedDocument", "bool", "Needs Signed Document"), ("filesUrl", "text", "Files URL"),
+    ("aiRunning", "bool", "AI Running"), ("aiStatusText", "long", "AI Status Text"),
     ("confirmPrompt", "long", "Confirm Prompt"), ("changePrompt", "long", "Change Prompt"),
+    ("refreshPrompt", "long", "Refresh Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
 
@@ -310,7 +312,11 @@ submission_body = envelope([
             accordion_item("AI analysis details", [markdown("{!$attrs.aiSummary}")], icon_name="file-text", expanded=False),
         ]),
     ], gap="sm"), "{!$attrs.hasRecommendation}"),
-    callout("AI analysis unavailable", None, "warning", "{!$attrs.aiFailed}", body="{!$attrs.aiFailureReason}"),
+    col([
+        callout("AI analysis running", None, "info", "{!$attrs.aiRunning}", body="{!$attrs.aiStatusText}"),
+        with_if(row([button("Refresh preview", "secondary", send("{!$attrs.refreshPrompt}"))], gap="sm"), "{!$attrs.aiRunning}"),
+        callout("AI analysis unavailable", None, "warning", "{!$attrs.aiFailed}", body="{!$attrs.aiFailureReason}"),
+    ], gap="sm"),
     with_if(col([
         callout("Signed order form required", "Closed Won needs the signed order form attached to the opportunity.", "error"),
         row([
@@ -427,6 +433,7 @@ w(f"{PKG}/genAiFunctions/Submit_Closed_Won/input/schema.json", action_input(WON_
 w(f"{PKG}/genAiFunctions/Submit_Closed_Won/output/schema.json", action_output(SUBMISSION))
 
 LOST_INPUTS = [opp_input, confirm_input,
+    ("retryAi", "lightning__booleanType", "Retry AI", "True starts the background AI loss analysis again, for example after it failed. Ignored when confirm is true."),
     ("primaryReason", "lightning__textType", "CL Primary Reason", "Required picklist: Bad Fit Disqualified, Budget Financial, Business Change, Competitive Loss, Duplicate, No Need, No Show / Buyer Canceled, Product / Technical Gap, Security Compliance, Timing Priority, Wrong Authority."),
     ("secondaryReason", "lightning__textType", "CL Secondary Reason", "Optional picklist: Hebbia, Claude, Perplexity, BlueFlame, Internal Build, Inaccuracy / Hallucination, Latency / Performance, Missing 3P Data, Missing 1P Data, Budget Not Approved, Funding Shifted, Perceived price too high."),
     ("finalCompetitor", "lightning__textType", "Final Competitor", "Optional picklist: AlphaSense, BlueFlame, ChatGPT, Claude, Hebbia, Internal Build, ModelML, Perplexity."),
@@ -521,7 +528,7 @@ server = ('<?xml version="1.0" encoding="UTF-8"?>\n<McpServerDefinition xmlns="h
                "Submits an Opportunity as Closed Won like the Close Opportunity screen flow. Call without confirm to validate and preview; the user reviews the card, then call again with confirm=true to write the finance and handoff fields, notify RevOps in Slack, and queue order form extraction. RevOps stamps the stage. Requires a signed order form on the record. Blank inputs keep existing values, and a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.",
                "closeSubmissionCardWon", False)
     + tool_xml("SubmitClosedLost", "Submit Closed Lost",
-               "Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to get the AI-recommended loss reason, competitor, and narrative and preview the values; the user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative; a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.",
+               "Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to preview: the first call starts the AI loss analysis in the background (about 30 seconds) and returns immediately; a later preview call shows the recommended reason, competitor, and narrative. The user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative; a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.",
                "closeSubmissionCardLost", False)
     + resource_xml("accountSummaryCard", "getAccountSummary", "Account Summary Card",
                    "HXL widget that renders an account summary: header with industry and type, firmographics, owner and location, open pipeline with top opportunities, and a link to the record.")

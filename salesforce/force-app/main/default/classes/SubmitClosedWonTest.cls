@@ -44,6 +44,7 @@ private class SubmitClosedWonTest {
 
         System.assertEquals('Submitted', c.status);
         System.assertEquals(true, c.isSubmitted);
+        System.assertEquals(true, c.aiRunning, 'Win summary is generated in the background');
         Opportunity saved = [
             SELECT StageName, Billing_Notes__c, Seat_Licenses__c, CW_Screen_Flow_Used__c, CW_Submission_Source__c,
                    Purchase_Driver__c, Account.Provide_References__c

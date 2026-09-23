@@ -78,6 +78,17 @@ Fewer round trips:
   list. Agents cannot upload binaries through an MCP tool call, so the upload
   itself stays in Salesforce; the card just takes the rep straight there.
 
+The AI analysis runs in the background. The Claude callout inside the shared
+`DealScoreAIController` can take longer than an MCP tool call is allowed to
+run, so the tools never call it inline. The first Closed Lost preview starts
+`CloseAiAnalysisJob` (a queueable) and returns at once with an "AI analysis
+running" notice and a Refresh preview button; the job writes the AI fields to
+the record and the next preview shows the recommendation. Closed Won queues
+the win summary after the submit commits. Progress lives in a new text field,
+`Opportunity.Agent_AI_Status__c` ("Running since …", "Failed …: reason",
+blank on success). A failed run shows its reason and a Retry AI analysis
+button, which calls Submit Closed Lost with `retryAi=true`.
+
 Supporting metadata is generated from one field list by
 `scripts/gen_close_metadata.py` so the Apex responses, Lightning Types,
 widget schemas, renderers, and Agent Action schemas stay in sync.

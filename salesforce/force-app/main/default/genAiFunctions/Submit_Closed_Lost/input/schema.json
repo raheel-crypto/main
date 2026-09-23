@@ -18,6 +18,13 @@
       "lightning:isPII": false,
       "copilotAction:isUserInput": false
     },
+    "retryAi": {
+      "title": "Retry AI",
+      "description": "True starts the background AI loss analysis again, for example after it failed. Ignored when confirm is true.",
+      "lightning:type": "lightning__booleanType",
+      "lightning:isPII": false,
+      "copilotAction:isUserInput": false
+    },
     "primaryReason": {
       "title": "CL Primary Reason",
       "description": "Required picklist: Bad Fit Disqualified, Budget Financial, Business Change, Competitive Loss, Duplicate, No Need, No Show / Buyer Canceled, Product / Technical Gap, Security Compliance, Timing Priority, Wrong Authority.",

@@ -136,6 +136,102 @@ public class OpportunityCloseServiceTest {
         }
     }
 
+    /** Stub AI runners so the background analysis job runs without a callout. */
+    private class SucceedingAiRunner extends CloseAiAnalysisJob.Runner {
+        public override DealScoreAIController.ForensicResult run(Id opportunityId, String mode) {
+            DealScoreAIController.ForensicResult r = new DealScoreAIController.ForensicResult();
+            r.success = true;
+            r.summary = 'Summary for ' + mode;
+            r.confidence = 'High';
+            r.nextStep = 'Send the recap';
+            r.evidenceTier = 'Tier 1';
+            return r;
+        }
+    }
+
+    private class FailingAiRunner extends CloseAiAnalysisJob.Runner {
+        public override DealScoreAIController.ForensicResult run(Id opportunityId, String mode) {
+            DealScoreAIController.ForensicResult r = new DealScoreAIController.ForensicResult();
+            r.success = false;
+            r.summary = 'AI analysis failed: Read timed out';
+            return r;
+        }
+    }
+
+    @IsTest
+    static void aiJobLossSuccessWritesDetailsAndClearsStatus() {
+        CloseAiAnalysisJob.runner = new SucceedingAiRunner();
+        Account a = makeAccount();
+        Opportunity o = makeBareOpportunity(a.Id);
+        Test.startTest();
+        System.assertEquals(true, OpportunityCloseService.startAiAnalysis(OpportunityCloseService.loadOpportunity(o.Id), 'Loss'));
+        Opportunity running = [SELECT Agent_AI_Status__c FROM Opportunity WHERE Id = :o.Id];
+        System.assert(running.Agent_AI_Status__c.startsWith(CloseAiAnalysisJob.RUNNING_PREFIX), running.Agent_AI_Status__c);
+        System.assertEquals(true, OpportunityCloseService.aiState(running).running);
+        Test.stopTest();
+        Opportunity done = [SELECT Agent_AI_Status__c, CL_Details_AI__c FROM Opportunity WHERE Id = :o.Id];
+        System.assertEquals(true, CloseAiAnalysisJob.lastRunSucceeded);
+        System.assertEquals(null, done.Agent_AI_Status__c, 'Status cleared on success');
+        System.assertEquals('Summary for Loss', done.CL_Details_AI__c);
+    }
+
+    @IsTest
+    static void aiJobWinSuccessWritesWinFields() {
+        CloseAiAnalysisJob.runner = new SucceedingAiRunner();
+        Account a = makeAccount();
+        Opportunity o = makeBareOpportunity(a.Id);
+        Test.startTest();
+        System.enqueueJob(new CloseAiAnalysisJob(o.Id, 'Win'));
+        Test.stopTest();
+        Opportunity done = [SELECT CW_AI_Details__c, CW_Confidence_AI__c, Next_Step_AI__c, Evidence_Tier_AI__c FROM Opportunity WHERE Id = :o.Id];
+        System.assertEquals('Summary for Win', done.CW_AI_Details__c);
+        System.assertEquals('High', done.CW_Confidence_AI__c);
+        System.assertEquals('Send the recap', done.Next_Step_AI__c);
+        System.assertEquals('Tier 1', done.Evidence_Tier_AI__c);
+    }
+
+    @IsTest
+    static void aiJobFailureRecordsReasonAndStateParsesIt() {
+        CloseAiAnalysisJob.runner = new FailingAiRunner();
+        Account a = makeAccount();
+        Opportunity o = makeBareOpportunity(a.Id);
+        Test.startTest();
+        System.enqueueJob(new CloseAiAnalysisJob(o.Id, 'Loss'));
+        Test.stopTest();
+        Opportunity failed = [SELECT Agent_AI_Status__c FROM Opportunity WHERE Id = :o.Id];
+        System.assertEquals(false, CloseAiAnalysisJob.lastRunSucceeded);
+        System.assert(failed.Agent_AI_Status__c.startsWith(CloseAiAnalysisJob.FAILED_PREFIX), failed.Agent_AI_Status__c);
+        OpportunityCloseService.AiState s = OpportunityCloseService.aiState(failed);
+        System.assertEquals(true, s.failed);
+        System.assertEquals(false, s.running);
+        System.assertEquals('AI analysis failed: Read timed out', s.reason);
+
+        // A "running" marker older than the stale window counts as failed too.
+        Opportunity stale = new Opportunity(Agent_AI_Status__c = CloseAiAnalysisJob.RUNNING_PREFIX + '2020-01-01T00:00:00Z');
+        OpportunityCloseService.AiState staleState = OpportunityCloseService.aiState(stale);
+        System.assertEquals(true, staleState.failed);
+        System.assertEquals(false, staleState.running);
+        System.assertEquals(false, OpportunityCloseService.aiState(new Opportunity()).failed, 'Blank status is idle');
+    }
+
+    @IsTest
+    static void aiJobSurvivesARunnerException() {
+        CloseAiAnalysisJob.runner = new ThrowingAiRunner();
+        Account a = makeAccount();
+        Opportunity o = makeBareOpportunity(a.Id);
+        Test.startTest();
+        System.enqueueJob(new CloseAiAnalysisJob(o.Id, 'Loss'));
+        Test.stopTest();
+        System.assertEquals(false, CloseAiAnalysisJob.lastRunSucceeded);
+        System.assert([SELECT Agent_AI_Status__c FROM Opportunity WHERE Id = :o.Id].Agent_AI_Status__c.contains('simulated outage'));
+    }
+
+    private class ThrowingAiRunner extends CloseAiAnalysisJob.Runner {
+        public override DealScoreAIController.ForensicResult run(Id opportunityId, String mode) {
+            throw new CalloutException('simulated outage');
+        }
+    }
+
     @IsTest
     static void slackJobReportsFailureWhenServiceReturnsNothing() {
         OpportunityCloseService.disableExternalCalls = false;

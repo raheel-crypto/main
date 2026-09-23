@@ -31,6 +31,7 @@ public with sharing class SubmitClosedLost {
         res.forOpportunity(opp);
         res.confirmPrompt = OpportunityCloseService.confirmLostPrompt(opp);
         res.changePrompt = OpportunityCloseService.changePrompt(opp);
+        res.refreshPrompt = OpportunityCloseService.refreshLostPrompt(opp);
 
         if (opp.IsClosed) {
             return res.finish('AlreadyClosed', opp.IsWon ? 'Already Closed Won' : 'Already Closed Lost', 'info',
@@ -39,31 +40,36 @@ public with sharing class SubmitClosedLost {
 
         Boolean confirm = req.confirm == true;
 
-        // AI loss analysis: run on preview, or on confirm when it has not run yet.
-        // In Loss mode the controller writes CL_Reason_AI__c, CL_Narrative_AI__c and
-        // Final_Competitor__c itself; writeBackNewFields also persists confidence,
-        // evidence tier and next step so the confirm call can reuse them.
-        DealScoreAIController.ForensicResult ai = null;
-        if (!confirm || String.isBlank(opp.CL_Reason_AI__c)) {
-            ai = OpportunityCloseService.runAiAnalysis(opp.Id, 'Loss', true);
-            if (ai != null && ai.success != true) {
-                res.aiFailureReason = OpportunityCloseService.textOrNotSet(ai.summary);
+        // AI loss analysis runs in the background (CloseAiAnalysisJob) because its
+        // callout can outlast an MCP tool call. The controller writes CL_Reason_AI__c,
+        // CL_Narrative_AI__c and Final_Competitor__c to the record; this tool only
+        // reads them. On preview: start the job when nothing has run yet (or on an
+        // explicit retry), report progress while it runs, report failure otherwise.
+        // On confirm: never wait; close with whatever the record holds.
+        Boolean haveAi = String.isNotBlank(opp.CL_Reason_AI__c);
+        OpportunityCloseService.AiState state = OpportunityCloseService.aiState(opp);
+        if (!confirm && (req.retryAi == true || (!haveAi && !state.running))) {
+            if (OpportunityCloseService.startAiAnalysis(opp, 'Loss')) {
+                res.aiRunning = true;
+                res.aiStatusText = 'The AI loss analysis has started in the background. It usually takes about 30 seconds. '
+                    + 'Refresh the preview to see the recommended reason, competitor, and narrative, or pick a reason below now.';
+            } else {
                 res.aiFailed = true;
-                ai = null;
+                res.aiFailureReason = 'The AI analysis could not be queued right now.';
             }
-            if (ai != null) {
-                // Persist the summary the flow stores in CL_Details_AI__c.
-                if (String.isNotBlank(ai.summary)) {
-                    update new Opportunity(Id = opp.Id, CL_Details_AI__c = ai.summary);
-                }
-                opp = OpportunityCloseService.loadOpportunity(opp.Id);
-            }
+        } else if (!haveAi && state.running) {
+            res.aiRunning = true;
+            res.aiStatusText = 'The AI loss analysis is still running.' + OpportunityCloseService.secondsAgoText(state.since)
+                + ' Refresh the preview in a moment, or pick a reason below now.';
+        } else if (!haveAi && state.failed) {
+            res.aiFailed = true;
+            res.aiFailureReason = OpportunityCloseService.textOrNotSet(state.reason);
         }
-        res.aiSummary = firstNonBlank(ai == null ? null : ai.summary, opp.CL_Details_AI__c);
-        res.recommendedReason = firstNonBlank(ai == null ? null : ai.clReason, opp.CL_Reason_AI__c);
-        res.recommendedCompetitor = firstNonBlank(ai == null ? null : ai.clCompetitor, opp.Final_Competitor__c);
-        res.recommendedNarrative = firstNonBlank(ai == null ? null : ai.clNarrative, opp.CL_Narrative_AI__c);
-        res.aiConfidence = firstNonBlank(ai == null ? null : ai.confidence, opp.CL_Confidence_AI__c);
+        res.aiSummary = firstNonBlank(null, opp.CL_Details_AI__c);
+        res.recommendedReason = firstNonBlank(null, opp.CL_Reason_AI__c);
+        res.recommendedCompetitor = firstNonBlank(null, opp.Final_Competitor__c);
+        res.recommendedNarrative = firstNonBlank(null, opp.CL_Narrative_AI__c);
+        res.aiConfidence = firstNonBlank(null, opp.CL_Confidence_AI__c);
         res.hasRecommendation = res.recommendedReason != OpportunityCloseService.NOT_SET;
 
         // Choice buttons: offered on every response that does not submit (preview or
@@ -212,8 +218,11 @@ public with sharing class SubmitClosedLost {
         r.hasLobChoices = false;
         r.needsSignedDocument = false;
         r.filesUrl = '';
+        r.aiRunning = false;
+        r.aiStatusText = '';
         r.confirmPrompt = '';
         r.changePrompt = '';
+        r.refreshPrompt = '';
         return r;
     }
 
@@ -224,6 +233,8 @@ public with sharing class SubmitClosedLost {
         public String opportunityId;
         @InvocableVariable(label='Confirm' description='False or blank previews with the AI recommendation and validates without saving. True stamps Closed Lost. Only set true after the user has reviewed the preview.')
         public Boolean confirm;
+        @InvocableVariable(label='Retry AI' description='True starts the background AI loss analysis again, for example after it failed. Ignored when confirm is true.')
+        public Boolean retryAi;
         @InvocableVariable(label='CL Primary Reason' description='Picklist, required. Options: Bad Fit Disqualified, Budget Financial, Business Change, Competitive Loss, Duplicate, No Need, No Show / Buyer Canceled, Product / Technical Gap, Security Compliance, Timing Priority, Wrong Authority.')
         public String primaryReason;
         @InvocableVariable(label='CL Secondary Reason' description='Picklist, optional. Options: Hebbia, Claude, Perplexity, BlueFlame, Internal Build, Inaccuracy / Hallucination, Latency / Performance, Missing 3P Data, Missing 1P Data, Budget Not Approved, Funding Shifted, Perceived price too high.')
@@ -265,8 +276,11 @@ public with sharing class SubmitClosedLost {
         @InvocableVariable(label='Has LOB/Division Choices') public Boolean hasLobChoices;
         @InvocableVariable(label='Needs Signed Document' description='Always false for Closed Lost; present so the same card renders Won and Lost.') public Boolean needsSignedDocument;
         @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list, where the signed order form is uploaded.') public String filesUrl;
+        @InvocableVariable(label='AI Running' description='True while the background AI analysis is running; refresh the preview to see its result.') public Boolean aiRunning;
+        @InvocableVariable(label='AI Status Text' description='Plain-English progress of the background AI analysis.') public String aiStatusText;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
+        @InvocableVariable(label='Refresh Prompt' description='Prompt the Refresh preview button sends once the AI analysis has had time to finish.') public String refreshPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;
 
 

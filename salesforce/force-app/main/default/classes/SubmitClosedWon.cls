@@ -106,14 +106,8 @@ public with sharing class SubmitClosedWon {
                 'Review the values below. Confirming writes them to the opportunity, notifies RevOps in Slack to validate and mark the deal Closed Won, and queues order form extraction. Nothing has been saved yet.');
         }
 
-        // Confirmed: AI win analysis first (callout), then the writes.
-        DealScoreAIController.ForensicResult ai = OpportunityCloseService.runAiAnalysis(opp.Id, 'Win', false);
-        if (ai != null && ai.success != true) {
-            res.aiFailureReason = OpportunityCloseService.textOrNotSet(ai.summary);
-            res.aiFailed = true;
-            ai = null;
-        }
-
+        // Confirmed: write the fields now; the AI win analysis runs in the background
+        // (CloseAiAnalysisJob) after commit, because its callout can outlast a tool call.
         Opportunity upd = new Opportunity(Id = opp.Id);
         upd.LOB_Division__c = (String) values.get('lobDivision');
         upd.Pricing_Structure__c = (String) values.get('pricingStructure');
@@ -144,12 +138,6 @@ public with sharing class SubmitClosedWon {
         upd.Opt_Out_Date__c = (Date) values.get('optOutDate');
         upd.CW_Screen_Flow_Used__c = true; // same flag the screen flow and Slack port set
         upd.CW_Submission_Source__c = OpportunityCloseService.SUBMISSION_SOURCE;
-        if (ai != null) {
-            upd.CW_Confidence_AI__c = ai.confidence;
-            upd.CW_AI_Details__c = ai.summary;
-            upd.Next_Step_AI__c = ai.nextStep;
-            upd.Evidence_Tier_AI__c = ai.evidenceTier;
-        }
         update upd;
 
         if (opp.AccountId != null) {
@@ -158,12 +146,14 @@ public with sharing class SubmitClosedWon {
 
         OpportunityCloseService.queueOrderFormExtraction(opp.Id);
         OpportunityCloseService.notifyRevOpsAfterCommit(opp.Id);
+        if (OpportunityCloseService.startAiAnalysis(opp, 'Win')) {
+            res.aiRunning = true;
+            res.aiStatusText = 'The AI win summary is being generated in the background and will be saved to the opportunity when it finishes.';
+        }
 
         res.isSubmitted = true;
         res.lobChoices = new List<OpportunityCloseService.Choice>();
         res.hasLobChoices = false;
-        res.aiSummary = ai == null ? OpportunityCloseService.NOT_SET : OpportunityCloseService.textOrNotSet(ai.summary);
-        res.aiConfidence = ai == null ? OpportunityCloseService.NOT_SET : OpportunityCloseService.textOrNotSet(ai.confidence);
         return res.finish('Submitted', 'Submitted to RevOps', 'success', 'Closed Won submitted',
             'The finance and handoff fields are saved and a Slack has been sent to RevOps to validate and mark the opportunity Closed Won. Order form extraction has been queued.');
     }
@@ -292,6 +282,9 @@ public with sharing class SubmitClosedWon {
         r.hasLobChoices = false;
         r.needsSignedDocument = false;
         r.filesUrl = '';
+        r.aiRunning = false;
+        r.aiStatusText = '';
+        r.refreshPrompt = '';
         r.confirmPrompt = '';
         r.changePrompt = '';
         return r;
@@ -366,8 +359,11 @@ public with sharing class SubmitClosedWon {
         @InvocableVariable(label='Has LOB/Division Choices') public Boolean hasLobChoices;
         @InvocableVariable(label='Needs Signed Document' description='True when submission is blocked because no signed order form is attached.') public Boolean needsSignedDocument;
         @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list, where the signed order form is uploaded.') public String filesUrl;
+        @InvocableVariable(label='AI Running' description='True after submit while the background AI win summary is being generated.') public Boolean aiRunning;
+        @InvocableVariable(label='AI Status Text' description='Plain-English progress of the background AI analysis.') public String aiStatusText;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
+        @InvocableVariable(label='Refresh Prompt' description='Not used for Closed Won; present so the same card renders Won and Lost.') public String refreshPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;
 
 
