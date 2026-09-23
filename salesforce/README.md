@@ -89,6 +89,15 @@ the win summary after the submit commits. Progress lives in a new text field,
 blank on success). A failed run shows its reason and a Retry AI analysis
 button, which calls Submit Closed Lost with `retryAi=true`.
 
+The shared `DealScoreAIController` is now part of this project for one small
+change: its Claude callout timeout is a public static, `calloutTimeoutMs`,
+defaulting to the original 30 seconds. The background job raises it to the
+Apex maximum of 120 seconds before calling in, so the analysis that used to
+time out at 30 seconds can finish. The screen flow's behavior is unchanged.
+Because the class is deployed from here, its own test class
+(`DealScoreAIControllerTest`, already in the org) must be in the test list
+of the classes deploy so coverage is computed.
+
 Supporting metadata is generated from one field list by
 `scripts/gen_close_metadata.py` so the Apex responses, Lightning Types,
 widget schemas, renderers, and Agent Action schemas stay in sync.
@@ -169,7 +178,7 @@ orgs require Apex tests to run on deploy, hence the test flags.
 ```
 cd ~/sf-visualizer/salesforce
 sf project deploy start --source-dir force-app/main/default/objects
-sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest --tests OpportunityCloseServiceTest --tests GetCloseReadinessTest --tests SubmitClosedWonTest --tests SubmitClosedLostTest
+sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest --tests OpportunityCloseServiceTest --tests GetCloseReadinessTest --tests SubmitClosedWonTest --tests SubmitClosedLostTest --tests DealScoreAIControllerTest
 sf project deploy start --source-dir force-app/main/default/uiWidgets
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse --source-dir force-app/main/default/lightningTypes/getCloseReadinessResponse --source-dir force-app/main/default/lightningTypes/submitClosedWonResponse --source-dir force-app/main/default/lightningTypes/submitClosedLostResponse
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary --source-dir force-app/main/default/lightningTypes/getCloseReadiness --source-dir force-app/main/default/lightningTypes/submitClosedWon --source-dir force-app/main/default/lightningTypes/submitClosedLost

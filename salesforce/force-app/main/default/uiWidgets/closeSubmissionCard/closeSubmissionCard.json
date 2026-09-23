@@ -272,6 +272,35 @@
                   "meta": {
                     "if": "{!$attrs.aiFailed}"
                   }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Retry AI analysis",
+                        "variant": "secondary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/sendMessage",
+                              "attributes": {
+                                "content": "{!$attrs.retryPrompt}"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.aiFailed}"
+                  }
                 }
               ]
             },

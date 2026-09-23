@@ -32,6 +32,7 @@ public with sharing class SubmitClosedLost {
         res.confirmPrompt = OpportunityCloseService.confirmLostPrompt(opp);
         res.changePrompt = OpportunityCloseService.changePrompt(opp);
         res.refreshPrompt = OpportunityCloseService.refreshLostPrompt(opp);
+        res.retryPrompt = OpportunityCloseService.retryAiPrompt(opp);
 
         if (opp.IsClosed) {
             return res.finish('AlreadyClosed', opp.IsWon ? 'Already Closed Won' : 'Already Closed Lost', 'info',
@@ -74,12 +75,8 @@ public with sharing class SubmitClosedLost {
 
         // Choice buttons: offered on every response that does not submit (preview or
         // blocked), whatever the confirm flag was, so a blocked confirm still gets them.
-        // When the AI analysis failed, a retry button rides along.
+        // The Retry AI analysis button lives under the AI notice (retryPrompt), not here.
         res.reasonChoices = OpportunityCloseService.lostReasonChoices(opp, res.recommendedReason);
-        if (res.aiFailed) {
-            res.reasonChoices.add(new OpportunityCloseService.Choice('Retry AI analysis',
-                OpportunityCloseService.retryAiPrompt(opp), 'secondary'));
-        }
         res.hasReasonChoices = true;
 
         // Merge inputs over existing values (notes default to the AI narrative, like the flow).
@@ -223,6 +220,7 @@ public with sharing class SubmitClosedLost {
         r.confirmPrompt = '';
         r.changePrompt = '';
         r.refreshPrompt = '';
+        r.retryPrompt = '';
         return r;
     }
 
@@ -281,6 +279,7 @@ public with sharing class SubmitClosedLost {
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
         @InvocableVariable(label='Refresh Prompt' description='Prompt the Refresh preview button sends once the AI analysis has had time to finish.') public String refreshPrompt;
+        @InvocableVariable(label='Retry Prompt' description='Prompt the Retry AI analysis button sends after a failed analysis.') public String retryPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;
 
 

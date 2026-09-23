@@ -18,8 +18,12 @@ public with sharing class CloseAiAnalysisJob implements Queueable, Database.Allo
     public static final String FAILED_PREFIX = 'Failed ';
 
     /** Wraps the analysis call so tests can stub it. */
+    /** Background work is not bound by an MCP tool call, so give the model the Apex maximum. */
+    public static final Integer BACKGROUND_TIMEOUT_MS = 120000;
+
     public virtual class Runner {
         public virtual DealScoreAIController.ForensicResult run(Id opportunityId, String mode) {
+            DealScoreAIController.calloutTimeoutMs = BACKGROUND_TIMEOUT_MS;
             return OpportunityCloseService.runAiAnalysis(opportunityId, mode, true);
         }
     }

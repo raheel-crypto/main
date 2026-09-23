@@ -143,13 +143,10 @@ private class SubmitClosedLostTest {
         System.assertEquals(true, failed.aiFailed);
         System.assertEquals(false, failed.aiRunning);
         System.assert(failed.aiFailureReason.contains('Read timed out'), failed.aiFailureReason);
-        Boolean sawRetry = false;
+        System.assert(failed.retryPrompt.contains('retryAi=true') && failed.retryPrompt.contains(o.Id), 'Retry prompt asks for retryAi');
         for (OpportunityCloseService.Choice ch : failed.reasonChoices) {
-            if (ch.label == 'Retry AI analysis') {
-                sawRetry = ch.prompt.contains('retryAi=true');
-            }
+            System.assertNotEquals('Retry AI analysis', ch.label, 'Retry is its own button, not a reason');
         }
-        System.assert(sawRetry, 'Retry button offered with a retryAi prompt');
         System.assertEquals(0, Limits.getQueueableJobs(), 'A failed analysis is not restarted silently');
 
         SubmitClosedLost.Request retry = request(o.Id, false);

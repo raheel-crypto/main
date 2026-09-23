@@ -37,6 +37,7 @@
           "confirmPrompt": "{!$attrs.outputValues.confirmPrompt}",
           "changePrompt": "{!$attrs.outputValues.changePrompt}",
           "refreshPrompt": "{!$attrs.outputValues.refreshPrompt}",
+          "retryPrompt": "{!$attrs.outputValues.retryPrompt}",
           "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"
         }
       }

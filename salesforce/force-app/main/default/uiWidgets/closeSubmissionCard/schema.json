@@ -214,6 +214,10 @@
           "title": "Refresh Prompt",
           "lightning:type": "lightning__multilineTextType"
         },
+        "retryPrompt": {
+          "title": "Retry Prompt",
+          "lightning:type": "lightning__multilineTextType"
+        },
         "opportunityUrl": {
           "title": "Opportunity URL",
           "lightning:type": "lightning__textType"

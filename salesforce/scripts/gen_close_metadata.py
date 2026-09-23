@@ -54,7 +54,7 @@ SUBMISSION = [
     ("needsSignedDocument", "bool", "Needs Signed Document"), ("filesUrl", "text", "Files URL"),
     ("aiRunning", "bool", "AI Running"), ("aiStatusText", "long", "AI Status Text"),
     ("confirmPrompt", "long", "Confirm Prompt"), ("changePrompt", "long", "Change Prompt"),
-    ("refreshPrompt", "long", "Refresh Prompt"),
+    ("refreshPrompt", "long", "Refresh Prompt"), ("retryPrompt", "long", "Retry Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
 
@@ -316,6 +316,7 @@ submission_body = envelope([
         callout("AI analysis running", None, "info", "{!$attrs.aiRunning}", body="{!$attrs.aiStatusText}"),
         with_if(row([button("Refresh preview", "secondary", send("{!$attrs.refreshPrompt}"))], gap="sm"), "{!$attrs.aiRunning}"),
         callout("AI analysis unavailable", None, "warning", "{!$attrs.aiFailed}", body="{!$attrs.aiFailureReason}"),
+        with_if(row([button("Retry AI analysis", "secondary", send("{!$attrs.retryPrompt}"))], gap="sm"), "{!$attrs.aiFailed}"),
     ], gap="sm"),
     with_if(col([
         callout("Signed order form required", "Closed Won needs the signed order form attached to the opportunity.", "error"),

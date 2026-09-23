@@ -314,6 +314,15 @@
       "copilotAction:useHydratedPrompt": false,
       "lightning:type": "lightning__textType"
     },
+    "retryPrompt": {
+      "title": "Retry Prompt",
+      "description": "Retry Prompt",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
     "opportunityUrl": {
       "title": "Opportunity URL",
       "description": "Opportunity URL",

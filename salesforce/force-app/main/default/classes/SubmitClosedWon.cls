@@ -285,6 +285,7 @@ public with sharing class SubmitClosedWon {
         r.aiRunning = false;
         r.aiStatusText = '';
         r.refreshPrompt = '';
+        r.retryPrompt = '';
         r.confirmPrompt = '';
         r.changePrompt = '';
         return r;
@@ -364,6 +365,7 @@ public with sharing class SubmitClosedWon {
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
         @InvocableVariable(label='Refresh Prompt' description='Not used for Closed Won; present so the same card renders Won and Lost.') public String refreshPrompt;
+        @InvocableVariable(label='Retry Prompt' description='Not used for Closed Won; present so the same card renders Won and Lost.') public String retryPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;
 
 
