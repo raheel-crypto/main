@@ -34,3 +34,15 @@ Then save with Cmd+S.
 
 ## Stopping Servers
 Remind the user to press `Ctrl+C` in each terminal window before restarting.
+
+## Salesforce metadata (salesforce/)
+- Every new custom field MUST ship with field-level security. A field deployed
+  from metadata is invisible to everyone, admins included, until a permission
+  set or profile grants it. Add the field to
+  `force-app/main/default/permissionsets/Agent_Close_Tools.permissionset-meta.xml`
+  (or a new permission set), deploy it with the field, and give the user the
+  `sf org assign permset` command.
+- Deploy order for the close tools: objects → permissionsets → classes →
+  uiWidgets → response Lightning Types → envelope Lightning Types →
+  genAiFunctions → (only if changed) mcpServerDefinitions, then reactivate the
+  server and remove/re-add the connector in Claude.

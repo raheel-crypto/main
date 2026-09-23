@@ -87,7 +87,11 @@ the record and the next preview shows the recommendation. Closed Won queues
 the win summary after the submit commits. Progress lives in a new text field,
 `Opportunity.Agent_AI_Status__c` ("Running since …", "Failed …: reason",
 blank on success). A failed run shows its reason and a Retry AI analysis
-button, which calls Submit Closed Lost with `retryAi=true`.
+button, which calls Submit Closed Lost with `retryAi=true`. Field-level
+security for this field (and `CW_Submission_Source__c`) comes from the
+`Agent_Close_Tools` permission set; a field deployed from metadata has no
+FLS for anyone until a permission set grants it, so assign it to every user
+who closes deals from an agent.
 
 The shared `DealScoreAIController` is now part of this project for one small
 change: its Claude callout timeout is a public static, `calloutTimeoutMs`,
@@ -178,6 +182,8 @@ orgs require Apex tests to run on deploy, hence the test flags.
 ```
 cd ~/sf-visualizer/salesforce
 sf project deploy start --source-dir force-app/main/default/objects
+sf project deploy start --source-dir force-app/main/default/permissionsets
+sf org assign permset --name Agent_Close_Tools
 sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest --tests OpportunityCloseServiceTest --tests GetCloseReadinessTest --tests SubmitClosedWonTest --tests SubmitClosedLostTest --tests DealScoreAIControllerTest
 sf project deploy start --source-dir force-app/main/default/uiWidgets
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse --source-dir force-app/main/default/lightningTypes/getCloseReadinessResponse --source-dir force-app/main/default/lightningTypes/submitClosedWonResponse --source-dir force-app/main/default/lightningTypes/submitClosedLostResponse

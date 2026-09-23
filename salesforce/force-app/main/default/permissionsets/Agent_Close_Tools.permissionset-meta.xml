@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <description>Field-level security for the fields the agent close tools (HXL cards) read and write. Assign to every user who closes opportunities from an agent.</description>
+    <hasActivationRequired>false</hasActivationRequired>
+    <label>Agent Close Tools</label>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Opportunity.Agent_AI_Status__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Opportunity.CW_Submission_Source__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+</PermissionSet>
