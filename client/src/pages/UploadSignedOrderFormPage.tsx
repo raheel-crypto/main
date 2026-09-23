@@ -8,9 +8,12 @@ interface Props {
 }
 
 /**
- * Landing page for the "Upload signed order form" button on the agent close
- * cards. Takes ?opp=<Opportunity Id>, shows what is already attached, uploads
- * the chosen file as a __signed ContentVersion linked to the opportunity, and
+ * Local-development copy of the signed order form upload page. In production
+ * the "Upload signed order form" button on the agent close cards opens the
+ * Deal Portal's /upload page (gtm-eng, apps/deal-portal, hosted on Vercel);
+ * this page backs the same flow when Upload_Page_URL__c points at localhost.
+ * Takes ?opp=<Opportunity Id>, shows what is already attached, uploads the
+ * chosen file as a signed__ ContentVersion linked to the opportunity, and
  * sends the rep back to the agent to check readiness again.
  */
 export function UploadSignedOrderFormPage({ instanceUrl }: Props) {
@@ -74,7 +77,7 @@ export function UploadSignedOrderFormPage({ instanceUrl }: Props) {
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Agent close tools</p>
           <h1 className="text-2xl font-bold text-foreground">Attach the signed order form</h1>
           <p className="text-sm text-muted-foreground">
-            The file is saved to the opportunity in Salesforce with the <code className="text-foreground">__signed</code>{" "}
+            The file is saved to the opportunity in Salesforce with the <code className="text-foreground">signed__</code>{" "}
             name the close checks look for. When it is done, go back to the agent and ask it to check the deal again.
           </p>
         </div>
@@ -163,7 +166,7 @@ export function UploadSignedOrderFormPage({ instanceUrl }: Props) {
 
                 {file && (
                   <p className="mt-3 text-xs text-muted-foreground">
-                    Will be saved as <span className="text-foreground">__signed {file.name}</span>
+                    Will be saved as <span className="text-foreground">signed__{file.name}</span>
                   </p>
                 )}
 

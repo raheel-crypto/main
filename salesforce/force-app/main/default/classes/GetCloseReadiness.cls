@@ -169,7 +169,7 @@ public with sharing class GetCloseReadiness {
         @InvocableVariable(label='Complete Title' description='Accordion title for the complete fields, with the count.') public String completeTitle;
         @InvocableVariable(label='Progress Label' description='Label for the progress bar, e.g. 4 of 27 Closed Won fields complete.') public String progressLabel;
         @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list in Salesforce.') public String filesUrl;
-        @InvocableVariable(label='Upload URL' description='Link to the upload page for the signed order form (sf-visualizer), or the Files list when not configured.') public String uploadUrl;
+        @InvocableVariable(label='Upload URL' description='Link to the Deal Portal upload page for the signed order form, or the Files list when not configured.') public String uploadUrl;
         @InvocableVariable(label='Close Won Prompt') public String closeWonPrompt;
         @InvocableVariable(label='Close Lost Prompt') public String closeLostPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

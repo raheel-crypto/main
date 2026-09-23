@@ -361,7 +361,7 @@ public with sharing class SubmitClosedWon {
         @InvocableVariable(label='Has LOB/Division Choices') public Boolean hasLobChoices;
         @InvocableVariable(label='Needs Signed Document' description='True when submission is blocked because no signed order form is attached.') public Boolean needsSignedDocument;
         @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list in Salesforce.') public String filesUrl;
-        @InvocableVariable(label='Upload URL' description='Link to the upload page for the signed order form (sf-visualizer), or the Files list when not configured.') public String uploadUrl;
+        @InvocableVariable(label='Upload URL' description='Link to the Deal Portal upload page for the signed order form, or the Files list when not configured.') public String uploadUrl;
         @InvocableVariable(label='AI Running' description='True after submit while the background AI win summary is being generated.') public Boolean aiRunning;
         @InvocableVariable(label='AI Status Text' description='Plain-English progress of the background AI analysis.') public String aiStatusText;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;

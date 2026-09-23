@@ -46,7 +46,14 @@ Remind the user to press `Ctrl+C` in each terminal window before restarting.
   classes → uiWidgets → response Lightning Types → envelope Lightning Types →
   genAiFunctions → (only if changed) mcpServerDefinitions, then reactivate the
   server and remove/re-add the connector in Claude.
-- The signed order form upload page lives in the visualizer at `/upload?opp=<Id>`
-  (client page `UploadSignedOrderFormPage`, server route `/api/close-docs`). The
-  cards get its URL from the `Agent_Close_Setting.Default` custom metadata record
-  (`Upload_Page_URL__c`), so a hosted deployment only needs that value changed.
+- The signed order form upload page that the close cards link to is the Deal
+  Portal's `/upload?opp=<Id>` page, hosted on Vercel at
+  `https://quote-bot-portal.vercel.app` (repo `Rogo-Technologies/gtm-eng`:
+  `apps/deal-portal/app/upload`, `components/SignedPaperUpload.tsx`; the
+  ContentVersion write is the `signed_paper_upload` action in
+  `apps/slack-agent-dealdesk/.agents/skills/slack-agent/api/portal/rpc.ts`,
+  rules in `lib/signed-paper.ts`). The visualizer keeps a local-development
+  copy at `/upload?opp=<Id>` (`UploadSignedOrderFormPage`, `/api/close-docs`).
+  The cards get the URL from the `Agent_Close_Setting.Default` custom metadata
+  record (`Upload_Page_URL__c`). Uploaded files are titled `signed__<name>`,
+  the prefix the Slack quote bot and Tabs' document pickup key on.

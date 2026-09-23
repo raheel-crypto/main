@@ -4,6 +4,6 @@
     <protected>false</protected>
     <values>
         <field>Upload_Page_URL__c</field>
-        <value xsi:type="xsd:string">http://localhost:5173/upload</value>
+        <value xsi:type="xsd:string">https://quote-bot-portal.vercel.app/upload</value>
     </values>
 </CustomMetadata>

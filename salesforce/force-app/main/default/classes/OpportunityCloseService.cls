@@ -266,9 +266,10 @@ public with sharing class OpportunityCloseService {
     }
 
     /**
-     * The sf-visualizer upload page for this opportunity (Agent_Close_Setting__mdt.Default
-     * Upload_Page_URL__c + ?opp=Id). Falls back to the Salesforce Files list when the
-     * setting is blank, so the card button always leads somewhere useful.
+     * The signed order form upload page for this opportunity: the Deal Portal's /upload
+     * page (Agent_Close_Setting__mdt.Default Upload_Page_URL__c + ?opp=Id). Falls back to
+     * the Salesforce Files list when the setting is blank, so the card button always
+     * leads somewhere useful.
      */
     public static String uploadUrl(Id opportunityId) {
         String base = uploadPageBase();

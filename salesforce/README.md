@@ -58,7 +58,8 @@ commit in `CloseWonNotificationJob`. Submissions are tagged with a new
 `Agent` value on `CW_Submission_Source__c`. Blank tool inputs keep the values
 already on the record, so the agent only asks for what is missing. The
 signed-document check accepts both the `__signed` prefix the flow searches for
-and the `signed__` prefix it renames uploads to.
+and the `signed__` prefix it renames uploads to (the upload page writes
+`signed__`, the prefix the Slack quote bot and Tabs' document pickup use).
 
 Fewer round trips:
 
@@ -74,17 +75,25 @@ Fewer round trips:
   "Retry AI analysis" button when the analysis failed.
 - **Every choice-button prompt** tells the agent to keep the other preview
   values and to ask for anything still missing in a single message.
-- **Upload signed order form** opens the visualizer's upload page
-  (`/upload?opp=<Id>`), which saves the dropped file to the opportunity as a
-  `__signed` ContentVersion (the FirstPublishLocationId link) and tells the rep
-  to check the deal again. Agents cannot carry a file through an MCP tool call,
-  so this small page is the bridge. Its base URL lives in the
-  `Agent_Close_Setting.Default` custom metadata record (`Upload_Page_URL__c`,
-  `http://localhost:5173/upload` for local development); blank falls back to
-  the opportunity's Files list, which the card also offers as a secondary
-  button. Server side: `server/src/routes/closeDocs.ts`; client side:
-  `client/src/pages/UploadSignedOrderFormPage.tsx`. The page survives the
-  Salesforce login redirect through `returnTo`.
+- **Upload signed order form** opens the Deal Portal's upload page
+  (`https://quote-bot-portal.vercel.app/upload?opp=<Id>`, Rogo SSO), which
+  saves the dropped file to the opportunity as a `signed__` ContentVersion
+  (the FirstPublishLocationId link) and tells the rep to check the deal again.
+  Agents cannot carry a file through an MCP tool call, so this small page is
+  the bridge. It lives in the `Rogo-Technologies/gtm-eng` repo: the page is
+  `apps/deal-portal/app/upload` + `components/SignedPaperUpload.tsx`, and the
+  Salesforce write is the `signed_paper_upload` action of the deal-desk Slack
+  agent (`apps/slack-agent-dealdesk/.agents/skills/slack-agent/api/portal/rpc.ts`,
+  rules in `lib/signed-paper.ts`), which already holds the org credential. The
+  portal lets the opportunity owner or a portal admin upload, takes PDF, Word
+  or image scans up to 3 MB, and does not post the Mark Closed Won card; the
+  agent's confirm step notifies RevOps as before. The base URL lives in the
+  `Agent_Close_Setting.Default` custom metadata record (`Upload_Page_URL__c`);
+  blank falls back to the opportunity's Files list, which the card also offers
+  as a secondary button. The visualizer keeps a local-development copy of the
+  page (`server/src/routes/closeDocs.ts`,
+  `client/src/pages/UploadSignedOrderFormPage.tsx`) for
+  `http://localhost:5173/upload`.
 
 The AI analysis runs in the background. The Claude callout inside the shared
 `DealScoreAIController` can take longer than an MCP tool call is allowed to

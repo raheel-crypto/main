@@ -4,14 +4,17 @@ import path from "path";
 import { getConnection } from "../services/salesforce.js";
 
 /**
- * Signed order form upload for the agent close tools.
+ * Signed order form upload for the agent close tools (local-development copy).
  *
  * The HXL cards in Claude cannot upload files (an MCP tool call carries no
- * binary), so the "Upload signed order form" button deep-links to the
- * visualizer's /upload page, which posts the file here. The file becomes a
- * ContentVersion whose FirstPublishLocationId is the opportunity, which makes
- * Salesforce create the ContentDocumentLink for us. The title is forced to the
- * "__signed" prefix the close tools and the screen flow look for.
+ * binary), so the "Upload signed order form" button deep-links to an upload
+ * page. In production that page is the Deal Portal's /upload (gtm-eng,
+ * apps/deal-portal, hosted on Vercel); this route backs the same page in the
+ * visualizer for local development, when Upload_Page_URL__c points at
+ * localhost. The file becomes a ContentVersion whose FirstPublishLocationId is
+ * the opportunity, which makes Salesforce create the ContentDocumentLink for
+ * us. The title is forced to the "signed__" prefix that the close tools, the
+ * Slack quote bot and Tabs' document pickup all key on.
  */
 const router = Router();
 const upload = multer({
@@ -20,7 +23,7 @@ const upload = multer({
 });
 
 const OPP_ID = /^006[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?$/;
-const SIGNED_PREFIX = "__signed";
+const SIGNED_PREFIX = "signed__";
 
 export interface SignedDocument {
   contentDocumentId: string;
@@ -121,7 +124,7 @@ router.post("/opportunity/:id/signed-order-form", upload.single("file"), async (
     const original = req.file.originalname || "Order Form";
     const ext = path.extname(original);
     const stem = path.basename(original, ext).trim() || "Order Form";
-    const title = isSignedTitle(stem) ? stem : `${SIGNED_PREFIX} ${stem}`;
+    const title = isSignedTitle(stem) ? stem : `${SIGNED_PREFIX}${stem}`;
 
     const result: any = await conn.sobject("ContentVersion").create({
       Title: title,
