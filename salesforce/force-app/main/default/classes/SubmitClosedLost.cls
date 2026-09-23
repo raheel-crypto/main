@@ -59,11 +59,11 @@ public with sharing class SubmitClosedLost {
                 res.aiFailed = true;
                 res.aiFailureReason = 'The AI analysis could not be queued right now.';
             }
-        } else if (!haveAi && state.running) {
+        } else if (!confirm && !haveAi && state.running) {
             res.aiRunning = true;
             res.aiStatusText = 'The AI loss analysis is still running.' + OpportunityCloseService.secondsAgoText(state.since)
                 + ' Refresh the preview in a moment, or pick a reason below now.';
-        } else if (!haveAi && state.failed) {
+        } else if (!confirm && !haveAi && state.failed) {
             res.aiFailed = true;
             res.aiFailureReason = OpportunityCloseService.textOrNotSet(state.reason);
         }
