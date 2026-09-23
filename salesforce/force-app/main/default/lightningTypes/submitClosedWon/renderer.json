@@ -28,6 +28,10 @@
           "aiFailureReason": "{!$attrs.outputValues.aiFailureReason}",
           "reasonChoices": "{!$attrs.outputValues.reasonChoices}",
           "hasReasonChoices": "{!$attrs.outputValues.hasReasonChoices}",
+          "lobChoices": "{!$attrs.outputValues.lobChoices}",
+          "hasLobChoices": "{!$attrs.outputValues.hasLobChoices}",
+          "needsSignedDocument": "{!$attrs.outputValues.needsSignedDocument}",
+          "filesUrl": "{!$attrs.outputValues.filesUrl}",
           "confirmPrompt": "{!$attrs.outputValues.confirmPrompt}",
           "changePrompt": "{!$attrs.outputValues.changePrompt}",
           "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"

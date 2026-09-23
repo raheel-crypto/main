@@ -60,6 +60,24 @@ already on the record, so the agent only asks for what is missing. The
 signed-document check accepts both the `__signed` prefix the flow searches for
 and the `signed__` prefix it renames uploads to.
 
+Fewer round trips:
+
+- **LOB/Division defaults from the account.** Account Business Type predicts
+  LOB almost one to one in this org (for example `private_equity` → Private
+  Equity in 1,546 of 1,567 deals), so a blank LOB is filled from it, shown in
+  the values table as "(suggested from account type)", and written on
+  confirm. `other` is not mapped because it is too noisy. Both submission
+  cards offer LOB buttons (suggestion first, then the five most common LOBs,
+  then "More LOB options") whenever LOB was not set explicitly.
+- **Loss reasons as buttons**, ordered by how often closed-lost deals use them
+  in this org, with the AI recommendation first when there is one and a
+  "Retry AI analysis" button when the analysis failed.
+- **Every choice-button prompt** tells the agent to keep the other preview
+  values and to ask for anything still missing in a single message.
+- **Attach signed order form** deep-links to the opportunity's Files related
+  list. Agents cannot upload binaries through an MCP tool call, so the upload
+  itself stays in Salesforce; the card just takes the rep straight there.
+
 Supporting metadata is generated from one field list by
 `scripts/gen_close_metadata.py` so the Apex responses, Lightning Types,
 widget schemas, renderers, and Agent Action schemas stay in sync.

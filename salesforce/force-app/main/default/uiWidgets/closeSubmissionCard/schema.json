@@ -161,6 +161,39 @@
           "title": "Has Loss Reason Choices",
           "lightning:type": "lightning__booleanType"
         },
+        "lobChoices": {
+          "title": "LOB/Division Choices",
+          "lightning:type": "lightning__listType",
+          "items": {
+            "lightning:type": "lightning__objectType",
+            "properties": {
+              "label": {
+                "title": "Label",
+                "lightning:type": "lightning__textType"
+              },
+              "prompt": {
+                "title": "Prompt",
+                "lightning:type": "lightning__multilineTextType"
+              },
+              "variant": {
+                "title": "Variant",
+                "lightning:type": "lightning__textType"
+              }
+            }
+          }
+        },
+        "hasLobChoices": {
+          "title": "Has LOB/Division Choices",
+          "lightning:type": "lightning__booleanType"
+        },
+        "needsSignedDocument": {
+          "title": "Needs Signed Document",
+          "lightning:type": "lightning__booleanType"
+        },
+        "filesUrl": {
+          "title": "Files URL",
+          "lightning:type": "lightning__textType"
+        },
         "confirmPrompt": {
           "title": "Confirm Prompt",
           "lightning:type": "lightning__multilineTextType"

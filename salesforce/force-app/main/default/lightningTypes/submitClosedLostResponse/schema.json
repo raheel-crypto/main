@@ -104,6 +104,22 @@
       "title": "Has Loss Reason Choices",
       "lightning:type": "lightning__booleanType"
     },
+    "lobChoices": {
+      "title": "LOB/Division Choices",
+      "lightning:type": "@apexClassType/c__OpportunityCloseService$Choice"
+    },
+    "hasLobChoices": {
+      "title": "Has LOB/Division Choices",
+      "lightning:type": "lightning__booleanType"
+    },
+    "needsSignedDocument": {
+      "title": "Needs Signed Document",
+      "lightning:type": "lightning__booleanType"
+    },
+    "filesUrl": {
+      "title": "Files URL",
+      "lightning:type": "lightning__textType"
+    },
     "confirmPrompt": {
       "title": "Confirm Prompt",
       "lightning:type": "lightning__multilineTextType"

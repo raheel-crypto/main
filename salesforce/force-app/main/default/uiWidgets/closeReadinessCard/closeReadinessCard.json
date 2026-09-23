@@ -196,6 +196,44 @@
                   },
                   "children": [
                     {
+                      "definition": "tile/button",
+                      "attributes": {
+                        "label": "Attach signed order form",
+                        "variant": "primary",
+                        "actions": {
+                          "click": [
+                            {
+                              "definition": "action/openLink",
+                              "attributes": {
+                                "url": "{!$attrs.filesUrl}",
+                                "target": "_blank"
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "Opens the opportunity Files. Upload a file whose name starts with __signed, then check again.",
+                        "variant": "caption",
+                        "color": "muted"
+                      }
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.missingSignedDocument}"
+                  }
+                },
+                {
+                  "definition": "tile/row",
+                  "attributes": {
+                    "gap": "sm",
+                    "align": "center"
+                  },
+                  "children": [
+                    {
                       "definition": "tile/icon",
                       "attributes": {
                         "name": "check-circle",

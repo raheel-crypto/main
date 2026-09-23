@@ -229,6 +229,46 @@
       "copilotAction:useHydratedPrompt": false,
       "lightning:type": "lightning__booleanType"
     },
+    "lobChoices": {
+      "title": "LOB/Division Choices",
+      "description": "LOB/Division Choices",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "maxItems": 2000,
+      "items": {
+        "lightning:type": "@apexClassType/c__OpportunityCloseService$Choice"
+      },
+      "lightning:type": "lightning__listType"
+    },
+    "hasLobChoices": {
+      "title": "Has LOB/Division Choices",
+      "description": "Has LOB/Division Choices",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "needsSignedDocument": {
+      "title": "Needs Signed Document",
+      "description": "Needs Signed Document",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__booleanType"
+    },
+    "filesUrl": {
+      "title": "Files URL",
+      "description": "Files URL",
+      "lightning:isPII": false,
+      "copilotAction:isDisplayable": true,
+      "copilotAction:isUsedByPlanner": true,
+      "copilotAction:useHydratedPrompt": false,
+      "lightning:type": "lightning__textType"
+    },
     "confirmPrompt": {
       "title": "Confirm Prompt",
       "description": "Confirm Prompt",

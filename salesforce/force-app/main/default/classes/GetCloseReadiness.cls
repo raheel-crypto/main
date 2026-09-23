@@ -53,6 +53,7 @@ public with sharing class GetCloseReadiness {
             res.closeWonPrompt = 'Which opportunity should I close?';
             res.closeLostPrompt = 'Which opportunity should I close?';
             res.opportunityUrl = URL.getOrgDomainUrl().toExternalForm();
+            res.filesUrl = res.opportunityUrl;
             return res;
         }
 
@@ -65,6 +66,7 @@ public with sharing class GetCloseReadiness {
         res.opportunityType = OpportunityCloseService.textOrNotSet(opp.Type);
         res.ownerName = opp.Owner == null ? OpportunityCloseService.NOT_SET : opp.Owner.Name;
         res.opportunityUrl = OpportunityCloseService.recordUrl(opp.Id);
+        res.filesUrl = OpportunityCloseService.filesUrl(opp.Id);
         res.isClosed = opp.IsClosed;
         res.canClose = !opp.IsClosed;
         res.isRestructure = OpportunityCloseService.isRestructure(opp);
@@ -79,6 +81,7 @@ public with sharing class GetCloseReadiness {
             : String.join(signed, ', ');
 
         List<String> missing = new List<String>();
+        String suggestedLob = OpportunityCloseService.suggestLob(opp);
         for (OpportunityCloseService.FieldSpec spec : OpportunityCloseService.wonFieldSpecs()) {
             Boolean needed = spec.required || (spec.key == 'optOutDate' && opp.Opt_Out__c == true);
             Boolean present = OpportunityCloseService.hasValue(spec, opp);
@@ -88,7 +91,10 @@ public with sharing class GetCloseReadiness {
                 res.checklist.add(done);
                 res.completeRows.add(done);
             } else {
-                OpportunityCloseService.Row gap = new OpportunityCloseService.Row(spec.label, 'Needed', 'alert-circle', 'warning');
+                String status = (spec.key == 'lobDivision' && suggestedLob != null)
+                    ? 'Needed. Will default to ' + suggestedLob + ' from the account type'
+                    : 'Needed';
+                OpportunityCloseService.Row gap = new OpportunityCloseService.Row(spec.label, status, 'alert-circle', 'warning');
                 res.checklist.add(gap);
                 res.neededRows.add(gap);
                 missing.add(spec.label);
@@ -113,7 +119,7 @@ public with sharing class GetCloseReadiness {
         } else if (res.missingSignedDocument) {
             res.statusLabel = 'Blocked';
             res.statusVariant = 'error';
-            res.statusMessage = 'A signed order form must be attached to the opportunity in Salesforce before it can be closed Won. Attach a file whose name starts with __signed, then check again.';
+            res.statusMessage = 'A signed order form must be attached before this can be closed Won. Use the Attach signed order form button to open the opportunity Files, upload a file whose name starts with __signed, then check again.';
         } else if (res.hasMissingFields) {
             res.statusLabel = 'Fields needed';
             res.statusVariant = 'warning';
@@ -160,6 +166,7 @@ public with sharing class GetCloseReadiness {
         @InvocableVariable(label='Needed Title' description='Accordion title for the needed fields, with the count.') public String neededTitle;
         @InvocableVariable(label='Complete Title' description='Accordion title for the complete fields, with the count.') public String completeTitle;
         @InvocableVariable(label='Progress Label' description='Label for the progress bar, e.g. 4 of 27 Closed Won fields complete.') public String progressLabel;
+        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list, where the signed order form is uploaded.') public String filesUrl;
         @InvocableVariable(label='Close Won Prompt') public String closeWonPrompt;
         @InvocableVariable(label='Close Lost Prompt') public String closeLostPrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;

@@ -120,6 +120,10 @@
       "title": "Progress Label",
       "lightning:type": "lightning__textType"
     },
+    "filesUrl": {
+      "title": "Files URL",
+      "lightning:type": "lightning__textType"
+    },
     "closeWonPrompt": {
       "title": "Close Won Prompt",
       "lightning:type": "lightning__multilineTextType"

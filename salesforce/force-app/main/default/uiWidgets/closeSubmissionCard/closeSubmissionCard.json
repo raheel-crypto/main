@@ -226,55 +226,174 @@
               },
               "children": [
                 {
-                  "definition": "tile/text",
+                  "definition": "tile/callout",
                   "attributes": {
-                    "text": "Pick the loss reason",
-                    "variant": "h3"
-                  }
-                },
-                {
-                  "definition": "tile/text",
-                  "attributes": {
-                    "text": "Choose a reason to preview with it, or ask for the full list.",
-                    "variant": "caption",
-                    "color": "muted"
+                    "title": "Signed order form required",
+                    "variant": "error",
+                    "description": "Closed Won needs the signed order form attached to the opportunity."
                   }
                 },
                 {
                   "definition": "tile/row",
                   "attributes": {
                     "gap": "sm",
-                    "align": "center",
-                    "isWrapped": true
+                    "align": "center"
                   },
                   "children": [
                     {
                       "definition": "tile/button",
                       "attributes": {
-                        "label": "{!$choice.label}",
-                        "variant": "{!$choice.variant}",
+                        "label": "Attach signed order form",
+                        "variant": "primary",
                         "actions": {
                           "click": [
                             {
-                              "definition": "action/sendMessage",
+                              "definition": "action/openLink",
                               "attributes": {
-                                "content": "{!$choice.prompt}"
+                                "url": "{!$attrs.filesUrl}",
+                                "target": "_blank"
                               }
                             }
                           ]
                         }
-                      },
-                      "meta": {
-                        "forEach": "{!$attrs.reasonChoices}",
-                        "forItem": "$choice"
+                      }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "Opens the opportunity Files. Upload a file whose name starts with __signed, then try again.",
+                        "variant": "caption",
+                        "color": "muted"
                       }
                     }
                   ]
                 }
               ],
               "meta": {
-                "if": "{!$attrs.hasReasonChoices}"
+                "if": "{!$attrs.needsSignedDocument}"
               }
+            },
+            {
+              "definition": "tile/column",
+              "attributes": {
+                "gap": "md"
+              },
+              "children": [
+                {
+                  "definition": "tile/column",
+                  "attributes": {
+                    "gap": "sm"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "Pick the loss reason",
+                        "variant": "h3"
+                      }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "Choose a reason to preview with it, or ask for the full list.",
+                        "variant": "caption",
+                        "color": "muted"
+                      }
+                    },
+                    {
+                      "definition": "tile/row",
+                      "attributes": {
+                        "gap": "sm",
+                        "align": "center",
+                        "isWrapped": true
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/button",
+                          "attributes": {
+                            "label": "{!$choice.label}",
+                            "variant": "{!$choice.variant}",
+                            "actions": {
+                              "click": [
+                                {
+                                  "definition": "action/sendMessage",
+                                  "attributes": {
+                                    "content": "{!$choice.prompt}"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "meta": {
+                            "forEach": "{!$attrs.reasonChoices}",
+                            "forItem": "$choice"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.hasReasonChoices}"
+                  }
+                },
+                {
+                  "definition": "tile/column",
+                  "attributes": {
+                    "gap": "sm"
+                  },
+                  "children": [
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "Pick the LOB/Division",
+                        "variant": "h3"
+                      }
+                    },
+                    {
+                      "definition": "tile/text",
+                      "attributes": {
+                        "text": "The suggestion comes from the account type. Pick another to preview with it.",
+                        "variant": "caption",
+                        "color": "muted"
+                      }
+                    },
+                    {
+                      "definition": "tile/row",
+                      "attributes": {
+                        "gap": "sm",
+                        "align": "center",
+                        "isWrapped": true
+                      },
+                      "children": [
+                        {
+                          "definition": "tile/button",
+                          "attributes": {
+                            "label": "{!$lob.label}",
+                            "variant": "{!$lob.variant}",
+                            "actions": {
+                              "click": [
+                                {
+                                  "definition": "action/sendMessage",
+                                  "attributes": {
+                                    "content": "{!$lob.prompt}"
+                                  }
+                                }
+                              ]
+                            }
+                          },
+                          "meta": {
+                            "forEach": "{!$attrs.lobChoices}",
+                            "forItem": "$lob"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "meta": {
+                    "if": "{!$attrs.hasLobChoices}"
+                  }
+                }
+              ]
             },
             {
               "definition": "tile/column",

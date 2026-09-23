@@ -84,7 +84,16 @@ public with sharing class SubmitClosedLost {
         if (String.isBlank(notes) && res.recommendedNarrative != OpportunityCloseService.NOT_SET) {
             notes = res.recommendedNarrative;
         }
+        // LOB/Division: explicit input or record value wins; otherwise default from the
+        // account's Business Type and offer buttons to change it.
         String lob = pick(req.lobDivision, opp.LOB_Division__c);
+        Boolean lobExplicit = String.isNotBlank(lob);
+        String suggestedLob = lobExplicit ? null : OpportunityCloseService.suggestLob(opp);
+        if (!lobExplicit) {
+            lob = suggestedLob;
+            res.lobChoices = OpportunityCloseService.lobChoices(opp, suggestedLob, 'Lost');
+            res.hasLobChoices = true;
+        }
 
         List<OpportunityCloseService.Row> problems = new List<OpportunityCloseService.Row>();
         primary = requirePicklist(problems, 'CL Primary Reason', 'CL_Primary_Reason__c', primary, true);
@@ -100,7 +109,8 @@ public with sharing class SubmitClosedLost {
         res.rows.add(new OpportunityCloseService.Row('CL Primary Reason', OpportunityCloseService.textOrNotSet(primary)));
         res.rows.add(new OpportunityCloseService.Row('CL Secondary Reason', OpportunityCloseService.textOrNotSet(secondary)));
         res.rows.add(new OpportunityCloseService.Row('Final Competitor', OpportunityCloseService.textOrNotSet(competitor)));
-        res.rows.add(new OpportunityCloseService.Row('LOB/Division', OpportunityCloseService.textOrNotSet(lob)));
+        res.rows.add(new OpportunityCloseService.Row('LOB/Division', OpportunityCloseService.textOrNotSet(lob)
+            + (suggestedLob != null ? OpportunityCloseService.SUGGESTED_SUFFIX : '')));
         res.rows.add(new OpportunityCloseService.Row('CL Notes', OpportunityCloseService.textOrNotSet(notes)));
 
         if (!problems.isEmpty()) {
@@ -141,6 +151,8 @@ public with sharing class SubmitClosedLost {
 
         res.reasonChoices = new List<OpportunityCloseService.Choice>();
         res.hasReasonChoices = false;
+        res.lobChoices = new List<OpportunityCloseService.Choice>();
+        res.hasLobChoices = false;
         res.isSubmitted = true;
         return res.finish('Submitted', 'Closed Lost', 'success', 'Opportunity closed Lost',
             'The opportunity is now Closed Lost with the reasons and notes recorded.');
@@ -196,6 +208,10 @@ public with sharing class SubmitClosedLost {
         r.aiFailureReason = '';
         r.reasonChoices = new List<OpportunityCloseService.Choice>();
         r.hasReasonChoices = false;
+        r.lobChoices = new List<OpportunityCloseService.Choice>();
+        r.hasLobChoices = false;
+        r.needsSignedDocument = false;
+        r.filesUrl = '';
         r.confirmPrompt = '';
         r.changePrompt = '';
         return r;
@@ -245,6 +261,10 @@ public with sharing class SubmitClosedLost {
         @InvocableVariable(label='AI Failure Reason' description='Why the AI recommendation is unavailable, when it failed.') public String aiFailureReason;
         @InvocableVariable(label='Loss Reason Choices' description='Buttons for the recommended CL Primary Reason plus common alternatives. Each carries the prompt the button sends.') public List<OpportunityCloseService.Choice> reasonChoices;
         @InvocableVariable(label='Has Loss Reason Choices' description='True on preview and blocked responses, when the user can still pick a reason.') public Boolean hasReasonChoices;
+        @InvocableVariable(label='LOB/Division Choices' description='Buttons for LOB/Division when it was not set explicitly: the account-based suggestion first, then common LOBs.') public List<OpportunityCloseService.Choice> lobChoices;
+        @InvocableVariable(label='Has LOB/Division Choices') public Boolean hasLobChoices;
+        @InvocableVariable(label='Needs Signed Document' description='Always false for Closed Lost; present so the same card renders Won and Lost.') public Boolean needsSignedDocument;
+        @InvocableVariable(label='Files URL' description='Link to the opportunity Files related list, where the signed order form is uploaded.') public String filesUrl;
         @InvocableVariable(label='Confirm Prompt') public String confirmPrompt;
         @InvocableVariable(label='Change Prompt') public String changePrompt;
         @InvocableVariable(label='Opportunity URL') public String opportunityUrl;
@@ -255,12 +275,14 @@ public with sharing class SubmitClosedLost {
             opportunityName = opp.Name;
             accountName = opp.Account == null ? OpportunityCloseService.NOT_SET : opp.Account.Name;
             opportunityUrl = OpportunityCloseService.recordUrl(opp.Id);
+            filesUrl = OpportunityCloseService.filesUrl(opp.Id);
         }
 
         public Response notFound(String requested) {
             opportunityName = 'Opportunity not found';
             accountName = String.isBlank(requested) ? 'No Opportunity Id was provided' : 'No opportunity with Id ' + requested;
             opportunityUrl = URL.getOrgDomainUrl().toExternalForm();
+            filesUrl = opportunityUrl;
             isBlocked = true;
             return finish('NotFound', 'Not found', 'error', 'Opportunity not found', 'Check the Id and try again.');
         }

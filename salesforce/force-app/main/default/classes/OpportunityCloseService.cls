@@ -80,7 +80,7 @@ public with sharing class OpportunityCloseService {
     public static Opportunity loadOpportunity(Id opportunityId) {
         List<Opportunity> opps = [
             SELECT Id, Name, StageName, IsClosed, IsWon, Amount, CloseDate, Type, OwnerId, Owner.Name,
-                   AccountId, Account.Name, Account.Provide_References__c,
+                   AccountId, Account.Name, Account.Provide_References__c, Account.Business_Type__c,
                    LOB_Division__c, Pricing_Structure__c, Deal_Description__c, Purchase_Driver__c,
                    Rollout_Timeline__c, Success_Criteria__c, Upsell_Potential__c, Implementation_Notes__c,
                    Key_Risks__c, Contract_Start_Date__c, Contract_End_Date__c, Contract_Length_Mos__c,
@@ -256,7 +256,13 @@ public with sharing class OpportunityCloseService {
     // ─── Prompts the widget buttons send back to the agent ───────────────
 
     public static String closeWonPrompt(Opportunity opp) {
-        return 'Close opportunity ' + opp.Id + ' (' + opp.Name + ') as Closed Won. Ask me for any missing fields first.';
+        return 'Close opportunity ' + opp.Id + ' (' + opp.Name + ') as Closed Won. Run the preview, then ask me for every '
+            + 'missing field in a single message, grouped into deal details, contract dates and money, and billing.';
+    }
+
+    /** Deep link to the opportunity's Files related list, where the signed order form gets uploaded. */
+    public static String filesUrl(Id opportunityId) {
+        return URL.getOrgDomainUrl().toExternalForm() + '/lightning/r/Opportunity/' + opportunityId + '/related/AttachedContentDocuments/view';
     }
 
     public static String closeLostPrompt(Opportunity opp) {
@@ -275,9 +281,22 @@ public with sharing class OpportunityCloseService {
         return 'I want to change some values before submitting the close for opportunity ' + opp.Id + '.';
     }
 
+    /** Tail shared by every choice-button prompt: one round trip for whatever is still missing. */
+    private static final String ONE_MESSAGE_TAIL =
+        ' Keep every other value from the current preview. If anything required is still missing, ask me for all of it in one message.';
+
     public static String lostReasonPrompt(Opportunity opp, String reason) {
         return 'Close opportunity ' + opp.Id + ' (' + opp.Name + ') as Closed Lost with CL Primary Reason "' + reason
-            + '". Keep the recommended competitor and narrative unless I say otherwise, then show me the preview.';
+            + '". Keep the recommended competitor and narrative unless I say otherwise, then show me the preview.' + ONE_MESSAGE_TAIL;
+    }
+
+    public static String lobPrompt(Opportunity opp, String lob, String mode) {
+        return 'Use LOB/Division "' + lob + '" for opportunity ' + opp.Id + ' (' + opp.Name + ') and re-run the Closed ' + mode
+            + ' preview.' + ONE_MESSAGE_TAIL;
+    }
+
+    public static String moreLobPrompt(Opportunity opp) {
+        return 'I want a different LOB/Division for opportunity ' + opp.Id + '. List the LOB/Division options and ask me which one applies.';
     }
 
     public static String retryAiPrompt(Opportunity opp) {
@@ -290,11 +309,75 @@ public with sharing class OpportunityCloseService {
 
     // ─── Loss reason choice buttons ──────────────────────────────────────
 
-    /** Reasons offered as buttons when the AI has no recommendation, most common first. */
+    /** Reasons offered as buttons, ordered by how often closed-lost deals in this org use them. */
     @TestVisible private static final List<String> COMMON_LOSS_REASONS = new List<String>{
-        'Competitive Loss', 'Budget Financial', 'Timing Priority', 'No Need', 'Product / Technical Gap'
+        'Bad Fit Disqualified', 'Timing Priority', 'No Show / Buyer Canceled', 'No Need', 'Budget Financial', 'Competitive Loss'
     };
     @TestVisible private static final Integer MAX_REASON_ALTERNATIVES = 3;
+
+    // ─── LOB/Division defaults and choice buttons ────────────────────────
+
+    /**
+     * Account Business Type predicts LOB/Division almost one to one in this org
+     * (e.g. private_equity -> Private Equity in 1,546 of 1,567 deals), so a blank
+     * LOB defaults from it. "other" is deliberately absent: it is too noisy to guess.
+     */
+    @TestVisible private static final Map<String, String> LOB_BY_BUSINESS_TYPE = new Map<String, String>{
+        'private_equity' => 'Private Equity',
+        'investment_bank' => 'Investment Banking',
+        'Corporate' => 'Corporate Finance',
+        'hedge_fund' => 'Hedge Fund',
+        'Asset Manager' => 'Asset Management',
+        'venture_capital' => 'Venture Capital / Ventures',
+        'Private Credit' => 'Private Credit',
+        'Consulting Firm' => 'Consulting',
+        'Family Office' => 'Wealth Management',
+        'Wealth Manager' => 'Wealth Management',
+        'Commercial Bank' => 'Commercial Banking'
+    };
+    /** LOBs offered as buttons, ordered by how often deals in this org use them. */
+    @TestVisible private static final List<String> COMMON_LOBS = new List<String>{
+        'Private Equity', 'Investment Banking', 'Corporate Finance', 'Hedge Fund', 'Asset Management'
+    };
+    @TestVisible private static final Integer MAX_LOB_ALTERNATIVES = 4;
+    public static final String SUGGESTED_SUFFIX = ' (suggested from account type)';
+
+    /** The LOB/Division the account's Business Type implies, as an active picklist value, or null. */
+    public static String suggestLob(Opportunity opp) {
+        if (opp == null || opp.Account == null || String.isBlank(opp.Account.Business_Type__c)) {
+            return null;
+        }
+        String lob = LOB_BY_BUSINESS_TYPE.get(opp.Account.Business_Type__c);
+        return lob == null ? null : matchPicklist('LOB_Division__c', lob);
+    }
+
+    /**
+     * "Use suggested: X" first when the account implies an LOB, then up to four
+     * common LOBs, then a button that asks the agent to list every option.
+     */
+    public static List<Choice> lobChoices(Opportunity opp, String suggestedLob, String mode) {
+        List<Choice> choices = new List<Choice>();
+        Set<String> used = new Set<String>();
+        if (String.isNotBlank(suggestedLob)) {
+            choices.add(new Choice('Use suggested: ' + suggestedLob, lobPrompt(opp, suggestedLob, mode), 'primary'));
+            used.add(suggestedLob);
+        }
+        Integer alternatives = 0;
+        for (String lob : COMMON_LOBS) {
+            if (alternatives >= MAX_LOB_ALTERNATIVES) {
+                break;
+            }
+            String canonical = matchPicklist('LOB_Division__c', lob);
+            if (canonical == null || used.contains(canonical)) {
+                continue;
+            }
+            choices.add(new Choice(canonical, lobPrompt(opp, canonical, mode), 'secondary'));
+            used.add(canonical);
+            alternatives++;
+        }
+        choices.add(new Choice('More LOB options', moreLobPrompt(opp), 'secondary'));
+        return choices;
+    }
 
     /**
      * The recommended reason (if any) as the primary choice, then up to three

@@ -35,7 +35,7 @@ READINESS = [
     ("neededRows", "rows", "Needed Rows"), ("completeRows", "rows", "Complete Rows"),
     ("completedCount", "int", "Completed Count"), ("totalFieldCount", "int", "Total Field Count"),
     ("neededTitle", "text", "Needed Title"), ("completeTitle", "text", "Complete Title"),
-    ("progressLabel", "text", "Progress Label"),
+    ("progressLabel", "text", "Progress Label"), ("filesUrl", "text", "Files URL"),
     ("closeWonPrompt", "long", "Close Won Prompt"), ("closeLostPrompt", "long", "Close Lost Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
@@ -50,6 +50,8 @@ SUBMISSION = [
     ("recommendedNarrative", "long", "Recommended Narrative"), ("aiConfidence", "text", "AI Confidence"),
     ("aiFailed", "bool", "AI Failed"), ("aiFailureReason", "long", "AI Failure Reason"),
     ("reasonChoices", "choices", "Loss Reason Choices"), ("hasReasonChoices", "bool", "Has Loss Reason Choices"),
+    ("lobChoices", "choices", "LOB/Division Choices"), ("hasLobChoices", "bool", "Has LOB/Division Choices"),
+    ("needsSignedDocument", "bool", "Needs Signed Document"), ("filesUrl", "text", "Files URL"),
     ("confirmPrompt", "long", "Confirm Prompt"), ("changePrompt", "long", "Change Prompt"),
     ("opportunityUrl", "text", "Opportunity URL"),
 ]
@@ -261,6 +263,10 @@ readiness_body = envelope([
     ], gap="md"),
     col([
         callout("Signed order form required", "{!$attrs.signedDocumentText}", "error", "{!$attrs.missingSignedDocument}"),
+        with_if(row([
+            button("Attach signed order form", "primary", open_link("{!$attrs.filesUrl}")),
+            text("Opens the opportunity Files. Upload a file whose name starts with __signed, then check again.", variant="caption", color="muted"),
+        ], gap="sm"), "{!$attrs.missingSignedDocument}"),
         with_if(row([icon("check-circle", "success"), text("Signed order form", variant="body", weight="semibold"),
                      text("{!$attrs.signedDocumentText}", variant="body", color="muted")], gap="sm"), "{!$attrs.hasSignedDocument}"),
     ], gap="sm"),
@@ -306,10 +312,24 @@ submission_body = envelope([
     ], gap="sm"), "{!$attrs.hasRecommendation}"),
     callout("AI analysis unavailable", None, "warning", "{!$attrs.aiFailed}", body="{!$attrs.aiFailureReason}"),
     with_if(col([
-        text("Pick the loss reason", variant="h3"),
-        text("Choose a reason to preview with it, or ask for the full list.", variant="caption", color="muted"),
-        row([choice_buttons("{!$attrs.reasonChoices}")], gap="sm", isWrapped=True),
-    ], gap="sm"), "{!$attrs.hasReasonChoices}"),
+        callout("Signed order form required", "Closed Won needs the signed order form attached to the opportunity.", "error"),
+        row([
+            button("Attach signed order form", "primary", open_link("{!$attrs.filesUrl}")),
+            text("Opens the opportunity Files. Upload a file whose name starts with __signed, then try again.", variant="caption", color="muted"),
+        ], gap="sm"),
+    ], gap="sm"), "{!$attrs.needsSignedDocument}"),
+    col([
+        with_if(col([
+            text("Pick the loss reason", variant="h3"),
+            text("Choose a reason to preview with it, or ask for the full list.", variant="caption", color="muted"),
+            row([choice_buttons("{!$attrs.reasonChoices}")], gap="sm", isWrapped=True),
+        ], gap="sm"), "{!$attrs.hasReasonChoices}"),
+        with_if(col([
+            text("Pick the LOB/Division", variant="h3"),
+            text("The suggestion comes from the account type. Pick another to preview with it.", variant="caption", color="muted"),
+            row([choice_buttons("{!$attrs.lobChoices}", item="$lob")], gap="sm", isWrapped=True),
+        ], gap="sm"), "{!$attrs.hasLobChoices}"),
+    ], gap="md"),
     with_if(col([
         callout("Fix these before submitting", "Nothing has been saved.", "error"),
         table("{!$attrs.problems}", "Problems to fix", "Field", "Issue"),
@@ -498,10 +518,10 @@ server = ('<?xml version="1.0" encoding="UTF-8"?>\n<McpServerDefinition xmlns="h
                "Checks whether an Opportunity can be closed: whether a signed order form is attached and which Closed Won fields still need values. Read-only. Call this first when a user wants to close a deal. Provide the Opportunity Id (starts with 006).",
                "closeReadinessCard", True)
     + tool_xml("SubmitClosedWon", "Submit Closed Won",
-               "Submits an Opportunity as Closed Won like the Close Opportunity screen flow. Call without confirm to validate and preview; the user reviews the card, then call again with confirm=true to write the finance and handoff fields, notify RevOps in Slack, and queue order form extraction. RevOps stamps the stage. Requires a signed order form on the record. Blank inputs keep existing values.",
+               "Submits an Opportunity as Closed Won like the Close Opportunity screen flow. Call without confirm to validate and preview; the user reviews the card, then call again with confirm=true to write the finance and handoff fields, notify RevOps in Slack, and queue order form extraction. RevOps stamps the stage. Requires a signed order form on the record. Blank inputs keep existing values, and a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.",
                "closeSubmissionCardWon", False)
     + tool_xml("SubmitClosedLost", "Submit Closed Lost",
-               "Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to get the AI-recommended loss reason, competitor, and narrative and preview the values; the user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative.",
+               "Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to get the AI-recommended loss reason, competitor, and narrative and preview the values; the user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative; a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.",
                "closeSubmissionCardLost", False)
     + resource_xml("accountSummaryCard", "getAccountSummary", "Account Summary Card",
                    "HXL widget that renders an account summary: header with industry and type, firmographics, owner and location, open pipeline with top opportunities, and a link to the record.")

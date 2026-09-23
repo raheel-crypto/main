@@ -30,10 +30,12 @@ private class SubmitClosedLostTest {
         System.assertEquals(7, p.rows.size());
         System.assertEquals(true, p.hasReasonChoices);
         System.assertEquals(4, p.reasonChoices.size(), 'Three common reasons plus Other when there is no recommendation');
-        System.assertEquals('Competitive Loss', p.reasonChoices[0].label);
+        System.assertEquals('Bad Fit Disqualified', p.reasonChoices[0].label);
         System.assert(p.reasonChoices[0].prompt.contains(o.Id));
-        System.assert(p.reasonChoices[0].prompt.contains('"Competitive Loss"'));
+        System.assert(p.reasonChoices[0].prompt.contains('"Bad Fit Disqualified"'));
         System.assertEquals('Other reason', p.reasonChoices[3].label);
+        System.assertEquals(false, p.hasLobChoices, 'LOB was given explicitly, so no LOB buttons');
+        System.assert(p.filesUrl.contains(o.Id) && p.filesUrl.contains('AttachedContentDocuments'));
         System.assertEquals('3 - POV', [SELECT StageName FROM Opportunity WHERE Id = :o.Id].StageName, 'Preview must not save');
 
         SubmitClosedLost.Request confirm = request(o.Id, true);
@@ -78,7 +80,10 @@ private class SubmitClosedLostTest {
         System.assert(labels.contains('LOB/Division'));
         System.assertEquals('3 - POV', [SELECT StageName FROM Opportunity WHERE Id = :o.Id].StageName);
         System.assertEquals(true, res.hasReasonChoices, 'A blocked confirm still offers reason buttons');
-        System.assertEquals('Competitive Loss', res.reasonChoices[0].label);
+        System.assertEquals('Bad Fit Disqualified', res.reasonChoices[0].label);
+        System.assertEquals(true, res.hasLobChoices, 'No LOB anywhere, so LOB buttons are offered');
+        System.assertEquals('Private Equity', res.lobChoices[0].label, 'No account type, so the most common LOB leads');
+        System.assertEquals('More LOB options', res.lobChoices[res.lobChoices.size() - 1].label);
     }
 
     @IsTest
@@ -95,6 +100,43 @@ private class SubmitClosedLostTest {
         SubmitClosedLost.Request bad = new SubmitClosedLost.Request();
         bad.opportunityId = 'nope';
         System.assertEquals('NotFound', run(bad).status);
+    }
+
+    @IsTest
+    static void lobDefaultsFromAccountBusinessType() {
+        OpportunityCloseService.disableExternalCalls = true;
+        Account a = OpportunityCloseServiceTest.makeAccount();
+        a.Business_Type__c = 'investment_bank';
+        update a;
+        Opportunity o = OpportunityCloseServiceTest.makeBareOpportunity(a.Id);
+
+        SubmitClosedLost.Request preview = request(o.Id, false);
+        preview.primaryReason = 'No Need';
+        preview.notes = 'Went quiet after the pilot';
+        SubmitClosedLost.Response p = run(preview);
+
+        System.assertEquals('ReadyToSubmit', p.status, 'Suggested LOB satisfies the requirement: ' + JSON.serialize(p.problems));
+        System.assertEquals(true, p.hasLobChoices);
+        System.assertEquals('Use suggested: Investment Banking', p.lobChoices[0].label);
+        System.assertEquals('primary', p.lobChoices[0].variant);
+        System.assert(p.lobChoices[0].prompt.contains('"Investment Banking"') && p.lobChoices[0].prompt.contains('Closed Lost'));
+        Boolean sawSuggestedRow = false;
+        for (OpportunityCloseService.Row r : p.rows) {
+            if (r.label == 'LOB/Division') {
+                sawSuggestedRow = r.value == 'Investment Banking' + OpportunityCloseService.SUGGESTED_SUFFIX;
+            }
+        }
+        System.assert(sawSuggestedRow, 'Row shows the suggested LOB with its suffix');
+
+        SubmitClosedLost.Request confirm = request(o.Id, true);
+        confirm.primaryReason = 'No Need';
+        confirm.notes = 'Went quiet after the pilot';
+        SubmitClosedLost.Response c = run(confirm);
+        System.assertEquals('Submitted', c.status);
+        System.assertEquals(false, c.hasLobChoices);
+        System.assertEquals('Investment Banking', [SELECT LOB_Division__c FROM Opportunity WHERE Id = :o.Id].LOB_Division__c);
+
+        System.assertEquals(null, OpportunityCloseService.suggestLob(null));
     }
 
     @IsTest

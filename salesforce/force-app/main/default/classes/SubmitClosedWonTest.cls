@@ -28,6 +28,9 @@ private class SubmitClosedWonTest {
         System.assertEquals(false, p.hasProblems);
         System.assertEquals(28, p.rows.size(), '27 fields plus references');
         System.assert(p.confirmPrompt.contains(o.Id));
+        System.assertEquals(false, p.hasLobChoices, 'LOB already on the record');
+        System.assertEquals(false, p.needsSignedDocument);
+        System.assert(p.filesUrl.contains(o.Id));
         Opportunity untouched = [SELECT Billing_Notes__c FROM Opportunity WHERE Id = :o.Id];
         System.assertEquals('Invoice on signature', untouched.Billing_Notes__c, 'Preview must not save');
 
@@ -74,6 +77,9 @@ private class SubmitClosedWonTest {
         System.assertEquals(true, res.isBlocked);
         System.assertEquals(true, res.hasProblems);
         System.assertEquals('Signed order form', res.problems[0].label, 'Signed doc problem listed first');
+        System.assertEquals(true, res.needsSignedDocument);
+        System.assertEquals(true, res.hasLobChoices, 'Bare deal has no LOB, so LOB buttons are offered');
+        System.assert(res.lobChoices[0].prompt.contains('Closed Won'));
         Set<String> labels = new Set<String>();
         for (OpportunityCloseService.Row r : res.problems) {
             labels.add(r.label);

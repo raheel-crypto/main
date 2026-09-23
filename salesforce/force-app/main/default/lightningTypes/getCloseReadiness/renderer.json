@@ -32,6 +32,7 @@
           "neededTitle": "{!$attrs.outputValues.neededTitle}",
           "completeTitle": "{!$attrs.outputValues.completeTitle}",
           "progressLabel": "{!$attrs.outputValues.progressLabel}",
+          "filesUrl": "{!$attrs.outputValues.filesUrl}",
           "closeWonPrompt": "{!$attrs.outputValues.closeWonPrompt}",
           "closeLostPrompt": "{!$attrs.outputValues.closeLostPrompt}",
           "opportunityUrl": "{!$attrs.outputValues.opportunityUrl}"

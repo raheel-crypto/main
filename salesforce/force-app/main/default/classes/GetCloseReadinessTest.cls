@@ -50,6 +50,7 @@ private class GetCloseReadinessTest {
         System.assert(res.missingFieldCount > 20, 'Most fields should be missing, got ' + res.missingFieldCount);
         System.assert(res.missingFieldsText.contains('Purchase Driver'));
         System.assertEquals(res.missingFieldCount, res.neededRows.size());
+        System.assert(res.filesUrl.contains(o.Id) && res.filesUrl.contains('AttachedContentDocuments'));
         System.assertEquals(res.checklist.size(), res.neededRows.size() + res.completeRows.size());
         System.assertEquals(res.completeRows.size(), res.completedCount);
         System.assert(res.neededTitle.startsWith('Needed ('));
