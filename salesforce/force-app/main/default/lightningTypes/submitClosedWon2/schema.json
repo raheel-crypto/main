@@ -1,6 +1,6 @@
 {
-  "title": "Submit Closed Lost",
-  "description": "Invocable-action result envelope for the SubmitClosedLost MCP tool. outputValues carries the response rendered by the closeSubmissionCard widget.",
+  "title": "Submit Closed Won",
+  "description": "Invocable-action result envelope for the SubmitClosedWon MCP tool. outputValues carries the response rendered by the closeSubmissionCard2 widget.",
   "type": "object",
   "lightning:type": "lightning__objectType",
   "lightning:tags": [
@@ -18,7 +18,7 @@
     },
     "outputValues": {
       "title": "outputValues",
-      "lightning:type": "c__submitClosedLostResponse"
+      "lightning:type": "c__submitClosedWonResponse"
     }
   }
 }

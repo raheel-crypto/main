@@ -1,6 +1,6 @@
 {
   "title": "Get Close Readiness",
-  "description": "Invocable-action result envelope for the GetCloseReadiness MCP tool. outputValues carries the response rendered by the closeReadinessCard widget.",
+  "description": "Invocable-action result envelope for the GetCloseReadiness MCP tool. outputValues carries the response rendered by the closeReadinessCard2 widget.",
   "type": "object",
   "lightning:type": "lightning__objectType",
   "lightning:tags": [

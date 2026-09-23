@@ -49,9 +49,9 @@ tools on the same MCP server, each rendering an HXL card:
 
 | Tool | Apex | Card | What it does |
 |---|---|---|---|
-| Get Close Readiness | `GetCloseReadiness` | `closeReadinessCard` | Read-only. Header, signed-order-form check, a progress bar of Closed Won fields completed, the 27 fields grouped into "Needed" (expanded) and "Complete" (collapsed) accordion sections, buttons to start Won or Lost. |
-| Submit Closed Won | `SubmitClosedWon` | `closeSubmissionCard` | Validates and previews without `confirm`; with `confirm=true` writes the finance and handoff fields, sets the Account references flag, sends the RevOps Slack, queues order form extraction. Does not stamp the stage (RevOps does), except Contract Restructure which closes directly. Requires a signed order form on the record. |
-| Submit Closed Lost | `SubmitClosedLost` | `closeSubmissionCard` | Runs the AI loss analysis and previews without `confirm`; with `confirm=true` stamps Closed Lost with reasons, notes, LOB, prior stage, and AI fields. The preview offers loss-reason choice buttons: the AI recommendation first, then up to three common alternatives, then "Other reason". Each button sends a prompt that re-runs the preview with that reason. |
+| Get Close Readiness | `GetCloseReadiness` | `closeReadinessCard2` | Read-only. Header, signed-order-form check, a progress bar of Closed Won fields completed, the 27 fields grouped into "Needed" (expanded) and "Complete" (collapsed) accordion sections, buttons to start Won or Lost. |
+| Submit Closed Won | `SubmitClosedWon` | `closeSubmissionCard2` | Validates and previews without `confirm`; with `confirm=true` writes the finance and handoff fields, sets the Account references flag, sends the RevOps Slack, queues order form extraction. Does not stamp the stage (RevOps does), except Contract Restructure which closes directly. Requires a signed order form on the record. |
+| Submit Closed Lost | `SubmitClosedLost` | `closeSubmissionCard2` | Runs the AI loss analysis and previews without `confirm`; with `confirm=true` stamps Closed Lost with reasons, notes, LOB, prior stage, and AI fields. The preview offers loss-reason choice buttons: the AI recommendation first, then up to three common alternatives, then "Other reason". Each button sends a prompt that re-runs the preview with that reason. |
 
 Shared logic lives in `OpportunityCloseService`; the Slack callout runs after
 commit in `CloseWonNotificationJob`. Submissions are tagged with a new
@@ -205,10 +205,14 @@ sf org assign permset --name Agent_Close_Tools
 sf project deploy start --source-dir force-app/main/default/classes --test-level RunSpecifiedTests --tests GetAccountSummaryTest --tests OpportunityCloseServiceTest --tests GetCloseReadinessTest --tests SubmitClosedWonTest --tests SubmitClosedLostTest --tests DealScoreAIControllerTest
 sf project deploy start --source-dir force-app/main/default/uiWidgets
 sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummaryResponse --source-dir force-app/main/default/lightningTypes/getCloseReadinessResponse --source-dir force-app/main/default/lightningTypes/submitClosedWonResponse --source-dir force-app/main/default/lightningTypes/submitClosedLostResponse
-sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary --source-dir force-app/main/default/lightningTypes/getCloseReadiness --source-dir force-app/main/default/lightningTypes/submitClosedWon --source-dir force-app/main/default/lightningTypes/submitClosedLost
+sf project deploy start --source-dir force-app/main/default/lightningTypes/getAccountSummary --source-dir force-app/main/default/lightningTypes/getCloseReadiness2 --source-dir force-app/main/default/lightningTypes/submitClosedWon2 --source-dir force-app/main/default/lightningTypes/submitClosedLost2
 sf project deploy start --source-dir force-app/main/default/genAiFunctions
 sf project deploy start --source-dir force-app/main/default/mcpServerDefinitions
 ```
+
+The `2` on the close widgets and their envelope Lightning Types is the
+`REV` constant in `scripts/gen_close_metadata.py`; see "Widget changes need
+a new name" below for why it exists and when to bump it.
 
 The last step updates the existing `HXLAccounts` server in place. After it,
 do both of these, in order, or cards stop rendering:
@@ -219,9 +223,27 @@ do both of these, in order, or cards stop rendering:
    Claude caches the tool list and its UI resource links from the first
    connection.
 
-Clients also cache widget templates by resource URI, so if a later widget
-change does not show up after those two steps, copy the Lightning Type to a
-new name and point `<resourceUri>` at it.
+### Widget changes need a new name
+
+The hosted MCP server caches the compiled widget by name, and that cache
+survives a widget redeploy, a server definition redeploy, a server
+deactivate/activate, and a connector remove/re-add. In September 2026 the
+"Upload signed order form" button was in the org's widget bundle (a
+`sf project retrieve` proved it) and the Apex returned the portal URL, yet
+four full resets still rendered the previous button. The only reliable fix is
+a name the server has never seen.
+
+So: whenever a widget body or a renderer changes, bump `REV` in
+`scripts/gen_close_metadata.py`, run the script, `git rm` the previous
+`uiWidgets/closeReadinessCard<old>`, `uiWidgets/closeSubmissionCard<old>`,
+and `lightningTypes/getCloseReadiness<old>`, `submitClosedWon<old>`,
+`submitClosedLost<old>` folders, then deploy widgets → response types →
+envelope types → server definition, and do the two reset steps above. The
+response Lightning Types and the Agent Actions keep their names; only the
+presentation layer moves. The old bundles stay in the org unused; delete them
+from Setup when convenient. A change that only touches Apex or the response
+field list does not need a bump, but adding a field does (the widget schema and
+renderer change with it).
 
 ### If a card shows "Loading…" forever or "Couldn't render a rich UI"
 

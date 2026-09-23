@@ -32,7 +32,7 @@
         <returnDirect>false</returnDirect>
         <toolName>GetCloseReadinessapex_GetCloseReadiness</toolName>
         <toolTitle>Get Close Readiness</toolTitle>
-        <uiResource>closeReadinessCard</uiResource>
+        <uiResource>closeReadinessCard2</uiResource>
     </tools>
     <tools>
         <apiDefinition>
@@ -48,7 +48,7 @@
         <returnDirect>false</returnDirect>
         <toolName>SubmitClosedWonapex_SubmitClosedWon</toolName>
         <toolTitle>Submit Closed Won</toolTitle>
-        <uiResource>closeSubmissionCardWon</uiResource>
+        <uiResource>closeSubmissionCard2Won</uiResource>
     </tools>
     <tools>
         <apiDefinition>
@@ -64,7 +64,7 @@
         <returnDirect>false</returnDirect>
         <toolName>SubmitClosedLostapex_SubmitClosedLost</toolName>
         <toolTitle>Submit Closed Lost</toolTitle>
-        <uiResource>closeSubmissionCardLost</uiResource>
+        <uiResource>closeSubmissionCard2Lost</uiResource>
     </tools>
     <resources>
         <resourceName>accountSummaryCard</resourceName>
@@ -73,20 +73,20 @@
         <description>HXL widget that renders an account summary: header with industry and type, firmographics, owner and location, open pipeline with top opportunities, and a link to the record.</description>
     </resources>
     <resources>
-        <resourceName>closeReadinessCard</resourceName>
-        <resourceUri>ui://widget/lightningType/c__getCloseReadiness</resourceUri>
+        <resourceName>closeReadinessCard2</resourceName>
+        <resourceUri>ui://widget/lightningType/c__getCloseReadiness2</resourceUri>
         <resourceTitle>Close Readiness Card</resourceTitle>
         <description>HXL widget showing whether an opportunity can be closed: status, signed order form check, Closed Won field checklist, and buttons to start Closed Won or Closed Lost.</description>
     </resources>
     <resources>
-        <resourceName>closeSubmissionCardWon</resourceName>
-        <resourceUri>ui://widget/lightningType/c__submitClosedWon</resourceUri>
+        <resourceName>closeSubmissionCard2Won</resourceName>
+        <resourceUri>ui://widget/lightningType/c__submitClosedWon2</resourceUri>
         <resourceTitle>Closed Won Submission Card</resourceTitle>
         <description>HXL widget showing the preview, validation problems, or result of a Closed Won submission, with confirm and change buttons.</description>
     </resources>
     <resources>
-        <resourceName>closeSubmissionCardLost</resourceName>
-        <resourceUri>ui://widget/lightningType/c__submitClosedLost</resourceUri>
+        <resourceName>closeSubmissionCard2Lost</resourceName>
+        <resourceUri>ui://widget/lightningType/c__submitClosedLost2</resourceUri>
         <resourceTitle>Closed Lost Submission Card</resourceTitle>
         <description>HXL widget showing the AI recommendation, preview, validation problems, or result of a Closed Lost submission, with confirm and change buttons.</description>
     </resources>

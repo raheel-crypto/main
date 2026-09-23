@@ -1,6 +1,6 @@
 {
   "title": "Submit Closed Won Response",
-  "description": "Response fields from the SubmitClosedWon invocable action. Rendered by the closeSubmissionCard widget.",
+  "description": "Response fields from the SubmitClosedWon invocable action. Rendered by the closeSubmissionCard2 widget.",
   "type": "object",
   "lightning:type": "lightning__objectType",
   "lightning:tags": [

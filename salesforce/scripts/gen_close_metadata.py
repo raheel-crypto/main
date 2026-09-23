@@ -6,6 +6,17 @@ Lightning Types, renderers, and Agent Action schemas cannot drift from each othe
 import json, os, re
 
 PKG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "force-app", "main", "default")
+
+# Revision suffix on the widget bundles, the envelope Lightning Types, and the
+# MCP server resource names. The hosted MCP server caches the compiled widget by
+# name and does not drop that cache when the bundle is redeployed, the server is
+# reactivated, or the connector is re-added (Sep 2026: four resets could not get
+# a changed button to render). Bump this whenever a widget body or a renderer
+# changes, so the server resolves a name it has never seen. Response Lightning
+# Types and the Agent Actions keep their names; only the presentation layer moves.
+REV = "2"
+READINESS_WIDGET = "closeReadinessCard" + REV
+SUBMISSION_WIDGET = "closeSubmissionCard" + REV
 ROW_TYPE = "@apexClassType/c__OpportunityCloseService$Row"
 ROW_ITEM_PROPS = {
     "label": {"title": "Label", "lightning:type": "lightning__textType"},
@@ -364,32 +375,38 @@ submission_body = envelope([
 
 # ─── Emit widgets ────────────────────────────────────────────────────────
 
-w(f"{PKG}/uiWidgets/closeReadinessCard/closeReadinessCard.json", readiness_body)
-w(f"{PKG}/uiWidgets/closeReadinessCard/schema.json", widget_schema(
+w(f"{PKG}/uiWidgets/{READINESS_WIDGET}/{READINESS_WIDGET}.json", readiness_body)
+w(f"{PKG}/uiWidgets/{READINESS_WIDGET}/schema.json", widget_schema(
     "Close Readiness Card", "Shows whether an opportunity can be closed: status, signed order form, a progress bar, and the Closed Won fields grouped into needed and complete.", READINESS))
-w(f"{PKG}/uiWidgets/closeReadinessCard/closeReadinessCard.uiwidget-meta.xml", widget_meta(
+w(f"{PKG}/uiWidgets/{READINESS_WIDGET}/{READINESS_WIDGET}.uiwidget-meta.xml", widget_meta(
     "Close Readiness Card", "Whether an opportunity can be closed from the agent: status badge, signed order form check, completion progress, Closed Won fields grouped into needed and complete, and buttons to start Closed Won or Closed Lost."))
 
-w(f"{PKG}/uiWidgets/closeSubmissionCard/closeSubmissionCard.json", submission_body)
-w(f"{PKG}/uiWidgets/closeSubmissionCard/schema.json", widget_schema(
+w(f"{PKG}/uiWidgets/{SUBMISSION_WIDGET}/{SUBMISSION_WIDGET}.json", submission_body)
+w(f"{PKG}/uiWidgets/{SUBMISSION_WIDGET}/schema.json", widget_schema(
     "Close Submission Card", "Preview, problems, or result of a Closed Won or Closed Lost submission, with loss reason choice buttons and confirm and change buttons.", SUBMISSION))
-w(f"{PKG}/uiWidgets/closeSubmissionCard/closeSubmissionCard.uiwidget-meta.xml", widget_meta(
+w(f"{PKG}/uiWidgets/{SUBMISSION_WIDGET}/{SUBMISSION_WIDGET}.uiwidget-meta.xml", widget_meta(
     "Close Submission Card", "Preview, validation problems, or result of submitting an opportunity as Closed Won or Closed Lost, with an AI recommendation section, loss reason choice buttons, and confirm buttons."))
 
 # ─── Emit Lightning Types + renderers ───────────────────────────────────
 
+# The response Lightning Type keeps its stable name ({tool}Response): it mirrors the
+# Apex response class and the Agent Actions point at it. The envelope Lightning
+# Type carries REV because it is the MCP resource the hosted server caches.
 TOOLS = [
     # (tool api name, Apex class, widget, fields, label)
-    ("getCloseReadiness", "GetCloseReadiness", "closeReadinessCard", READINESS, "Get Close Readiness"),
-    ("submitClosedWon", "SubmitClosedWon", "closeSubmissionCard", SUBMISSION, "Submit Closed Won"),
-    ("submitClosedLost", "SubmitClosedLost", "closeSubmissionCard", SUBMISSION, "Submit Closed Lost"),
+    ("getCloseReadiness", "GetCloseReadiness", READINESS_WIDGET, READINESS, "Get Close Readiness"),
+    ("submitClosedWon", "SubmitClosedWon", SUBMISSION_WIDGET, SUBMISSION, "Submit Closed Won"),
+    ("submitClosedLost", "SubmitClosedLost", SUBMISSION_WIDGET, SUBMISSION, "Submit Closed Lost"),
 ]
+def envelope_name(tool):
+    return tool + REV
+
 for tool, cls, widget, fields, label in TOOLS:
     w(f"{PKG}/lightningTypes/{tool}Response/schema.json", response_clt(
         f"{label} Response", f"Response fields from the {cls} invocable action. Rendered by the {widget} widget.", fields))
-    w(f"{PKG}/lightningTypes/{tool}/schema.json", envelope_clt(
+    w(f"{PKG}/lightningTypes/{envelope_name(tool)}/schema.json", envelope_clt(
         label, f"Invocable-action result envelope for the {cls} MCP tool. outputValues carries the response rendered by the {widget} widget.", f"{tool}Response"))
-    w(f"{PKG}/lightningTypes/{tool}/renderer.json", renderer(widget, fields))
+    w(f"{PKG}/lightningTypes/{envelope_name(tool)}/renderer.json", renderer(widget, fields))
 
 # ─── Emit Agent Actions ─────────────────────────────────────────────────
 
@@ -529,20 +546,20 @@ server = ('<?xml version="1.0" encoding="UTF-8"?>\n<McpServerDefinition xmlns="h
                "accountSummaryCard", True)
     + tool_xml("GetCloseReadiness", "Get Close Readiness",
                "Checks whether an Opportunity can be closed: whether a signed order form is attached and which Closed Won fields still need values. Read-only. Call this first when a user wants to close a deal. Provide the Opportunity Id (starts with 006).",
-               "closeReadinessCard", True)
+               READINESS_WIDGET, True)
     + tool_xml("SubmitClosedWon", "Submit Closed Won",
                "Submits an Opportunity as Closed Won like the Close Opportunity screen flow. Call without confirm to validate and preview; the user reviews the card, then call again with confirm=true to write the finance and handoff fields, notify RevOps in Slack, and queue order form extraction. RevOps stamps the stage. Requires a signed order form on the record. Blank inputs keep existing values, and a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.",
-               "closeSubmissionCardWon", False)
+               SUBMISSION_WIDGET + "Won", False)
     + tool_xml("SubmitClosedLost", "Submit Closed Lost",
                "Closes an Opportunity as Closed Lost like the Close Opportunity screen flow. Call without confirm to preview: the first call starts the AI loss analysis in the background (about 30 seconds) and returns immediately; a later preview call shows the recommended reason, competitor, and narrative. The user reviews the card, then call again with confirm=true to stamp Closed Lost. Blank inputs keep existing values; blank notes default to the AI narrative; a blank LOB/Division defaults from the account type. When fields are missing, ask the user for all of them in one message rather than one at a time.",
-               "closeSubmissionCardLost", False)
+               SUBMISSION_WIDGET + "Lost", False)
     + resource_xml("accountSummaryCard", "getAccountSummary", "Account Summary Card",
                    "HXL widget that renders an account summary: header with industry and type, firmographics, owner and location, open pipeline with top opportunities, and a link to the record.")
-    + resource_xml("closeReadinessCard", "getCloseReadiness", "Close Readiness Card",
+    + resource_xml(READINESS_WIDGET, envelope_name("getCloseReadiness"), "Close Readiness Card",
                    "HXL widget showing whether an opportunity can be closed: status, signed order form check, Closed Won field checklist, and buttons to start Closed Won or Closed Lost.")
-    + resource_xml("closeSubmissionCardWon", "submitClosedWon", "Closed Won Submission Card",
+    + resource_xml(SUBMISSION_WIDGET + "Won", envelope_name("submitClosedWon"), "Closed Won Submission Card",
                    "HXL widget showing the preview, validation problems, or result of a Closed Won submission, with confirm and change buttons.")
-    + resource_xml("closeSubmissionCardLost", "submitClosedLost", "Closed Lost Submission Card",
+    + resource_xml(SUBMISSION_WIDGET + "Lost", envelope_name("submitClosedLost"), "Closed Lost Submission Card",
                    "HXL widget showing the AI recommendation, preview, validation problems, or result of a Closed Lost submission, with confirm and change buttons.")
     + "</McpServerDefinition>\n")
 w(f"{PKG}/mcpServerDefinitions/HXLAccounts.mcpServerDefinition-meta.xml", server)

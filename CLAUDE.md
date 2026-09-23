@@ -46,6 +46,14 @@ Remind the user to press `Ctrl+C` in each terminal window before restarting.
   classes → uiWidgets → response Lightning Types → envelope Lightning Types →
   genAiFunctions → (only if changed) mcpServerDefinitions, then reactivate the
   server and remove/re-add the connector in Claude.
+- Any change to a widget body or renderer MUST bump `REV` in
+  `salesforce/scripts/gen_close_metadata.py` (currently `2`), regenerate,
+  `git rm` the previous widget and envelope Lightning Type folders, and
+  redeploy through mcpServerDefinitions. The hosted MCP server caches the
+  compiled widget by name and no redeploy, reactivation, or connector reset
+  clears it. Say so in the deploy instructions every time the widgets change.
+  Deploying the classes folder needs every test class listed, including
+  `GetAccountSummaryTest`, or the coverage check fails.
 - The signed order form upload page that the close cards link to is the Deal
   Portal's `/upload?opp=<Id>` page, hosted on Vercel at
   `https://quote-bot-portal.vercel.app` (repo `Rogo-Technologies/gtm-eng`:

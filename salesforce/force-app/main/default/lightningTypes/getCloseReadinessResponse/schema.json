@@ -1,6 +1,6 @@
 {
   "title": "Get Close Readiness Response",
-  "description": "Response fields from the GetCloseReadiness invocable action. Rendered by the closeReadinessCard widget.",
+  "description": "Response fields from the GetCloseReadiness invocable action. Rendered by the closeReadinessCard2 widget.",
   "type": "object",
   "lightning:type": "lightning__objectType",
   "lightning:tags": [

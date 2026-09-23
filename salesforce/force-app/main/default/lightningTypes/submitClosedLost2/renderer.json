@@ -2,7 +2,7 @@
   "renderer": {
     "componentOverrides": {
       "$": {
-        "definition": "@widget/c/closeSubmissionCard",
+        "definition": "@widget/c/closeSubmissionCard2",
         "attributes": {
           "opportunityId": "{!$attrs.outputValues.opportunityId}",
           "opportunityName": "{!$attrs.outputValues.opportunityName}",
