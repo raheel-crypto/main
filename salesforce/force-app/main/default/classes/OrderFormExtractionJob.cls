@@ -599,32 +599,32 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Subscription_Schedule__c = OrderFormPicklistMapper.mapSubscriptionSchedule((String) extracted.get('Subscription_Schedule'));
         row.Payment_Terms__c = OrderFormPicklistMapper.mapPaymentTerms((String) extracted.get('Payment_Terms'));
         row.Credit_Terms__c = OrderFormPicklistMapper.mapCreditTerms((String) extracted.get('Credit_Terms'));
-        row.Pricing_Structure__c = truncate((String) extracted.get('Pricing_Structure'), 100);
+        row.Pricing_Structure__c = truncate(extracted.get('Pricing_Structure'), 100);
         row.Billing_Contact_Email__c = sanitizeEmail(extracted.get('Billing_Contact_Email'));
-        row.Primary_Contact__c = truncate((String) extracted.get('Primary_Contact_Name'), 255);
-        row.Primary_Contact_Phone__c = truncate((String) extracted.get('Primary_Contact_Phone'), 255);
+        row.Primary_Contact__c = truncate(extracted.get('Primary_Contact_Name'), 255);
+        row.Primary_Contact_Phone__c = truncate(extracted.get('Primary_Contact_Phone'), 255);
         row.Primary_Contact_Email__c = sanitizeEmail(extracted.get('Primary_Contact_Email'));
         Boolean ela = toBoolean(extracted.get('ELA'));
         row.ELA__c = ela == true;
         Boolean paid = toBoolean(extracted.get('Paid_Trial'));
         row.Paid_Trial__c = paid == true;
         row.Trial_Price__c = toDecimal(extracted.get('Trial_Price'));
-        row.Pilot_Success_Criteria__c = truncate((String) extracted.get('Pilot_Success_Criteria'), 32768);
+        row.Pilot_Success_Criteria__c = truncate(extracted.get('Pilot_Success_Criteria'), 32768);
         row.Credits_Purchased__c = toDecimal(extracted.get('Credits_Purchased'));
         row.Credits_Period__c = mapCreditsPeriod((String) extracted.get('Credits_Period'));
-        row.Special_Terms__c = truncate((String) extracted.get('Special_Terms'), 32768);
+        row.Special_Terms__c = truncate(extracted.get('Special_Terms'), 32768);
         row.Logo_Publicity_Rights__c = OrderFormPicklistMapper.mapPublicityRights((String) extracted.get('Logo_Publicity_Rights'));
-        row.Logo_Publicity_Language__c = truncate((String) extracted.get('Logo_Publicity_Language'), 32768);
+        row.Logo_Publicity_Language__c = truncate(extracted.get('Logo_Publicity_Language'), 32768);
         row.Renewal_Fee_Escalator__c = toDecimal(extracted.get('Renewal_Fee_Escalator_Percent'));
-        row.Billing_Entity_Name__c = truncate((String) extracted.get('Billing_Entity_Name'), 255);
+        row.Billing_Entity_Name__c = truncate(extracted.get('Billing_Entity_Name'), 255);
         row.Billing_Entity_Review__c = toBoolean(extracted.get('Billing_Entity_Is_Derived')) == true;
-        row.Billing_Entity_Reg_Id__c = truncate((String) extracted.get('Billing_Entity_Reg_Id'), 100);
-        row.Billing_Entity_Address__c = truncate((String) extracted.get('Billing_Entity_Address'), 255);
-        row.Billing_Entity_Jurisdiction__c = truncate((String) extracted.get('Billing_Entity_Jurisdiction'), 100);
+        row.Billing_Entity_Reg_Id__c = truncate(extracted.get('Billing_Entity_Reg_Id'), 100);
+        row.Billing_Entity_Address__c = truncate(extracted.get('Billing_Entity_Address'), 255);
+        row.Billing_Entity_Jurisdiction__c = truncate(extracted.get('Billing_Entity_Jurisdiction'), 100);
         row.Source_Document_Type__c = mapDocumentType((String) extracted.get('Source_Document_Type'));
         row.Seats_Added__c = toDecimal(extracted.get('Seats_Added'));
-        row.Named_Users__c = truncate((String) extracted.get('Named_Users'), 4096);
-        row.Requested_By_Name__c = truncate((String) extracted.get('Requested_By_Name'), 255);
+        row.Named_Users__c = truncate(extracted.get('Named_Users'), 4096);
+        row.Requested_By_Name__c = truncate(extracted.get('Requested_By_Name'), 255);
         row.Requested_By_Email__c = sanitizeEmail(extracted.get('Requested_By_Email'));
 
         populatePackageAndCreditFields(row, extracted);
@@ -637,7 +637,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
     @TestVisible
     private static void populateSubprocessorFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
-        row.Subprocessor_Restrictions__c = truncate((String) extracted.get('Subprocessor_Restrictions'), 32768);
+        row.Subprocessor_Restrictions__c = truncate(extracted.get('Subprocessor_Restrictions'), 32768);
         row.Sub_Processor_List__c = truncate(mapSubprocessorListValue(extracted.get('Sub_Processor_List')), 32768);
         // Spec v2: a null day-count means NO notice obligation was found - do NOT
         // default it to 30 and do NOT treat it as zero. Store exactly what was
@@ -677,18 +677,18 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     // mapper so a model variant can't write an invalid restricted value.
     @TestVisible
     private static void populateGateFields(Order_Form_Extraction__c row, Map<String, Object> extracted) {
-        row.Resolved_Subprocessor_Term__c = truncate((String) extracted.get('Resolved_Subprocessor_Term'), 100);
+        row.Resolved_Subprocessor_Term__c = truncate(extracted.get('Resolved_Subprocessor_Term'), 100);
         row.Subprocessor_Gate_Type__c = OrderFormPicklistMapper.mapGateType((String) extracted.get('Subprocessor_Gate_Type'));
         row.Consent_Revocable__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('Consent_Revocable'));
-        row.Subprocessor_Objection_Consequence__c = truncate((String) extracted.get('Subprocessor_Objection_Consequence'), 255);
+        row.Subprocessor_Objection_Consequence__c = truncate(extracted.get('Subprocessor_Objection_Consequence'), 255);
         row.Subprocessor_List_Location__c = OrderFormPicklistMapper.mapListLocation((String) extracted.get('Subprocessor_List_Location'));
         row.Subprocessor_List_Granularity__c = OrderFormPicklistMapper.mapListGranularity((String) extracted.get('Subprocessor_List_Granularity'));
         row.AI_Model_Change_Gate_Days__c = toDecimal(extracted.get('AI_Model_Change_Gate_Days'));
-        row.AI_Model_Change_Documentation__c = truncate((String) extracted.get('AI_Model_Change_Documentation'), 32768);
-        row.AI_Model_Change_Carveout__c = truncate((String) extracted.get('AI_Model_Change_Carveout'), 255);
+        row.AI_Model_Change_Documentation__c = truncate(extracted.get('AI_Model_Change_Documentation'), 32768);
+        row.AI_Model_Change_Carveout__c = truncate(extracted.get('AI_Model_Change_Carveout'), 255);
         row.AI_Change_Reporting_Trigger__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Change_Reporting_Trigger'));
         row.Processing_Location_Gate__c = OrderFormPicklistMapper.mapLocationGate((String) extracted.get('Processing_Location_Gate'));
-        row.Approved_Locations__c = truncate((String) extracted.get('Approved_Locations'), 255);
+        row.Approved_Locations__c = truncate(extracted.get('Approved_Locations'), 255);
         row.Personal_Data_Disclosure_Gate__c = OrderFormPicklistMapper.mapDisclosureGate((String) extracted.get('Personal_Data_Disclosure_Gate'));
         row.Release_Notice_Days__c = toDecimal(extracted.get('Release_Notice_Days'));
         row.Release_Major_Notice_Days__c = toDecimal(extracted.get('Release_Major_Notice_Days'));
@@ -714,8 +714,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             row.Signature_Date__c = customerSig;
         }
 
-        row.Customer_Signer_Name__c = truncate((String) extracted.get('Customer_Signer_Name'), 255);
-        row.Customer_Signer_Title__c = truncate((String) extracted.get('Customer_Signer_Title'), 100);
+        row.Customer_Signer_Name__c = truncate(extracted.get('Customer_Signer_Name'), 255);
+        row.Customer_Signer_Title__c = truncate(extracted.get('Customer_Signer_Title'), 100);
     }
 
     /**
@@ -748,7 +748,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (rateLimitable == true) row.Rate_Limitable__c = 'Yes';
         else if (rateLimitable == false) row.Rate_Limitable__c = 'No';
         else row.Rate_Limitable__c = 'Not specified';
-        row.Rate_Limit_Notes__c = truncate((String) extracted.get('Rate_Limit_Terms'), 32768);
+        row.Rate_Limit_Notes__c = truncate(extracted.get('Rate_Limit_Terms'), 32768);
 
         Boolean isEnterprise = 'Enterprise'.equals(row.Package_Tier__c);
         row.Unlimited_Lite__c = resolveTristate(toBoolean(extracted.get('Unlimited_Lite_Stated')), isEnterprise);
@@ -872,8 +872,14 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return null;
     }
 
-    private static String truncate(String s, Integer maxLen) {
-        if (s == null) return null;
+    // Accepts Object, not just String: the model occasionally returns a free-text
+    // field (e.g. Subprocessor_Restrictions) as a JSON object/array instead of a
+    // string, and a raw (String) cast on that throws "Invalid conversion from
+    // Map<String,ANY> to String", failing the whole row. Stringify non-strings so
+    // the value is preserved (as JSON) rather than lost.
+    private static String truncate(Object raw, Integer maxLen) {
+        if (raw == null) return null;
+        String s = (raw instanceof String) ? (String) raw : JSON.serialize(raw);
         return s.length() > maxLen ? s.substring(0, maxLen) : s;
     }
 

@@ -1908,4 +1908,34 @@ private class OrderFormExtractorTest {
         System.assert(row.Error_Message__c.contains('original and retry'),
             'Error should note both attempts failed: ' + row.Error_Message__c);
     }
+
+    // ===== Tolerate a free-text field returned as a JSON object/array =====
+
+    @isTest
+    static void populate_toleratesStructuredFreeTextField() {
+        // The model occasionally returns a free-text field as an object/array
+        // instead of a string. The row must still save (value stored as JSON),
+        // not throw "Invalid conversion from Map<String,ANY> to String".
+        Opportunity opp = insertOpp('Structured Free Text', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Subprocessor_Restrictions' => new Map<String, Object>{
+                'consent' => 'prior written consent (MSA 10.5)',
+                'notice'  => '30 days'
+            },
+            'Special_Terms' => new List<Object>{ 'term a', 'term b' }
+        });
+
+        Test.startTest();
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(
+            opp.Id, new List<Id>(), body);
+        insert row;
+        Test.stopTest();
+
+        System.assertEquals('Success', row.Extraction_Status__c, 'A structured free-text value must not fail the row');
+        System.assert(row.Subprocessor_Restrictions__c != null && row.Subprocessor_Restrictions__c.contains('consent'),
+            'Structured restriction stored as JSON: ' + row.Subprocessor_Restrictions__c);
+        System.assert(row.Special_Terms__c != null && row.Special_Terms__c.contains('term a'),
+            'Structured special terms stored as JSON: ' + row.Special_Terms__c);
+    }
 }
