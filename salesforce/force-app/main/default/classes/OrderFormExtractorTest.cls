@@ -920,6 +920,63 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_correctsAnniversaryEndDateOffByOne() {
+        // Doc states only a 12-month term; the model computed the end as the
+        // anniversary (9/30/2026 + 12mo = 9/30/2027). Rogo's convention is the
+        // inclusive end 9/29/2027, so the extractor must correct the off-by-one.
+        Opportunity opp = insertOpp('End Date Off By One', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Contract_Start_Date' => '2026-09-30',
+            'Contract_End_Date' => '2027-09-30',   // model returned the anniversary
+            'Contract_Length_Months' => 12
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertEquals(Date.newInstance(2026, 9, 30), row.Contract_Start_Date__c);
+        System.assertEquals(Date.newInstance(2027, 9, 29), row.Contract_End_Date__c,
+            'Anniversary end (start + 12mo) must be corrected to the inclusive end (start + 12mo - 1)');
+    }
+
+    @isTest
+    static void extractionJob_keepsExplicitNonAnniversaryEndDate() {
+        // A 3-month term with an explicit end date that is NEITHER the anniversary
+        // (12/30/2026) nor the inclusive end (12/29/2026). It must be preserved -
+        // we only correct the anniversary off-by-one, never override a real date.
+        Opportunity opp = insertOpp('End Date Explicit', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Contract_Start_Date' => '2026-09-30',
+            'Contract_End_Date' => '2026-12-31',   // explicit, not the anniversary
+            'Contract_Length_Months' => 3
+        });
+
+        OrderFormExtractor.Request req = new OrderFormExtractor.Request();
+        req.opportunityId = opp.Id;
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormExtractor.run(new List<OrderFormExtractor.Request>{ req });
+        Test.stopTest();
+
+        Order_Form_Extraction__c row = latestExtractionFor(opp.Id);
+        System.assertEquals(Date.newInstance(2026, 12, 31), row.Contract_End_Date__c,
+            'A non-anniversary explicit end date must be preserved');
+    }
+
+    @isTest
     static void extractionJob_writesSuccessRowWithAllFields() {
         Opportunity opp = insertOpp('Happy Extract', '4 - Proposal');
         attachSignedFile(opp.Id, 'signed__Customer_Agreement');

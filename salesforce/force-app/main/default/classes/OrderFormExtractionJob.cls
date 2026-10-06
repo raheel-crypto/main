@@ -815,14 +815,35 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     @TestVisible
+    // Rogo's convention: a term is INCLUSIVE of the start date, so a 12-month term
+    // from 9/30/2026 runs THROUGH 9/29/2027 (start + term - 1 day), not to the
+    // 9/30/2027 anniversary. When the document states only a term (no explicit end
+    // date) the model tends to return the anniversary (start + term) - off by one.
+    // So: derive the inclusive end when none was extracted, AND correct an extracted
+    // end that equals the naive anniversary. A genuinely different explicit end date
+    // (not the anniversary) is left untouched.
     private static void deriveEndDate(Order_Form_Extraction__c row) {
-        if (row.Contract_End_Date__c != null || row.Contract_Start_Date__c == null) return;
+        if (row.Contract_Start_Date__c == null) return;
+        Date startD = row.Contract_Start_Date__c;
+
+        Date inclusiveEnd;
+        Date naiveAnniversary;
         if (row.Contract_Length_Months__c != null) {
             Integer months = Integer.valueOf(row.Contract_Length_Months__c);
-            row.Contract_End_Date__c = row.Contract_Start_Date__c.addMonths(months).addDays(-1);
+            naiveAnniversary = startD.addMonths(months);
+            inclusiveEnd = naiveAnniversary.addDays(-1);
         } else if (row.Contract_Length_Days__c != null) {
             Integer days = Integer.valueOf(row.Contract_Length_Days__c);
-            row.Contract_End_Date__c = row.Contract_Start_Date__c.addDays(days - 1);
+            naiveAnniversary = startD.addDays(days);
+            inclusiveEnd = startD.addDays(days - 1);
+        } else {
+            return;   // no term -> nothing to derive or correct
+        }
+
+        if (row.Contract_End_Date__c == null) {
+            row.Contract_End_Date__c = inclusiveEnd;                 // derive when missing
+        } else if (row.Contract_End_Date__c == naiveAnniversary) {
+            row.Contract_End_Date__c = inclusiveEnd;                 // fix the anniversary off-by-one
         }
     }
 
