@@ -83,7 +83,7 @@ public with sharing class ContractLegalTermsApplier {
                    Renewal_Terms__c, Renewal_Fee_Escalator__c, Payment_Terms__c, Credit_Terms__c,
                    Rate_Limitable__c, Rate_Limit_Notes__c,
                    Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
-                   ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
+                   ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c, Credits_Purchased__c,
                    Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c
             FROM Order_Form_Extraction__c
             WHERE Id IN :extractionIds
@@ -130,6 +130,27 @@ public with sharing class ContractLegalTermsApplier {
                 FROM Contract WHERE Id IN :contractIds
             ]);
 
+        // Running credit total per contract (Total_Credits_Purchased__c), recomputed
+        // as a SIGNED SUM of Credits_Purchased__c across every Success OFE applied to
+        // the contract: Downsell subtracts, everything else adds. Recompute (not
+        // increment) so it stays correct across re-runs / re-applies. Seed from OFEs
+        // already stamped to these contracts, EXCLUDING the ones in this call (those
+        // are added below as they apply, so a re-applied OFE is counted exactly once).
+        Map<Id, Decimal> creditTotalByContract = new Map<Id, Decimal>();
+        if (!contractIds.isEmpty()) {
+            for (Order_Form_Extraction__c prior : [
+                SELECT Credits_Purchased__c, Applied_Contract__c, Opportunity__r.Type
+                FROM Order_Form_Extraction__c
+                WHERE Applied_Contract__c IN :contractIds
+                  AND Extraction_Status__c = 'Success'
+                  AND Id NOT IN :extractionIds
+            ]) {
+                addSignedCredits(creditTotalByContract, prior.Applied_Contract__c,
+                    prior.Credits_Purchased__c,
+                    prior.Opportunity__r != null ? prior.Opportunity__r.Type : null);
+            }
+        }
+
         Map<Id, Contract> toUpdate = new Map<Id, Contract>();
         Map<Id, Id> ofeContractStamp = new Map<Id, Id>();   // OFE Id -> Contract it was applied to
         List<Result> results = new List<Result>();
@@ -168,6 +189,15 @@ public with sharing class ContractLegalTermsApplier {
             changes.Latest_Order_Form_Extraction__c = ofe.Id;
             changes.Reconciliation_Notes__c = truncate(String.join(log, '\n'), 32768);
             if (conflict) changes.Needs_Legal_Review__c = true;
+
+            // Fold this OFE into the contract's running credit total (signed), then
+            // write the recomputed total. Set even when it is 0 - the field is a
+            // computed rollup, so an accurate 0 is correct.
+            addSignedCredits(creditTotalByContract, contractId, ofe.Credits_Purchased__c,
+                ofe.Opportunity__r != null ? ofe.Opportunity__r.Type : null);
+            changes.Total_Credits_Purchased__c = creditTotalByContract.containsKey(contractId)
+                ? creditTotalByContract.get(contractId) : 0;
+
             toUpdate.put(contractId, changes);
             ofeContractStamp.put(ofe.Id, contractId);   // paper-trail link back to the OFE
 
@@ -284,5 +314,16 @@ public with sharing class ContractLegalTermsApplier {
     private static String truncate(String s, Integer maxLen) {
         if (s == null) return null;
         return s.length() > maxLen ? s.substring(0, maxLen) : s;
+    }
+
+    // Adds one OFE's credits to the contract's running total: Downsell subtracts,
+    // every other type adds. Null credits contribute nothing.
+    @TestVisible
+    private static void addSignedCredits(Map<Id, Decimal> totals, Id contractId,
+                                         Decimal credits, String oppType) {
+        if (contractId == null || credits == null) return;
+        Decimal signed = ('Downsell' == oppType) ? -credits : credits;
+        Decimal running = totals.containsKey(contractId) ? totals.get(contractId) : 0;
+        totals.put(contractId, running + signed);
     }
 }

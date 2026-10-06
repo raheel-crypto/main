@@ -1,6 +1,22 @@
 @isTest
 private class ContractLegalTermsApplierTest {
 
+    // The org blocks creating an Opportunity at a closed stage; makeOpp inserts at
+    // Closed Won. Grant the running test user the Bypass_Validations custom
+    // permission (its own transaction, so the permission cache reflects it and the
+    // setup DML doesn't collide with record DML). No-op if the permission is absent.
+    @testSetup
+    static void grantValidationBypass() {
+        List<CustomPermission> perms = [
+            SELECT Id FROM CustomPermission WHERE DeveloperName = 'Bypass_Validations' LIMIT 1
+        ];
+        if (perms.isEmpty()) return;
+        PermissionSet ps = new PermissionSet(Name = 'CLTA_Test_Bypass', Label = 'CLTA Test Bypass');
+        insert ps;
+        insert new SetupEntityAccess(ParentId = ps.Id, SetupEntityId = perms[0].Id);
+        insert new PermissionSetAssignment(AssigneeId = UserInfo.getUserId(), PermissionSetId = ps.Id);
+    }
+
     private static Account makeAccount() {
         Account a = new Account(Name = 'Test Account');
         insert a;
@@ -280,5 +296,47 @@ private class ContractLegalTermsApplierTest {
         System.assertEquals('646-000-1111', upAfter.Primary_Contact_Phone__c, 'Blank filled from order form');
         System.assertEquals('old@liontree.com', upAfter.Primary_Contact_Email__c, 'Silent field preserved');
         System.assertEquals(false, upAfter.Needs_Legal_Review__c);
+    }
+
+    // ===== Running credit total (signed: Downsell subtracts) =====
+
+    @isTest
+    static void creditTotal_signedSumAcrossOFEs() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+
+        // New Business on the contract (1000), an Upsell (+500) and a Downsell (-200),
+        // the amendments resolving to the same contract via Base_Opportunity.
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{ 'Credits_Purchased__c' => 1000 });
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeUp = makeOfe(up.Id, new Map<String, Object>{ 'Credits_Purchased__c' => 500 });
+        Opportunity dn = makeOpp(a.Id, 'Downsell', null, nb.Id);
+        Order_Form_Extraction__c ofeDn = makeOfe(dn.Id, new Map<String, Object>{ 'Credits_Purchased__c' => 200 });
+
+        Test.startTest();
+        runOne(ofeNb.Id);   // 1000
+        runOne(ofeUp.Id);   // +500 -> 1500
+        runOne(ofeDn.Id);   // -200 -> 1300
+        Test.stopTest();
+
+        Contract after = [SELECT Total_Credits_Purchased__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(1300, after.Total_Credits_Purchased__c, 'Signed sum: 1000 + 500 - 200');
+    }
+
+    @isTest
+    static void creditTotal_isIdempotentOnReapply() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{ 'Credits_Purchased__c' => 1000 });
+
+        Test.startTest();
+        runOne(ofeNb.Id);
+        runOne(ofeNb.Id);   // re-apply the SAME OFE - must not double-count to 2000
+        Test.stopTest();
+
+        Contract after = [SELECT Total_Credits_Purchased__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(1000, after.Total_Credits_Purchased__c, 'Re-apply recomputes, never doubles');
     }
 }
