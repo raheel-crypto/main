@@ -1,9 +1,12 @@
 /**
- * Applies the LEGAL TERMS of an Order_Form_Extraction__c to a Contract.
+ * Applies the LEGAL TERMS of an Order_Form_Extraction__c to a Contract, plus
+ * its usage + product terms (ContractUsageRollup: package tier, free tiers,
+ * overage rate, annual credits, blended credit rate, pricing structure) and the
+ * running Total_Credits_Purchased__c.
  *
- * Commercial metrics (seats, ARR, fees, license count, pricing structure,
- * package tier, credit amounts) are intentionally NOT handled here - a
- * separate agent owns those. This class only moves the legal-term fields.
+ * ARR, seats and fees are intentionally NOT written: the Opportunity flows own
+ * Contract.ARR__c / Seat_Licenses__c / the fee fields and roll them into
+ * Account ARR.
  *
  * Behavior by deal type:
  *   - New Business / Renewal / Pilot: the Contract is freshly created for the
@@ -89,7 +92,11 @@ public with sharing class ContractLegalTermsApplier {
                    Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
                    ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c, Credits_Purchased__c,
                    Credits_Added__c,
-                   Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c
+                   Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
+                   Opportunity__r.Name, Opportunity__r.CloseDate, Opportunity__r.CreatedDate,
+                   Type__c, Extracted_At__c, Package_Tier__c, Unlimited_Lite__c, Free_Max_Mid_Credits__c,
+                   Free_Max_Mid_Amount__c, Free_Tier_Retained__c, Overage_Rate__c, Credit_Rate__c,
+                   Credits_Per_Year__c, Credits_Period__c, Contract_Length_Months__c
             FROM Order_Form_Extraction__c
             WHERE Id IN :extractionIds
         ]);
@@ -133,7 +140,10 @@ public with sharing class ContractLegalTermsApplier {
                        Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
                        ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
                        Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
-                       Opportunity__c, Source_Opportunity_Id__c
+                       Opportunity__c, Source_Opportunity_Id__c,
+                       Package_Tier__c, Unlimited_Lite__c, Free_Max_Mid_Credits__c, Free_Max_Mid_Amount__c,
+                       Free_Tier_Retained__c, Overage_Rate__c, Credits_Per_Year__c, Credit_Rate__c,
+                       Pricing_Structure__c, Total_Credits_Purchased__c
                 FROM Contract WHERE Id IN :contractIds
             ]);
 
@@ -149,12 +159,17 @@ public with sharing class ContractLegalTermsApplier {
         // Versions are kept as history, so count ONE row per deal (the current one,
         // else the latest) and skip deals being applied in this call.
         Map<Id, Decimal> creditTotalByContract = new Map<Id, Decimal>();
+        Map<Id, List<Order_Form_Extraction__c>> priorDealsByContract = new Map<Id, List<Order_Form_Extraction__c>>();
         if (!contractIds.isEmpty()) {
             Set<Id> oppsInThisCall = new Set<Id>();
             for (Order_Form_Extraction__c o : ofes.values()) if (o.Opportunity__c != null) oppsInThisCall.add(o.Opportunity__c);
             Set<Id> counted = new Set<Id>();
             for (Order_Form_Extraction__c prior : [
-                SELECT Credits_Purchased__c, Credits_Added__c, Applied_Contract__c, Opportunity__c, Opportunity__r.Type
+                SELECT Credits_Purchased__c, Credits_Added__c, Applied_Contract__c, Opportunity__c, Opportunity__r.Type,
+                       Opportunity__r.Name, Opportunity__r.CloseDate, Opportunity__r.CreatedDate,
+                       Extraction_Status__c, Type__c, Extracted_At__c, Package_Tier__c, Unlimited_Lite__c,
+                       Free_Max_Mid_Credits__c, Free_Max_Mid_Amount__c, Free_Tier_Retained__c, Overage_Rate__c,
+                       Credit_Rate__c, Credits_Per_Year__c, Credits_Period__c, Contract_Length_Months__c
                 FROM Order_Form_Extraction__c
                 WHERE Applied_Contract__c IN :contractIds
                   AND Extraction_Status__c IN :APPLICABLE_STATUSES
@@ -164,6 +179,9 @@ public with sharing class ContractLegalTermsApplier {
             ]) {
                 if (counted.contains(prior.Opportunity__c)) continue;
                 counted.add(prior.Opportunity__c);
+                if (!priorDealsByContract.containsKey(prior.Applied_Contract__c))
+                    priorDealsByContract.put(prior.Applied_Contract__c, new List<Order_Form_Extraction__c>());
+                priorDealsByContract.get(prior.Applied_Contract__c).add(prior);
                 addCreditContribution(creditTotalByContract, prior.Applied_Contract__c, prior.Credits_Purchased__c,
                     prior.Credits_Added__c, prior.Opportunity__r != null ? prior.Opportunity__r.Type : null);
             }
@@ -240,6 +258,8 @@ public with sharing class ContractLegalTermsApplier {
             res.notes = changes.Reconciliation_Notes__c;
         }
 
+        applyUsageRollup(toUpdate, contractsById, ofes, ofeContractStamp, priorDealsByContract);
+
         if (!toUpdate.isEmpty()) update toUpdate.values();
 
         // Stamp each OFE with the Contract it was applied to, so the Contract's
@@ -254,6 +274,36 @@ public with sharing class ContractLegalTermsApplier {
             update stamps;
         }
         return results;
+    }
+
+    // Usage + product terms: fold every deal on each touched contract - the prior
+    // applied deals plus this call's - in deal order (ContractUsageRollup), then
+    // write what changed. A field the papers never state is left as it is.
+    private static void applyUsageRollup(Map<Id, Contract> toUpdate, Map<Id, Contract> contractsById,
+            Map<Id, Order_Form_Extraction__c> ofes, Map<Id, Id> ofeContractStamp,
+            Map<Id, List<Order_Form_Extraction__c>> priorDealsByContract) {
+        Map<Id, Map<Id, Order_Form_Extraction__c>> callDealsByContract = new Map<Id, Map<Id, Order_Form_Extraction__c>>();
+        for (Id ofeId : ofeContractStamp.keySet()) {
+            Id contractId = ofeContractStamp.get(ofeId);
+            Order_Form_Extraction__c ofe = ofes.get(ofeId);
+            if (!callDealsByContract.containsKey(contractId))
+                callDealsByContract.put(contractId, new Map<Id, Order_Form_Extraction__c>());
+            callDealsByContract.get(contractId).put(ofe.Opportunity__c != null ? ofe.Opportunity__c : ofe.Id, ofe);
+        }
+
+        for (Id contractId : callDealsByContract.keySet()) {
+            List<Order_Form_Extraction__c> deals = new List<Order_Form_Extraction__c>(callDealsByContract.get(contractId).values());
+            if (priorDealsByContract.containsKey(contractId)) deals.addAll(priorDealsByContract.get(contractId));
+            ContractUsageRollup.Result r = ContractUsageRollup.fold(deals);
+
+            Contract changes = toUpdate.get(contractId);
+            List<String> log = ContractUsageRollup.writeTo(r, contractsById.get(contractId), changes);
+            if (!log.isEmpty()) {
+                String notes = (changes.Reconciliation_Notes__c == null ? '' : changes.Reconciliation_Notes__c + '\n')
+                    + 'Usage / product:\n' + String.join(log, '\n');
+                changes.Reconciliation_Notes__c = truncate(notes, 32768);
+            }
+        }
     }
 
     /** Direct contract: base Opp's contract for amendments, else this Opp's contract. */

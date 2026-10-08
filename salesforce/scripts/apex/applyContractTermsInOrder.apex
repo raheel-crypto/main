@@ -1,6 +1,11 @@
 // =============================================================================
 // Apply Contract legal terms in the proper order (New Business -> upsells)
 // =============================================================================
+// (Also writes the usage + product fields - tier, free tiers, overage rate,
+// Credits Per Year, blended Credit Rate, Pricing Structure - via
+// ContractUsageRollup. For contracts applied before those fields existed, run
+// backfillContractUsage.apex afterwards.)
+//
 // Applies ContractLegalTermsApplier to every CURRENT (Is_Current__c) readable
 // extraction (Success, Incomplete, or No Order Form - the last two contribute
 // legal terms only and never move the contract pointer) that hasn't been applied yet (Applied_Contract__c = null) - one per

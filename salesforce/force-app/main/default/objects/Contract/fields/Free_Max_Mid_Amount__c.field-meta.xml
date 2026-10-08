@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Free_Max_Mid_Amount__c</fullName>
+    <description>Stated quantity of free Max/Mid credits or queries from the most recent applied order form that states one.</description>
+    <label>Free Max/Mid Amount</label>
+    <precision>12</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

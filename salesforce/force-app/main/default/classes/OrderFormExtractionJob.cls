@@ -1135,8 +1135,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return (v * 12).divide(months, 2, RoundingMode.HALF_UP);
     }
 
-    @TestVisible
-    private static Decimal creditsPerYear(Decimal credits, String period, Decimal months) {
+    // Also used by ContractUsageRollup to annualise an amendment's Credits_Added.
+    public static Decimal creditsPerYear(Decimal credits, String period, Decimal months) {
         if (credits == null) return null;
         if (period == 'year') return credits;
         if (period == 'month') return credits * 12;

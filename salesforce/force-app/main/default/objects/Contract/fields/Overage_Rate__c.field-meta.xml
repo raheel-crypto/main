@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Overage_Rate__c</fullName>
+    <description>Per-credit price for usage beyond the commitment, from the most recent applied order form that states one. Distinct from Credit_Rate__c (the committed rate).</description>
+    <label>Overage Rate</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>6</scale>
+    <type>Number</type>
+</CustomField>

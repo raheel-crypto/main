@@ -447,17 +447,135 @@ private class ContractLegalTermsApplierTest {
         Opportunity o = makeOpp(a.Id, 'New Business', c.Id, null);
         Order_Form_Extraction__c ofe = makeOfe(o.Id, new Map<String, Object>{
             'Extraction_Status__c' => 'No Order Form',
-            'Payment_Terms__c' => 'Annual' });
+            'Payment_Terms__c' => 'Annual',
+            'Package_Tier__c' => 'Enterprise' });   // an MSA tier table is not this deal's product
 
         Test.startTest();
         ContractLegalTermsApplier.Result res = runOne(ofe.Id);
         Test.stopTest();
 
         System.assertEquals('Applied', res.status);
-        Contract after = [SELECT Payment_Terms__c, Latest_Order_Form_Extraction__c, Reconciliation_Notes__c
+        Contract after = [SELECT Payment_Terms__c, Latest_Order_Form_Extraction__c, Reconciliation_Notes__c,
+                                 Package_Tier__c, Pricing_Structure__c
                           FROM Contract WHERE Id = :c.Id];
         System.assertEquals('Annual', after.Payment_Terms__c, 'Legal terms applied from the MSA');
+        System.assertEquals(null, after.Package_Tier__c, 'No order form -> no product terms');
+        System.assertEquals(null, after.Pricing_Structure__c);
         System.assertEquals(null, after.Latest_Order_Form_Extraction__c, 'Pointer not moved without an order form');
         System.assert(after.Reconciliation_Notes__c.contains('Applied legal terms only'), after.Reconciliation_Notes__c);
+    }
+
+    // ===== Usage + product terms (ContractUsageRollup) =====
+
+    @isTest
+    static void usage_freshDealWritesProductAndCreditTerms() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofe = makeOfe(nb.Id, new Map<String, Object>{
+            'Package_Tier__c' => 'Enterprise', 'Unlimited_Lite__c' => 'Inferred (Enterprise)',
+            'Free_Tier_Retained__c' => 'Yes', 'Overage_Rate__c' => 0.04,
+            'Credits_Purchased__c' => 200000, 'Credits_Period__c' => 'year', 'Credits_Per_Year__c' => 200000,
+            'Credit_Rate__c' => 0.05, 'Credit_Commit__c' => true });
+
+        Test.startTest();
+        runOne(ofe.Id);
+        Test.stopTest();
+
+        Contract after = [SELECT Package_Tier__c, Unlimited_Lite__c, Free_Tier_Retained__c, Overage_Rate__c,
+                                 Credits_Per_Year__c, Credit_Rate__c, Pricing_Structure__c, Reconciliation_Notes__c
+                          FROM Contract WHERE Id = :c.Id];
+        System.assertEquals('Enterprise', after.Package_Tier__c);
+        System.assertEquals('Inferred (Enterprise)', after.Unlimited_Lite__c);
+        System.assertEquals('Yes', after.Free_Tier_Retained__c);
+        System.assertEquals(0.04, after.Overage_Rate__c);
+        System.assertEquals(200000, after.Credits_Per_Year__c);
+        System.assertEquals(0.05, after.Credit_Rate__c);
+        System.assertEquals('Seats: Credit-Based Usage', after.Pricing_Structure__c);
+        System.assert(after.Reconciliation_Notes__c.contains('Usage / product'), after.Reconciliation_Notes__c);
+    }
+
+    @isTest
+    static void usage_upsellLatestWinsRateBlendsAndOrderDoesNotMatter() {
+        // NB: Team, Unlimited Lite stated Yes, 200k credits/yr at 0.05, overage 0.04.
+        // Upsell: silent on tier, Lite only inferred, +100k credits/yr at 0.02, overage 0.03.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{
+            'Package_Tier__c' => 'Team', 'Unlimited_Lite__c' => 'Yes', 'Overage_Rate__c' => 0.04,
+            'Credits_Purchased__c' => 200000, 'Credits_Period__c' => 'year', 'Credits_Per_Year__c' => 200000,
+            'Credit_Rate__c' => 0.05 });
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeUp = makeOfe(up.Id, new Map<String, Object>{
+            'Package_Tier__c' => 'Not specified', 'Unlimited_Lite__c' => 'Inferred (Enterprise)',
+            'Overage_Rate__c' => 0.03, 'Credits_Added__c' => 100000, 'Credits_Period__c' => 'year',
+            'Contract_Length_Months__c' => 12, 'Credit_Rate__c' => 0.02 });
+
+        Test.startTest();
+        runOne(ofeNb.Id);
+        runOne(ofeUp.Id);
+        runOne(ofeNb.Id);   // re-applying the older paper must not roll the contract back
+        Test.stopTest();
+
+        Contract after = [SELECT Package_Tier__c, Unlimited_Lite__c, Overage_Rate__c, Credits_Per_Year__c,
+                                 Credit_Rate__c, Needs_Legal_Review__c
+                          FROM Contract WHERE Id = :c.Id];
+        System.assertEquals('Team', after.Package_Tier__c, 'A silent paper never erases');
+        System.assertEquals('Yes', after.Unlimited_Lite__c, 'An inference never overrides a stated Yes');
+        System.assertEquals(0.03, after.Overage_Rate__c, 'Latest stated rate wins, whatever the apply order');
+        System.assertEquals(300000, after.Credits_Per_Year__c, '200k + 100k added');
+        System.assertEquals(0.04, after.Credit_Rate__c, '(0.05 x 200k + 0.02 x 100k) / 300k');
+        System.assertEquals(false, after.Needs_Legal_Review__c, 'Usage changes never trigger legal review');
+    }
+
+    @isTest
+    static void usage_coTermedCreditsAddedAreAnnualised() {
+        // Corvex-style: +1M credits for a 6-month co-termed remainder = 2M per year.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{
+            'Credits_Per_Year__c' => 1000000, 'Credit_Rate__c' => 0.04 });
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeUp = makeOfe(up.Id, new Map<String, Object>{
+            'Credits_Added__c' => 1000000, 'Credits_Period__c' => 'contract', 'Contract_Length_Months__c' => 6 });
+
+        Test.startTest();
+        runOne(ofeNb.Id);
+        runOne(ofeUp.Id);
+        Test.stopTest();
+
+        Contract after = [SELECT Credits_Per_Year__c, Credit_Rate__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(3000000, after.Credits_Per_Year__c, '1M + 1M x 12/6');
+        System.assertEquals(0.04, after.Credit_Rate__c, 'An unpriced tranche does not move the blended rate');
+    }
+
+    @isTest
+    static void usage_backfillRecomputesWithoutTouchingLegalTerms() {
+        // A contract whose deal was applied before the usage fields existed.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        makeOfe(nb.Id, new Map<String, Object>{
+            'Applied_Contract__c' => c.Id, 'Is_Current__c' => true,
+            'Package_Tier__c' => 'Team', 'Credits_Per_Year__c' => 100000, 'Credit_Rate__c' => 0.05,
+            'Payment_Terms__c' => 'Annual' });
+
+        Test.startTest();
+        ContractUsageRollup.runBackfill();
+        Test.stopTest();
+
+        Contract after = [SELECT Package_Tier__c, Credits_Per_Year__c, Credit_Rate__c, Pricing_Structure__c,
+                                 Payment_Terms__c, Needs_Legal_Review__c, Reconciliation_Notes__c
+                          FROM Contract WHERE Id = :c.Id];
+        System.assertEquals('Team', after.Package_Tier__c);
+        System.assertEquals(100000, after.Credits_Per_Year__c);
+        System.assertEquals(0.05, after.Credit_Rate__c);
+        System.assertEquals('Seats: Credit-Based Usage', after.Pricing_Structure__c);
+        System.assertEquals(null, after.Payment_Terms__c, 'Backfill never applies legal terms');
+        System.assertEquals(false, after.Needs_Legal_Review__c);
+        System.assert(after.Reconciliation_Notes__c.contains('recomputed'), after.Reconciliation_Notes__c);
+        System.assertEquals(0, ContractUsageRollup.refresh(new Set<Id>{ c.Id }), 'Idempotent: nothing left to change');
     }
 }
