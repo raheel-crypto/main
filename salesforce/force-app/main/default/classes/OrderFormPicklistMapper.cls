@@ -187,6 +187,8 @@ public with sharing class OrderFormPicklistMapper {
         if (String.isBlank(raw)) return null;
         String s = raw.toLowerCase();
         if (s.contains('annual') || s.contains('year') || s.contains('annum')) return 'Annual';
+        if (s.contains('month')) return 'Monthly';
+        if (s.contains('quarter')) return 'Quarterly';
         if (s.contains('term') || s.contains('contract') || s.contains('subscription period')
             || s.contains('total') || s.contains('whole')) return 'Term';
         return null;

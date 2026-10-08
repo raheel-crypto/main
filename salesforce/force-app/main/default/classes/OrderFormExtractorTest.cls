@@ -20,7 +20,7 @@ private class OrderFormExtractorTest {
         }
         Boolean hasEconomics = false;
         for (String k : new List<String>{ 'Annual_Recurring_Revenue', 'Recurring_Fees_Stated', 'Incremental_Recurring_Fees',
-                'Total_Contract_Value', 'License_Fees', 'Platform_Connection_Fee', 'Trial_Price' }) {
+                'Total_Contract_Value', 'License_Fees', 'Platform_Connection_Fee', 'Trial_Price', 'Unit_Price' }) {
             if (f.containsKey(k)) hasEconomics = true;
         }
         if (!hasEconomics) f.put('Total_Contract_Value', 10000);
@@ -2283,6 +2283,86 @@ private class OrderFormExtractorTest {
         System.assertEquals(15817500, row.Credits_Per_Year__c);
         System.assertEquals(0.02, row.Credit_Rate__c, '316,350 / 15,817,500');
         System.assert(row.Derived_Fields__c.contains('Credit_Rate'), row.Derived_Fields__c);
+    }
+
+    // ---- Misreads found in the 2026-10-08 rerun ----
+
+    @isTest
+    static void parser_toleratesProseBeforeFencedJson() {
+        // TTB Partners: a paragraph of reasoning, then the JSON in a code fence.
+        String reply = 'Looking at the two documents, FILE 1 is the operative order form.\n\n```json\n'
+            + '{"Type": "New Business", "Seat_Licenses": 7}\n```';
+        System.assertEquals('{"Type": "New Business", "Seat_Licenses": 7}', OrderFormExtractionJob.extractJsonText(reply));
+        System.assertEquals('{"a": 1}', OrderFormExtractionJob.extractJsonText('Here you go: {"a": 1} Done.'));
+        System.assertEquals('{"a": "x"}', OrderFormExtractionJob.extractJsonText('```\n{"a": "x"}\n```'));
+    }
+
+    @isTest
+    static void basis_monthlyFeeAnnualises() {
+        // Centerview bridge: "$6,250 per month".
+        Opportunity opp = insertOpp('Monthly Bridge', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Monthly', 'Recurring_Fees_Stated' => 6250,
+                'Contract_Start_Date' => '2026-09-30', 'Contract_End_Date' => '2026-10-31' }));
+        System.assertEquals('Monthly', row.Value_Basis__c);
+        System.assertEquals(75000, row.Annual_Recurring_Revenue__c, '6,250 x 12');
+        System.assert(row.Derived_Fields__c.contains('Annual_Recurring_Revenue'), row.Derived_Fields__c);
+        System.assertEquals('Monthly', OrderFormPicklistMapper.mapValueBasis('per month'));
+        System.assertEquals('Quarterly', OrderFormPicklistMapper.mapValueBasis('Quarterly'));
+    }
+
+    @isTest
+    static void unitPrice_timesQuantityGivesRecurringFees() {
+        // Wells Fargo: "$930 per license", 2,000 licenses, no annual total written.
+        Opportunity opp = insertOpp('Unit Priced', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Annual',
+                'Unit_Price' => 930, 'Unit_Quantity' => 2000, 'Seat_Licenses' => 2000,
+                'Total_Contract_Value' => 1627500 }));
+        System.assertEquals(1860000, row.Annual_Recurring_Revenue__c, '930 x 2,000');
+        System.assertEquals(null, row.License_Fees__c, 'A unit price is not the license fee');
+        System.assert(row.Extract_Evidence__c.contains('Unit price 930'), row.Extract_Evidence__c);
+
+        // Arvo: "$70 per license per month", 9 licenses.
+        Order_Form_Extraction__c monthly = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Monthly', 'Unit_Price' => 70, 'Unit_Quantity' => 9 }));
+        System.assertEquals(7560, monthly.Annual_Recurring_Revenue__c, '70 x 9 x 12');
+    }
+
+    @isTest
+    static void amendment_upsellTotalBelowContractIsTheIncrement() {
+        // JPM PE: a new 50-seat schedule's "Total Annual Fee" under a much larger contract.
+        Opportunity up = governedAmendment('Upsell');   // prior paper: 100k ARR, 10 seats, 200k credits
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual',
+                'Recurring_Fees_Stated' => 46250, 'Seat_Licenses' => 5,
+                'Credits_Purchased' => 50000, 'Credits_Period' => 'year' }));
+        System.assertEquals(46250, row.Incremental_ARR__c, 'Read as the increment, not 46,250 - 100,000');
+        System.assertEquals(146250, row.Resulting_ARR__c);
+        System.assertEquals(146250, row.Annual_Recurring_Revenue__c);
+        System.assertEquals(5, row.Seats_Added__c);
+        System.assertEquals(15, row.Resulting_Seats__c);
+        System.assertEquals(50000, row.Credits_Added__c);
+        System.assertEquals(null, row.Credits_Per_Year__c, 'Only an increment was priced');
+    }
+
+    @isTest
+    static void amendment_sameFigureAsTotalAndChangeIsTheChange() {
+        // Mitsui: 5,500 reported as both; JPM true-up: 819 seats reported as both.
+        Opportunity up = governedAmendment('Upsell');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual',
+                'Recurring_Fees_Stated' => 5500, 'Incremental_Recurring_Fees' => 5500,
+                'Seat_Licenses' => 12, 'Seats_Added' => 12 }));
+        System.assertEquals(5500, row.Incremental_ARR__c);
+        System.assertEquals(105500, row.Resulting_ARR__c, 'Prior 100k + 5,500, not 5,500');
+        System.assertEquals(2, row.Seats_Added__c, '12 total - 10 prior');
+        System.assertEquals(12, row.Resulting_Seats__c);
     }
 
     // ---- 6. Clamp out-of-range numbers ----

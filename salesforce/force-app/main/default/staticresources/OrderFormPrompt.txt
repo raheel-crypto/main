@@ -32,23 +32,25 @@ MULTI-DOCUMENT GUIDANCE:
 - If the current deal references the MSA but no MSA is attached, leave the referenced fields null.
 
 FEES, BASIS AND RECURRING TOTALS (stated values only):
-- Value_Basis = how the paper writes its fee figures: "Annual" when a fee is stated per year ("$100,000 per year", "annual fee", "payable annually"), "Term" when ONE figure covers the whole subscription period ("$1,700,000 for the Subscription Period", "total fees for the Initial Term"). Every fee figure you return (License_Fees, Platform_Connection_Fee, Recurring_Fees_Stated, Incremental_Recurring_Fees) must be in that basis, exactly as written - do NOT convert. If a paper mixes bases, report the subscription fee's basis and note the other line in Special_Terms.
+- Value_Basis = how the paper writes its RECURRING fee figures: "Annual" when stated per year ("$100,000 per year", "annual fee", "Total Annual Fee"), "Monthly" when stated per month ("$6,250 per month"), "Quarterly" when stated per quarter, "Term" when ONE figure covers the whole subscription period, whatever its length ("$1,700,000 for the Subscription Period", "Software License Fee $4,251,250, Period Covered: 2y"). How a fee is PAID ("payable monthly in advance") is not its basis - "$56,000 per year, payable monthly" is Annual. Every recurring figure you return (License_Fees, Platform_Connection_Fee, Recurring_Fees_Stated, Incremental_Recurring_Fees, Unit_Price) must be in that basis, exactly as written - do NOT convert. A prorated or one-off charge does not set the basis. If a paper mixes bases, report the subscription fee's basis and note the other line in Special_Terms.
+- Unit_Price + Unit_Quantity = when the paper prices per seat / user / license and does NOT write the total ("Tier 3: 2000 Users, $930 per license"; "$70 per license per month; # of Licenses: 9"): the per-unit price exactly as written (in Value_Basis) and the number of units it applies to. Never multiply them yourself, and never put a per-unit price in License_Fees or Recurring_Fees_Stated. When the paper writes the total too, return the total as usual and leave Unit_Price / Unit_Quantity null.
 - License_Fees = the primary RECURRING subscription / access fee - the main charge for using Rogo, WHATEVER the order form labels it ("Platform Fee", "Subscription Fee", "License Fee", "Annual Fee", a per-user / per-seat fee, or an ELA flat fee). Do NOT be misled by the word "Platform" in a label: a "Platform Fee" charged per user or as the main subscription is a License Fee, not a Platform_Connection_Fee. Excludes one-time services and excludes a separately-stated "Hosting Fee".
 - Platform_Connection_Fee = ONLY a fee the order form explicitly calls a "Hosting Fee". That literal line item is the ONLY thing that goes in this field. If there is no line named "Hosting Fee", return null - NEVER route a "Platform Fee", subscription, seat, or per-user charge here.
 - Professional_Service_Fees = ONE-TIME implementation, integration, onboarding, or services fees. Never recurring.
-- Recurring_Fees_Stated = the SUM of every RECURRING charge on the paper for the whole contract after this paper (subscription / license + hosting + tenant or platform fees + any other recurring line), in Value_Basis. Adding the stated line items is fine; annualising is not. Excludes one-time fees. For an amendment, fill this ONLY when the paper restates the contract's full recurring fees.
-- Incremental_Recurring_Fees = AMENDMENTS ONLY: the change in recurring fees that this paper prices (e.g. "10 additional seats at $5,000 per year" -> 50000), in Value_Basis; negative for a reduction. Null when the paper only restates the full contract.
+- Recurring_Fees_Stated = the SUM of every RECURRING charge on the paper for the whole contract after this paper (subscription / license + hosting + tenant or platform fees + any other recurring line), in Value_Basis. Adding the stated line items is fine; annualising is not. Excludes one-time fees. For an amendment, fill this ONLY when the paper states the WHOLE contract's recurring fees after the change ("Recalculated Total Annual Fee", "total fees following this amendment", a fee table covering every seat on the contract).
+- Incremental_Recurring_Fees = AMENDMENTS ONLY: the change in the RECURRING fee that this paper prices (e.g. "10 additional seats at $5,000 per year" -> 50000), in Value_Basis; negative for a reduction. A new schedule or order form under an existing contract that prices only its own seats / credits is an increment - even when it calls its figure "Total Annual Fee" - so its fee goes here, not in Recurring_Fees_Stated. Never put the same figure in both fields.
+- A prorated, stub or true-up charge for part of a period ("pro-rated for the remaining 226 days at a total cost of $3,405", "net prorated charge for the remainder of the contract year") is NOT a recurring fee: report it as Total_Contract_Value (the amount this paper bills) and leave Incremental_Recurring_Fees null unless the paper also states the recurring change itself.
 - Total_Contract_Value = the total amount due over the entire term ONLY if the paper states it (or it is the single term figure for a Term-basis deal). A pilot with no fee: 0.
 - Never return an "Annual_Recurring_Revenue" figure: Apex computes ARR from Recurring_Fees_Stated / Incremental_Recurring_Fees, Value_Basis and the term.
 
 TERM AND DATES (stated values only):
 - Contract_Start_Date = the stated start / effective / subscription start date of THIS deal (from an order form).
 - Contract_End_Date = ONLY an end / expiry date written on the paper. Do not compute it.
-- Contract_Length_Months / Contract_Length_Days = ONLY a term length written on the paper ("12 months", "Initial Subscription Period: 24 months", "90 days"). Do not compute it from dates.
+- Contract_Length_Months / Contract_Length_Days = a term length written on the paper in any form ("12 months", "Initial Subscription Period: 24 months", "two-year term", "Period Covered: 2y", "90 days"). Converting stated years to months ("2y" -> 24) is reading, not computing - do it. Do not compute a length from dates.
 
 AMENDMENTS (Upsell / Downsell / Contract Restructure):
 - An amendment order form often RESTATES the whole contract. Report both sides only as written:
-  * Seat_Licenses = the TOTAL seats after this paper when the paper states it (never the delta). Seats_Added = the change in seats when the paper states it (negative for a reduction).
+  * Seat_Licenses = the TOTAL seats after this paper when the paper states it (never the delta). Seats_Added = the change in seats when the paper states it (negative for a reduction). Never copy the total into Seats_Added: a true-up to "819 users" with no stated change has Seats_Added null.
   * Recurring_Fees_Stated = the restated full recurring fees; Incremental_Recurring_Fees = the change priced on the paper.
   * Credits_Purchased = the TOTAL credits after this paper when stated; Credits_Added = the change in credits when stated (negative for a reduction).
 - Leave the unstated side null - Apex computes it against the governing contract and marks it derived. Never compute an increment or total yourself.
@@ -72,12 +74,14 @@ JSON SCHEMA (return exactly these keys):
   "Contract_Length_Months": "number - ONLY if a term length is written" | null,
   "Contract_Length_Days": "number - ONLY if a term length in days is written" | null,
   "Seat_Licenses": number | null,
-  "Value_Basis": "Annual" | "Term" | null,
+  "Value_Basis": "Annual" | "Monthly" | "Quarterly" | "Term" | null,
   "License_Fees": number | null,
   "Platform_Connection_Fee": number | null,
   "Professional_Service_Fees": number | null,
   "Recurring_Fees_Stated": number | null,
   "Incremental_Recurring_Fees": number | null,
+  "Unit_Price": number | null,
+  "Unit_Quantity": number | null,
   "Total_Contract_Value": number | null,
   "Renewal_Terms": "Auto-renew (90-day)" | "Auto-renew (60-day)" | "Auto-renew (30-day)" | "Manual renewal" | null,
   "Subscription_Schedule": "Monthly" | "Quarterly" | "Bi-Annual" | "Annual" | null,
@@ -240,7 +244,7 @@ LOGO / PUBLICITY RIGHTS:
 
 EXTRACT_EVIDENCE FIELD:
 - Return Extract_Evidence as a JSON OBJECT keyed by field name; each value is { "clause": "<section / clause / exhibit ref>", "quote": "<short verbatim excerpt, <= ~300 chars>" }. Example: {"Subprocessor_Gate_Type": {"clause":"8.1(a)", "quote":"...90 days prior written notice..."}}.
-- REQUIRED for every LLM-gate field you return with a value other than "Not specified" / null (Subprocessor_Gate_Type, Subprocessor_Notice_Period_Days, Consent_Revocable, Subprocessor_Objection_Consequence, AI_Model_Change_Gate_Days, AI_Model_Change_Carveout, Processing_Location_Gate, Personal_Data_Disclosure_Gate, AI_Training_Prohibition, and the rest), and for Value_Basis, Recurring_Fees_Stated, Incremental_Recurring_Fees, Total_Contract_Value, Credits_Purchased, Credits_Added, Credit_Rate_Stated, Overage_Rate, Free_Tier_Retained, Contract_End_Date, Signature_Date, Sub_Processor_List, Renewal_Terms / Renewal_Fee_Escalator when inferred, and any value taken from a rider overriding the base contract.
+- REQUIRED for every LLM-gate field you return with a value other than "Not specified" / null (Subprocessor_Gate_Type, Subprocessor_Notice_Period_Days, Consent_Revocable, Subprocessor_Objection_Consequence, AI_Model_Change_Gate_Days, AI_Model_Change_Carveout, Processing_Location_Gate, Personal_Data_Disclosure_Gate, AI_Training_Prohibition, and the rest), and for Value_Basis, Recurring_Fees_Stated, Incremental_Recurring_Fees, Unit_Price, Contract_Length_Months, Total_Contract_Value, Credits_Purchased, Credits_Added, Credit_Rate_Stated, Overage_Rate, Free_Tier_Retained, Contract_End_Date, Signature_Date, Sub_Processor_List, Renewal_Terms / Renewal_Fee_Escalator when inferred, and any value taken from a rider overriding the base contract.
 - Skip trivial extractions that appear plainly in labeled fields (Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name).
 - Keep each quote short and total length well under 30,000 characters. Return null only if there is genuinely nothing to cite.
 - Each "quote" (and every other value) is ONE JSON string: do not join fragments with a semicolon between closing and opening quotes ("...a"; "b..."), and do not append an editorial "note:" as a second quoted string. If a clause conflicts with another or you must caveat it, write it as ordinary prose INSIDE the single quoted string (or put the caveat in Subprocessor_Restrictions), never as separate quoted fragments.

@@ -568,7 +568,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (String.isBlank(assistantText)) {
             throw new OrderFormException('Anthropic response had no text block.');
         }
-        String jsonText = stripCodeFence(assistantText);
+        String jsonText = extractJsonText(assistantText);
         Object parsed = JSON.deserializeUntyped(jsonText);
         if (!(parsed instanceof Map<String, Object>)) {
             throw new OrderFormException('Extracted JSON was not an object.');
@@ -576,16 +576,23 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return (Map<String, Object>) parsed;
     }
 
-    private static String stripCodeFence(String s) {
-        String trimmed = s.trim();
-        if (trimmed.startsWith('```')) {
-            Integer first = trimmed.indexOf('\n');
-            Integer last = trimmed.lastIndexOf('```');
-            if (first > 0 && last > first) {
-                return trimmed.substring(first + 1, last).trim();
+    // The JSON object in the reply, tolerating prose before or after it and a
+    // code fence anywhere (TTB: a paragraph of reasoning, then ```json ... ```).
+    @TestVisible
+    private static String extractJsonText(String s) {
+        String t = s.trim();
+        if (!t.startsWith('{')) {
+            Integer fence = t.indexOf('```');
+            Integer bodyStart = (fence < 0) ? -1 : t.indexOf('\n', fence);
+            Integer close = (bodyStart < 0) ? -1 : t.indexOf('```', bodyStart);
+            if (close > bodyStart) {
+                String inner = t.substring(bodyStart + 1, close).trim();
+                if (inner.startsWith('{')) return inner;
             }
         }
-        return trimmed;
+        Integer open = t.indexOf('{');
+        Integer last = t.lastIndexOf('}');
+        return (open >= 0 && last > open) ? t.substring(open, last + 1) : t;
     }
 
     @TestVisible
@@ -964,6 +971,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
         Boolean isAmend = AMEND_TYPES.contains(row.Type__c);
         Boolean isDownsell = row.Type__c == 'Downsell';
+        Boolean isUpsell = row.Type__c == 'Upsell';
+        Boolean creditsAreIncrement = false;
         Decimal months = row.Contract_Length_Months__c;
         String basis = row.Value_Basis__c;
 
@@ -972,8 +981,29 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         Decimal totalStated = toDecimal(extracted.get('Recurring_Fees_Stated'));
         Decimal incStated = toDecimal(extracted.get('Incremental_Recurring_Fees'));
         String totalHow = null;
+        String incHow = null;
+        if (isAmend && totalStated != null && totalStated == incStated) {
+            // Mitsui: one figure reported as both the contract total and the
+            // change. It is the change - the contract after an upsell is more.
+            totalStated = null;
+            incHow = 'Paper gives ' + incStated + ' as both the total and the change; read as the change';
+        }
         if (totalStated == null && incStated == null) {
-            if (row.License_Fees__c != null || row.Platform_Connection_Fee__c != null) {
+            Decimal unitPrice = toDecimal(extracted.get('Unit_Price'));
+            Decimal units = toDecimal(extracted.get('Unit_Quantity'));
+            if (unitPrice != null && units != null) {
+                // Priced per seat with no total written (Wells Fargo: "$930 per
+                // license", 2,000 licenses): units x unit price, in Value_Basis.
+                Decimal fees = unitPrice * units;
+                String how = 'Unit price ' + unitPrice + ' x ' + units + ' units';
+                if (isAmend && row.Seats_Added__c != null && units == Math.abs(row.Seats_Added__c)) {
+                    incStated = fees;
+                    incHow = how;
+                } else {
+                    totalStated = fees;
+                    totalHow = how;
+                }
+            } else if (row.License_Fees__c != null || row.Platform_Connection_Fee__c != null) {
                 totalStated = nz(row.License_Fees__c) + nz(row.Platform_Connection_Fee__c);
                 totalHow = 'License_Fees ' + nz(row.License_Fees__c) + ' + Hosting Fee ' + nz(row.Platform_Connection_Fee__c);
             } else if (extracted.get('Annual_Recurring_Revenue') != null) {
@@ -985,14 +1015,14 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         Decimal feeFactor = annualFactor(basis, months);
         Decimal totalAnnual = annualiseFee(totalStated, basis, months);
         Decimal incAnnual = annualiseFee(incStated, basis, months);
-        String termNote = (basis == 'Term' && months != null)
-            ? ' stated for the ' + months + '-month term, x 12/' + months : '';
+        Boolean scaled = basis == 'Term' || basis == 'Monthly' || basis == 'Quarterly';
+        String termNote = basisNote(basis, months);
 
         Contract gov = isAmend ? loadGoverningContract(parentOpp) : null;
 
         if (!isAmend) {
             row.Annual_Recurring_Revenue__c = totalAnnual;
-            if (totalAnnual != null && (totalHow != null || basis == 'Term')) {
+            if (totalAnnual != null && (totalHow != null || scaled)) {
                 d.mark('Annual_Recurring_Revenue', (totalHow != null ? totalHow : String.valueOf(totalStated))
                     + termNote + ' = ' + totalAnnual + ' per year.');
             }
@@ -1004,13 +1034,23 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             String baseSrc = base.arrSource;
             Decimal inc = incAnnual;
             if (inc != null && isDownsell && inc > 0) inc = -inc;
-            if (inc != null && basis == 'Term') {
-                d.mark('Incremental_ARR', incStated + termNote + ' = ' + inc + ' per year.');
+            if (inc != null && (scaled || incHow != null)) {
+                d.mark('Incremental_ARR', (incHow != null ? incHow : String.valueOf(incStated))
+                    + termNote + ' = ' + inc + ' per year.');
+            }
+            if (isUpsell && inc == null && totalAnnual != null && baseArr != null && totalAnnual < baseArr) {
+                // JPM PE: a new 50-seat schedule's "Total Annual Fee $46,250" under
+                // a $4.2M contract. An upsell cannot shrink ARR, so the paper's
+                // "total" is its own increment.
+                inc = totalAnnual;
+                d.mark('Incremental_ARR', 'Paper total ' + totalAnnual + ' is below ' + baseSrc + ' ' + baseArr
+                    + '; an upsell cannot reduce ARR, so it is read as the increment.');
+                totalAnnual = null;
             }
             if (totalAnnual != null) {
                 row.Resulting_ARR__c = totalAnnual;
                 row.Annual_Recurring_Revenue__c = totalAnnual;
-                if (totalHow != null || basis == 'Term') {
+                if (totalHow != null || scaled) {
                     d.mark('Resulting_ARR', (totalHow != null ? totalHow : String.valueOf(totalStated))
                         + termNote + ' = ' + totalAnnual + ' per year.');
                 }
@@ -1033,12 +1073,28 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             Decimal added = row.Seats_Added__c;
             if (added != null && isDownsell && added > 0) { added = -added; row.Seats_Added__c = added; }
             Decimal baseSeats = base.seats;
-            if (row.Seat_Licenses__c != null) {
-                row.Resulting_Seats__c = row.Seat_Licenses__c;
+            Decimal totalSeats = row.Seat_Licenses__c;
+            String seatsWhy = '';
+            if (added != null && added == totalSeats && baseSeats != null && baseSeats > 0) {
+                // JPM true-up: 819 reported as both the total and the change.
+                added = null;
+                row.Seats_Added__c = null;
+                seatsWhy = ' (the paper gave ' + totalSeats + ' as both the total and the change)';
+            }
+            if (isUpsell && added == null && totalSeats != null && baseSeats != null && totalSeats < baseSeats) {
+                // A new schedule's own seat count, not the contract's total.
+                row.Seats_Added__c = totalSeats;
+                row.Resulting_Seats__c = baseSeats + totalSeats;
+                d.mark('Seats_Added', 'Paper states ' + totalSeats + ' seats, below ' + base.seatsSource + ' '
+                    + baseSeats + '; an upsell cannot reduce seats, so they are the seats added.');
+                d.mark('Resulting_Seats', base.seatsSource + ' ' + baseSeats + ' + ' + totalSeats
+                    + ' added = ' + row.Resulting_Seats__c + '.');
+            } else if (totalSeats != null) {
+                row.Resulting_Seats__c = totalSeats;
                 if (added == null && baseSeats != null) {
-                    row.Seats_Added__c = row.Seat_Licenses__c - baseSeats;
-                    d.mark('Seats_Added', 'Paper states ' + row.Seat_Licenses__c + ' seats in total; minus '
-                        + base.seatsSource + ' ' + baseSeats + ' = ' + row.Seats_Added__c + '.');
+                    row.Seats_Added__c = totalSeats - baseSeats;
+                    d.mark('Seats_Added', 'Paper states ' + totalSeats + ' seats in total; minus '
+                        + base.seatsSource + ' ' + baseSeats + ' = ' + row.Seats_Added__c + '.' + seatsWhy);
                 }
             } else if (added != null && baseSeats != null) {
                 row.Resulting_Seats__c = baseSeats + added;
@@ -1050,7 +1106,17 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             Decimal cAdded = toDecimal(extracted.get('Credits_Added'));
             if (cAdded != null && isDownsell && cAdded > 0) cAdded = -cAdded;
             Decimal baseCredits = base.credits;
-            if (cAdded == null && row.Credits_Purchased__c != null && baseCredits != null) {
+            if (cAdded != null && cAdded == row.Credits_Purchased__c && baseCredits != null && baseCredits > 0) {
+                cAdded = null;   // same figure as total and change: derive the change
+            }
+            if (isUpsell && cAdded == null && row.Credits_Purchased__c != null && baseCredits != null
+                    && row.Credits_Purchased__c < baseCredits) {
+                // The paper's own credit block, not the contract's new total.
+                cAdded = row.Credits_Purchased__c;
+                creditsAreIncrement = true;
+                d.mark('Credits_Added', 'Paper states ' + cAdded + ' credits, below ' + base.creditsSource + ' '
+                    + baseCredits + '; an upsell cannot reduce credits, so they are the credits added.');
+            } else if (cAdded == null && row.Credits_Purchased__c != null && baseCredits != null) {
                 cAdded = row.Credits_Purchased__c - baseCredits;
                 d.mark('Credits_Added', 'Paper states ' + row.Credits_Purchased__c + ' credits in total; minus '
                     + base.creditsSource + ' ' + baseCredits + ' = ' + cAdded + '.');
@@ -1060,7 +1126,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
         // Credits per year (the contract's allocation; null when only an increment is priced).
         Decimal creditFac = creditFactor(row.Credits_Period__c, months);
-        row.Credits_Per_Year__c = creditsPerYear(row.Credits_Purchased__c, row.Credits_Period__c, months);
+        row.Credits_Per_Year__c = creditsAreIncrement
+            ? null : creditsPerYear(row.Credits_Purchased__c, row.Credits_Period__c, months);
         if (row.Credits_Per_Year__c != null) {
             if (row.Credits_Period__c != 'year') {
                 d.mark('Credits_Per_Year', row.Credits_Purchased__c + ' credits per ' + row.Credits_Period__c
@@ -1092,6 +1159,14 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         }
     }
 
+    // How a fee in this basis was scaled to a year, for the evidence text.
+    private static String basisNote(String basis, Decimal months) {
+        if (basis == 'Monthly') return ' per month, x 12';
+        if (basis == 'Quarterly') return ' per quarter, x 4';
+        if (basis == 'Term' && months != null) return ' stated for the ' + months + '-month term, x 12/' + months;
+        return '';
+    }
+
     @TestVisible
     private static Decimal creditRate(Decimal fee, Decimal feeFactor, Decimal credits,
                                       Decimal creditFactor, Boolean bothTerm) {
@@ -1109,6 +1184,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     // when the term length is unknown). A missing basis is treated as annual.
     @TestVisible
     private static Decimal annualFactor(String basis, Decimal months) {
+        if (basis == 'Monthly') return 12;
+        if (basis == 'Quarterly') return 4;
         if (basis != 'Term') return 1;
         if (months == null || months <= 0) return null;
         return Decimal.valueOf(12).divide(months, 10, RoundingMode.HALF_UP);
@@ -1130,6 +1207,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     @TestVisible
     private static Decimal annualiseFee(Decimal v, String basis, Decimal months) {
         if (v == null) return null;
+        if (basis == 'Monthly') return v * 12;
+        if (basis == 'Quarterly') return v * 4;
         if (basis != 'Term') return v;
         if (months == null || months <= 0) return null;
         return (v * 12).divide(months, 2, RoundingMode.HALF_UP);
