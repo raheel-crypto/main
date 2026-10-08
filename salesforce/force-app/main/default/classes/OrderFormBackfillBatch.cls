@@ -46,11 +46,12 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
 
     public Database.QueryLocator start(Database.BatchableContext bc) {
         if (rerunFlagged) {
-            // Only Opps whose extraction was flagged for re-run.
+            // Only Opps whose extraction was flagged for re-run. Oldest first, so
+            // a base deal is re-read before the amendments measured against it.
             return Database.getQueryLocator(
                 'SELECT Id, Name FROM Opportunity ' +
                 'WHERE Id IN (SELECT Opportunity__c FROM Order_Form_Extraction__c WHERE Rerun__c = true) ' +
-                'ORDER BY CloseDate DESC'
+                'ORDER BY CloseDate ASC, CreatedDate ASC'
             );
         }
         // Declared at method scope so the dynamic-SOQL bind :cutoff resolves.
@@ -59,12 +60,12 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         if (refreshMode) {
             // Every Closed Won opp EXCEPT those already refreshed in this pass
             // (an extraction row modified at/after the cutoff). execute() updates
-            // the latest row in place.
+            // the latest row in place. Oldest first, as for reruns.
             return Database.getQueryLocator(
                 'SELECT Id, Name FROM Opportunity ' +
                 'WHERE StageName = \'Closed Won\' ' +
                 'AND Id NOT IN (SELECT Opportunity__c FROM Order_Form_Extraction__c WHERE LastModifiedDate >= :cutoff) ' +
-                'ORDER BY CloseDate DESC'
+                'ORDER BY CloseDate ASC, CreatedDate ASC'
             );
         }
         String soql =
