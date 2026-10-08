@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>End_Date_Source__c</fullName>
+    <description>How Contract_End_Date__c was set. Stated: written on the paper and already inclusive. Normalized: written on the paper as the anniversary and moved back one day to Rogo's inclusive convention. Derived: computed as start + term - 1 day.</description>
+    <label>End Date Source</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Stated</fullName><default>false</default><label>Stated</label></value>
+            <value><fullName>Normalized</fullName><default>false</default><label>Normalized</label></value>
+            <value><fullName>Derived</fullName><default>false</default><label>Derived</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

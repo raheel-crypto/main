@@ -339,4 +339,76 @@ private class ContractLegalTermsApplierTest {
         Contract after = [SELECT Total_Credits_Purchased__c FROM Contract WHERE Id = :c.Id];
         System.assertEquals(1000, after.Total_Credits_Purchased__c, 'Re-apply recomputes, never doubles');
     }
+
+    // ===== Contract pointer: never stamped from the account fallback =====
+
+    @isTest
+    static void pointer_notStampedForAccountFallbackContract() {
+        // BlackRock: the new term's opp had no contract, so the account fallback
+        // picked an older contract - that must not become its pointer.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity o = makeOpp(a.Id, 'Upsell', null, null);
+        Order_Form_Extraction__c ofe = makeOfe(o.Id, new Map<String, Object>{ 'Subprocessor_Notice_Period__c' => 30 });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        System.assertEquals(c.Id, res.contractId, 'Terms still reconcile onto the fallback contract');
+        Contract after = [SELECT Latest_Order_Form_Extraction__c, Reconciliation_Notes__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(null, after.Latest_Order_Form_Extraction__c, 'Pointer not moved by a fallback match');
+        System.assert(after.Reconciliation_Notes__c.contains('pointer not moved'), after.Reconciliation_Notes__c);
+    }
+
+    @isTest
+    static void pointer_stampedWhenFallbackContractIsTheDealsSourceOpp() {
+        Account a = makeAccount();
+        Opportunity o = makeOpp(a.Id, 'Upsell', null, null);
+        // The opp itself has no ContractId, but the contract records it as its source.
+        Contract c = makeContract(a.Id, new Map<String, Object>{ 'Opportunity__c' => o.Id });
+        Order_Form_Extraction__c ofe = makeOfe(o.Id, new Map<String, Object>{ 'Subprocessor_Notice_Period__c' => 30 });
+
+        Test.startTest();
+        runOne(ofe.Id);
+        Test.stopTest();
+
+        Contract after = [SELECT Latest_Order_Form_Extraction__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(ofe.Id, after.Latest_Order_Form_Extraction__c);
+    }
+
+    @isTest
+    static void isSourceOpportunity_matchesLookupOrExternalId() {
+        Account a = makeAccount();
+        Opportunity o = makeOpp(a.Id, 'New Business', null, null);
+        Contract viaId = new Contract();
+        viaId.put('Source_Opportunity_Id__c', String.valueOf(o.Id).left(15));
+        System.assertEquals(true, ContractLegalTermsApplier.isSourceOpportunity(viaId, o.Id), '15-char id matches');
+        Contract junk = new Contract();
+        junk.put('Source_Opportunity_Id__c', 'not-an-id');
+        System.assertEquals(false, ContractLegalTermsApplier.isSourceOpportunity(junk, o.Id));
+        System.assertEquals(false, ContractLegalTermsApplier.isSourceOpportunity(null, o.Id));
+    }
+
+    @isTest
+    static void creditTotal_amendmentUsesCapturedIncrementNotRestatedTotal() {
+        // NB buys 200k; the upsell order form restates 300k as the new TOTAL and the
+        // extractor captured the +100k increment. The contract total must be 300k,
+        // not 200k + 300k.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{ 'Credits_Purchased__c' => 200000 });
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeUp = makeOfe(up.Id, new Map<String, Object>{
+            'Credits_Purchased__c' => 300000, 'Credits_Added__c' => 100000 });
+
+        Test.startTest();
+        runOne(ofeNb.Id);
+        runOne(ofeUp.Id);
+        Test.stopTest();
+
+        Contract after = [SELECT Total_Credits_Purchased__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(300000, after.Total_Credits_Purchased__c);
+    }
 }

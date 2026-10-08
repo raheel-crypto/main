@@ -46,7 +46,7 @@ worklist. The script reads the same prompt the Apex pipeline uses
 
 ## Notes
 
-- **Model** defaults to `claude-sonnet-4-6` to match the in-platform pipeline.
+- **Model** defaults to `claude-sonnet-5` (thinking disabled) to match the in-platform pipeline. Each file is sent with a `FILE n (CURRENT DEAL): <title>` label so the model can classify it (Order Form / MSA / MNDA / DPA / Other); a run with no order form is recorded as **No Order Form**.
   Override with `--model` if you change the Apex model.
 - Files 3–4 MB and under still belong in the normal Apex flow; this is only for
   the oversized tail.

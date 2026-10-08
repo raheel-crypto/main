@@ -8,6 +8,11 @@
 // no good row to anchor on - those are the failed / large-file / blank ones you
 // may still be working).
 //
+// NOTE (version linking): re-extractions now link to the row they supersede
+// (Supersedes__c) and only the best row is Is_Current__c, so stale history no
+// longer misleads anything - this cleanup is optional. It never deletes the
+// CURRENT row, and deleting history clears the Supersedes__c links into it.
+//
 // SAFETY:
 //   * DRY RUN by default (DO_DELETE = false): prints what it WOULD delete.
 //     Review the counts, then set DO_DELETE = true to actually remove them.
@@ -39,12 +44,14 @@ for (Order_Form_Extraction__c o : [
 List<Order_Form_Extraction__c> toDelete = new List<Order_Form_Extraction__c>();
 if (!keepLineByOpp.isEmpty()) {
     for (Order_Form_Extraction__c o : [
-        SELECT Id, Opportunity__c, CreatedDate
+        SELECT Id, Opportunity__c, CreatedDate, Is_Current__c
         FROM Order_Form_Extraction__c
         WHERE Opportunity__c IN :keepLineByOpp.keySet()
         ORDER BY CreatedDate ASC
     ]) {
-        if (o.CreatedDate < keepLineByOpp.get(o.Opportunity__c)) {
+        // Never delete the current row - with the quality ladder it can be an
+        // older complete Success that a later, thinner row did not displace.
+        if (o.CreatedDate < keepLineByOpp.get(o.Opportunity__c) && o.Is_Current__c != true) {
             toDelete.add(o);
         }
     }

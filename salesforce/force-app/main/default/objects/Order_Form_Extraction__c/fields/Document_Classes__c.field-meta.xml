@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Document_Classes__c</fullName>
+    <description>Per-file classification returned by the extractor: one line per attached file, 'FILE n [Current|Parent]: &lt;title&gt; =&gt; Order Form | MSA | MNDA | DPA | Other'. Economics are only extracted from Order Form class files in the current deal; a row with none is status No Order Form.</description>
+    <label>Document Classes</label>
+    <length>8192</length>
+    <type>LongTextArea</type>
+    <visibleLines>4</visibleLines>
+</CustomField>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Supersedes__c</fullName>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <description>The earlier extraction of the same Opportunity that this row supersedes (set when a re-extraction inserts a new row). Follow it to walk the version history.</description>
+    <label>Supersedes</label>
+    <referenceTo>Order_Form_Extraction__c</referenceTo>
+    <relationshipLabel>Superseded By</relationshipLabel>
+    <relationshipName>Superseding_Extractions</relationshipName>
+    <required>false</required>
+    <type>Lookup</type>
+</CustomField>

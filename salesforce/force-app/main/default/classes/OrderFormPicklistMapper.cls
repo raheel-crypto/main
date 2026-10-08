@@ -180,4 +180,36 @@ public with sharing class OrderFormPicklistMapper {
         if (s.contains('low')) return 'Low';
         return 'Low';
     }
+
+    // Value_Basis__c: is a stated fee per year (Annual) or one figure for the
+    // whole subscription period (Term)? Null when the model didn't say.
+    public static String mapValueBasis(String raw) {
+        if (String.isBlank(raw)) return null;
+        String s = raw.toLowerCase();
+        if (s.contains('term') || s.contains('contract') || s.contains('subscription period')
+            || s.contains('total') || s.contains('whole')) return 'Term';
+        if (s.contains('annual') || s.contains('year') || s.contains('yearly')) return 'Annual';
+        return null;
+    }
+
+    private static final Pattern NDA_WORD = Pattern.compile('\\bnda\\b');
+
+    // Document class for Document_Classes__c / the No Order Form rule. Order
+    // matters: NDA before agreement ("Non-Disclosure Agreement" is an MNDA).
+    public static String mapDocumentClass(String raw) {
+        if (String.isBlank(raw)) return 'Other';
+        String s = raw.toLowerCase().trim();
+        if (s == 'order form') return 'Order Form';
+        if (s == 'msa') return 'MSA';
+        if (s == 'mnda') return 'MNDA';
+        if (s == 'dpa') return 'DPA';
+        if (s.contains('order') || s.contains('quote') || s.contains('statement of work') || s == 'sow'
+            || s.contains('application contract') || s.contains('pricing') || s.contains('email confirmation')) return 'Order Form';
+        if (s.contains('mnda') || NDA_WORD.matcher(s).find() || s.contains('non-disclosure')
+            || s.contains('nondisclosure') || s.contains('confidentiality')) return 'MNDA';
+        if (s.contains('dpa') || s.contains('data processing') || s.contains('data protection')) return 'DPA';
+        if (s.contains('msa') || s.contains('master') || s.contains('agreement') || s.contains('terms')
+            || s.contains('saas')) return 'MSA';
+        return 'Other';
+    }
 }

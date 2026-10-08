@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Extraction_Status__c</fullName>
+    <description>Success requires an Order Form plus start/end dates and ARR or TCV. Incomplete: an order form was read but those minimums are missing. No Order Form: only MSA/MNDA/DPA/other files were attached, so no economics were extracted. Parse/API Failed and No Document are transient failures.</description>
     <label>Extraction Status</label>
     <required>true</required>
     <type>Picklist</type>
@@ -27,6 +28,16 @@
                 <fullName>No Document</fullName>
                 <default>false</default>
                 <label>No Document</label>
+            </value>
+            <value>
+                <fullName>No Order Form</fullName>
+                <default>false</default>
+                <label>No Order Form</label>
+            </value>
+            <value>
+                <fullName>Incomplete</fullName>
+                <default>false</default>
+                <label>Incomplete</label>
             </value>
         </valueSetDefinition>
     </valueSet>

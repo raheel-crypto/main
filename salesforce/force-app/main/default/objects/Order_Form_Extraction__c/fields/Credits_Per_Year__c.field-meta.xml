@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credits_Per_Year__c</fullName>
+    <description>Annual credit allocation, derived in Apex from Credits_Purchased__c and Credits_Period__c (month x12, quarter x4, contract x12/term months). Null when the paper only prices an increment (see Credits_Added__c) or the term length is unknown.</description>
+    <label>Credits Per Year</label>
+    <precision>16</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <type>Number</type>
+</CustomField>

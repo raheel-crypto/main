@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Resulting_Seats__c</fullName>
+    <description>Amendments: total seats on the contract after this paper. Stated when the paper restates the total; derived as the governing Contract's Seat_Licenses__c plus Seats_Added__c otherwise.</description>
+    <label>Resulting Seats</label>
+    <precision>8</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <type>Number</type>
+</CustomField>

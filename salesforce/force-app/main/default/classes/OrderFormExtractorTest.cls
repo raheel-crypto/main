@@ -1,7 +1,33 @@
 @isTest
 private class OrderFormExtractorTest {
 
+    // Builds a Messages API response whose text block is the extraction JSON.
+    // Unless a test sets them, it supplies what a real order form carries - an
+    // Order Form in Documents, a start date + 12-month term, and a TCV - so a test
+    // about one field still yields a Success row under the Success gate. Tests of
+    // the gate itself use makeAnthropicResponseRaw.
     private static String makeAnthropicResponse(Map<String, Object> extractedFields) {
+        Map<String, Object> f = new Map<String, Object>(extractedFields);
+        if (!f.containsKey('Documents')) {
+            f.put('Documents', new List<Object>{ new Map<String, Object>{
+                'file' => 'FILE 1 (CURRENT DEAL): signed__OrderForm', 'group' => 'Current', 'class' => 'Order Form' } });
+        }
+        if (!f.containsKey('Contract_Start_Date') && !f.containsKey('Contract_End_Date')) {
+            f.put('Contract_Start_Date', '2026-01-01');
+            if (!f.containsKey('Contract_Length_Months') && !f.containsKey('Contract_Length_Days')) {
+                f.put('Contract_Length_Months', 12);
+            }
+        }
+        Boolean hasEconomics = false;
+        for (String k : new List<String>{ 'Annual_Recurring_Revenue', 'Recurring_Fees_Stated', 'Incremental_Recurring_Fees',
+                'Total_Contract_Value', 'License_Fees', 'Platform_Connection_Fee', 'Trial_Price' }) {
+            if (f.containsKey(k)) hasEconomics = true;
+        }
+        if (!hasEconomics) f.put('Total_Contract_Value', 10000);
+        return makeAnthropicResponseRaw(f);
+    }
+
+    private static String makeAnthropicResponseRaw(Map<String, Object> extractedFields) {
         Map<String, Object> textBlock = new Map<String, Object>{
             'type' => 'text',
             'text' => JSON.serialize(extractedFields)
@@ -376,9 +402,14 @@ private class OrderFormExtractorTest {
         Order_Form_Extraction__c row = [
             SELECT Source_Document_Type__c, Seats_Added__c, Seat_Licenses__c, Named_Users__c,
                    Requested_By_Name__c, Requested_By_Email__c, Billing_Entity_Name__c,
-                   License_Fees__c, Annual_Recurring_Revenue__c, Payment_Terms__c
+                   License_Fees__c, Annual_Recurring_Revenue__c, Payment_Terms__c,
+                   Extraction_Status__c, Resulting_Seats__c
             FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id LIMIT 1
         ];
+        // An email confirmation states seats but no ARR/TCV: it is captured, but
+        // not as a Success (Success requires dates and ARR or TCV).
+        System.assertEquals('Incomplete', row.Extraction_Status__c);
+        System.assertEquals(5, row.Resulting_Seats__c, 'Stated total seats -> Resulting_Seats');
         System.assertEquals('Email Confirmation', row.Source_Document_Type__c);
         System.assertEquals(4, row.Seats_Added__c);
         System.assertEquals(5, row.Seat_Licenses__c);
@@ -1392,16 +1423,18 @@ private class OrderFormExtractorTest {
         OrderFormBackfillBatch.runRerunFlagged();
         Test.stopTest();
 
-        // The flagged (superseded) row is deleted; exactly one fresh, unflagged row remains.
-        System.assertEquals(0, [SELECT COUNT() FROM Order_Form_Extraction__c WHERE Id = :flaggedRow.Id],
-            'Flagged row should be deleted after re-extraction');
-        List<Order_Form_Extraction__c> rows = [
-            SELECT Id, Extraction_Status__c, Rerun__c
-            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id
-        ];
-        System.assertEquals(1, rows.size(), 'Exactly one fresh extraction row should remain');
-        System.assertEquals('Success', rows[0].Extraction_Status__c);
-        System.assertEquals(false, rows[0].Rerun__c, 'New row must not be flagged');
+        // The flagged row is KEPT as history; the fresh row supersedes it and is current.
+        Order_Form_Extraction__c oldRow = [
+            SELECT Rerun__c, Is_Current__c FROM Order_Form_Extraction__c WHERE Id = :flaggedRow.Id];
+        System.assertEquals(false, oldRow.Rerun__c, 'Flag clears once the rerun is current');
+        System.assertEquals(false, oldRow.Is_Current__c);
+        Order_Form_Extraction__c fresh = [
+            SELECT Extraction_Status__c, Rerun__c, Is_Current__c, Supersedes__c
+            FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id AND Id != :flaggedRow.Id];
+        System.assertEquals('Success', fresh.Extraction_Status__c);
+        System.assertEquals(true, fresh.Is_Current__c);
+        System.assertEquals(flaggedRow.Id, fresh.Supersedes__c, 'New row points at the row it supersedes');
+        System.assertEquals(false, fresh.Rerun__c, 'New row must not be flagged');
     }
 
     @isTest
@@ -1994,5 +2027,391 @@ private class OrderFormExtractorTest {
             'Structured restriction stored as JSON: ' + row.Subprocessor_Restrictions__c);
         System.assert(row.Special_Terms__c != null && row.Special_Terms__c.contains('term a'),
             'Structured special terms stored as JSON: ' + row.Special_Terms__c);
+    }
+
+    // =====================================================================
+    // Extraction-quality fixes (classification, annualisation, increments,
+    // credit rate, clamping, end dates, metered fields, versioning)
+    // =====================================================================
+
+    private static Map<String, Object> doc(Integer n, String grp, String cls) {
+        return new Map<String, Object>{
+            'file' => 'FILE ' + n + ' (' + (grp == 'Parent' ? 'PARENT CONTEXT' : 'CURRENT DEAL') + '): doc' + n,
+            'group' => grp, 'class' => cls };
+    }
+
+    // ---- 1. Classification and the Success gate ----
+
+    @isTest
+    static void classification_noOrderFormClearsEconomicsAndSetsStatus() {
+        // MidCap: the renewal's only paper was the MNDA plus the MSA.
+        Opportunity opp = insertOpp('MidCap Renewal', 'Closed Won');
+        String body = makeAnthropicResponseRaw(new Map<String, Object>{
+            'Type' => 'Renewal',
+            'Documents' => new List<Object>{ doc(1, 'Current', 'MNDA'), doc(2, 'Current', 'MSA') },
+            'Contract_Start_Date' => '2024-01-01',      // the MSA's effective date
+            'License_Fees' => 99000,                     // an MSA pricing exhibit
+            'Payment_Terms' => 'Annual'
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+
+        System.assertEquals('No Order Form', row.Extraction_Status__c);
+        System.assertEquals(null, row.License_Fees__c, 'MSA pricing is not this deal');
+        System.assertEquals(null, row.Contract_Start_Date__c, 'MSA / MNDA dates are not the deal start');
+        System.assertEquals(null, row.Annual_Recurring_Revenue__c);
+        System.assertEquals('Annual', row.Payment_Terms__c, 'Legal terms from the MSA are still extracted');
+        System.assert(row.Document_Classes__c.contains('=> MNDA') && row.Document_Classes__c.contains('=> MSA'),
+            row.Document_Classes__c);
+        System.assert(row.Error_Message__c.contains('No Order Form'), row.Error_Message__c);
+    }
+
+    @isTest
+    static void classification_orderFormOnlyInParentContextIsNoOrderForm() {
+        Opportunity opp = insertOpp('Parent Only OF', 'Closed Won');
+        String body = makeAnthropicResponseRaw(new Map<String, Object>{
+            'Documents' => new List<Object>{ doc(1, 'Current', 'MSA'), doc(2, 'Parent', 'Order Form') },
+            'Contract_Start_Date' => '2026-01-01', 'Contract_Length_Months' => 12, 'Total_Contract_Value' => 50000
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+        System.assertEquals('No Order Form', row.Extraction_Status__c, 'A parent-contract order form is context, not this deal');
+    }
+
+    @isTest
+    static void classification_fileNumbersDecideCurrentVsParent() {
+        System.assertEquals(true, OrderFormExtractionJob.isCurrentFile('FILE 1 (CURRENT DEAL): of', null, 1));
+        System.assertEquals(false, OrderFormExtractionJob.isCurrentFile('FILE 2 (CURRENT DEAL): of', 'Current', 1),
+            'File numbers beyond the current-deal count are parent context, whatever the model says');
+        System.assertEquals(false, OrderFormExtractionJob.isCurrentFile('some file', 'Parent', null));
+        System.assertEquals(true, OrderFormExtractionJob.isCurrentFile('some file', null, null));
+        System.assertEquals('Order Form', OrderFormPicklistMapper.mapDocumentClass('Application Contract'));
+        System.assertEquals('MNDA', OrderFormPicklistMapper.mapDocumentClass('Mutual Non-Disclosure Agreement'));
+        System.assertEquals('DPA', OrderFormPicklistMapper.mapDocumentClass('Data Processing Agreement'));
+        System.assertEquals('MSA', OrderFormPicklistMapper.mapDocumentClass('Master Subscription Agreement'));
+        System.assertEquals('MSA', OrderFormPicklistMapper.mapDocumentClass('Standard Terms'), '"standard" is not an NDA');
+        System.assertEquals('Other', OrderFormPicklistMapper.mapDocumentClass('W-9'));
+    }
+
+    @isTest
+    static void statusGate_orderFormWithoutArrOrTcvIsIncomplete() {
+        Opportunity opp = insertOpp('Thin OF', 'Closed Won');
+        String body = makeAnthropicResponseRaw(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Documents' => new List<Object>{ doc(1, 'Current', 'Order Form') },
+            'Contract_Start_Date' => '2026-01-01', 'Contract_Length_Months' => 12, 'Seat_Licenses' => 5
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+        System.assertEquals('Incomplete', row.Extraction_Status__c);
+        System.assert(row.Error_Message__c.contains('ARR or TCV'), row.Error_Message__c);
+    }
+
+    @isTest
+    static void statusGate_missingDatesIsIncomplete() {
+        Opportunity opp = insertOpp('No Dates OF', 'Closed Won');
+        String body = makeAnthropicResponseRaw(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Documents' => new List<Object>{ doc(1, 'Current', 'Order Form') },
+            'Total_Contract_Value' => 10000
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+        System.assertEquals('Incomplete', row.Extraction_Status__c);
+        System.assert(row.Error_Message__c.contains('start date') && row.Error_Message__c.contains('end date'),
+            row.Error_Message__c);
+    }
+
+    // ---- 2. + 4. Annual normalisation and the credit rate (Nomura) ----
+
+    @isTest
+    static void annualise_termFiguresYieldArrCreditsPerYearAndRate() {
+        // $1.7M and 110.5M credits stated for the whole 18-month subscription period.
+        Opportunity opp = insertOpp('Nomura Term', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Contract_Start_Date' => '2026-01-01',
+            'Contract_End_Date' => '2027-06-30',
+            'Value_Basis' => 'Term',
+            'License_Fees' => 1700000,
+            'Recurring_Fees_Stated' => 1700000,
+            'Total_Contract_Value' => 1700000,
+            'Credits_Purchased' => 110500000,
+            'Credits_Period' => 'contract'
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(18, row.Contract_Length_Months__c, 'Term length derived from the dates');
+        System.assertEquals('Term', row.Value_Basis__c);
+        System.assertEquals(1700000, row.License_Fees__c, 'Verbatim term figure is kept');
+        System.assertEquals(1133333.33, row.Annual_Recurring_Revenue__c, '1.7M x 12/18');
+        System.assertEquals(73666666.67, row.Credits_Per_Year__c, '110.5M x 12/18');
+        System.assertEquals(0.015385, row.Credit_Rate__c, '1.7M / 110.5M');
+        for (String f : new List<String>{ 'Annual_Recurring_Revenue', 'Credits_Per_Year', 'Credit_Rate', 'Contract_Length_Months' }) {
+            System.assert(row.Derived_Fields__c.contains(f), f + ' should be marked derived: ' + row.Derived_Fields__c);
+        }
+        System.assert(row.Extract_Evidence__c.contains('"derived"'), row.Extract_Evidence__c);
+    }
+
+    @isTest
+    static void annualise_annualFiguresPassThroughAndRateDerives() {
+        // Harrison-style: $10,000 per year for 200,000 credits per year.
+        Opportunity opp = insertOpp('Annual Credits', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Value_Basis' => 'Annual',
+            'Recurring_Fees_Stated' => 10000,
+            'Credits_Purchased' => 200000,
+            'Credits_Period' => 'year',
+            'Overage_Rate' => 0.04
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+        System.assertEquals(10000, row.Annual_Recurring_Revenue__c);
+        System.assertEquals(200000, row.Credits_Per_Year__c);
+        System.assertEquals(0.05, row.Credit_Rate__c, 'Committed rate, not the 0.04 overage');
+        System.assertEquals(0.04, row.Overage_Rate__c);
+        System.assert(row.Derived_Fields__c == null || !row.Derived_Fields__c.contains('Annual_Recurring_Revenue'),
+            'An annual stated figure is not derived: ' + row.Derived_Fields__c);
+    }
+
+    @isTest
+    static void termMonths_handlesLeapAndOffByOneTerms() {
+        System.assertEquals(12, OrderFormExtractionJob.termMonths(Date.newInstance(2027, 3, 1), Date.newInstance(2028, 2, 29)),
+            'A 366-day leap-year term is still 12 months');
+        System.assertEquals(12, OrderFormExtractionJob.termMonths(Date.newInstance(2026, 9, 30), Date.newInstance(2027, 9, 29)));
+        System.assertEquals(12, OrderFormExtractionJob.termMonths(Date.newInstance(2026, 9, 30), Date.newInstance(2027, 9, 28)),
+            'A paper a day short still reads 12');
+        System.assertEquals(1.48, OrderFormExtractionJob.termMonths(Date.newInstance(2026, 1, 1), Date.newInstance(2026, 2, 14)));
+        System.assertEquals(null, OrderFormExtractionJob.annualFactor('Term', null), 'Term basis needs a term length');
+        System.assertEquals(4, OrderFormExtractionJob.creditFactor('quarter', null));
+        System.assertEquals(0.5, OrderFormExtractionJob.creditRate(100, null, 200, null, true),
+            'Both whole-term figures with no known length: direct ratio');
+        System.assertEquals(null, OrderFormExtractionJob.creditRate(100, null, 200, 1, false));
+    }
+
+    // ---- 3. Amendment increments against the governing contract ----
+
+    private static Opportunity governedAmendment(String type, Decimal arr, Decimal seats, Decimal credits) {
+        Account a = new Account(Name = 'Governed ' + type);
+        insert a;
+        Contract c = new Contract(AccountId = a.Id, Status = 'Draft', StartDate = Date.today(), ContractTerm = 12);
+        c.put('ARR__c', arr);
+        c.put('Seat_Licenses__c', seats);
+        c.put('Total_Credits_Purchased__c', credits);
+        insert c;
+        Opportunity base = new Opportunity(Name = 'Governed Land', StageName = 'Closed Won', CloseDate = Date.today(),
+            AccountId = a.Id, Type = 'New Business', ContractId = c.Id);
+        insertOppSafely(base);
+        Opportunity amend = new Opportunity(Name = 'Governed ' + type, StageName = '5 - Contracting',
+            CloseDate = Date.today(), AccountId = a.Id, Type = type, Base_Opportunity__c = base.Id);
+        insert amend;
+        return amend;
+    }
+
+    @isTest
+    static void amendment_restatedTotalsDeriveIncrementsAgainstGoverningContract() {
+        Opportunity up = governedAmendment('Upsell', 100000, 10, 200000);
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Upsell', 'Value_Basis' => 'Annual',
+            'Recurring_Fees_Stated' => 150000,   // the paper restates the whole contract
+            'Seat_Licenses' => 15,
+            'Credits_Purchased' => 300000, 'Credits_Period' => 'year'
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(), body);
+
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(150000, row.Resulting_ARR__c);
+        System.assertEquals(150000, row.Annual_Recurring_Revenue__c, 'ARR on an amendment row = contract ARR after it');
+        System.assertEquals(100000, row.Base_ARR__c);
+        System.assertEquals(50000, row.Incremental_ARR__c);
+        System.assertEquals(15, row.Resulting_Seats__c);
+        System.assertEquals(5, row.Seats_Added__c);
+        System.assertEquals(100000, row.Credits_Added__c);
+        for (String f : new List<String>{ 'Incremental_ARR', 'Seats_Added', 'Credits_Added' }) {
+            System.assert(row.Derived_Fields__c.contains(f), f + ': ' + row.Derived_Fields__c);
+        }
+        System.assert(row.Extract_Evidence__c.contains('governing Contract'), row.Extract_Evidence__c);
+    }
+
+    @isTest
+    static void amendment_incrementOnlyPaperDerivesResultingTotals_downsellSigned() {
+        Opportunity dn = governedAmendment('Downsell', 100000, 10, 200000);
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Downsell', 'Value_Basis' => 'Annual',
+            'Incremental_Recurring_Fees' => 20000,   // stated as a positive reduction
+            'Seats_Added' => 2,
+            'Credits_Added' => 50000
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(dn.Id, new List<Id>(), body);
+
+        System.assertEquals(-20000, row.Incremental_ARR__c, 'A downsell reduces ARR');
+        System.assertEquals(80000, row.Resulting_ARR__c);
+        System.assertEquals(80000, row.Annual_Recurring_Revenue__c);
+        System.assertEquals(-2, row.Seats_Added__c);
+        System.assertEquals(8, row.Resulting_Seats__c);
+        System.assertEquals(-50000, row.Credits_Added__c);
+        System.assertEquals(null, row.Credits_Per_Year__c, 'Only an increment was priced');
+        System.assert(row.Derived_Fields__c.contains('Resulting_ARR') && row.Derived_Fields__c.contains('Resulting_Seats'),
+            row.Derived_Fields__c);
+    }
+
+    // ---- 6. Clamp out-of-range numbers ----
+
+    @isTest
+    static void clamp_outOfRangeNumberKeepsRowAndRecordsRawValue() {
+        Opportunity opp = insertOpp('Notice 2700', 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Subprocessor_Notice_Period_Days' => 2700,     // Number(3,0) holds 999
+            'Renewal_Fee_Escalator_Percent' => 150          // Percent(2,0) holds 99
+        });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+        insert row;   // previously NUMBER_OUTSIDE_VALID_RANGE
+
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assertEquals(999, row.Subprocessor_Notice_Period__c);
+        System.assertEquals(99, row.Renewal_Fee_Escalator__c);
+        System.assert(row.Derived_Fields__c.contains('Subprocessor_Notice_Period(clamped)'), row.Derived_Fields__c);
+        System.assert(row.Extract_Evidence__c.contains('2700'), 'Raw value kept in evidence: ' + row.Extract_Evidence__c);
+        System.assertEquals(999, OrderFormExtractionJob.maxForPrecision(3, 0));
+        System.assertEquals(99999999999999.99, OrderFormExtractionJob.maxForPrecision(16, 2));
+    }
+
+    // ---- 7. Inclusive end date and its source ----
+
+    @isTest
+    static void endDate_sourceRecordsStatedNormalizedDerived() {
+        Opportunity opp = insertOpp('End Date Sources', 'Closed Won');
+        Order_Form_Extraction__c normalized = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Contract_Start_Date' => '2026-09-30', 'Contract_End_Date' => '2027-09-30' }));
+        System.assertEquals(Date.newInstance(2027, 9, 29), normalized.Contract_End_Date__c);
+        System.assertEquals('Normalized', normalized.End_Date_Source__c);
+        System.assertEquals(12, normalized.Contract_Length_Months__c, 'Anniversary paper does not read as 12.03 months');
+
+        Order_Form_Extraction__c derived = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Contract_Start_Date' => '2026-09-30', 'Contract_Length_Months' => 12 }));
+        System.assertEquals(Date.newInstance(2027, 9, 29), derived.Contract_End_Date__c);
+        System.assertEquals('Derived', derived.End_Date_Source__c);
+
+        Order_Form_Extraction__c stated = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Contract_Start_Date' => '2026-09-30', 'Contract_End_Date' => '2027-09-29' }));
+        System.assertEquals(Date.newInstance(2027, 9, 29), stated.Contract_End_Date__c);
+        System.assertEquals('Stated', stated.End_Date_Source__c);
+        System.assertEquals(12, stated.Contract_Length_Months__c);
+    }
+
+    // ---- 8. Metered-inference fields ----
+
+    @isTest
+    static void metered_statedCreditRateAndFreeTier() {
+        Opportunity opp = insertOpp('Felix Light', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Recurring_Fees_Stated' => 10000, 'Value_Basis' => 'Annual',
+                'Credits_Purchased' => 200000, 'Credits_Period' => 'year',
+                'Credit_Rate_Stated' => 0.03, 'Free_Tier_Retained' => 'Yes'
+            }));
+        System.assertEquals(0.03, row.Credit_Rate__c, 'A stated rate wins over the derived one');
+        System.assert(row.Derived_Fields__c == null || !row.Derived_Fields__c.contains('Credit_Rate'), row.Derived_Fields__c);
+        System.assertEquals('Yes', row.Free_Tier_Retained__c);
+
+        Order_Form_Extraction__c silent = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business' }));
+        System.assertEquals('Not specified', silent.Free_Tier_Retained__c);
+        System.assertEquals(null, silent.Overage_Rate__c);
+    }
+
+    // ---- 9. Version linking and the quality ladder ----
+
+    private static Order_Form_Extraction__c completeRow(Id oppId, Boolean isCurrent) {
+        return new Order_Form_Extraction__c(Opportunity__c = oppId, Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now().addDays(-1), Is_Current__c = isCurrent,
+            Contract_Start_Date__c = Date.newInstance(2026, 1, 1), Contract_End_Date__c = Date.newInstance(2026, 12, 31),
+            Annual_Recurring_Revenue__c = 1000);
+    }
+
+    @isTest
+    static void versioning_thinReextractionDoesNotDisplaceCompleteRow() {
+        Opportunity opp = insertOpp('Keep Complete', 'Closed Won');
+        Order_Form_Extraction__c complete = completeRow(opp.Id, true);
+        insert complete;
+        // A screenshot re-extraction: order form seen, but no dates / ARR / TCV.
+        Order_Form_Extraction__c thin = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponseRaw(new Map<String, Object>{
+                'Documents' => new List<Object>{ doc(1, 'Current', 'Order Form') }, 'Seat_Licenses' => 3 }));
+        System.assertEquals('Incomplete', thin.Extraction_Status__c);
+
+        Test.startTest();
+        OrderFormVersioning.insertWithVersioning(new List<Order_Form_Extraction__c>{ thin });
+        Test.stopTest();
+
+        System.assertEquals(true, [SELECT Is_Current__c FROM Order_Form_Extraction__c WHERE Id = :complete.Id].Is_Current__c,
+            'The complete row stays current');
+        Order_Form_Extraction__c t = [SELECT Is_Current__c, Supersedes__c FROM Order_Form_Extraction__c WHERE Id = :thin.Id];
+        System.assertEquals(false, t.Is_Current__c);
+        System.assertEquals(complete.Id, t.Supersedes__c, 'Still linked into the version history');
+    }
+
+    @isTest
+    static void versioning_noOrderFormReplacesHollowLegacySuccess() {
+        Opportunity opp = insertOpp('Hollow Legacy', 'Closed Won');
+        // Pre-fix MidCap row: "Success" with every economic field null.
+        Order_Form_Extraction__c hollow = new Order_Form_Extraction__c(Opportunity__c = opp.Id,
+            Extraction_Status__c = 'Success', Extracted_At__c = System.now().addDays(-1), Is_Current__c = true);
+        insert hollow;
+        Order_Form_Extraction__c fresh = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponseRaw(new Map<String, Object>{
+                'Documents' => new List<Object>{ doc(1, 'Current', 'MNDA'), doc(2, 'Current', 'MSA') } }));
+
+        Test.startTest();
+        OrderFormVersioning.insertWithVersioning(new List<Order_Form_Extraction__c>{ fresh });
+        Test.stopTest();
+
+        System.assertEquals(false, [SELECT Is_Current__c FROM Order_Form_Extraction__c WHERE Id = :hollow.Id].Is_Current__c);
+        Order_Form_Extraction__c f = [SELECT Is_Current__c, Supersedes__c, Extraction_Status__c FROM Order_Form_Extraction__c WHERE Id = :fresh.Id];
+        System.assertEquals('No Order Form', f.Extraction_Status__c);
+        System.assertEquals(true, f.Is_Current__c, 'The honest No Order Form row replaces the hollow Success');
+        System.assertEquals(hollow.Id, f.Supersedes__c);
+    }
+
+    @isTest
+    static void versioning_rankLadder() {
+        Id oppId = insertOpp('Ladder', 'Closed Won').Id;
+        System.assertEquals(3, OrderFormVersioning.rank(completeRow(oppId, false)));
+        System.assertEquals(2, OrderFormVersioning.rank(new Order_Form_Extraction__c(Extraction_Status__c = 'Incomplete')));
+        System.assertEquals(1, OrderFormVersioning.rank(new Order_Form_Extraction__c(Extraction_Status__c = 'No Order Form')));
+        System.assertEquals(1, OrderFormVersioning.rank(new Order_Form_Extraction__c(Extraction_Status__c = 'Success')),
+            'A legacy Success without the minimums ranks with No Order Form');
+        System.assertEquals(0, OrderFormVersioning.rank(new Order_Form_Extraction__c(Extraction_Status__c = 'API Failed')));
+        System.assertEquals(false, OrderFormVersioning.isAtLeastAsGood(
+            new Order_Form_Extraction__c(Extraction_Status__c = 'Parse Failed'),
+            new Order_Form_Extraction__c(Extraction_Status__c = 'API Failed')),
+            'A failure never displaces anything');
+        Order_Form_Extraction__c pilot = new Order_Form_Extraction__c(Extraction_Status__c = 'Success', Type__c = 'Pilot',
+            Contract_Start_Date__c = Date.today(), Contract_End_Date__c = Date.today().addDays(30));
+        System.assertEquals(3, OrderFormVersioning.rank(pilot), 'A free pilot with dates meets the minimums');
+    }
+
+    @isTest
+    static void runRefresh_correctsHollowSuccessToNoOrderForm() {
+        Opportunity opp = insertOpp('Refresh Hollow', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__MNDA');
+        Order_Form_Extraction__c hollow = new Order_Form_Extraction__c(Opportunity__c = opp.Id,
+            Extraction_Status__c = 'Success', Extracted_At__c = System.now(), Is_Current__c = true);
+        insert hollow;
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponseRaw(new Map<String, Object>{
+            'Documents' => new List<Object>{ doc(1, 'Current', 'MNDA') } });
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormBackfillBatch.runRefresh(Datetime.now().addMinutes(1));
+        Test.stopTest();
+
+        Order_Form_Extraction__c after = [SELECT Id, Extraction_Status__c, Is_Current__c
+                                          FROM Order_Form_Extraction__c WHERE Opportunity__c = :opp.Id];
+        System.assertEquals(hollow.Id, after.Id, 'Updated in place');
+        System.assertEquals('No Order Form', after.Extraction_Status__c);
+        System.assertEquals(true, after.Is_Current__c);
     }
 }

@@ -1,8 +1,9 @@
 // =============================================================================
 // Apply Contract legal terms in the proper order (New Business -> upsells)
 // =============================================================================
-// Applies ContractLegalTermsApplier to every Success extraction that hasn't been
-// applied yet (Applied_Contract__c = null), in the correct order so a contract's
+// Applies ContractLegalTermsApplier to every CURRENT (Is_Current__c) Success
+// extraction that hasn't been applied yet (Applied_Contract__c = null) - one per
+// opportunity, so superseded versions are never applied - in the correct order so a contract's
 // terms are laid down before any amendment reconciles against them:
 //   1) fresh-contract deals first (New Business / Renewal / Pilot),
 //   2) then amendments (Upsell / Downsell / Contract Restructure),
@@ -31,6 +32,7 @@ List<Order_Form_Extraction__c> unapplied = [
     SELECT Id, Opportunity__r.Name, Opportunity__r.Type, Opportunity__r.CloseDate
     FROM Order_Form_Extraction__c
     WHERE Extraction_Status__c = 'Success'
+      AND Is_Current__c = true
       AND Applied_Contract__c = null
       AND Opportunity__c != null
     ORDER BY Opportunity__r.CloseDate ASC NULLS LAST
@@ -77,6 +79,7 @@ for (String n : notable) System.debug('NOTE: ' + n);
 
 Integer remaining = [
     SELECT COUNT() FROM Order_Form_Extraction__c
-    WHERE Extraction_Status__c = 'Success' AND Applied_Contract__c = null AND Opportunity__c != null
+    WHERE Extraction_Status__c = 'Success' AND Is_Current__c = true
+      AND Applied_Contract__c = null AND Opportunity__c != null
 ];
 System.debug('--- Remaining unapplied after this run: ' + remaining + ' (re-run if > 0)');

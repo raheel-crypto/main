@@ -84,6 +84,7 @@ public with sharing class ContractLegalTermsApplier {
                    Rate_Limitable__c, Rate_Limit_Notes__c,
                    Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
                    ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c, Credits_Purchased__c,
+                   Credits_Added__c,
                    Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c
             FROM Order_Form_Extraction__c
             WHERE Id IN :extractionIds
@@ -91,10 +92,11 @@ public with sharing class ContractLegalTermsApplier {
 
         // Resolve target Contract Ids and bulk-load the account-fallback contracts.
         Map<Id, Id> targetContractByOfe = new Map<Id, Id>();
+        Set<Id> resolvedDirectly = new Set<Id>();   // OFEs whose contract came from their own / base opp
         Set<Id> accountsNeedingFallback = new Set<Id>();
         for (Order_Form_Extraction__c ofe : ofes.values()) {
             Id direct = resolveDirectContract(ofe);
-            if (direct != null) targetContractByOfe.put(ofe.Id, direct);
+            if (direct != null) { targetContractByOfe.put(ofe.Id, direct); resolvedDirectly.add(ofe.Id); }
             else if (ofe.Opportunity__r != null && ofe.Opportunity__r.AccountId != null)
                 accountsNeedingFallback.add(ofe.Opportunity__r.AccountId);
         }
@@ -126,28 +128,31 @@ public with sharing class ContractLegalTermsApplier {
                        Rate_Limitable__c, Rate_Limit_Notes__c,
                        Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
                        ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
-                       Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c
+                       Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
+                       Opportunity__c, Source_Opportunity_Id__c
                 FROM Contract WHERE Id IN :contractIds
             ]);
 
         // Running credit total per contract (Total_Credits_Purchased__c), recomputed
-        // as a SIGNED SUM of Credits_Purchased__c across every Success OFE applied to
-        // the contract: Downsell subtracts, everything else adds. Recompute (not
+        // as a SIGNED SUM across every Success OFE applied to the contract: fresh
+        // deals add Credits_Purchased__c; amendments add their Credits_Added__c (the
+        // change - an upsell order form usually restates the whole contract, so its
+        // Credits_Purchased__c is a total, not an increment), falling back to the
+        // signed Credits_Purchased__c when no increment was captured. Recompute (not
         // increment) so it stays correct across re-runs / re-applies. Seed from OFEs
         // already stamped to these contracts, EXCLUDING the ones in this call (those
         // are added below as they apply, so a re-applied OFE is counted exactly once).
         Map<Id, Decimal> creditTotalByContract = new Map<Id, Decimal>();
         if (!contractIds.isEmpty()) {
             for (Order_Form_Extraction__c prior : [
-                SELECT Credits_Purchased__c, Applied_Contract__c, Opportunity__r.Type
+                SELECT Credits_Purchased__c, Credits_Added__c, Applied_Contract__c, Opportunity__r.Type
                 FROM Order_Form_Extraction__c
                 WHERE Applied_Contract__c IN :contractIds
                   AND Extraction_Status__c = 'Success'
                   AND Id NOT IN :extractionIds
             ]) {
-                addSignedCredits(creditTotalByContract, prior.Applied_Contract__c,
-                    prior.Credits_Purchased__c,
-                    prior.Opportunity__r != null ? prior.Opportunity__r.Type : null);
+                addCreditContribution(creditTotalByContract, prior.Applied_Contract__c, prior.Credits_Purchased__c,
+                    prior.Credits_Added__c, prior.Opportunity__r != null ? prior.Opportunity__r.Type : null);
             }
         }
 
@@ -186,15 +191,25 @@ public with sharing class ContractLegalTermsApplier {
                 ? reconcile(current, ofe, changes, log)
                 : freshWrite(current, ofe, changes, log);
 
-            changes.Latest_Order_Form_Extraction__c = ofe.Id;
+            // Only point the contract at this extraction when it really is this
+            // contract's paper: the contract was resolved from the deal's own (or
+            // base) opportunity, or the extraction's opp is the contract's source
+            // opp. An account-fallback contract is someone else's paper - that is
+            // how BlackRock's new term pointed at an April pilot.
+            if (resolvedDirectly.contains(ofe.Id) || isSourceOpportunity(current, ofe.Opportunity__c)) {
+                changes.Latest_Order_Form_Extraction__c = ofe.Id;
+            } else {
+                log.add('Contract pointer not moved: this contract was found via the account fallback and is not '
+                    + 'this deal\'s contract, so Latest_Order_Form_Extraction__c was left unchanged.');
+            }
             changes.Reconciliation_Notes__c = truncate(String.join(log, '\n'), 32768);
             if (conflict) changes.Needs_Legal_Review__c = true;
 
             // Fold this OFE into the contract's running credit total (signed), then
             // write the recomputed total. Set even when it is 0 - the field is a
             // computed rollup, so an accurate 0 is correct.
-            addSignedCredits(creditTotalByContract, contractId, ofe.Credits_Purchased__c,
-                ofe.Opportunity__r != null ? ofe.Opportunity__r.Type : null);
+            addCreditContribution(creditTotalByContract, contractId, ofe.Credits_Purchased__c,
+                ofe.Credits_Added__c, ofe.Opportunity__r != null ? ofe.Opportunity__r.Type : null);
             changes.Total_Credits_Purchased__c = creditTotalByContract.containsKey(contractId)
                 ? creditTotalByContract.get(contractId) : 0;
 
@@ -314,6 +329,35 @@ public with sharing class ContractLegalTermsApplier {
     private static String truncate(String s, Integer maxLen) {
         if (s == null) return null;
         return s.length() > maxLen ? s.substring(0, maxLen) : s;
+    }
+
+    // Is oppId the contract's source opportunity (Opportunity__c lookup, or the
+    // Source_Opportunity_Id__c external id - 15 or 18 characters)?
+    @TestVisible
+    private static Boolean isSourceOpportunity(Contract c, Id oppId) {
+        if (c == null || oppId == null) return false;
+        if (c.Opportunity__c == oppId) return true;
+        if (String.isNotBlank(c.Source_Opportunity_Id__c)) {
+            try {
+                return Id.valueOf(c.Source_Opportunity_Id__c) == oppId;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    // One OFE's contribution to the running credit total: an amendment's captured
+    // increment (already signed) when present, else the signed Credits_Purchased__c.
+    private static void addCreditContribution(Map<Id, Decimal> totals, Id contractId, Decimal purchased,
+                                              Decimal added, String oppType) {
+        if (contractId == null) return;
+        if (added != null && AMEND_TYPES.contains(oppType)) {
+            Decimal running = totals.containsKey(contractId) ? totals.get(contractId) : 0;
+            totals.put(contractId, running + added);
+            return;
+        }
+        addSignedCredits(totals, contractId, purchased, oppType);
     }
 
     // Adds one OFE's credits to the contract's running total: Downsell subtracts,

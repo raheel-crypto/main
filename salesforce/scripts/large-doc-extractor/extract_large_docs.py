@@ -49,7 +49,7 @@ API_VERSION = "v62.0"
 
 # Match the in-platform pipeline's model so these extractions are consistent
 # with the ~1,300 done in Apex. Override with --model if you ever change it.
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "claude-sonnet-5"  # keep in step with OrderFormExtractionJob.MODEL
 MAX_TOKENS = 8192
 # Anthropic's PDF ceiling is 32 MB; stop before that with a little headroom.
 MAX_FILE_BYTES = 31 * 1024 * 1024
@@ -177,6 +177,9 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
         print(f"    downloading + uploading: {d['title']} ({d['size']} bytes, .{d['ext']})")
         data = download(target_org, d["versionId"])
         uploaded = client.files.upload(file=(f"{d['title']}.{d['ext']}", io.BytesIO(data), mime))
+        # Label every file so the model can classify each one (Documents[] in the
+        # prompt); this job sends a single group, so all files are the current deal.
+        blocks.append({"type": "text", "text": f"FILE {len(used_doc_ids) + 1} (CURRENT DEAL): {d['title']}"})
         blocks.append({"type": block_type, "source": {"type": "file", "file_id": uploaded.id}})
         used_doc_ids.append(d["contentDocumentId"])
 
@@ -186,6 +189,10 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
     blocks.append({"type": "text", "text": deal_context(opp)})
     resp = client.messages.create(
         model=model, max_tokens=MAX_TOKENS, system=system_prompt,
+        # Sonnet 5 thinks by default and can spend the whole max_tokens budget
+        # before emitting the JSON; this is deterministic extraction, so disable it
+        # (same as the Apex callout).
+        thinking={"type": "disabled"},
         messages=[{"role": "user", "content": blocks}],
     )
     # model_dump_json() reproduces the Messages API response body, which is what

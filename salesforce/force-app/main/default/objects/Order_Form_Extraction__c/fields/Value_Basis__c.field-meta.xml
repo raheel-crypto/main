@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Value_Basis__c</fullName>
+    <description>Basis of the fee figures as written on the paper: Annual (stated per year) or Term (one figure for the whole subscription period). License_Fees__c etc. stay verbatim; Annual_Recurring_Revenue__c and Credits_Per_Year__c are normalised to annual in Apex using this basis.</description>
+    <label>Value Basis</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Annual</fullName><default>false</default><label>Annual</label></value>
+            <value><fullName>Term</fullName><default>false</default><label>Term</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

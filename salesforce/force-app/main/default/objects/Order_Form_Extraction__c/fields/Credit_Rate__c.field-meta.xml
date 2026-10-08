@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Rate__c</fullName>
+    <description>Effective committed price per credit. Stated when the paper gives a per-credit price; otherwise derived as the annualised subscription fee divided by annualised credits (e.g. $1.7M / 110.5M credits = 0.015385). Not the overage rate.</description>
+    <label>Credit Rate</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>6</scale>
+    <type>Number</type>
+</CustomField>

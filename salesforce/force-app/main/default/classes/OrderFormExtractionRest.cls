@@ -39,7 +39,7 @@ global with sharing class OrderFormExtractionRest {
             }
             Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(
                 p.opportunityId, p.contentDocumentIds, p.responseBody);
-            insert row;
+            OrderFormVersioning.insertWithVersioning(new List<Order_Form_Extraction__c>{ row });
             out.extractionId = row.Id;
             out.status = row.Extraction_Status__c;
             out.message = row.Error_Message__c;

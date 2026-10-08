@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Current__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>The extraction to use for this Opportunity. A new extraction becomes current only if it ranks at least as high as the existing current row (Success &gt; Incomplete &gt; No Order Form &gt; failures), so a thin re-extraction never displaces a complete one. Filter on this instead of picking latest by Extracted_At.</description>
+    <label>Is Current</label>
+    <type>Checkbox</type>
+</CustomField>

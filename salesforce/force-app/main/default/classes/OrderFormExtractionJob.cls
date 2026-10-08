@@ -45,7 +45,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     public static void runOnce(Id opportunityId, List<Id> contentDocumentIds) {
         Order_Form_Extraction__c row = buildExtraction(opportunityId, contentDocumentIds);
         try {
-            insert row;
+            OrderFormVersioning.insertWithVersioning(new List<Order_Form_Extraction__c>{ row });
         } catch (Exception e) {
             System.debug(LoggingLevel.ERROR, 'Failed to insert extraction row: ' + e.getMessage());
         }
@@ -133,16 +133,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             }
 
             row.Extracted_JSON__c = truncate(JSON.serializePretty(extracted), EXTRACTED_JSON_LIMIT);
-            populateExtractedFields(row, extracted);
-            overrideTypeFromOpp(row, parentOpp);
-            computeIncrementalARR(row, parentOpp);
-            row.Extraction_Status__c = 'Success';
-            if (!skipped.isEmpty()) {
-                row.Error_Message__c = truncate(
-                    'Note: files skipped or dropped during extraction (extraction still succeeded on the remaining files): '
-                        + String.join(skipped, '; '),
-                    ERROR_MESSAGE_LIMIT);
-            }
+            finishRow(row, extracted, parentOpp, currentFiles.size(), skipped);
             return row;
 
         } catch (Exception e) {
@@ -189,10 +180,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         try {
             Map<String, Object> extracted = parseAssistantJson(responseBody);
             row.Extracted_JSON__c = truncate(JSON.serializePretty(extracted), EXTRACTED_JSON_LIMIT);
-            populateExtractedFields(row, extracted);
-            overrideTypeFromOpp(row, parentOpp);
-            computeIncrementalARR(row, parentOpp);
-            row.Extraction_Status__c = 'Success';
+            // The off-platform job may run a different model than MODEL; record
+            // the one that actually produced this response.
+            String served = responseModel(responseBody);
+            if (String.isNotBlank(served)) row.Model__c = served;
+            // File groups are not known here (the Files-API job sends one group).
+            finishRow(row, extracted, parentOpp, null, new List<String>());
         } catch (Exception e) {
             row.Extraction_Status__c = 'Parse Failed';
             row.Error_Message__c = truncate(e.getMessage() + '\n' + e.getStackTraceString(), ERROR_MESSAGE_LIMIT);
@@ -204,10 +197,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static Opportunity loadParentOpp(Id opportunityId) {
         if (opportunityId == null) return null;
         List<Opportunity> opps = [
-            SELECT Id, Name, Type, CloseDate, AccountId, Annual_Recurring_Revenue__c,
+            SELECT Id, Name, Type, CloseDate, AccountId, Annual_Recurring_Revenue__c, ContractId,
                    Base_Opportunity__c,
                    Base_Opportunity__r.Name, Base_Opportunity__r.CloseDate,
-                   Base_Opportunity__r.Annual_Recurring_Revenue__c
+                   Base_Opportunity__r.Annual_Recurring_Revenue__c, Base_Opportunity__r.ContractId
             FROM Opportunity WHERE Id = :opportunityId LIMIT 1
         ];
         return opps.isEmpty() ? null : opps[0];
@@ -405,6 +398,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return s;
     }
 
+    @TestVisible
+    private static String fileLabel(Integer n, Boolean isCurrent, String title) {
+        return 'FILE ' + n + ' (' + (isCurrent ? 'CURRENT DEAL' : 'PARENT CONTEXT') + '): '
+            + (String.isBlank(title) ? 'untitled' : title);
+    }
+
     private static Map<String, Object> makeFileBlock(ContentVersion cv) {
         String mediaType = getMediaType(cv);
         if (mediaType == null) return null;
@@ -472,7 +471,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                                        String.join(currentTitles, ', '))
         });
 
-        // Current deal docs first, labeled.
+        // Current deal docs first, labeled. Every file gets a "FILE n" label so
+        // the model can classify each one (Documents[]); files 1..currentFiles
+        // are the current deal, the rest parent-contract context.
+        Integer fileNo = 0;
         if (!currentFiles.isEmpty()) {
             content.add(new Map<String, Object>{
                 'type' => 'text',
@@ -480,7 +482,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             });
             for (ContentVersion cv : currentFiles) {
                 Object block = makeFileBlock(cv);
-                if (block != null) content.add(block);
+                if (block == null) continue;
+                fileNo++;
+                content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, true, cv.Title) });
+                content.add(block);
             }
         }
 
@@ -494,7 +499,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             });
             for (ContentVersion cv : baseFiles) {
                 Object block = makeFileBlock(cv);
-                if (block != null) content.add(block);
+                if (block == null) continue;
+                fileNo++;
+                content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, false, cv.Title) });
+                content.add(block);
             }
         }
 
@@ -594,7 +602,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Platform_Connection_Fee__c = toDecimal(extracted.get('Platform_Connection_Fee'));
         row.Professional_Service_Fees__c = toDecimal(extracted.get('Professional_Service_Fees'));
         row.Total_Contract_Value__c = toDecimal(extracted.get('Total_Contract_Value'));
-        row.Annual_Recurring_Revenue__c = toDecimal(extracted.get('Annual_Recurring_Revenue'));
+        row.Value_Basis__c = OrderFormPicklistMapper.mapValueBasis(asStr(extracted.get('Value_Basis')));
         row.Renewal_Terms__c = OrderFormPicklistMapper.mapRenewalTerms((String) extracted.get('Renewal_Terms'));
         row.Subscription_Schedule__c = OrderFormPicklistMapper.mapSubscriptionSchedule((String) extracted.get('Subscription_Schedule'));
         row.Payment_Terms__c = OrderFormPicklistMapper.mapPaymentTerms((String) extracted.get('Payment_Terms'));
@@ -626,13 +634,15 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Named_Users__c = truncate(extracted.get('Named_Users'), 4096);
         row.Requested_By_Name__c = truncate(extracted.get('Requested_By_Name'), 255);
         row.Requested_By_Email__c = sanitizeEmail(extracted.get('Requested_By_Email'));
+        row.Credit_Rate__c = toDecimal(extracted.get('Credit_Rate_Stated'));
+        row.Overage_Rate__c = toDecimal(extracted.get('Overage_Rate'));
+        row.Free_Tier_Retained__c = OrderFormPicklistMapper.mapYesNoNotSpecified(asStr(extracted.get('Free_Tier_Retained')));
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
         populateSubprocessorFields(row, extracted);
         populateGateFields(row, extracted);
         row.Pricing_Structure__c = derivePricingStructure(row);
-        deriveEndDate(row);
     }
 
     @TestVisible
@@ -762,23 +772,404 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return isEnterprise ? 'Inferred (Enterprise)' : 'Not specified';
     }
 
-    @TestVisible
-    private static void computeIncrementalARR(Order_Form_Extraction__c row, Opportunity parentOpp) {
-        Decimal totalARR = row.Annual_Recurring_Revenue__c;
-        if (totalARR == null) return;
+    // ===================== Post-parse pipeline =====================
+    // The model reports only what the paper STATES. Everything computed - term
+    // length, the inclusive end date, annualised ARR and credits, amendment
+    // increments, the credit rate - happens here, deterministically, and is
+    // marked derived in Extract_Evidence__c and Derived_Fields__c. Shared by the
+    // callout path and the off-platform Files-API path so both produce identical
+    // rows.
+    @TestVisible private static final Set<String> AMEND_TYPES =
+        new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
 
-        // For New Business / Pilot / null Type, Incremental = full extracted ARR.
-        Set<String> expansionTypes = new Set<String>{'Upsell','Renewal','Downsell','Contract Restructure'};
-        if (!expansionTypes.contains(row.Type__c)) {
-            row.Incremental_ARR__c = totalARR;
-            return;
+    private static void finishRow(Order_Form_Extraction__c row, Map<String, Object> extracted,
+                                  Opportunity parentOpp, Integer currentFileCount, List<String> skipped) {
+        Derivations d = new Derivations(extracted.get('Extract_Evidence'));
+        populateExtractedFields(row, extracted);
+        overrideTypeFromOpp(row, parentOpp);
+        Boolean hasOrderForm = classifyDocuments(row, extracted, currentFileCount);
+        if (hasOrderForm == false) clearEconomics(row);
+        normaliseTerm(row, d);
+        computeEconomics(row, extracted, parentOpp, d);
+        clampToFieldLimits(row, d);
+        d.writeTo(row);
+        applyStatus(row, hasOrderForm, skipped);
+    }
+
+    // Records the model's per-file classification and reports whether the CURRENT
+    // deal includes an Order Form. Null = classification not returned (older
+    // prompt), in which case the No Order Form rule is not applied.
+    @TestVisible
+    private static Boolean classifyDocuments(Order_Form_Extraction__c row, Map<String, Object> extracted,
+                                             Integer currentFileCount) {
+        row.Document_Classes__c = null;
+        Object raw = extracted.get('Documents');
+        if (!(raw instanceof List<Object>)) return null;
+        List<String> lines = new List<String>();
+        Boolean currentOrderForm = false;
+        for (Object o : (List<Object>) raw) {
+            if (!(o instanceof Map<String, Object>)) continue;
+            Map<String, Object> doc = (Map<String, Object>) o;
+            String file = doc.get('file') == null ? 'unlabelled file' : String.valueOf(doc.get('file'));
+            String cls = OrderFormPicklistMapper.mapDocumentClass(asStr(doc.get('class')));
+            Boolean isCurrent = isCurrentFile(file, asStr(doc.get('group')), currentFileCount);
+            lines.add(file + ' [' + (isCurrent ? 'Current' : 'Parent') + '] => ' + cls);
+            if (isCurrent && cls == 'Order Form') currentOrderForm = true;
+        }
+        if (lines.isEmpty()) return null;
+        row.Document_Classes__c = truncate(String.join(lines, '\n'), 8192);
+        return currentOrderForm;
+    }
+
+    // Files 1..currentFileCount are the current deal (see buildRequestBody). When
+    // the label can't be parsed or the count is unknown, trust the model's group.
+    private static final Pattern FILE_NO = Pattern.compile('(?i)FILE\\s*(\\d+)');
+    @TestVisible
+    private static Boolean isCurrentFile(String file, String grp, Integer currentFileCount) {
+        if (currentFileCount != null && file != null) {
+            Matcher m = FILE_NO.matcher(file);
+            if (m.find()) return Integer.valueOf(m.group(1)) <= currentFileCount;
+        }
+        if (file != null && file.toLowerCase().contains('parent')) return false;
+        return grp == null || !grp.toLowerCase().contains('parent');
+    }
+
+    // No order form among the current deal's documents: MSA pricing exhibits,
+    // MNDA dates etc. must not masquerade as this deal's economics.
+    private static void clearEconomics(Order_Form_Extraction__c row) {
+        row.Contract_Start_Date__c = null;
+        row.Contract_End_Date__c = null;
+        row.Contract_Length_Months__c = null;
+        row.Contract_Length_Days__c = null;
+        row.Seat_Licenses__c = null;
+        row.Seats_Added__c = null;
+        row.License_Fees__c = null;
+        row.Platform_Connection_Fee__c = null;
+        row.Professional_Service_Fees__c = null;
+        row.Total_Contract_Value__c = null;
+        row.Annual_Recurring_Revenue__c = null;
+        row.Credits_Purchased__c = null;
+        row.Credits_Period__c = null;
+        row.Value_Basis__c = null;
+        row.Credit_Rate__c = null;
+        row.Overage_Rate__c = null;
+        row.Trial_Price__c = null;
+    }
+
+    // Success requires an order form plus the minimums (see OrderFormVersioning).
+    @TestVisible
+    private static void applyStatus(Order_Form_Extraction__c row, Boolean hasOrderForm, List<String> skipped) {
+        List<String> notes = new List<String>();
+        if (hasOrderForm == false) {
+            row.Extraction_Status__c = 'No Order Form';
+            notes.add('No Order Form among the current-deal documents (only MSA / MNDA / DPA / other paper); '
+                + 'economic fields were not extracted.');
+        } else {
+            List<String> missing = OrderFormVersioning.missingMinimums(row);
+            if (missing.isEmpty()) {
+                row.Extraction_Status__c = 'Success';
+            } else {
+                row.Extraction_Status__c = 'Incomplete';
+                notes.add('Order form read but missing: ' + String.join(missing, ', ') + '.');
+            }
+        }
+        if (skipped != null && !skipped.isEmpty()) {
+            notes.add('Files skipped or dropped before extraction: ' + String.join(skipped, '; '));
+        }
+        row.Error_Message__c = notes.isEmpty() ? null : truncate(String.join(notes, '\n'), ERROR_MESSAGE_LIMIT);
+    }
+
+    // Rogo's convention: a term is INCLUSIVE of its start date, so the end date is
+    // the anniversary minus one day (12 months from 9/30/2026 ends 9/29/2027).
+    //  - A stated end that falls exactly on an anniversary is normalised back a
+    //    day (End_Date_Source 'Normalized'); any other stated end is kept ('Stated').
+    //  - No stated end: derive start + term - 1 day from a stated term ('Derived').
+    //  - Term length not stated: compute it from the dates.
+    private static void normaliseTerm(Order_Form_Extraction__c row, Derivations d) {
+        Date startD = row.Contract_Start_Date__c;
+        Date endD = row.Contract_End_Date__c;
+        row.End_Date_Source__c = (endD != null) ? 'Stated' : null;
+        if (startD == null) return;
+
+        if (endD != null) {
+            Integer k = startD.monthsBetween(endD);
+            if (k >= 1 && startD.addMonths(k) == endD) {
+                row.Contract_End_Date__c = endD.addDays(-1);
+                row.End_Date_Source__c = 'Normalized';
+                d.mark('Contract_End_Date', 'Paper states ' + String.valueOf(endD) + ', the ' + k
+                    + '-month anniversary of ' + String.valueOf(startD) + '; normalised to the inclusive end '
+                    + String.valueOf(row.Contract_End_Date__c) + '.');
+            }
+        } else {
+            Decimal m = row.Contract_Length_Months__c;
+            if (m != null && m > 0 && m == m.setScale(0, RoundingMode.DOWN)) {
+                row.Contract_End_Date__c = startD.addMonths(m.intValue()).addDays(-1);
+                row.End_Date_Source__c = 'Derived';
+                d.mark('Contract_End_Date', 'Derived: start ' + String.valueOf(startD) + ' + '
+                    + m.intValue() + ' months - 1 day.');
+            } else if (row.Contract_Length_Days__c != null && row.Contract_Length_Days__c > 0) {
+                Integer days = row.Contract_Length_Days__c.intValue();
+                row.Contract_End_Date__c = startD.addDays(days - 1);
+                row.End_Date_Source__c = 'Derived';
+                d.mark('Contract_End_Date', 'Derived: start ' + String.valueOf(startD) + ' + '
+                    + days + ' days - 1 day.');
+            }
         }
 
-        if (parentOpp == null) return;
-        Decimal baseARR = null;
+        if (row.Contract_Length_Months__c == null && row.Contract_End_Date__c != null
+                && row.Contract_End_Date__c >= startD) {
+            row.Contract_Length_Months__c = termMonths(startD, row.Contract_End_Date__c);
+            d.mark('Contract_Length_Months', 'Derived from ' + String.valueOf(startD) + ' to '
+                + String.valueOf(row.Contract_End_Date__c) + ' (inclusive).');
+        }
+    }
 
-        // 1) Explicit Base_Opportunity linkage (typical for Upsells that expand
-        //    a specific Land/parent deal).
+    // Whole months when the inclusive term is month-aligned (a 366-day leap-year
+    // term still reads 12); otherwise days x 12 / 365.25, snapped to the whole
+    // month when within 0.1 so a paper that is off by a day doesn't read 11.97.
+    @TestVisible
+    private static Decimal termMonths(Date startD, Date endD) {
+        Date after = endD.addDays(1);
+        Integer k = startD.monthsBetween(after);
+        if (k > 0 && startD.addMonths(k) == after) return k;
+        Decimal f = (Decimal.valueOf(startD.daysBetween(endD) + 1) * 12).divide(365.25, 6, RoundingMode.HALF_UP);
+        Decimal whole = f.setScale(0, RoundingMode.HALF_UP);
+        return (f - whole).abs() <= 0.1 ? whole : f.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    // Annualised ARR, amendment increments / resulting totals, credits per year
+    // and the effective credit rate.
+    private static void computeEconomics(Order_Form_Extraction__c row, Map<String, Object> extracted,
+                                         Opportunity parentOpp, Derivations d) {
+        // Reset everything computed below so an in-place refresh never keeps a
+        // stale value from the previous extraction.
+        row.Annual_Recurring_Revenue__c = null;
+        row.Incremental_ARR__c = null;
+        row.Base_ARR__c = null;
+        row.Resulting_ARR__c = null;
+        row.Resulting_Seats__c = null;
+        row.Credits_Added__c = null;
+        row.Credits_Per_Year__c = null;
+
+        Boolean isAmend = AMEND_TYPES.contains(row.Type__c);
+        Boolean isDownsell = row.Type__c == 'Downsell';
+        Decimal months = row.Contract_Length_Months__c;
+        String basis = row.Value_Basis__c;
+
+        // Recurring fees as written: the whole contract after this paper and/or
+        // (amendments) just the change it prices. Both in the paper's Value_Basis.
+        Decimal totalStated = toDecimal(extracted.get('Recurring_Fees_Stated'));
+        Decimal incStated = toDecimal(extracted.get('Incremental_Recurring_Fees'));
+        String totalHow = null;
+        if (totalStated == null && incStated == null) {
+            if (row.License_Fees__c != null || row.Platform_Connection_Fee__c != null) {
+                totalStated = nz(row.License_Fees__c) + nz(row.Platform_Connection_Fee__c);
+                totalHow = 'License_Fees ' + nz(row.License_Fees__c) + ' + Hosting Fee ' + nz(row.Platform_Connection_Fee__c);
+            } else if (extracted.get('Annual_Recurring_Revenue') != null) {
+                // Older prompt: an already-annual figure for the whole contract.
+                totalStated = toDecimal(extracted.get('Annual_Recurring_Revenue'));
+                basis = 'Annual';
+            }
+        }
+        Decimal feeFactor = annualFactor(basis, months);
+        Decimal totalAnnual = annualiseFee(totalStated, basis, months);
+        Decimal incAnnual = annualiseFee(incStated, basis, months);
+        String termNote = (basis == 'Term' && months != null)
+            ? ' stated for the ' + months + '-month term, x 12/' + months : '';
+
+        Contract gov = isAmend ? loadGoverningContract(parentOpp) : null;
+        String govName = (gov == null) ? null : 'governing Contract ' + gov.ContractNumber;
+
+        if (!isAmend) {
+            row.Annual_Recurring_Revenue__c = totalAnnual;
+            if (totalAnnual != null && (totalHow != null || basis == 'Term')) {
+                d.mark('Annual_Recurring_Revenue', (totalHow != null ? totalHow : String.valueOf(totalStated))
+                    + termNote + ' = ' + totalAnnual + ' per year.');
+            }
+            computeIncrementalARR(row, parentOpp);
+        } else {
+            Decimal baseArr = null;
+            String baseSrc = null;
+            if (gov != null && gov.ARR__c != null) {
+                baseArr = gov.ARR__c;
+                baseSrc = govName + ' ARR__c';
+            } else {
+                BaseValue b = resolveBaseArr(parentOpp, totalAnnual);
+                baseArr = b.value;
+                baseSrc = b.source;
+            }
+            Decimal inc = incAnnual;
+            if (inc != null && isDownsell && inc > 0) inc = -inc;
+            if (inc != null && basis == 'Term') {
+                d.mark('Incremental_ARR', incStated + termNote + ' = ' + inc + ' per year.');
+            }
+            if (totalAnnual != null) {
+                row.Resulting_ARR__c = totalAnnual;
+                row.Annual_Recurring_Revenue__c = totalAnnual;
+                if (totalHow != null || basis == 'Term') {
+                    d.mark('Resulting_ARR', (totalHow != null ? totalHow : String.valueOf(totalStated))
+                        + termNote + ' = ' + totalAnnual + ' per year.');
+                }
+                if (inc == null && baseArr != null) {
+                    inc = totalAnnual - baseArr;
+                    row.Base_ARR__c = baseArr;
+                    d.mark('Incremental_ARR', 'Paper restates contract ARR ' + totalAnnual + '; minus '
+                        + baseSrc + ' ' + baseArr + ' = ' + inc + '.');
+                }
+            } else if (inc != null && baseArr != null) {
+                row.Base_ARR__c = baseArr;
+                row.Resulting_ARR__c = baseArr + inc;
+                row.Annual_Recurring_Revenue__c = row.Resulting_ARR__c;
+                d.mark('Resulting_ARR', baseSrc + ' ' + baseArr + ' + incremental ' + inc + ' = '
+                    + row.Resulting_ARR__c + '.');
+            }
+            row.Incremental_ARR__c = inc;
+
+            // Seats: Seat_Licenses is the stated TOTAL after the change, Seats_Added the stated change.
+            Decimal added = row.Seats_Added__c;
+            if (added != null && isDownsell && added > 0) { added = -added; row.Seats_Added__c = added; }
+            Decimal baseSeats = (gov == null) ? null : gov.Seat_Licenses__c;
+            if (row.Seat_Licenses__c != null) {
+                row.Resulting_Seats__c = row.Seat_Licenses__c;
+                if (added == null && baseSeats != null) {
+                    row.Seats_Added__c = row.Seat_Licenses__c - baseSeats;
+                    d.mark('Seats_Added', 'Paper states ' + row.Seat_Licenses__c + ' seats in total; minus '
+                        + govName + ' Seat_Licenses__c ' + baseSeats + ' = ' + row.Seats_Added__c + '.');
+                }
+            } else if (added != null && baseSeats != null) {
+                row.Resulting_Seats__c = baseSeats + added;
+                d.mark('Resulting_Seats', govName + ' Seat_Licenses__c ' + baseSeats + ' + ' + added
+                    + ' added = ' + row.Resulting_Seats__c + '.');
+            }
+
+            // Credits: Credits_Purchased is the stated TOTAL, Credits_Added the stated change.
+            Decimal cAdded = toDecimal(extracted.get('Credits_Added'));
+            if (cAdded != null && isDownsell && cAdded > 0) cAdded = -cAdded;
+            Decimal baseCredits = (gov == null) ? null : gov.Total_Credits_Purchased__c;
+            if (cAdded == null && row.Credits_Purchased__c != null && baseCredits != null) {
+                cAdded = row.Credits_Purchased__c - baseCredits;
+                d.mark('Credits_Added', 'Paper states ' + row.Credits_Purchased__c + ' credits in total; minus '
+                    + govName + ' Total_Credits_Purchased__c ' + baseCredits + ' = ' + cAdded + '.');
+            }
+            row.Credits_Added__c = cAdded;
+        }
+
+        // Credits per year (the contract's allocation; null when only an increment is priced).
+        Decimal creditFac = creditFactor(row.Credits_Period__c, months);
+        row.Credits_Per_Year__c = creditsPerYear(row.Credits_Purchased__c, row.Credits_Period__c, months);
+        if (row.Credits_Per_Year__c != null) {
+            if (row.Credits_Period__c != 'year') {
+                d.mark('Credits_Per_Year', row.Credits_Purchased__c + ' credits per ' + row.Credits_Period__c
+                    + (row.Credits_Period__c == 'contract' ? ' (' + months + '-month term)' : '')
+                    + ' = ' + row.Credits_Per_Year__c + ' per year.');
+            }
+        }
+
+        // Effective committed price per credit, when the paper doesn't state one.
+        if (row.Credit_Rate__c == null) {
+            Decimal fee = (row.License_Fees__c != null) ? row.License_Fees__c : totalStated;
+            Decimal credits = row.Credits_Purchased__c;
+            String period = row.Credits_Period__c;
+            if (credits == null && incStated != null && extracted.get('Credits_Added') != null) {
+                fee = incStated;                                       // increment-only paper
+                credits = toDecimal(extracted.get('Credits_Added'));
+            }
+            Boolean bothTerm = basis == 'Term' && period == 'contract';
+            Decimal rate = creditRate(fee, feeFactor, credits, creditFac, bothTerm);
+            if (rate != null) {
+                row.Credit_Rate__c = rate;
+                d.mark('Credit_Rate', 'Derived: committed fee ' + fee + ' (' + (basis == null ? 'Annual' : basis)
+                    + ') / ' + credits + ' credits (' + period + ') = ' + rate + ' per credit.');
+            }
+        }
+    }
+
+    @TestVisible
+    private static Decimal creditRate(Decimal fee, Decimal feeFactor, Decimal credits,
+                                      Decimal creditFactor, Boolean bothTerm) {
+        if (fee == null || credits == null || fee <= 0 || credits <= 0) return null;
+        if (feeFactor != null && creditFactor != null) {
+            return (fee * feeFactor).divide(credits * creditFactor, 6, RoundingMode.HALF_UP);
+        }
+        // Both figures cover the same whole term but its length is unknown - the
+        // ratio is basis-invariant, so divide directly.
+        if (bothTerm) return fee.divide(credits, 6, RoundingMode.HALF_UP);
+        return null;
+    }
+
+    // Annual figures pass through; Term figures scale by 12 / term months (null
+    // when the term length is unknown). A missing basis is treated as annual.
+    @TestVisible
+    private static Decimal annualFactor(String basis, Decimal months) {
+        if (basis != 'Term') return 1;
+        if (months == null || months <= 0) return null;
+        return Decimal.valueOf(12).divide(months, 10, RoundingMode.HALF_UP);
+    }
+
+    @TestVisible
+    private static Decimal creditFactor(String period, Decimal months) {
+        if (period == 'year') return 1;
+        if (period == 'month') return 12;
+        if (period == 'quarter') return 4;
+        if (period == 'contract') {
+            return (months == null || months <= 0) ? null : Decimal.valueOf(12).divide(months, 10, RoundingMode.HALF_UP);
+        }
+        return null;
+    }
+
+    // Exact annualisation (value x 12 / months, rounded once) rather than
+    // multiplying by a pre-rounded 12/months factor, which can land a cent off.
+    @TestVisible
+    private static Decimal annualiseFee(Decimal v, String basis, Decimal months) {
+        if (v == null) return null;
+        if (basis != 'Term') return v;
+        if (months == null || months <= 0) return null;
+        return (v * 12).divide(months, 2, RoundingMode.HALF_UP);
+    }
+
+    @TestVisible
+    private static Decimal creditsPerYear(Decimal credits, String period, Decimal months) {
+        if (credits == null) return null;
+        if (period == 'year') return credits;
+        if (period == 'month') return credits * 12;
+        if (period == 'quarter') return credits * 4;
+        if (period == 'contract' && months != null && months > 0) {
+            return (credits * 12).divide(months, 2, RoundingMode.HALF_UP);
+        }
+        return null;
+    }
+
+    private static Decimal nz(Decimal v) { return v == null ? 0 : v; }
+
+    private static String asStr(Object v) { return v == null ? null : String.valueOf(v); }
+
+    // The contract an amendment changes: the base deal's contract, else this
+    // opp's own. Deliberately no account fallback - a wrong contract would yield
+    // wrong increments (see the applier's BlackRock case).
+    @TestVisible
+    private static Contract loadGoverningContract(Opportunity parentOpp) {
+        if (parentOpp == null) return null;
+        Id cid = (parentOpp.Base_Opportunity__r != null && parentOpp.Base_Opportunity__r.ContractId != null)
+            ? parentOpp.Base_Opportunity__r.ContractId : parentOpp.ContractId;
+        if (cid == null) return null;
+        List<Contract> cs = [
+            SELECT Id, ContractNumber, ARR__c, Seat_Licenses__c, Total_Credits_Purchased__c
+            FROM Contract WHERE Id = :cid LIMIT 1
+        ];
+        return cs.isEmpty() ? null : cs[0];
+    }
+
+    private class BaseValue {
+        Decimal value;
+        String source;
+        BaseValue(Decimal value, String source) { this.value = value; this.source = source; }
+    }
+
+    // Prior ARR when there is no governing contract value: the base opp's current
+    // Success extraction, else the base opp's ARR, else (renewals) this opp's own
+    // ARR - unless it already equals the new total (set by another process).
+    private static BaseValue resolveBaseArr(Opportunity parentOpp, Decimal totalARR) {
+        if (parentOpp == null) return new BaseValue(null, null);
         if (parentOpp.Base_Opportunity__c != null) {
             List<Order_Form_Extraction__c> baseRows = [
                 SELECT Annual_Recurring_Revenue__c
@@ -786,65 +1177,127 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 WHERE Opportunity__c = :parentOpp.Base_Opportunity__c
                   AND Extraction_Status__c = 'Success'
                   AND Annual_Recurring_Revenue__c != null
-                ORDER BY CreatedDate DESC
+                ORDER BY Is_Current__c DESC, CreatedDate DESC
                 LIMIT 1
             ];
             if (!baseRows.isEmpty()) {
-                baseARR = baseRows[0].Annual_Recurring_Revenue__c;
-            } else if (parentOpp.Base_Opportunity__r != null) {
-                baseARR = parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c;
+                return new BaseValue(baseRows[0].Annual_Recurring_Revenue__c, 'base opportunity extraction ARR');
+            }
+            if (parentOpp.Base_Opportunity__r != null && parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c != null) {
+                return new BaseValue(parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c, 'base opportunity ARR');
             }
         }
-
-        // 2) No base link (typical for Renewals - they renew the same
-        //    subscription rather than expanding a parent deal). The prior /
-        //    aggregate ARR is carried on THIS Opp's own Annual_Recurring_Revenue__c
-        //    at close time (e.g. Land 20k + Upsell 35k = 55k on the renewal opp,
-        //    renewing up to 81k). Use it as the base. The != totalARR guard
-        //    avoids a bogus 0 when the Opp ARR has already been set to the new
-        //    value by another process.
-        if (baseARR == null && parentOpp.Annual_Recurring_Revenue__c != null
-                && parentOpp.Annual_Recurring_Revenue__c != totalARR) {
-            baseARR = parentOpp.Annual_Recurring_Revenue__c;
+        if (parentOpp.Annual_Recurring_Revenue__c != null && parentOpp.Annual_Recurring_Revenue__c != totalARR) {
+            return new BaseValue(parentOpp.Annual_Recurring_Revenue__c, 'opportunity ARR');
         }
+        return new BaseValue(null, null);
+    }
 
-        if (baseARR == null) return;
+    // Non-amendment rows: New Business / Pilot -> incremental = total; Renewal ->
+    // total minus the prior ARR.
+    @TestVisible
+    private static void computeIncrementalARR(Order_Form_Extraction__c row, Opportunity parentOpp) {
+        Decimal totalARR = row.Annual_Recurring_Revenue__c;
+        if (totalARR == null) return;
+        if (row.Type__c != 'Renewal') {
+            row.Incremental_ARR__c = totalARR;
+            return;
+        }
+        BaseValue b = resolveBaseArr(parentOpp, totalARR);
+        if (b.value == null) return;
+        row.Base_ARR__c = b.value;
+        row.Incremental_ARR__c = totalARR - b.value;
+    }
 
-        row.Base_ARR__c = baseARR;
-        row.Incremental_ARR__c = totalARR - baseARR;
+    // An out-of-range number fails the whole DML (and, in a batch, the whole
+    // chunk). Clamp every numeric field to its precision instead, keep the row,
+    // and record the raw value in the evidence.
+    private static Map<String, Schema.SObjectField> ofeFieldMap;
+    private static void clampToFieldLimits(Order_Form_Extraction__c row, Derivations d) {
+        if (ofeFieldMap == null) ofeFieldMap = Schema.SObjectType.Order_Form_Extraction__c.fields.getMap();
+        Map<String, Object> populated = row.getPopulatedFieldsAsMap();
+        for (String f : populated.keySet()) {
+            Object v = populated.get(f);
+            if (!(v instanceof Decimal)) continue;
+            Schema.SObjectField sf = ofeFieldMap.get(f.toLowerCase());
+            if (sf == null) continue;
+            Schema.DescribeFieldResult dr = sf.getDescribe();
+            Schema.DisplayType t = dr.getType();
+            if (t != Schema.DisplayType.DOUBLE && t != Schema.DisplayType.CURRENCY
+                    && t != Schema.DisplayType.PERCENT && t != Schema.DisplayType.INTEGER) continue;
+            Decimal max = maxForPrecision(dr.getPrecision(), dr.getScale());
+            if (max == null) continue;
+            Decimal dv = (Decimal) v;
+            if (dv.abs() > max) {
+                Decimal clamped = dv < 0 ? -max : max;
+                row.put(f, clamped);
+                d.clamped(f.removeEnd('__c'), dv, clamped);
+            }
+        }
     }
 
     @TestVisible
-    // Rogo's convention: a term is INCLUSIVE of the start date, so a 12-month term
-    // from 9/30/2026 runs THROUGH 9/29/2027 (start + term - 1 day), not to the
-    // 9/30/2027 anniversary. When the document states only a term (no explicit end
-    // date) the model tends to return the anniversary (start + term) - off by one.
-    // So: derive the inclusive end when none was extracted, AND correct an extracted
-    // end that equals the naive anniversary. A genuinely different explicit end date
-    // (not the anniversary) is left untouched.
-    private static void deriveEndDate(Order_Form_Extraction__c row) {
-        if (row.Contract_Start_Date__c == null) return;
-        Date startD = row.Contract_Start_Date__c;
+    private static Decimal maxForPrecision(Integer precision, Integer scale) {
+        if (precision == null || precision <= 0) return null;
+        Integer s = (scale == null) ? 0 : scale;
+        String intPart = (precision - s > 0) ? '9'.repeat(precision - s) : '0';
+        return Decimal.valueOf(intPart + (s > 0 ? '.' + '9'.repeat(s) : ''));
+    }
 
-        Date inclusiveEnd;
-        Date naiveAnniversary;
-        if (row.Contract_Length_Months__c != null) {
-            Integer months = Integer.valueOf(row.Contract_Length_Months__c);
-            naiveAnniversary = startD.addMonths(months);
-            inclusiveEnd = naiveAnniversary.addDays(-1);
-        } else if (row.Contract_Length_Days__c != null) {
-            Integer days = Integer.valueOf(row.Contract_Length_Days__c);
-            naiveAnniversary = startD.addDays(days);
-            inclusiveEnd = startD.addDays(days - 1);
-        } else {
-            return;   // no term -> nothing to derive or correct
+    // Collects what Apex computed or clamped, merged into the model's evidence:
+    // each entry may gain a "derived" or "clamped" key. Untouched rows keep the
+    // model's evidence exactly as returned.
+    private class Derivations {
+        Map<String, Object> evidence = new Map<String, Object>();
+        List<String> fields = new List<String>();
+        Boolean touched = false;
+
+        public Derivations(Object rawEvidence) {
+            if (rawEvidence instanceof Map<String, Object>) {
+                evidence = (Map<String, Object>) rawEvidence;
+            } else if (rawEvidence != null && String.isNotBlank(String.valueOf(rawEvidence))) {
+                evidence.put('_model_notes', String.valueOf(rawEvidence));
+            }
         }
 
-        if (row.Contract_End_Date__c == null) {
-            row.Contract_End_Date__c = inclusiveEnd;                 // derive when missing
-        } else if (row.Contract_End_Date__c == naiveAnniversary) {
-            row.Contract_End_Date__c = inclusiveEnd;                 // fix the anniversary off-by-one
+        public void mark(String field, String computation) {
+            note(field, field, 'derived', computation);
         }
+
+        public void clamped(String field, Decimal raw, Decimal stored) {
+            note(field, field + '(clamped)', 'clamped',
+                'Raw value ' + raw + ' exceeds the field limit; stored ' + stored + '.');
+        }
+
+        private void note(String field, String tag, String key, String text) {
+            touched = true;
+            if (!fields.contains(tag)) fields.add(tag);
+            Object existing = evidence.get(field);
+            if (existing instanceof Map<String, Object>) {
+                ((Map<String, Object>) existing).put(key, text);
+            } else {
+                evidence.put(field, new Map<String, Object>{ 'clause' => 'Computed by extractor', key => text });
+            }
+        }
+
+        public void writeTo(Order_Form_Extraction__c row) {
+            row.Derived_Fields__c = null;
+            if (!touched) return;
+            row.Extract_Evidence__c = OrderFormExtractionJob.truncate(JSON.serialize(evidence), 32768);
+            row.Derived_Fields__c = OrderFormExtractionJob.truncate(String.join(fields, ';'), 255);
+        }
+    }
+
+    // The "model" field of a Messages API response envelope, if present.
+    @TestVisible
+    private static String responseModel(String responseBody) {
+        try {
+            Object env = JSON.deserializeUntyped(responseBody);
+            if (env instanceof Map<String, Object>) return asStr(((Map<String, Object>) env).get('model'));
+        } catch (Exception e) {
+            return null;
+        }
+        return null;
     }
 
     private static String mapDocumentType(String raw) {

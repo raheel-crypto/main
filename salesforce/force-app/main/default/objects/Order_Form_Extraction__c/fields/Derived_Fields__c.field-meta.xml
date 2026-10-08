@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Derived_Fields__c</fullName>
+    <description>Semicolon list of fields Apex computed rather than read from the paper (e.g. Annual_Recurring_Revenue;Credits_Per_Year;Contract_End_Date). Values clamped to a field limit are listed as Field(clamped). The computation is recorded under the same field in Extract_Evidence__c.</description>
+    <label>Derived Fields</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+</CustomField>

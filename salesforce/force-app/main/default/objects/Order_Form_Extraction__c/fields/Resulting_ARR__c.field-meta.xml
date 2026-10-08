@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Resulting_ARR__c</fullName>
+    <description>Amendments: contract ARR after this paper (annualised). Stated when the paper restates all recurring fees; derived as the governing Contract's ARR__c plus Incremental_ARR__c otherwise.</description>
+    <label>Resulting ARR</label>
+    <precision>16</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <type>Currency</type>
+</CustomField>

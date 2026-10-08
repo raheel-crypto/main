@@ -2,7 +2,7 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Rerun__c</fullName>
     <defaultValue>false</defaultValue>
-    <description>Manual ops flag: check to mark this extraction for re-run. The rerunFlaggedExtractions script re-extracts the linked Opportunity (reading its current documents) and deletes this flagged row - so the flag clears itself. Safe to leave unchecked; nothing reads it automatically.</description>
+    <description>Manual ops flag: check to mark this extraction for re-run. OrderFormBackfillBatch.runRerunFlagged() re-extracts the linked Opportunity and links the new row to this one via Supersedes__c. The flag clears once a re-extraction at least as good becomes current; a failed or thinner rerun leaves it set so it can be retried.</description>
     <label>Rerun</label>
     <type>Checkbox</type>
 </CustomField>
