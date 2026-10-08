@@ -21,9 +21,18 @@
 // transaction is visible to later SOQL), so upsells reconcile against the
 // New Business terms - not a blank contract.
 //
-// Governor-safe: capped at CAP apply() calls per run (each is ~3 SOQL / 2 DML).
+// Governor-safe: capped at CAP apply() calls per run, and stops early if the
+// transaction nears its query / DML / CPU limits. A row that errors is rolled
+// back on its own (savepoint), reported, and skipped - the rest still apply.
 // Resumable - applied OFEs get stamped Applied_Contract__c, so re-run until
-// "Remaining unapplied" is 0.
+// "Remaining" is 0.
+//
+// Deals with NO Contract to land on (none on the opp, its base opp, or anywhere
+// on the account - typically [Arvo] lands and pilots) are listed, not attempted:
+// the applier would answer NoContract every time and they would block the
+// queue. They apply on a later run once a Contract exists. New Success rows are
+// also applied automatically by the "Order Form Extraction [Async] Update Slack
+// CW Notice to RevOps" flow; this script catches everything else.
 //
 // Run: sf apex run --target-org rogo --file scripts/apex/applyContractTermsInOrder.apex
 // (or paste into Dev Console -> Execute Anonymous)
@@ -32,60 +41,94 @@
 Integer CAP = 25;   // apply() calls per run; re-run until nothing remains
 
 Set<String> AMEND = new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
+String UNAPPLIED_FILTER = 'Extraction_Status__c IN (\'Success\', \'Incomplete\', \'No Order Form\') '
+    + 'AND Is_Current__c = true AND Applied_Contract__c = null AND Opportunity__c != null';
+String UNAPPLIED_SOQL = 'SELECT Id, Opportunity__r.Name, Opportunity__r.Type, Opportunity__r.CloseDate, '
+    + 'Opportunity__r.AccountId, Opportunity__r.ContractId, Opportunity__r.Base_Opportunity__r.ContractId '
+    + 'FROM Order_Form_Extraction__c WHERE ' + UNAPPLIED_FILTER
+    + ' ORDER BY Opportunity__r.CloseDate ASC NULLS LAST';
 
-// Unapplied Success extractions, chronological.
-List<Order_Form_Extraction__c> unapplied = [
-    SELECT Id, Opportunity__r.Name, Opportunity__r.Type, Opportunity__r.CloseDate
-    FROM Order_Form_Extraction__c
-    WHERE Extraction_Status__c IN ('Success', 'Incomplete', 'No Order Form')
-      AND Is_Current__c = true
-      AND Applied_Contract__c = null
-      AND Opportunity__c != null
-    ORDER BY Opportunity__r.CloseDate ASC NULLS LAST
-];
+// Unapplied current extractions, chronological.
+List<Order_Form_Extraction__c> unapplied = Database.query(UNAPPLIED_SOQL);
 
-// Partition: fresh-contract deals before amendments (both already date-sorted).
+// Accounts that have at least one Contract (the applier's fallback target).
+Set<Id> acctIds = new Set<Id>();
+for (Order_Form_Extraction__c o : unapplied) if (o.Opportunity__r.AccountId != null) acctIds.add(o.Opportunity__r.AccountId);
+Set<Id> acctsWithContract = new Set<Id>();
+for (AggregateResult ar : [SELECT AccountId a FROM Contract WHERE AccountId IN :acctIds GROUP BY AccountId]) {
+    acctsWithContract.add((Id) ar.get('a'));
+}
+
+// Partition: no contract anywhere (reported) / fresh-contract deals / amendments.
 List<Order_Form_Extraction__c> ordered = new List<Order_Form_Extraction__c>();
 List<Order_Form_Extraction__c> amends = new List<Order_Form_Extraction__c>();
+List<String> noContract = new List<String>();
 for (Order_Form_Extraction__c o : unapplied) {
-    String t = (o.Opportunity__r != null) ? o.Opportunity__r.Type : null;
-    if (t != null && AMEND.contains(t)) amends.add(o);
+    Opportunity opp = o.Opportunity__r;
+    Boolean hasTarget = opp.ContractId != null
+        || (opp.Base_Opportunity__r != null && opp.Base_Opportunity__r.ContractId != null)
+        || acctsWithContract.contains(opp.AccountId);
+    if (!hasTarget) { noContract.add(opp.Name + ' [' + opp.Type + ']'); continue; }
+    if (opp.Type != null && AMEND.contains(opp.Type)) amends.add(o);
     else ordered.add(o);   // New Business / Renewal / Pilot / (untyped) first
 }
 ordered.addAll(amends);
 
-System.debug('--- Unapplied Success extractions: ' + unapplied.size()
-    + ' (fresh: ' + (ordered.size() - amends.size()) + ', amendments: ' + amends.size() + ')');
+System.debug('--- Unapplied current extractions: ' + unapplied.size() + ' = ' + ordered.size()
+    + ' with a Contract to land on (fresh: ' + (ordered.size() - amends.size()) + ', amendments: ' + amends.size()
+    + ') + ' + noContract.size() + ' with no Contract anywhere (not attempted)');
 
 // Apply in order, one call each so each reconciles against prior committed state.
 Integer done = 0;
+Integer failed = 0;
+Boolean stoppedEarly = false;
 Map<String, Integer> statusCounts = new Map<String, Integer>();
 List<String> notable = new List<String>();
 for (Order_Form_Extraction__c o : ordered) {
     if (done >= CAP) break;
+    if (Limits.getQueries() > Limits.getLimitQueries() - 15
+            || Limits.getDmlStatements() > Limits.getLimitDmlStatements() - 15
+            || Limits.getCpuTime() > Limits.getLimitCpuTime() - 2000) {
+        stoppedEarly = true;
+        break;
+    }
+    String name = (o.Opportunity__r != null ? o.Opportunity__r.Name : o.Id) + ' ['
+        + (o.Opportunity__r != null ? o.Opportunity__r.Type : '?') + ']';
     ContractLegalTermsApplier.Request req = new ContractLegalTermsApplier.Request();
     req.extractionId = o.Id;
-    ContractLegalTermsApplier.Result res = ContractLegalTermsApplier.apply(
-        new List<ContractLegalTermsApplier.Request>{ req })[0];
+    Savepoint sp = Database.setSavepoint();
+    ContractLegalTermsApplier.Result res;
+    try {
+        res = ContractLegalTermsApplier.apply(new List<ContractLegalTermsApplier.Request>{ req })[0];
+    } catch (Exception e) {
+        Database.rollback(sp);
+        failed++;
+        notable.add('ERROR ' + name + ' -> ' + e.getTypeName() + ': ' + e.getMessage().left(300));
+        done++;
+        continue;
+    }
 
     Integer c = statusCounts.containsKey(res.status) ? statusCounts.get(res.status) : 0;
     statusCounts.put(res.status, c + 1);
     // Surface anything that isn't a clean apply so gaps/conflicts are visible.
     if (res.status != 'Applied') {
-        notable.add((o.Opportunity__r != null ? o.Opportunity__r.Name : o.Id)
-            + ' [' + (o.Opportunity__r != null ? o.Opportunity__r.Type : '?') + '] -> '
-            + res.status + (String.isBlank(res.notes) ? '' : ' | ' + res.notes.left(200)));
+        notable.add(name + ' -> ' + res.status + (String.isBlank(res.notes) ? '' : ' | ' + res.notes.left(200)));
     }
     done++;
 }
 
-System.debug('--- Applied this run: ' + done);
+System.debug('--- Attempted this run: ' + done + (failed > 0 ? ' (' + failed + ' errored and were rolled back)' : '')
+    + (stoppedEarly ? ' - stopped early near a governor limit' : ''));
 System.debug('--- Status counts: ' + statusCounts);
 for (String n : notable) System.debug('NOTE: ' + n);
 
-Integer remaining = [
-    SELECT COUNT() FROM Order_Form_Extraction__c
-    WHERE Extraction_Status__c IN ('Success', 'Incomplete', 'No Order Form') AND Is_Current__c = true
-      AND Applied_Contract__c = null AND Opportunity__c != null
-];
-System.debug('--- Remaining unapplied after this run: ' + remaining + ' (re-run if > 0)');
+Integer remaining = 0;
+for (Order_Form_Extraction__c o : Database.query(UNAPPLIED_SOQL)) {
+    Opportunity opp = o.Opportunity__r;
+    if (opp.ContractId != null || (opp.Base_Opportunity__r != null && opp.Base_Opportunity__r.ContractId != null)
+            || acctsWithContract.contains(opp.AccountId)) remaining++;
+}
+System.debug('--- Remaining to apply: ' + remaining + (remaining > 0 ? ' (re-run)' : ' - done'));
+if (!noContract.isEmpty()) {
+    System.debug('--- No Contract to land on (' + noContract.size() + '): ' + String.join(noContract, '; ').left(3000));
+}
