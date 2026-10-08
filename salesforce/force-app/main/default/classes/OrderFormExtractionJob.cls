@@ -586,8 +586,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             Integer bodyStart = (fence < 0) ? -1 : t.indexOf('\n', fence);
             Integer close = (bodyStart < 0) ? -1 : t.indexOf('```', bodyStart);
             if (close > bodyStart) {
-                String inner = t.substring(bodyStart + 1, close).trim();
-                if (inner.startsWith('{')) return inner;
+                String fenced = t.substring(bodyStart + 1, close).trim();
+                if (fenced.startsWith('{')) return fenced;
             }
         }
         Integer open = t.indexOf('{');
