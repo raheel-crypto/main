@@ -186,9 +186,9 @@ public with sharing class OrderFormPicklistMapper {
     public static String mapValueBasis(String raw) {
         if (String.isBlank(raw)) return null;
         String s = raw.toLowerCase();
+        if (s.contains('annual') || s.contains('year') || s.contains('annum')) return 'Annual';
         if (s.contains('term') || s.contains('contract') || s.contains('subscription period')
             || s.contains('total') || s.contains('whole')) return 'Term';
-        if (s.contains('annual') || s.contains('year') || s.contains('yearly')) return 'Annual';
         return null;
     }
 

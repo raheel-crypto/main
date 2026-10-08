@@ -33,6 +33,10 @@ public with sharing class ContractLegalTermsApplier {
     }
 
     // Amend-existing-contract deal types. Everything else is a fresh contract.
+    // Statuses whose legal terms may be applied. Failed reads never are.
+    private static final Set<String> APPLICABLE_STATUSES =
+        new Set<String>{ 'Success', 'Incomplete', 'No Order Form' };
+
     private static final Set<String> AMEND_TYPES = new Set<String>{
         'Upsell', 'Downsell', 'Contract Restructure'
     };
@@ -142,15 +146,24 @@ public with sharing class ContractLegalTermsApplier {
         // increment) so it stays correct across re-runs / re-applies. Seed from OFEs
         // already stamped to these contracts, EXCLUDING the ones in this call (those
         // are added below as they apply, so a re-applied OFE is counted exactly once).
+        // Versions are kept as history, so count ONE row per deal (the current one,
+        // else the latest) and skip deals being applied in this call.
         Map<Id, Decimal> creditTotalByContract = new Map<Id, Decimal>();
         if (!contractIds.isEmpty()) {
+            Set<Id> oppsInThisCall = new Set<Id>();
+            for (Order_Form_Extraction__c o : ofes.values()) if (o.Opportunity__c != null) oppsInThisCall.add(o.Opportunity__c);
+            Set<Id> counted = new Set<Id>();
             for (Order_Form_Extraction__c prior : [
-                SELECT Credits_Purchased__c, Credits_Added__c, Applied_Contract__c, Opportunity__r.Type
+                SELECT Credits_Purchased__c, Credits_Added__c, Applied_Contract__c, Opportunity__c, Opportunity__r.Type
                 FROM Order_Form_Extraction__c
                 WHERE Applied_Contract__c IN :contractIds
-                  AND Extraction_Status__c = 'Success'
+                  AND Extraction_Status__c IN :APPLICABLE_STATUSES
                   AND Id NOT IN :extractionIds
+                  AND Opportunity__c NOT IN :oppsInThisCall
+                ORDER BY Opportunity__c, Is_Current__c DESC, Extracted_At__c DESC NULLS LAST
             ]) {
+                if (counted.contains(prior.Opportunity__c)) continue;
+                counted.add(prior.Opportunity__c);
                 addCreditContribution(creditTotalByContract, prior.Applied_Contract__c, prior.Credits_Purchased__c,
                     prior.Credits_Added__c, prior.Opportunity__r != null ? prior.Opportunity__r.Type : null);
             }
@@ -169,7 +182,9 @@ public with sharing class ContractLegalTermsApplier {
             if (req == null || req.extractionId == null) { res.status = 'NotFound'; res.notes = 'No extractionId.'; continue; }
             Order_Form_Extraction__c ofe = ofes.get(req.extractionId);
             if (ofe == null) { res.status = 'NotFound'; res.notes = 'Extraction not found.'; continue; }
-            if (ofe.Extraction_Status__c != 'Success') {
+            // Incomplete / No Order Form rows still carry valid legal terms (an MSA
+            // is the source of truth for them); only failed reads are skipped.
+            if (!APPLICABLE_STATUSES.contains(ofe.Extraction_Status__c)) {
                 res.status = 'NotSuccess';
                 res.notes = 'Extraction status is "' + ofe.Extraction_Status__c + '".';
                 continue;
@@ -196,7 +211,10 @@ public with sharing class ContractLegalTermsApplier {
             // base) opportunity, or the extraction's opp is the contract's source
             // opp. An account-fallback contract is someone else's paper - that is
             // how BlackRock's new term pointed at an April pilot.
-            if (resolvedDirectly.contains(ofe.Id) || isSourceOpportunity(current, ofe.Opportunity__c)) {
+            if (ofe.Extraction_Status__c != 'Success') {
+                log.add('Applied legal terms only: extraction status is ' + ofe.Extraction_Status__c
+                    + ', so Latest_Order_Form_Extraction__c was left unchanged.');
+            } else if (resolvedDirectly.contains(ofe.Id) || isSourceOpportunity(current, ofe.Opportunity__c)) {
                 changes.Latest_Order_Form_Extraction__c = ofe.Id;
             } else {
                 log.add('Contract pointer not moved: this contract was found via the account fallback and is not '

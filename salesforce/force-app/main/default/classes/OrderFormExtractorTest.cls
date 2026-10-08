@@ -2051,6 +2051,9 @@ private class OrderFormExtractorTest {
             'Documents' => new List<Object>{ doc(1, 'Current', 'MNDA'), doc(2, 'Current', 'MSA') },
             'Contract_Start_Date' => '2024-01-01',      // the MSA's effective date
             'License_Fees' => 99000,                     // an MSA pricing exhibit
+            'Recurring_Fees_Stated' => 99000,            // ...even if the model sums it
+            'Annual_Recurring_Revenue' => 99000,         // ...or uses the legacy key
+            'Credits_Added' => 5000,
             'Payment_Terms' => 'Annual'
         });
         Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
@@ -2058,7 +2061,9 @@ private class OrderFormExtractorTest {
         System.assertEquals('No Order Form', row.Extraction_Status__c);
         System.assertEquals(null, row.License_Fees__c, 'MSA pricing is not this deal');
         System.assertEquals(null, row.Contract_Start_Date__c, 'MSA / MNDA dates are not the deal start');
-        System.assertEquals(null, row.Annual_Recurring_Revenue__c);
+        System.assertEquals(null, row.Annual_Recurring_Revenue__c, 'No order form -> no ARR from any key');
+        System.assertEquals(null, row.Incremental_ARR__c);
+        System.assertEquals(null, row.Credit_Rate__c);
         System.assertEquals('Annual', row.Payment_Terms__c, 'Legal terms from the MSA are still extracted');
         System.assert(row.Document_Classes__c.contains('=> MNDA') && row.Document_Classes__c.contains('=> MSA'),
             row.Document_Classes__c);
@@ -2188,17 +2193,21 @@ private class OrderFormExtractorTest {
 
     // ---- 3. Amendment increments against the governing contract ----
 
-    private static Opportunity governedAmendment(String type, Decimal arr, Decimal seats, Decimal credits) {
+    // A contract whose base deal already has a current extraction (ARR 100k,
+    // 10 seats, 200k credits), plus an amendment opportunity on it.
+    private static Opportunity governedAmendment(String type) {
         Account a = new Account(Name = 'Governed ' + type);
         insert a;
         Contract c = new Contract(AccountId = a.Id, Status = 'Draft', StartDate = Date.today(), ContractTerm = 12);
-        c.put('ARR__c', arr);
-        c.put('Seat_Licenses__c', seats);
-        c.put('Total_Credits_Purchased__c', credits);
         insert c;
-        Opportunity base = new Opportunity(Name = 'Governed Land', StageName = 'Closed Won', CloseDate = Date.today(),
-            AccountId = a.Id, Type = 'New Business', ContractId = c.Id);
+        Opportunity base = new Opportunity(Name = 'Governed Land', StageName = 'Closed Won',
+            CloseDate = Date.today().addDays(-30), AccountId = a.Id, Type = 'New Business', ContractId = c.Id);
         insertOppSafely(base);
+        insert new Order_Form_Extraction__c(Opportunity__c = base.Id, Extraction_Status__c = 'Success',
+            Is_Current__c = true, Extracted_At__c = System.now().addDays(-30), Type__c = 'New Business',
+            Contract_Start_Date__c = Date.today().addDays(-30), Contract_End_Date__c = Date.today().addDays(334),
+            Annual_Recurring_Revenue__c = 100000, Seat_Licenses__c = 10,
+            Credits_Purchased__c = 200000, Credits_Period__c = 'year', Applied_Contract__c = c.Id);
         Opportunity amend = new Opportunity(Name = 'Governed ' + type, StageName = '5 - Contracting',
             CloseDate = Date.today(), AccountId = a.Id, Type = type, Base_Opportunity__c = base.Id);
         insert amend;
@@ -2207,7 +2216,7 @@ private class OrderFormExtractorTest {
 
     @isTest
     static void amendment_restatedTotalsDeriveIncrementsAgainstGoverningContract() {
-        Opportunity up = governedAmendment('Upsell', 100000, 10, 200000);
+        Opportunity up = governedAmendment('Upsell');
         String body = makeAnthropicResponse(new Map<String, Object>{
             'Type' => 'Upsell', 'Value_Basis' => 'Annual',
             'Recurring_Fees_Stated' => 150000,   // the paper restates the whole contract
@@ -2227,12 +2236,12 @@ private class OrderFormExtractorTest {
         for (String f : new List<String>{ 'Incremental_ARR', 'Seats_Added', 'Credits_Added' }) {
             System.assert(row.Derived_Fields__c.contains(f), f + ': ' + row.Derived_Fields__c);
         }
-        System.assert(row.Extract_Evidence__c.contains('governing Contract'), row.Extract_Evidence__c);
+        System.assert(row.Extract_Evidence__c.contains('prior paper'), row.Extract_Evidence__c);
     }
 
     @isTest
     static void amendment_incrementOnlyPaperDerivesResultingTotals_downsellSigned() {
-        Opportunity dn = governedAmendment('Downsell', 100000, 10, 200000);
+        Opportunity dn = governedAmendment('Downsell');
         String body = makeAnthropicResponse(new Map<String, Object>{
             'Type' => 'Downsell', 'Value_Basis' => 'Annual',
             'Incremental_Recurring_Fees' => 20000,   // stated as a positive reduction
@@ -2388,8 +2397,10 @@ private class OrderFormExtractorTest {
             new Order_Form_Extraction__c(Extraction_Status__c = 'API Failed')),
             'A failure never displaces anything');
         Order_Form_Extraction__c pilot = new Order_Form_Extraction__c(Extraction_Status__c = 'Success', Type__c = 'Pilot',
-            Contract_Start_Date__c = Date.today(), Contract_End_Date__c = Date.today().addDays(30));
-        System.assertEquals(3, OrderFormVersioning.rank(pilot), 'A free pilot with dates meets the minimums');
+            Contract_Start_Date__c = Date.today(), Contract_End_Date__c = Date.today().addDays(30), Trial_Price__c = 0);
+        System.assertEquals(3, OrderFormVersioning.rank(pilot), 'A pilot with dates and a stated fee (even 0) meets the minimums');
+        pilot.Trial_Price__c = null;
+        System.assertEquals(1, OrderFormVersioning.rank(pilot), 'A pilot whose fee was not read does not');
     }
 
     @isTest
@@ -2413,5 +2424,61 @@ private class OrderFormExtractorTest {
         System.assertEquals(hollow.Id, after.Id, 'Updated in place');
         System.assertEquals('No Order Form', after.Extraction_Status__c);
         System.assertEquals(true, after.Is_Current__c);
+    }
+
+    @isTest
+    static void amendment_reextractionExcludesItsOwnAppliedRow() {
+        // After the amendment is applied, its own row (and the contract totals it
+        // fed) must not become its baseline - a refresh would otherwise derive 0.
+        Opportunity up = governedAmendment('Upsell');
+        Id contractId = [SELECT ContractId FROM Opportunity WHERE Id = :[SELECT Base_Opportunity__c FROM Opportunity WHERE Id = :up.Id].Base_Opportunity__c].ContractId;
+        insert new Order_Form_Extraction__c(Opportunity__c = up.Id, Extraction_Status__c = 'Success',
+            Is_Current__c = true, Extracted_At__c = System.now().addDays(-1), Type__c = 'Upsell',
+            Contract_Start_Date__c = Date.today(), Contract_End_Date__c = Date.today().addDays(364),
+            Annual_Recurring_Revenue__c = 150000, Resulting_ARR__c = 150000, Resulting_Seats__c = 15,
+            Credits_Purchased__c = 300000, Credits_Added__c = 100000, Applied_Contract__c = contractId);
+
+        Order_Form_Extraction__c again = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual', 'Recurring_Fees_Stated' => 150000,
+                'Seat_Licenses' => 15, 'Credits_Purchased' => 300000, 'Credits_Period' => 'year' }));
+        System.assertEquals(50000, again.Incremental_ARR__c, 'Same increment on re-extraction');
+        System.assertEquals(5, again.Seats_Added__c);
+        System.assertEquals(100000, again.Credits_Added__c);
+    }
+
+    @isTest
+    static void endDate_dayTermAnniversaryIsNormalised() {
+        Opportunity opp = insertOpp('90 Day Pilot', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Contract_Start_Date' => '2026-01-01', 'Contract_Length_Days' => 90, 'Contract_End_Date' => '2026-04-01' }));
+        System.assertEquals(Date.newInstance(2026, 3, 31), row.Contract_End_Date__c, 'start + 90 days stated -> inclusive end');
+        System.assertEquals('Normalized', row.End_Date_Source__c);
+    }
+
+    @isTest
+    static void valueBasisAndShortTerms() {
+        System.assertEquals('Annual', OrderFormPicklistMapper.mapValueBasis('Annual contract value'));
+        System.assertEquals('Term', OrderFormPicklistMapper.mapValueBasis('for the Subscription Period'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapValueBasis('unclear'));
+        System.assertEquals(0.10, OrderFormExtractionJob.termMonths(Date.newInstance(2026, 1, 1), Date.newInstance(2026, 1, 3)),
+            'A 3-day term is not snapped to 0 months');
+    }
+
+    @isTest
+    static void opportunityApplier_incompleteRowFillsBlankSeats() {
+        // An email seat-add is Incomplete (no ARR/TCV) but its seats still reach the Opp.
+        Opportunity opp = insertOpp('Email Seat Add', 'Closed Won');
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(Opportunity__c = opp.Id,
+            Extraction_Status__c = 'Incomplete', Extracted_At__c = System.now(), Type__c = 'Upsell',
+            Seat_Licenses__c = 5, Applied_To_Opportunity__c = false);
+        insert row;
+        OrderFormApplier.Request req = new OrderFormApplier.Request();
+        req.extractionId = row.Id;
+        Test.startTest();
+        OrderFormApplier.apply(new List<OrderFormApplier.Request>{ req });
+        Test.stopTest();
+        System.assertEquals(5, [SELECT Seat_Licenses__c FROM Opportunity WHERE Id = :opp.Id].Seat_Licenses__c);
     }
 }

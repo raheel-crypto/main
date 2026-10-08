@@ -75,7 +75,10 @@ public with sharing class OrderFormApplier {
             }
             res.opportunityId = row.Opportunity__c;
 
-            if (row.Extraction_Status__c != 'Success') {
+            // Incomplete rows (e.g. an email confirmation that states seats but no
+            // ARR/TCV) still fill blank Opportunity fields; this applier never
+            // overwrites, so a missing value can't erase anything.
+            if (row.Extraction_Status__c != 'Success' && row.Extraction_Status__c != 'Incomplete') {
                 res.status = 'NotSuccess';
                 res.notes = 'Extraction status is "' + row.Extraction_Status__c + '"; skipping apply.';
                 continue;

@@ -411,4 +411,53 @@ private class ContractLegalTermsApplierTest {
         Contract after = [SELECT Total_Credits_Purchased__c FROM Contract WHERE Id = :c.Id];
         System.assertEquals(300000, after.Total_Credits_Purchased__c);
     }
+
+    @isTest
+    static void creditTotal_countsOneRowPerDealAcrossVersions() {
+        // The NB deal was extracted twice (versions are kept as history): an older
+        // 200k row and the current 250k row, both already stamped to the contract.
+        // Only the current one counts, so an upsell adding 50k lands on 300k, not 500k.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        makeOfe(nb.Id, new Map<String, Object>{
+            'Credits_Purchased__c' => 200000, 'Applied_Contract__c' => c.Id, 'Is_Current__c' => false,
+            'Extracted_At__c' => System.now().addDays(-2) });
+        makeOfe(nb.Id, new Map<String, Object>{
+            'Credits_Purchased__c' => 250000, 'Applied_Contract__c' => c.Id, 'Is_Current__c' => true,
+            'Extracted_At__c' => System.now().addDays(-1) });
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeUp = makeOfe(up.Id, new Map<String, Object>{
+            'Credits_Purchased__c' => 300000, 'Credits_Added__c' => 50000 });
+
+        Test.startTest();
+        runOne(ofeUp.Id);
+        Test.stopTest();
+
+        Contract after = [SELECT Total_Credits_Purchased__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(300000, after.Total_Credits_Purchased__c, 'Current NB row (250k) + 50k added');
+    }
+
+    @isTest
+    static void noOrderForm_appliesLegalTermsWithoutMovingPointer() {
+        // MidCap: only an MNDA + MSA came through. The MSA's legal terms are still the
+        // source of truth, but with no order form the contract must not point at it.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity o = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofe = makeOfe(o.Id, new Map<String, Object>{
+            'Extraction_Status__c' => 'No Order Form',
+            'Payment_Terms__c' => 'Annual' });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        System.assertEquals('Applied', res.status);
+        Contract after = [SELECT Payment_Terms__c, Latest_Order_Form_Extraction__c, Reconciliation_Notes__c
+                          FROM Contract WHERE Id = :c.Id];
+        System.assertEquals('Annual', after.Payment_Terms__c, 'Legal terms applied from the MSA');
+        System.assertEquals(null, after.Latest_Order_Form_Extraction__c, 'Pointer not moved without an order form');
+        System.assert(after.Reconciliation_Notes__c.contains('Applied legal terms only'), after.Reconciliation_Notes__c);
+    }
 }

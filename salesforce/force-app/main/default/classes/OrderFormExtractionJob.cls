@@ -197,7 +197,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static Opportunity loadParentOpp(Id opportunityId) {
         if (opportunityId == null) return null;
         List<Opportunity> opps = [
-            SELECT Id, Name, Type, CloseDate, AccountId, Annual_Recurring_Revenue__c, ContractId,
+            SELECT Id, Name, Type, CloseDate, CreatedDate, AccountId, Annual_Recurring_Revenue__c, ContractId,
                    Base_Opportunity__c,
                    Base_Opportunity__r.Name, Base_Opportunity__r.CloseDate,
                    Base_Opportunity__r.Annual_Recurring_Revenue__c, Base_Opportunity__r.ContractId
@@ -788,9 +788,14 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         populateExtractedFields(row, extracted);
         overrideTypeFromOpp(row, parentOpp);
         Boolean hasOrderForm = classifyDocuments(row, extracted, currentFileCount);
-        if (hasOrderForm == false) clearEconomics(row);
+        if (hasOrderForm == false) {
+            clearEconomics(row);
+            row.Pricing_Structure__c = derivePricingStructure(row);   // without the MSA's credits
+        }
         normaliseTerm(row, d);
-        computeEconomics(row, extracted, parentOpp, d);
+        // With no order form the economics step must not see the model's fee /
+        // credit keys either - only the (cleared) row.
+        computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d);
         clampToFieldLimits(row, d);
         d.writeTo(row);
         applyStatus(row, hasOrderForm, skipped);
@@ -893,7 +898,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
         if (endD != null) {
             Integer k = startD.monthsBetween(endD);
-            if (k >= 1 && startD.addMonths(k) == endD) {
+            Integer statedDays = (row.Contract_Length_Days__c == null) ? null : row.Contract_Length_Days__c.intValue();
+            if (statedDays != null && statedDays > 0 && endD == startD.addDays(statedDays)) {
+                row.Contract_End_Date__c = endD.addDays(-1);
+                row.End_Date_Source__c = 'Normalized';
+                d.mark('Contract_End_Date', 'Paper states ' + String.valueOf(endD) + ' = start + ' + statedDays
+                    + ' days; normalised to the inclusive end ' + String.valueOf(row.Contract_End_Date__c) + '.');
+            } else if (k >= 1 && startD.addMonths(k) == endD) {
                 row.Contract_End_Date__c = endD.addDays(-1);
                 row.End_Date_Source__c = 'Normalized';
                 d.mark('Contract_End_Date', 'Paper states ' + String.valueOf(endD) + ', the ' + k
@@ -934,7 +945,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (k > 0 && startD.addMonths(k) == after) return k;
         Decimal f = (Decimal.valueOf(startD.daysBetween(endD) + 1) * 12).divide(365.25, 6, RoundingMode.HALF_UP);
         Decimal whole = f.setScale(0, RoundingMode.HALF_UP);
-        return (f - whole).abs() <= 0.1 ? whole : f.setScale(2, RoundingMode.HALF_UP);
+        return (whole >= 1 && (f - whole).abs() <= 0.1) ? whole : f.setScale(2, RoundingMode.HALF_UP);
     }
 
     // Annualised ARR, amendment increments / resulting totals, credits per year
@@ -978,7 +989,6 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             ? ' stated for the ' + months + '-month term, x 12/' + months : '';
 
         Contract gov = isAmend ? loadGoverningContract(parentOpp) : null;
-        String govName = (gov == null) ? null : 'governing Contract ' + gov.ContractNumber;
 
         if (!isAmend) {
             row.Annual_Recurring_Revenue__c = totalAnnual;
@@ -988,16 +998,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             }
             computeIncrementalARR(row, parentOpp);
         } else {
-            Decimal baseArr = null;
-            String baseSrc = null;
-            if (gov != null && gov.ARR__c != null) {
-                baseArr = gov.ARR__c;
-                baseSrc = govName + ' ARR__c';
-            } else {
-                BaseValue b = resolveBaseArr(parentOpp, totalAnnual);
-                baseArr = b.value;
-                baseSrc = b.source;
-            }
+            Baseline base = resolveAmendmentBaseline(row, parentOpp, gov, totalAnnual,
+                row.Seat_Licenses__c, row.Credits_Purchased__c);
+            Decimal baseArr = base.arr;
+            String baseSrc = base.arrSource;
             Decimal inc = incAnnual;
             if (inc != null && isDownsell && inc > 0) inc = -inc;
             if (inc != null && basis == 'Term') {
@@ -1028,28 +1032,28 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             // Seats: Seat_Licenses is the stated TOTAL after the change, Seats_Added the stated change.
             Decimal added = row.Seats_Added__c;
             if (added != null && isDownsell && added > 0) { added = -added; row.Seats_Added__c = added; }
-            Decimal baseSeats = (gov == null) ? null : gov.Seat_Licenses__c;
+            Decimal baseSeats = base.seats;
             if (row.Seat_Licenses__c != null) {
                 row.Resulting_Seats__c = row.Seat_Licenses__c;
                 if (added == null && baseSeats != null) {
                     row.Seats_Added__c = row.Seat_Licenses__c - baseSeats;
                     d.mark('Seats_Added', 'Paper states ' + row.Seat_Licenses__c + ' seats in total; minus '
-                        + govName + ' Seat_Licenses__c ' + baseSeats + ' = ' + row.Seats_Added__c + '.');
+                        + base.seatsSource + ' ' + baseSeats + ' = ' + row.Seats_Added__c + '.');
                 }
             } else if (added != null && baseSeats != null) {
                 row.Resulting_Seats__c = baseSeats + added;
-                d.mark('Resulting_Seats', govName + ' Seat_Licenses__c ' + baseSeats + ' + ' + added
+                d.mark('Resulting_Seats', base.seatsSource + ' ' + baseSeats + ' + ' + added
                     + ' added = ' + row.Resulting_Seats__c + '.');
             }
 
             // Credits: Credits_Purchased is the stated TOTAL, Credits_Added the stated change.
             Decimal cAdded = toDecimal(extracted.get('Credits_Added'));
             if (cAdded != null && isDownsell && cAdded > 0) cAdded = -cAdded;
-            Decimal baseCredits = (gov == null) ? null : gov.Total_Credits_Purchased__c;
+            Decimal baseCredits = base.credits;
             if (cAdded == null && row.Credits_Purchased__c != null && baseCredits != null) {
                 cAdded = row.Credits_Purchased__c - baseCredits;
                 d.mark('Credits_Added', 'Paper states ' + row.Credits_Purchased__c + ' credits in total; minus '
-                    + govName + ' Total_Credits_Purchased__c ' + baseCredits + ' = ' + cAdded + '.');
+                    + base.creditsSource + ' ' + baseCredits + ' = ' + cAdded + '.');
             }
             row.Credits_Added__c = cAdded;
         }
@@ -1157,6 +1161,102 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             FROM Contract WHERE Id = :cid LIMIT 1
         ];
         return cs.isEmpty() ? null : cs[0];
+    }
+
+    // The governing contract's position BEFORE this amendment. Live Contract
+    // fields are not a safe baseline on their own: flows roll a closed deal into
+    // Contract.ARR__c and the applier adds an applied amendment's credits into
+    // Total_Credits_Purchased__c, so a refresh would compute an increment of 0.
+    //  1. Prior paper: the contract's current Success extractions for deals that
+    //     closed before this one (the base deal and earlier amendments), never this
+    //     deal's own rows. ARR / seats = the most recent prior figure; credits = the
+    //     same signed running sum the applier keeps.
+    //  2. Otherwise the live Contract ARR / seats - unless the value already equals
+    //     the total this paper states (it already includes this deal).
+    //  3. ARR only: the base opportunity's ARR.
+    private class Baseline {
+        Decimal arr;
+        String arrSource;
+        Decimal seats;
+        String seatsSource;
+        Decimal credits;
+        String creditsSource;
+    }
+
+    private static Baseline resolveAmendmentBaseline(Order_Form_Extraction__c row, Opportunity parentOpp,
+            Contract gov, Decimal statedArr, Decimal statedSeats, Decimal statedCredits) {
+        Baseline b = new Baseline();
+        Set<Id> govIds = new Set<Id>();
+        if (gov != null) govIds.add(gov.Id);
+        Set<Id> baseIds = new Set<Id>();
+        if (parentOpp != null && parentOpp.Base_Opportunity__c != null) baseIds.add(parentOpp.Base_Opportunity__c);
+
+        if (row.Opportunity__c != null && (!govIds.isEmpty() || !baseIds.isEmpty())) {
+            Date myClose = (parentOpp == null) ? null : parentOpp.CloseDate;
+            Datetime myCreated = (parentOpp == null) ? null : parentOpp.CreatedDate;
+            Set<Id> seenOpps = new Set<Id>();
+            Boolean anyCredits = false;
+            Decimal creditSum = 0;
+            for (Order_Form_Extraction__c p : [
+                SELECT Opportunity__c, Opportunity__r.Type, Opportunity__r.CloseDate, Opportunity__r.CreatedDate,
+                       Type__c, Annual_Recurring_Revenue__c, Resulting_Seats__c, Seat_Licenses__c,
+                       Credits_Purchased__c, Credits_Added__c
+                FROM Order_Form_Extraction__c
+                WHERE Extraction_Status__c = 'Success'
+                  AND Opportunity__c != :row.Opportunity__c
+                  AND (Applied_Contract__c IN :govIds OR Opportunity__r.ContractId IN :govIds
+                       OR Opportunity__c IN :baseIds OR Opportunity__r.Base_Opportunity__c IN :baseIds)
+                ORDER BY Opportunity__r.CloseDate DESC NULLS LAST, Opportunity__r.CreatedDate DESC,
+                         Is_Current__c DESC, Extracted_At__c DESC NULLS LAST
+            ]) {
+                if (p.Opportunity__r == null || seenOpps.contains(p.Opportunity__c)) continue;  // one row per deal: current, else latest
+                seenOpps.add(p.Opportunity__c);
+                if (!closedBefore(p.Opportunity__r, myClose, myCreated)) continue;
+                String what = 'prior paper (' + (p.Opportunity__r.Type == null ? 'deal' : p.Opportunity__r.Type)
+                    + ' closed ' + String.valueOf(p.Opportunity__r.CloseDate) + ')';
+                if (b.arr == null && p.Annual_Recurring_Revenue__c != null) {
+                    b.arr = p.Annual_Recurring_Revenue__c;
+                    b.arrSource = what + ' ARR';
+                }
+                Decimal seats = (p.Resulting_Seats__c != null) ? p.Resulting_Seats__c : p.Seat_Licenses__c;
+                if (b.seats == null && seats != null) {
+                    b.seats = seats;
+                    b.seatsSource = what + ' seats';
+                }
+                String t = (p.Opportunity__r.Type != null) ? p.Opportunity__r.Type : p.Type__c;
+                Decimal contribution = (AMEND_TYPES.contains(t) && p.Credits_Added__c != null)
+                    ? p.Credits_Added__c
+                    : (p.Credits_Purchased__c == null ? null : (t == 'Downsell' ? -p.Credits_Purchased__c : p.Credits_Purchased__c));
+                if (contribution != null) { creditSum += contribution; anyCredits = true; }
+            }
+            if (anyCredits) {
+                b.credits = creditSum;
+                b.creditsSource = 'credits on the contract\'s prior paper';
+            }
+        }
+
+        String govName = (gov == null) ? null : 'governing Contract ' + gov.ContractNumber;
+        if (b.arr == null && gov != null && gov.ARR__c != null && gov.ARR__c != statedArr) {
+            b.arr = gov.ARR__c;
+            b.arrSource = govName + ' ARR__c';
+        }
+        if (b.seats == null && gov != null && gov.Seat_Licenses__c != null && gov.Seat_Licenses__c != statedSeats) {
+            b.seats = gov.Seat_Licenses__c;
+            b.seatsSource = govName + ' Seat_Licenses__c';
+        }
+        if (b.arr == null && parentOpp != null && parentOpp.Base_Opportunity__r != null
+                && parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c != null) {
+            b.arr = parentOpp.Base_Opportunity__r.Annual_Recurring_Revenue__c;
+            b.arrSource = 'base opportunity ARR';
+        }
+        return b;
+    }
+
+    // Did that deal close before this one? Same-day deals order by creation.
+    private static Boolean closedBefore(Opportunity other, Date myClose, Datetime myCreated) {
+        if (other == null || myClose == null || other.CloseDate == null) return true;
+        if (other.CloseDate != myClose) return other.CloseDate < myClose;
+        return myCreated == null || other.CreatedDate == null || other.CreatedDate < myCreated;
     }
 
     private class BaseValue {

@@ -32,8 +32,8 @@ public with sharing class OrderFormVersioning {
         if (r.Annual_Recurring_Revenue__c != null || r.Total_Contract_Value__c != null) return true;
         // An amendment that prices only the change has an ARR figure - the increment.
         if (r.Incremental_ARR__c != null && AMEND_TYPES.contains(r.Type__c)) return true;
-        // A pilot's economics are its fee, or the absence of one.
-        if (r.Type__c == 'Pilot' && (r.Trial_Price__c != null || r.Paid_Trial__c != true)) return true;
+        // A pilot's economics are its stated fee (a free pilot states TCV 0 - see the prompt).
+        if (r.Type__c == 'Pilot' && r.Trial_Price__c != null) return true;
         return false;
     }
 
@@ -52,8 +52,9 @@ public with sharing class OrderFormVersioning {
         return f > 0 && f >= rank(current);
     }
 
-    // The row to compare against per Opportunity: the one flagged current,
-    // else the most recently extracted (rows created before versioning existed).
+    // The row to compare against per Opportunity: the one flagged current; for
+    // rows created before versioning (none flagged), the best-ranked row with ties
+    // going to the most recent - the same rule as backfillCurrentExtractions.apex.
     public static Map<Id, Order_Form_Extraction__c> loadCurrentByOpp(Set<Id> oppIds) {
         Map<Id, Order_Form_Extraction__c> out = new Map<Id, Order_Form_Extraction__c>();
         if (oppIds == null || oppIds.isEmpty()) return out;
@@ -67,7 +68,12 @@ public with sharing class OrderFormVersioning {
             WHERE Opportunity__c IN :oppIds
             ORDER BY Opportunity__c, Is_Current__c DESC, Extracted_At__c DESC NULLS LAST, CreatedDate DESC
         ]) {
-            if (!out.containsKey(r.Opportunity__c)) out.put(r.Opportunity__c, r);
+            Order_Form_Extraction__c have = out.get(r.Opportunity__c);
+            // Rows arrive current-first, then newest-first: keep the first unless
+            // nothing is flagged current and this older row ranks strictly higher.
+            if (have == null || (have.Is_Current__c != true && r.Is_Current__c != true && rank(r) > rank(have))) {
+                out.put(r.Opportunity__c, r);
+            }
         }
         return out;
     }

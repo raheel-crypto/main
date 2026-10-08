@@ -1,8 +1,9 @@
 // =============================================================================
 // Apply Contract legal terms in the proper order (New Business -> upsells)
 // =============================================================================
-// Applies ContractLegalTermsApplier to every CURRENT (Is_Current__c) Success
-// extraction that hasn't been applied yet (Applied_Contract__c = null) - one per
+// Applies ContractLegalTermsApplier to every CURRENT (Is_Current__c) readable
+// extraction (Success, Incomplete, or No Order Form - the last two contribute
+// legal terms only and never move the contract pointer) that hasn't been applied yet (Applied_Contract__c = null) - one per
 // opportunity, so superseded versions are never applied - in the correct order so a contract's
 // terms are laid down before any amendment reconciles against them:
 //   1) fresh-contract deals first (New Business / Renewal / Pilot),
@@ -31,7 +32,7 @@ Set<String> AMEND = new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure
 List<Order_Form_Extraction__c> unapplied = [
     SELECT Id, Opportunity__r.Name, Opportunity__r.Type, Opportunity__r.CloseDate
     FROM Order_Form_Extraction__c
-    WHERE Extraction_Status__c = 'Success'
+    WHERE Extraction_Status__c IN ('Success', 'Incomplete', 'No Order Form')
       AND Is_Current__c = true
       AND Applied_Contract__c = null
       AND Opportunity__c != null
@@ -79,7 +80,7 @@ for (String n : notable) System.debug('NOTE: ' + n);
 
 Integer remaining = [
     SELECT COUNT() FROM Order_Form_Extraction__c
-    WHERE Extraction_Status__c = 'Success' AND Is_Current__c = true
+    WHERE Extraction_Status__c IN ('Success', 'Incomplete', 'No Order Form') AND Is_Current__c = true
       AND Applied_Contract__c = null AND Opportunity__c != null
 ];
 System.debug('--- Remaining unapplied after this run: ' + remaining + ' (re-run if > 0)');
