@@ -1074,9 +1074,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             Decimal fee = (row.License_Fees__c != null) ? row.License_Fees__c : totalStated;
             Decimal credits = row.Credits_Purchased__c;
             String period = row.Credits_Period__c;
-            if (credits == null && incStated != null && extracted.get('Credits_Added') != null) {
-                fee = incStated;                                       // increment-only paper
-                credits = toDecimal(extracted.get('Credits_Added'));
+            Decimal incCredits = row.Credits_Added__c;   // stated or derived above; null off amendments
+            if (incStated != null && (fee == null || (credits == null && incCredits != null))) {
+                // The paper prices only the change (Lazard FA: "$316,350 per year for
+                // the Credit Allocation"): pair that fee with the credits it buys -
+                // the increment when known, else the paper's own credit figure.
+                fee = incStated;
+                if (incCredits != null) credits = incCredits;
             }
             Boolean bothTerm = basis == 'Term' && period == 'contract';
             Decimal rate = creditRate(fee, feeFactor, credits, creditFac, bothTerm);

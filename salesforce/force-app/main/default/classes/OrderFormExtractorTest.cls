@@ -2265,6 +2265,26 @@ private class OrderFormExtractorTest {
             row.Derived_Fields__c);
     }
 
+    @isTest
+    static void creditRate_incrementOnlyFeeWithPaidAllocation() {
+        // Lazard FA: "$316,350 per year for the Credit Allocation" of 15,817,500
+        // credits per year, priced as an increment with no prior paper on file.
+        Opportunity up = new Opportunity(Name = 'Lazard FA Credits', StageName = 'Closed Won',
+            CloseDate = Date.today(), Type = 'Upsell');
+        insertOppSafely(up);
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual',
+                'Incremental_Recurring_Fees' => 316350,
+                'Credits_Purchased' => 15817500, 'Credits_Period' => 'year',
+                'Overage_Rate' => 0.02
+            }));
+        System.assertEquals(316350, row.Incremental_ARR__c);
+        System.assertEquals(15817500, row.Credits_Per_Year__c);
+        System.assertEquals(0.02, row.Credit_Rate__c, '316,350 / 15,817,500');
+        System.assert(row.Derived_Fields__c.contains('Credit_Rate'), row.Derived_Fields__c);
+    }
+
     // ---- 6. Clamp out-of-range numbers ----
 
     @isTest

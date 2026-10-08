@@ -55,6 +55,7 @@ AMENDMENTS (Upsell / Downsell / Contract Restructure):
 
 CREDITS, RATES AND FREE TIERS:
 - Credits_Purchased + Credits_Period as written: "year" for per-year allocations, "month" / "quarter" likewise, "contract" when one figure covers the whole term ("110,500,000 Credits for the Subscription Period").
+- Credits_Purchased is the PAID allocation the fee buys. Never fold complimentary / bonus / free credits into it - note those in Special_Terms. When the paper states both a per-period allocation and a term total that adds complimentary credits, report the per-period paid figure: "15,817,500 Credits per year; 832,500 complimentary Credits for the Initial Subscription Period; = 16,650,000 Credits" -> Credits_Purchased 15817500, Credits_Period "year".
 - Credit_Rate_Stated = a committed price per credit ONLY if the paper states one (e.g. "$0.015 per Credit"). This is the price of the commitment, NOT the overage price. Otherwise null - Apex derives it from fee / credits.
 - Overage_Rate = the per-credit price for usage beyond the commitment when the paper states one (e.g. "Overage fees of $0.04 per Credit" -> 0.04). Null when no overage price is stated.
 - Free_Tier_Retained = "Yes" when the paper explicitly lets the customer keep a free / included usage tier alongside the paid commitment (e.g. "Customer retains free access to Felix Light", "unlimited Lite queries included at no charge"); "No" when it explicitly removes / excludes free usage; "Not specified" when silent. Do not infer it from the package tier.
