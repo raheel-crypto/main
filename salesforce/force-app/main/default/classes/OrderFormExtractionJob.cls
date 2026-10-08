@@ -1211,7 +1211,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             ]) {
                 if (p.Opportunity__r == null || seenOpps.contains(p.Opportunity__c)) continue;  // one row per deal: current, else latest
                 seenOpps.add(p.Opportunity__c);
-                if (!closedBefore(p.Opportunity__r, myClose, myCreated)) continue;
+                // The base deal precedes its amendments by definition; dates only
+                // order the other amendments (same-day, same-second ties are common).
+                if (!baseIds.contains(p.Opportunity__c) && !closedBefore(p.Opportunity__r, myClose, myCreated)) continue;
                 String what = 'prior paper (' + (p.Opportunity__r.Type == null ? 'deal' : p.Opportunity__r.Type)
                     + ' closed ' + String.valueOf(p.Opportunity__r.CloseDate) + ')';
                 if (b.arr == null && p.Annual_Recurring_Revenue__c != null) {

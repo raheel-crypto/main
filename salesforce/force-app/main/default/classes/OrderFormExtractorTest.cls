@@ -372,7 +372,11 @@ private class OrderFormExtractorTest {
 
     @isTest
     static void extractionJob_emailConfirmationBasics() {
-        Opportunity opp = insertOpp('Seat Add Upsell', 'Closed Won');
+        // Type set explicitly: the opp's Type overrides the model's, and a blank
+        // Type can be defaulted by the org to a non-amendment value.
+        Opportunity opp = new Opportunity(Name = 'Seat Add Upsell', StageName = 'Closed Won',
+            CloseDate = Date.today(), Type = 'Upsell');
+        insertOppSafely(opp);
         // A PNG screenshot of the confirming email, prefixed signed__.
         attachSignedFile(opp.Id, 'signed__email_add_users', 'png', Blob.valueOf('fake png'));
 
