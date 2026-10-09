@@ -603,4 +603,28 @@ private class ContractLegalTermsApplierTest {
         System.assertEquals(false, after.Needs_Legal_Review__c);
         System.assertEquals(false, upRes.needsReview);
     }
+
+    @isTest
+    static void specialTerms_accumulateOnAmendmentsWithoutReview() {
+        // Siris / Finnea: each paper's special terms differ in wording - that is
+        // not a legal conflict. They stack under a label for the deal.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, new Map<String, Object>{ 'Special_Terms__c' => 'MFN clause.' });
+        Opportunity base = makeOpp(a.Id, 'New Business', c.Id, null);
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, base.Id);
+        Order_Form_Extraction__c ofeUp = makeOfe(up.Id, new Map<String, Object>{
+            'Special_Terms__c' => 'Additional users at $5,000 per user per year, co-termed.' });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofeUp.Id);
+        runOne(ofeUp.Id);   // re-applying the same paper adds nothing
+        Test.stopTest();
+
+        Contract after = [SELECT Special_Terms__c, Needs_Legal_Review__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(false, res.needsReview);
+        System.assertEquals(false, after.Needs_Legal_Review__c);
+        System.assert(after.Special_Terms__c.startsWith('MFN clause.'), after.Special_Terms__c);
+        System.assert(after.Special_Terms__c.contains('[Upsell Opp, closed '), after.Special_Terms__c);
+        System.assertEquals(1, after.Special_Terms__c.countMatches('co-termed'), 'Added once: ' + after.Special_Terms__c);
+    }
 }

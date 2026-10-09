@@ -39,6 +39,7 @@ public with sharing class ContractLegalTermsApplier {
     // A picklist answer meaning the paper is silent: never written as a term,
     // never a conflict, and replaced by any real value.
     private static final String NOT_SPECIFIED = 'Not specified';
+    private static final Integer SPECIAL_TERMS_MAX = 32768;
 
     // Statuses whose legal terms may be applied. Failed reads never are.
     private static final Set<String> APPLICABLE_STATUSES =
@@ -63,7 +64,6 @@ public with sharing class ContractLegalTermsApplier {
         new LegalField('Rate_Limit_Notes__c', 'Rate_Limit_Notes__c', false),
         new LegalField('Subprocessor_Notice_Period__c', 'Subprocessor_Notice_Period__c', false),
         new LegalField('Subprocessor_Restrictions__c', 'Subprocessor_Restrictions__c', false),
-        new LegalField('Special_Terms__c', 'Special_Terms__c', false),
         new LegalField('ELA__c', 'ELA__c', true),
         new LegalField('Credit_Commit__c', 'Credit_Commit__c', true),
         new LegalField('Credit_Overcommit_Obligation__c', 'Credit_Overcommit_Obligation__c', true)
@@ -334,6 +334,10 @@ public with sharing class ContractLegalTermsApplier {
                 log.add('Wrote ' + f.contract + ' = ' + v);
             }
         }
+        if (String.isNotBlank(ofe.Special_Terms__c)) {
+            changes.Special_Terms__c = truncate(ofe.Special_Terms__c, SPECIAL_TERMS_MAX);
+            log.add('Wrote Special_Terms__c');
+        }
         // Contact info: straight write of whatever the order form states.
         for (LegalField f : CONTACT_FIELDS) {
             Object v = ofe.get(f.ofe);
@@ -372,6 +376,7 @@ public with sharing class ContractLegalTermsApplier {
                         + '" - left contract unchanged, needs legal review');
             }
         }
+        appendSpecialTerms(current, ofe, changes, log);
         // Contact info: latest order form wins - fill blanks and update changes,
         // but a differing contact is NOT a legal conflict and never triggers review.
         for (LegalField f : CONTACT_FIELDS) {
@@ -389,6 +394,29 @@ public with sharing class ContractLegalTermsApplier {
 
         if (conflict) log.add('>>> One or more legal terms conflict with the existing contract. Review required.');
         return conflict;
+    }
+
+    // Special terms accumulate across amendments: each paper's terms are added
+    // under a label for its deal. Wording always differs between papers, so a
+    // difference is never a conflict and never flags legal review. Re-applying
+    // the same paper adds nothing.
+    private static void appendSpecialTerms(Contract current, Order_Form_Extraction__c ofe, Contract changes,
+                                           List<String> log) {
+        String added = ofe.Special_Terms__c;
+        if (String.isBlank(added)) return;
+        String existing = changes.getPopulatedFieldsAsMap().containsKey('Special_Terms__c')
+            ? changes.Special_Terms__c : (current == null ? null : current.Special_Terms__c);
+        if (String.isBlank(existing)) {
+            changes.Special_Terms__c = truncate(added, SPECIAL_TERMS_MAX);
+            log.add('Wrote Special_Terms__c (new)');
+            return;
+        }
+        if (existing.contains(added.trim())) return;
+        String label = (ofe.Opportunity__r == null) ? 'Order form' : ofe.Opportunity__r.Name
+            + (ofe.Opportunity__r.CloseDate == null ? '' : ', closed ' + String.valueOf(ofe.Opportunity__r.CloseDate));
+        String combined = existing + '\n\n[' + label + '] ' + added.trim();
+        changes.Special_Terms__c = truncate(combined, SPECIAL_TERMS_MAX);
+        log.add('Added Special_Terms__c from ' + label + (combined.length() > SPECIAL_TERMS_MAX ? ' (truncated to fit)' : ''));
     }
 
     private static Boolean sameValue(Object a, Object b) {
