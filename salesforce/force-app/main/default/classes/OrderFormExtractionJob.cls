@@ -787,6 +787,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     // marked derived in Extract_Evidence__c and Derived_Fields__c. Shared by the
     // callout path and the off-platform Files-API path so both produce identical
     // rows.
+    // Committed credit rates run ~$0.01-0.08; a derived figure above this means
+    // the fee and the credit count don't describe the same thing.
+    private static final Decimal MAX_DERIVED_CREDIT_RATE = 1;
+
     @TestVisible private static final Set<String> AMEND_TYPES =
         new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
 
@@ -1202,7 +1206,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             }
             Boolean bothTerm = basis == 'Term' && period == 'contract';
             Decimal rate = creditRate(fee, feeFactor, credits, creditFac, bothTerm);
-            if (rate != null) {
+            if (rate != null && rate > MAX_DERIVED_CREDIT_RATE) {
+                // William Blair: a $500k licence over a 250,000-credit allowance is $2 a
+                // credit - the fee buys seats, not the credits. Not a rate.
+                d.mark('Credit_Rate', 'Not derived: fee ' + fee + ' / ' + credits + ' credits = ' + rate
+                    + ' per credit is implausible (the fee likely buys seats, not credits).');
+            } else if (rate != null) {
                 row.Credit_Rate__c = rate;
                 d.mark('Credit_Rate', 'Derived: committed fee ' + fee + ' (' + (basis == null ? 'Annual' : basis)
                     + ') / ' + credits + ' credits (' + period + ') = ' + rate + ' per credit.');

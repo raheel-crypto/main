@@ -2413,6 +2413,14 @@ private class OrderFormExtractorTest {
         System.assertEquals('Incomplete', row.Extraction_Status__c);
         insert row;
         System.assertEquals(null, row.Credit_Rate__c, 'A stated rate of 0 is not a rate');
+
+        // William Blair: $500k licence / 250,000 credits = $2 a credit - not derived.
+        Order_Form_Extraction__c ela = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Annual', 'License_Fees' => 500000,
+                'Credits_Purchased' => 250000, 'Credits_Period' => 'year' }));
+        System.assertEquals(null, ela.Credit_Rate__c);
+        System.assert(ela.Extract_Evidence__c.contains('implausible'), ela.Extract_Evidence__c);
     }
 
     // ---- 6. Clamp out-of-range numbers ----
