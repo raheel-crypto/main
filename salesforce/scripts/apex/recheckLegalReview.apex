@@ -23,7 +23,7 @@
 // =============================================================================
 
 Boolean DRY_RUN = true;   // <-- false to re-check
-Integer CAP = 10;         // contracts per run
+Integer CAP = 25;         // contracts per run (stops early near a governor limit)
 String MARK = 'Review re-checked 2026-10-09';
 Set<String> AMEND = new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
 
