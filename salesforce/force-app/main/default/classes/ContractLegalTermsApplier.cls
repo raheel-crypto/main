@@ -36,6 +36,10 @@ public with sharing class ContractLegalTermsApplier {
     }
 
     // Amend-existing-contract deal types. Everything else is a fresh contract.
+    // A picklist answer meaning the paper is silent: never written as a term,
+    // never a conflict, and replaced by any real value.
+    private static final String NOT_SPECIFIED = 'Not specified';
+
     // Statuses whose legal terms may be applied. Failed reads never are.
     private static final Set<String> APPLICABLE_STATUSES =
         new Set<String>{ 'Success', 'Incomplete', 'No Order Form' };
@@ -325,7 +329,7 @@ public with sharing class ContractLegalTermsApplier {
             if (f.isBoolean) {
                 changes.put(f.contract, v == true);
                 if (v == true) log.add('Set ' + f.contract + ' = true');
-            } else if (v != null) {
+            } else if (v != null && v != NOT_SPECIFIED) {
                 changes.put(f.contract, v);
                 log.add('Wrote ' + f.contract + ' = ' + v);
             }
@@ -356,10 +360,10 @@ public with sharing class ContractLegalTermsApplier {
                 }
                 continue;
             }
-            if (ofeVal == null) {
+            if (ofeVal == null || ofeVal == NOT_SPECIFIED) {
                 continue; // order form silent on this term -> preserve contract
             }
-            if (curVal == null) {
+            if (curVal == null || curVal == NOT_SPECIFIED) {
                 changes.put(f.contract, ofeVal);
                 log.add('Wrote ' + f.contract + ' = ' + ofeVal + ' (new term)');
             } else if (!sameValue(curVal, ofeVal)) {

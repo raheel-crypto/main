@@ -578,4 +578,29 @@ private class ContractLegalTermsApplierTest {
         System.assert(after.Reconciliation_Notes__c.contains('recomputed'), after.Reconciliation_Notes__c);
         System.assertEquals(0, ContractUsageRollup.refresh(new Set<Id>{ c.Id }), 'Idempotent: nothing left to change');
     }
+
+    @isTest
+    static void notSpecified_isSilentNeverATermOrConflict() {
+        // Janssen: "Wrote Rate_Limitable__c = Not specified (new term)".
+        Account a = makeAccount();
+        Contract fresh = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', fresh.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{ 'Rate_Limitable__c' => 'Not specified' });
+
+        Contract amended = makeContract(a.Id, new Map<String, Object>{ 'Rate_Limitable__c' => 'Yes' });
+        Opportunity base = makeOpp(a.Id, 'New Business', amended.Id, null);
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, base.Id);
+        Order_Form_Extraction__c ofeUp = makeOfe(up.Id, new Map<String, Object>{ 'Rate_Limitable__c' => 'Not specified' });
+
+        Test.startTest();
+        runOne(ofeNb.Id);
+        ContractLegalTermsApplier.Result upRes = runOne(ofeUp.Id);
+        Test.stopTest();
+
+        System.assertEquals(null, [SELECT Rate_Limitable__c FROM Contract WHERE Id = :fresh.Id].Rate_Limitable__c);
+        Contract after = [SELECT Rate_Limitable__c, Needs_Legal_Review__c FROM Contract WHERE Id = :amended.Id];
+        System.assertEquals('Yes', after.Rate_Limitable__c);
+        System.assertEquals(false, after.Needs_Legal_Review__c);
+        System.assertEquals(false, upRes.needsReview);
+    }
 }

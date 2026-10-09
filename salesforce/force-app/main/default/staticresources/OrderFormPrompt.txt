@@ -40,7 +40,7 @@ FEES, BASIS AND RECURRING TOTALS (stated values only):
 - Recurring_Fees_Stated = the SUM of every RECURRING charge on the paper for the whole contract after this paper (subscription / license + hosting + tenant or platform fees + any other recurring line), in Value_Basis. Adding the stated line items is fine; annualising is not. Excludes one-time fees. For an amendment, fill this ONLY when the paper states the WHOLE contract's recurring fees after the change ("Recalculated Total Annual Fee", "total fees following this amendment", a fee table covering every seat on the contract).
 - Incremental_Recurring_Fees = AMENDMENTS ONLY: the change in the RECURRING fee that this paper prices (e.g. "10 additional seats at $5,000 per year" -> 50000), in Value_Basis; negative for a reduction. A new schedule or order form under an existing contract that prices only its own seats / credits is an increment - even when it calls its figure "Total Annual Fee" - so its fee goes here, not in Recurring_Fees_Stated. Never put the same figure in both fields.
 - A prorated, stub or true-up charge for part of a period ("pro-rated for the remaining 226 days at a total cost of $3,405", "net prorated charge for the remainder of the contract year") is NOT a recurring fee: report it as Total_Contract_Value (the amount this paper bills) and leave Incremental_Recurring_Fees null unless the paper also states the recurring change itself.
-- Total_Contract_Value = the total amount due over the entire term ONLY if the paper states it (or it is the single term figure for a Term-basis deal). A pilot with no fee: 0.
+- Total_Contract_Value = the total amount due over the entire term ONLY if the paper states it (or it is the single term figure for a Term-basis deal). A pilot with no fee: 0. When a Term-basis paper's only fee is the subscription for the term ("Total Fees: $7,500" for a 12-month subscription), report it as Recurring_Fees_Stated as well as Total_Contract_Value.
 - Never return an "Annual_Recurring_Revenue" figure: Apex computes ARR from Recurring_Fees_Stated / Incremental_Recurring_Fees, Value_Basis and the term.
 
 TERM AND DATES (stated values only):
@@ -102,7 +102,7 @@ JSON SCHEMA (return exactly these keys):
   "Credit_Rate_Stated": number | null,
   "Overage_Rate": number | null,
   "Free_Tier_Retained": "Yes" | "No" | "Not specified",
-  "Special_Terms": "free text summary of any non-standard clauses such as MFN, termination for convenience, indemnity carve-outs, data processing addenda, custom SLA, etc., or null if none" | null,
+  "Special_Terms": "free text summary of any non-standard clauses such as MFN, termination for convenience, indemnity carve-outs, data processing addenda, custom SLA, etc., or null if none. Contract terms ONLY - never notes about the documents, missing files or how you read them (no 'No current-deal documents were provided...'); return null instead" | null,
   "Logo_Publicity_Rights": "Yes" | "No" | "With Conditions" | "Not Mentioned",
   "Logo_Publicity_Language": "verbatim clause governing Rogo's use of the customer's name/logo/marks for publicity, or null" | null,
   "Package_Tier": "Enterprise" | "Team" | "Basic" | "Custom" | null,

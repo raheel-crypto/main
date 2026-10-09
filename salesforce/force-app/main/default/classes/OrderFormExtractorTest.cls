@@ -2365,6 +2365,56 @@ private class OrderFormExtractorTest {
         System.assertEquals(12, row.Resulting_Seats__c);
     }
 
+    // ---- Found in the 2026-10-09 audit ----
+
+    @isTest
+    static void coTerm_amendmentWithNoEndOrTermRunsToBaseDealEnd() {
+        // Macquarie / Tiger Global: the upsell paper says only "co-termed".
+        Opportunity up = governedAmendment('Upsell');   // base paper ends today + 334
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual', 'Incremental_Recurring_Fees' => 10000,
+                'Contract_Start_Date' => String.valueOf(Date.today()) }));
+        System.assertEquals(Date.today().addDays(334), row.Contract_End_Date__c);
+        System.assertEquals('Derived', row.End_Date_Source__c);
+        System.assertNotEquals(null, row.Contract_Length_Months__c);
+        System.assertEquals('Success', row.Extraction_Status__c, 'No longer Incomplete for a missing end date');
+        System.assert(row.Extract_Evidence__c.contains('co-termed'), row.Extract_Evidence__c);
+    }
+
+    @isTest
+    static void termTcvOnly_isTheSubscriptionFee() {
+        // Partners Capital: "$7,500" for a 12-month term, reported only as TCV.
+        Opportunity opp = insertOpp('TCV Only', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Term', 'Total_Contract_Value' => 7500,
+                'Contract_Start_Date' => '2026-01-01', 'Contract_Length_Months' => 12 }));
+        System.assertEquals(7500, row.Annual_Recurring_Revenue__c);
+        System.assert(row.Derived_Fields__c.contains('Annual_Recurring_Revenue'), row.Derived_Fields__c);
+
+        // A two-week paid trial's fee is not annualised into ARR.
+        Order_Form_Extraction__c trial = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Term', 'Total_Contract_Value' => 5000,
+                'Contract_Start_Date' => '2026-06-01', 'Contract_End_Date' => '2026-06-14' }));
+        System.assertEquals(null, trial.Annual_Recurring_Revenue__c);
+    }
+
+    @isTest
+    static void impossibleDateAndZeroRateAreDropped() {
+        // Ribbit: "1026-01-31" sank a refresh chunk (Salesforce cannot store it).
+        Opportunity opp = insertOpp('Bad Date', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Contract_Start_Date' => '1026-01-31', 'Contract_Length_Months' => 12,
+                'Credit_Rate_Stated' => 0 }));
+        System.assertEquals(null, row.Contract_Start_Date__c);
+        System.assertEquals('Incomplete', row.Extraction_Status__c);
+        insert row;
+        System.assertEquals(null, row.Credit_Rate__c, 'A stated rate of 0 is not a rate');
+    }
+
     // ---- 6. Clamp out-of-range numbers ----
 
     @isTest

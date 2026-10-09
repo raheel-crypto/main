@@ -641,7 +641,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Named_Users__c = truncate(extracted.get('Named_Users'), 4096);
         row.Requested_By_Name__c = truncate(extracted.get('Requested_By_Name'), 255);
         row.Requested_By_Email__c = sanitizeEmail(extracted.get('Requested_By_Email'));
-        row.Credit_Rate__c = toDecimal(extracted.get('Credit_Rate_Stated'));
+        Decimal statedRate = toDecimal(extracted.get('Credit_Rate_Stated'));
+        row.Credit_Rate__c = (statedRate != null && statedRate > 0) ? statedRate : null;
         row.Overage_Rate__c = toDecimal(extracted.get('Overage_Rate'));
         row.Free_Tier_Retained__c = OrderFormPicklistMapper.mapYesNoNotSpecified(asStr(extracted.get('Free_Tier_Retained')));
 
@@ -800,6 +801,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             row.Pricing_Structure__c = derivePricingStructure(row);   // without the MSA's credits
         }
         normaliseTerm(row, d);
+        coTermAmendment(row, parentOpp, d);
         // With no order form the economics step must not see the model's fee /
         // credit keys either - only the (cleared) row.
         computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d);
@@ -942,6 +944,47 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         }
     }
 
+    // An amendment that states neither an end date nor a term runs to the end of
+    // the contract it amends ("co-termed") - most upsell papers say no more than
+    // that. Without this they all read Incomplete, so a refresh could never
+    // replace an older row (Macquarie, Tiger Global, DC kept stale increments).
+    @TestVisible
+    private static void coTermAmendment(Order_Form_Extraction__c row, Opportunity parentOpp, Derivations d) {
+        Date startD = row.Contract_Start_Date__c;
+        if (!AMEND_TYPES.contains(row.Type__c) || parentOpp == null || startD == null
+                || row.Contract_End_Date__c != null || row.Contract_Length_Months__c != null
+                || row.Contract_Length_Days__c != null) return;
+        Date coEnd = null;
+        String source = null;
+        if (parentOpp.Base_Opportunity__c != null) {
+            for (Order_Form_Extraction__c b : [
+                SELECT Contract_End_Date__c FROM Order_Form_Extraction__c
+                WHERE Opportunity__c = :parentOpp.Base_Opportunity__c AND Contract_End_Date__c != null
+                  AND Extraction_Status__c IN ('Success', 'Incomplete')
+                ORDER BY Is_Current__c DESC, Extracted_At__c DESC NULLS LAST
+                LIMIT 1
+            ]) {
+                coEnd = b.Contract_End_Date__c;
+                source = 'the base deal\'s order form';
+            }
+        }
+        if (coEnd == null) {
+            Contract gov = loadGoverningContract(parentOpp);
+            if (gov != null && gov.EndDate != null) {
+                coEnd = gov.EndDate;
+                source = 'governing Contract ' + gov.ContractNumber;
+            }
+        }
+        if (coEnd == null || coEnd < startD) return;
+        row.Contract_End_Date__c = coEnd;
+        row.End_Date_Source__c = 'Derived';
+        d.mark('Contract_End_Date', 'Not stated on the paper; co-termed with ' + source + ', which ends '
+            + String.valueOf(coEnd) + '.');
+        row.Contract_Length_Months__c = termMonths(startD, coEnd);
+        d.mark('Contract_Length_Months', 'Derived from ' + String.valueOf(startD) + ' to '
+            + String.valueOf(coEnd) + ' (inclusive).');
+    }
+
     // Whole months when the inclusive term is month-aligned (a 366-day leap-year
     // term still reads 12); otherwise days x 12 / 365.25, snapped to the whole
     // month when within 0.1 so a paper that is off by a day doesn't read 11.97.
@@ -1010,6 +1053,14 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 // Older prompt: an already-annual figure for the whole contract.
                 totalStated = toDecimal(extracted.get('Annual_Recurring_Revenue'));
                 basis = 'Annual';
+            } else if (!isAmend && basis == 'Term' && row.Type__c != 'Pilot' && months != null && months >= 6
+                    && row.Total_Contract_Value__c != null && row.Total_Contract_Value__c > 0
+                    && row.Professional_Service_Fees__c == null) {
+                // Partners Capital: one "$7,500" for the 12-month term, reported only as
+                // TCV. With no recurring line and no one-time fee it is the
+                // subscription fee for the term.
+                totalStated = row.Total_Contract_Value__c;
+                totalHow = 'Total_Contract_Value ' + totalStated + ' (the paper\'s only fee)';
             }
         }
         Decimal feeFactor = annualFactor(basis, months);
@@ -1240,7 +1291,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             ? parentOpp.Base_Opportunity__r.ContractId : parentOpp.ContractId;
         if (cid == null) return null;
         List<Contract> cs = [
-            SELECT Id, ContractNumber, ARR__c, Seat_Licenses__c, Total_Credits_Purchased__c
+            SELECT Id, ContractNumber, EndDate, ARR__c, Seat_Licenses__c, Total_Credits_Purchased__c
             FROM Contract WHERE Id = :cid LIMIT 1
         ];
         return cs.isEmpty() ? null : cs[0];
@@ -1507,7 +1558,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
     private static Date parseDate(String iso) {
         if (String.isBlank(iso)) return null;
-        try { return Date.valueOf(iso); } catch (Exception e) { return null; }
+        try {
+            Date dt = Date.valueOf(iso);
+            // "1026-01-31": a typo Salesforce cannot even store (it sank a refresh chunk).
+            return (dt.year() < 1900 || dt.year() > 2100) ? null : dt;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static Decimal toDecimal(Object v) {

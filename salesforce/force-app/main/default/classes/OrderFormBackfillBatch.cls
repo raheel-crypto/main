@@ -21,6 +21,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
     private Integer totalProcessed = 0;
     private Integer totalSkippedNoFile = 0;
     private Integer totalRefreshSkipped = 0;
+    private Integer totalRefreshFailed = 0;
     private Integer totalSeen = 0;
 
     public OrderFormBackfillBatch() {
@@ -165,7 +166,12 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
                 totalRefreshSkipped++;                        // failed or thinner rerun - keep the good row
             }
         }
-        if (!toUpdate.isEmpty()) update toUpdate;
+        // Row by row: one unsavable value must not sink the other opp in the chunk.
+        if (!toUpdate.isEmpty()) {
+            for (Database.SaveResult sr : Database.update(toUpdate, false)) {
+                if (!sr.isSuccess()) totalRefreshFailed++;
+            }
+        }
         if (!toInsert.isEmpty()) OrderFormVersioning.insertWithVersioning(toInsert);
     }
 
@@ -175,7 +181,8 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
             'Seen: ' + totalSeen + '; ' +
             'Processed: ' + totalProcessed + '; ' +
             'Skipped (no documents): ' + totalSkippedNoFile + '; ' +
-            'Refresh skipped (failed or thinner rerun, row kept): ' + totalRefreshSkipped);
+            'Refresh skipped (failed or thinner rerun, row kept): ' + totalRefreshSkipped + '; ' +
+            'Refresh rows that failed to save: ' + totalRefreshFailed);
     }
 
     public static Id run() {
