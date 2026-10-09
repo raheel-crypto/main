@@ -44,7 +44,7 @@ FEES, BASIS AND RECURRING TOTALS (stated values only):
 - Never return an "Annual_Recurring_Revenue" figure: Apex computes ARR from Recurring_Fees_Stated / Incremental_Recurring_Fees, Value_Basis and the term.
 
 TERM AND DATES (stated values only):
-- Contract_Start_Date = the stated start / effective / subscription start date of THIS deal (from an order form).
+- Contract_Start_Date = the stated start / effective / subscription start date of THIS deal (from an order form). If the paper says it is effective on signature / execution rather than naming a date, leave Contract_Start_Date null and make sure Customer_Signature_Date / Rogo_Signature_Date are filled - Apex uses the later signature.
 - Contract_End_Date = ONLY an end / expiry date written on the paper. Do not compute it.
 - Contract_Length_Months / Contract_Length_Days = a term length written on the paper in any form ("12 months", "Initial Subscription Period: 24 months", "two-year term", "Period Covered: 2y", "90 days"). Converting stated years to months ("2y" -> 24) is reading, not computing - do it. Do not compute a length from dates.
 

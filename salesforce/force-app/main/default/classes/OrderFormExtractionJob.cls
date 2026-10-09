@@ -804,6 +804,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             clearEconomics(row);
             row.Pricing_Structure__c = derivePricingStructure(row);   // without the MSA's credits
         }
+        if (hasOrderForm != false) deriveStartDate(row, parentOpp, d);
         normaliseTerm(row, d);
         coTermAmendment(row, parentOpp, d);
         // With no order form the economics step must not see the model's fee /
@@ -945,6 +946,24 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             row.Contract_Length_Months__c = termMonths(startD, row.Contract_End_Date__c);
             d.mark('Contract_Length_Months', 'Derived from ' + String.valueOf(startD) + ' to '
                 + String.valueOf(row.Contract_End_Date__c) + ' (inclusive).');
+        }
+    }
+
+    // Most upsell papers take effect on signature rather than naming a start date
+    // (78 of 84 Incomplete upsells on 2026-10-09 lacked only that). The later
+    // signature is the start; for an amendment signed with no date captured,
+    // the opportunity's close date.
+    @TestVisible
+    private static void deriveStartDate(Order_Form_Extraction__c row, Opportunity parentOpp, Derivations d) {
+        if (row.Contract_Start_Date__c != null) return;
+        if (row.Signature_Date__c != null) {
+            row.Contract_Start_Date__c = row.Signature_Date__c;
+            d.mark('Contract_Start_Date', 'Not stated on the paper; effective on signature ('
+                + String.valueOf(row.Signature_Date__c) + ', the later signature).');
+        } else if (AMEND_TYPES.contains(row.Type__c) && parentOpp != null && parentOpp.CloseDate != null) {
+            row.Contract_Start_Date__c = parentOpp.CloseDate;
+            d.mark('Contract_Start_Date', 'Not stated and no signature date on the paper; the opportunity\'s close date '
+                + String.valueOf(parentOpp.CloseDate) + '.');
         }
     }
 

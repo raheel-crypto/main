@@ -2383,6 +2383,28 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void startDate_effectiveOnSignatureThenCoTermed() {
+        // Upsell papers that take effect on signature name no start date.
+        Opportunity up = governedAmendment('Upsell');   // base paper ends today + 334
+        Date signed = Date.today().addDays(-3);
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual', 'Incremental_Recurring_Fees' => 10000,
+                'Contract_Start_Date' => null, 'Customer_Signature_Date' => String.valueOf(signed) }));
+        System.assertEquals(signed, row.Contract_Start_Date__c);
+        System.assertEquals(Date.today().addDays(334), row.Contract_End_Date__c, 'Then co-termed');
+        System.assertEquals('Success', row.Extraction_Status__c);
+        System.assert(row.Derived_Fields__c.contains('Contract_Start_Date'), row.Derived_Fields__c);
+
+        // No signature date captured: the amendment's close date.
+        Order_Form_Extraction__c noSig = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual', 'Incremental_Recurring_Fees' => 10000,
+                'Contract_Start_Date' => null }));
+        System.assertEquals(Date.today(), noSig.Contract_Start_Date__c);
+    }
+
+    @isTest
     static void termTcvOnly_isTheSubscriptionFee() {
         // Partners Capital: "$7,500" for a 12-month term, reported only as TCV.
         Opportunity opp = insertOpp('TCV Only', 'Closed Won');
