@@ -2512,6 +2512,16 @@ private class OrderFormExtractorTest {
         System.assertEquals('Unresolved', OrderFormPicklistMapper.mapModelChangeRequirement('Unresolved'));
         System.assertEquals(null, OrderFormPicklistMapper.mapModelChangeRequirement('maybe'));
         System.assertEquals(null, OrderFormPicklistMapper.mapModelChangeRequirement(null));
+
+        // The cell always leads with its heading, not a clause title.
+        System.assertEquals('Notice: Any initial use or material change requires 90 days\' notice. §8.5.',
+            OrderFormExtractionJob.modelChangeCell('Notice',
+                'Use of Model (GPA Section 8.5): Any initial use or material change requires 90 days\' notice. §8.5.'));
+        System.assertEquals('Approval + notice: 90 days\' notice for approval. §2.3.',
+            OrderFormExtractionJob.modelChangeCell('Approval + notice', 'approval + notice: 90 days\' notice for approval. §2.3.'));
+        System.assertEquals('Approval: Prior written consent; no fixed lead time.',
+            OrderFormExtractionJob.modelChangeCell('Approval', 'Prior written consent; no fixed lead time.'));
+        System.assertEquals(null, OrderFormExtractionJob.modelChangeCell('Notice', null));
     }
 
     // ---- 6. Clamp out-of-range numbers ----

@@ -720,7 +720,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.AI_Change_Reporting_Trigger__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Change_Reporting_Trigger'));
         // Legal's "Model changes: notice or approval" column (heading + cell text).
         row.Model_Change_Requirement__c = OrderFormPicklistMapper.mapModelChangeRequirement(asStr(extracted.get('Model_Change_Requirement')));
-        row.Model_Change_Terms__c = truncate(extracted.get('Model_Change_Terms'), 2000);
+        row.Model_Change_Terms__c = truncate(
+            modelChangeCell(row.Model_Change_Requirement__c, asStr(extracted.get('Model_Change_Terms'))), 2000);
         row.Processing_Location_Gate__c = OrderFormPicklistMapper.mapLocationGate((String) extracted.get('Processing_Location_Gate'));
         row.Approved_Locations__c = truncate(extracted.get('Approved_Locations'), 255);
         row.Personal_Data_Disclosure_Gate__c = OrderFormPicklistMapper.mapDisclosureGate((String) extracted.get('Personal_Data_Disclosure_Gate'));
@@ -1591,6 +1592,20 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             return null;
         }
         return null;
+    }
+
+    // Legal's cell starts with its heading ("Notice: ..."). The model sometimes
+    // leads with the clause title instead ("Use of Model (GPA Section 8.5): ...");
+    // a short label before the first colon is replaced by the heading.
+    @TestVisible
+    private static String modelChangeCell(String requirement, String terms) {
+        if (String.isBlank(terms) || String.isBlank(requirement)) return terms;
+        String t = terms.trim();
+        String heading = requirement + ':';
+        if (t.toLowerCase().startsWith(heading.toLowerCase())) return heading + t.substring(heading.length());
+        Integer colon = t.indexOf(':');
+        if (colon > 0 && colon <= 80 && !t.substring(0, colon).contains('. ')) t = t.substring(colon + 1).trim();
+        return heading + ' ' + t;
     }
 
     // The paper's phases as a JSON array sorted by date: [{effective_date, seats,
