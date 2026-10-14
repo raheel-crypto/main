@@ -12,6 +12,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     // response JSON roughly doubled. 4096 was truncating output on rich contracts.
     @TestVisible private static final Integer MAX_TOKENS = 8192;
     @TestVisible private static final String PROMPT_RESOURCE = 'OrderFormPrompt';
+    // Oct 14 2026: the ramp schedule / free credits / credit commit fee keys live
+    // in a second resource appended at load time, so the production prompt stays
+    // byte-identical and the addendum can be deployed and reverted on its own.
+    @TestVisible private static final String PROMPT_ADDENDUM_RESOURCE = 'OrderFormPromptAddendum';
     @TestVisible private static final Integer RAW_RESPONSE_LIMIT = 131072;
     @TestVisible private static final Integer EXTRACTED_JSON_LIMIT = 32768;
     @TestVisible private static final Integer ERROR_MESSAGE_LIMIT = 32768;
@@ -535,7 +539,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (resources.isEmpty()) {
             throw new OrderFormException('Static resource "' + PROMPT_RESOURCE + '" not found.');
         }
-        return resources[0].Body.toString();
+        String prompt = resources[0].Body.toString();
+        List<StaticResource> addendum = [SELECT Body FROM StaticResource WHERE Name = :PROMPT_ADDENDUM_RESOURCE LIMIT 1];
+        if (!addendum.isEmpty()) prompt += '\n\n' + addendum[0].Body.toString();
+        return prompt;
     }
 
     @TestVisible
@@ -645,6 +652,12 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credit_Rate__c = (statedRate != null && statedRate > 0) ? statedRate : null;
         row.Overage_Rate__c = toDecimal(extracted.get('Overage_Rate'));
         row.Free_Tier_Retained__c = OrderFormPicklistMapper.mapYesNoNotSpecified(asStr(extracted.get('Free_Tier_Retained')));
+        // Oct 14 2026: the paper's own itemization. The stated credit commit fee
+        // (never a rate x allocation), complimentary credits kept apart from the
+        // paid allocation, and the phase schedule of a ramped paper (JSON).
+        row.Credit_Commit_Fee__c = toDecimal(extracted.get('Credit_Commit_Fee'));
+        row.Free_Credits__c = toDecimal(extracted.get('Free_Credits'));
+        row.Ramp_Schedule__c = serializeRampSchedule(extracted.get('Ramp_Schedule'));
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);
@@ -810,6 +823,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         // With no order form the economics step must not see the model's fee /
         // credit keys either - only the (cleared) row.
         computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d);
+        checkStatedSplit(row, extracted, d);
         clampToFieldLimits(row, d);
         d.writeTo(row);
         applyStatus(row, hasOrderForm, skipped);
@@ -873,6 +887,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credit_Rate__c = null;
         row.Overage_Rate__c = null;
         row.Trial_Price__c = null;
+        row.Credit_Commit_Fee__c = null;
+        row.Free_Credits__c = null;
+        row.Ramp_Schedule__c = null;
     }
 
     // Success requires an order form plus the minimums (see OrderFormVersioning).
@@ -1223,8 +1240,16 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 fee = incStated;
                 if (incCredits != null) credits = incCredits;
             }
-            Boolean bothTerm = basis == 'Term' && period == 'contract';
-            Decimal rate = creditRate(fee, feeFactor, credits, creditFac, bothTerm);
+            // Cantor: "Credit Commitment: USD $410,000 per year" beside the licence fee -
+            // the commitment is what buys the credits, so it prices them. Always annual.
+            Boolean usesCommitFee = row.Credit_Commit_Fee__c != null && row.Credit_Commit_Fee__c > 0;
+            Decimal rateFeeFactor = feeFactor;
+            if (usesCommitFee) {
+                fee = row.Credit_Commit_Fee__c;
+                rateFeeFactor = 1;
+            }
+            Boolean bothTerm = !usesCommitFee && basis == 'Term' && period == 'contract';
+            Decimal rate = creditRate(fee, rateFeeFactor, credits, creditFac, bothTerm);
             if (rate != null && rate > MAX_DERIVED_CREDIT_RATE) {
                 // William Blair: a $500k licence over a 250,000-credit allowance is $2 a
                 // credit - the fee buys seats, not the credits. Not a rate.
@@ -1232,7 +1257,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                     + ' per credit is implausible (the fee likely buys seats, not credits).');
             } else if (rate != null) {
                 row.Credit_Rate__c = rate;
-                d.mark('Credit_Rate', 'Derived: committed fee ' + fee + ' (' + (basis == null ? 'Annual' : basis)
+                d.mark('Credit_Rate', 'Derived: ' + (usesCommitFee ? 'credit commitment fee ' : 'committed fee ') + fee
+                    + ' (' + (usesCommitFee || basis == null ? 'Annual' : basis)
                     + ') / ' + credits + ' credits (' + period + ') = ' + rate + ' per credit.');
             }
         }
@@ -1562,6 +1588,56 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             return null;
         }
         return null;
+    }
+
+    // The paper's phases as a JSON array sorted by date: [{effective_date, seats,
+    // platform_fee_annual, credit_commit_annual}]. Entries without a parseable
+    // date are dropped; fewer than two phases is not a ramp (null).
+    @TestVisible
+    private static String serializeRampSchedule(Object raw) {
+        if (!(raw instanceof List<Object>)) return null;
+        List<Map<String, Object>> steps = new List<Map<String, Object>>();
+        for (Object o : (List<Object>) raw) {
+            if (!(o instanceof Map<String, Object>)) continue;
+            Map<String, Object> m = (Map<String, Object>) o;
+            Date eff = parseDate(asStr(m.get('effective_date')));
+            if (eff == null) continue;
+            steps.add(new Map<String, Object>{
+                'effective_date' => String.valueOf(eff),
+                'seats' => toDecimal(m.get('seats')),
+                'platform_fee_annual' => toDecimal(m.get('platform_fee_annual')),
+                'credit_commit_annual' => toDecimal(m.get('credit_commit_annual'))
+            });
+        }
+        if (steps.size() < 2) return null;
+        // Insertion sort by date (short lists; Apex has no comparator on List<Map>).
+        for (Integer i = 1; i < steps.size(); i++) {
+            Map<String, Object> cur = steps[i];
+            Integer j = i - 1;
+            while (j >= 0 && String.valueOf(steps[j].get('effective_date')) > String.valueOf(cur.get('effective_date'))) {
+                steps[j + 1] = steps[j];
+                j--;
+            }
+            steps[j + 1] = cur;
+        }
+        return truncate(JSON.serialize(steps), 32768);
+    }
+
+    // When the paper states every component, they must add up to the stated
+    // recurring fees; a gap means one of them was misread (Oppenheimer: a
+    // "$84,0000" typo read as 840,000 against a 253,784 total).
+    @TestVisible
+    private static void checkStatedSplit(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d) {
+        if (row.License_Fees__c == null || row.Credit_Commit_Fee__c == null) return;
+        Decimal stated = toDecimal(extracted.get('Recurring_Fees_Stated'));
+        if (stated == null) stated = row.Annual_Recurring_Revenue__c;
+        if (stated == null) return;
+        Decimal parts = row.License_Fees__c + row.Credit_Commit_Fee__c + nz(row.Platform_Connection_Fee__c);
+        if ((parts - stated).abs() > 1) {
+            d.mark('Credit_Commit_Fee', 'License fees ' + row.License_Fees__c + ' + credit commit ' + row.Credit_Commit_Fee__c
+                + ' + hosting ' + nz(row.Platform_Connection_Fee__c) + ' = ' + parts + ' does not equal the stated recurring fees '
+                + stated + '; one component is misread - verify before booking the split.');
+        }
     }
 
     private static String mapDocumentType(String raw) {

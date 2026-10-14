@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Ramp_Schedule__c</fullName>
+    <description>JSON array of the paper's phases when seats or fees phase in over the term: [{"effective_date","seats","platform_fee_annual","credit_commit_annual"}], sorted by date, first entry = contract start. Null on a flat deal. Written by OrderFormExtractionJob from the model's Ramp_Schedule key; read by the Deal Desk paper backfill to mint ramped quotes.</description>
+    <inlineHelpText>Phases of a ramped order form (JSON): total seats and annual fees in force from each date.</inlineHelpText>
+    <label>Ramp Schedule</label>
+    <length>32768</length>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>LongTextArea</type>
+    <visibleLines>6</visibleLines>
+</CustomField>

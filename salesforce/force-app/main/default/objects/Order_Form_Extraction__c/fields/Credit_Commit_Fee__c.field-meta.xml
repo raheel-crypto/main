@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Commit_Fee__c</fullName>
+    <description>The annual Credit Commitment fee in dollars as the order form states it (Cantor: "Credit Commitment: USD $410,000 per year"). Null when the paper has no separate commitment line (credits included in the licence fee). Never derived from a per-credit rate; the paper backfill books it as the quote's credit commit (QuoteForm.credits_commit_amount).</description>
+    <inlineHelpText>Annual Credit Commitment fee stated on the order form, in dollars.</inlineHelpText>
+    <label>Credit Commit Fee</label>
+    <precision>16</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Currency</type>
+</CustomField>

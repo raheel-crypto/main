@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Free_Credits__c</fullName>
+    <description>Complimentary / bonus credits per year the order form states separately from the paid Credit Allocation (Credits_Purchased__c). Null when none are stated. Minted as the quote's $0 "Free Credits" line.</description>
+    <externalId>false</externalId>
+    <inlineHelpText>Complimentary credits per year, as stated on the order form (not part of the paid allocation).</inlineHelpText>
+    <label>Free Credits</label>
+    <precision>18</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

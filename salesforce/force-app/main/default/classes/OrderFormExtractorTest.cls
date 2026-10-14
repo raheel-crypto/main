@@ -2445,6 +2445,53 @@ private class OrderFormExtractorTest {
         System.assert(ela.Extract_Evidence__c.contains('implausible'), ela.Extract_Evidence__c);
     }
 
+    // ---- Paper itemization (ramp schedule, free credits, credit commit fee) ----
+
+    @isTest
+    static void rampSchedule_sortedDatedPhasesOnly() {
+        List<Object> raw = new List<Object>{
+            new Map<String, Object>{ 'effective_date' => '2027-04-01', 'seats' => 40, 'platform_fee_annual' => 200000 },
+            new Map<String, Object>{ 'effective_date' => 'TBD', 'seats' => 99 },
+            new Map<String, Object>{ 'effective_date' => '2026-10-01', 'seats' => 20, 'platform_fee_annual' => 100000,
+                                     'credit_commit_annual' => 30000 }
+        };
+        String rampJson = OrderFormExtractionJob.serializeRampSchedule(raw);
+        List<Object> steps = (List<Object>) JSON.deserializeUntyped(rampJson);
+        System.assertEquals(2, steps.size(), 'Undated phase dropped: ' + rampJson);
+        System.assertEquals('2026-10-01', ((Map<String, Object>) steps[0]).get('effective_date'), 'Sorted by date');
+        System.assertEquals(null, OrderFormExtractionJob.serializeRampSchedule(new List<Object>{ raw[0] }),
+            'One phase is not a ramp');
+        System.assertEquals(null, OrderFormExtractionJob.serializeRampSchedule('not a list'));
+    }
+
+    @isTest
+    static void creditCommitFee_pricesTheCreditsAndChecksTheSplit() {
+        // Cantor-style: licence fee for seats plus a separate credit commitment.
+        Opportunity opp = insertOpp('Commit Fee', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Annual',
+                'License_Fees' => 100000, 'Credit_Commit_Fee' => 30000, 'Recurring_Fees_Stated' => 130000,
+                'Credits_Purchased' => 1000000, 'Credits_Period' => 'year', 'Free_Credits' => 50000,
+                'Ramp_Schedule' => new List<Object>{
+                    new Map<String, Object>{ 'effective_date' => '2026-01-01', 'seats' => 10 },
+                    new Map<String, Object>{ 'effective_date' => '2026-07-01', 'seats' => 20 } } }));
+        System.assertEquals(30000, row.Credit_Commit_Fee__c);
+        System.assertEquals(50000, row.Free_Credits__c);
+        System.assertNotEquals(null, row.Ramp_Schedule__c);
+        System.assertEquals(0.03, row.Credit_Rate__c, 'Commitment / credits, not licence fee / credits');
+        System.assert(row.Derived_Fields__c == null || !row.Derived_Fields__c.contains('Credit_Commit_Fee'),
+            'Components add up - no split warning: ' + row.Derived_Fields__c);
+
+        // Oppenheimer-style misread: the parts no longer add up to the stated total.
+        Order_Form_Extraction__c misread = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Annual',
+                'License_Fees' => 100000, 'Credit_Commit_Fee' => 840000, 'Recurring_Fees_Stated' => 184000 }));
+        System.assert(misread.Derived_Fields__c.contains('Credit_Commit_Fee'), misread.Derived_Fields__c);
+        System.assert(misread.Extract_Evidence__c.contains('misread'), misread.Extract_Evidence__c);
+    }
+
     // ---- 6. Clamp out-of-range numbers ----
 
     @isTest
