@@ -627,4 +627,69 @@ private class ContractLegalTermsApplierTest {
         System.assert(after.Special_Terms__c.contains('[Upsell Opp, closed '), after.Special_Terms__c);
         System.assertEquals(1, after.Special_Terms__c.countMatches('co-termed'), 'Added once: ' + after.Special_Terms__c);
     }
+
+    // ===== Legal's "Model changes: notice or approval" column =====
+
+    @isTest
+    static void modelChange_freshWritesAmendmentSilenceKeepsAndConflictFlags() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{
+            'Model_Change_Requirement__c' => 'Approval',
+            'Model_Change_Terms__c' => 'Approval: Before introducing a model outside the approved list; no fixed lead time. AI Schedule §4.' });
+        // An upsell paper without the MSA's AI terms: silence, never an override.
+        Opportunity up1 = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeSilent = makeOfe(up1.Id, new Map<String, Object>{
+            'Model_Change_Requirement__c' => 'None identified',
+            'Model_Change_Terms__c' => 'None identified: No notice or approval requirement identified.' });
+        // A different real answer: legal review, contract unchanged.
+        Opportunity up2 = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeDiffers = makeOfe(up2.Id, new Map<String, Object>{
+            'Model_Change_Requirement__c' => 'Notice',
+            'Model_Change_Terms__c' => 'Notice: 30 days before material model changes; customer may reject. §2.3.' });
+
+        Test.startTest();
+        runOne(ofeNb.Id);
+        ContractLegalTermsApplier.Result silentRes = runOne(ofeSilent.Id);
+        Contract afterSilent = [SELECT Model_Change_Requirement__c, Model_Change_Terms__c, Needs_Legal_Review__c
+                                FROM Contract WHERE Id = :c.Id];
+        ContractLegalTermsApplier.Result differsRes = runOne(ofeDiffers.Id);
+        Test.stopTest();
+
+        System.assertEquals('Approval', afterSilent.Model_Change_Requirement__c);
+        System.assert(afterSilent.Model_Change_Terms__c.startsWith('Approval: Before introducing'), afterSilent.Model_Change_Terms__c);
+        System.assertEquals(false, silentRes.needsReview);
+        System.assertEquals(false, afterSilent.Needs_Legal_Review__c);
+
+        Contract after = [SELECT Model_Change_Requirement__c, Needs_Legal_Review__c, Reconciliation_Notes__c
+                          FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(true, differsRes.needsReview);
+        System.assertEquals('Approval', after.Model_Change_Requirement__c, 'Conflict never overwrites');
+        System.assertEquals(true, after.Needs_Legal_Review__c);
+        System.assert(after.Reconciliation_Notes__c.contains('CONFLICT Model_Change_Requirement__c'), after.Reconciliation_Notes__c);
+    }
+
+    @isTest
+    static void modelChange_realAnswerReplacesUnresolved() {
+        // The NB paper referenced an AI Schedule that wasn't attached; the upsell's paper has it.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, new Map<String, Object>{
+            'Model_Change_Requirement__c' => 'Unresolved',
+            'Model_Change_Terms__c' => 'Unresolved: Referenced AI Schedule is missing.' });
+        Opportunity base = makeOpp(a.Id, 'New Business', c.Id, null);
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, base.Id);
+        Order_Form_Extraction__c ofe = makeOfe(up.Id, new Map<String, Object>{
+            'Model_Change_Requirement__c' => 'Notice',
+            'Model_Change_Terms__c' => 'Notice: 30 days before material model changes; customer may reject. AI Schedule §2.3.' });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        Contract after = [SELECT Model_Change_Requirement__c, Model_Change_Terms__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(false, res.needsReview);
+        System.assertEquals('Notice', after.Model_Change_Requirement__c);
+        System.assert(after.Model_Change_Terms__c.contains('AI Schedule §2.3'), after.Model_Change_Terms__c);
+    }
 }

@@ -150,6 +150,8 @@ JSON SCHEMA (return exactly these keys):
   "AI_Training_Prohibition": "Yes" | "No" | "Not specified",
   "AI_Training_Flowdown_Required": "Yes" | "No" | "Not specified",
   "Model_Capability_Floor": "Yes" | "No" | "Not specified",
+  "Model_Change_Requirement": "Notice" | "Approval" | "Approval + notice" | "None identified" | "Unresolved",
+  "Model_Change_Terms": "the heading, a colon, then one or two short sentences with section references (see MODEL CHANGES)" | null,
   "LLM_Gate_Confidence": "High" | "Medium" | "Low",
   "Extract_Evidence": {"<field_name>": {"clause":"clause ref", "quote":"verbatim quote"}, ...} | null
 }
@@ -233,6 +235,22 @@ GATE RULES:
 - If the contract is silent on a picklist gate, return "Not specified" - NEVER "No"/"None" to mean "the contract didn't say".
 - If a clause cross-references a sub-clause that does not exist or has a severed enumeration, set LLM_Gate_Confidence = Low. Set Source_Document_Type to the document the GATE CLAUSE came from.
 
+MODEL CHANGES: NOTICE OR APPROVAL (Model_Change_Requirement, Model_Change_Terms):
+This is Legal's contract-requirements column. It answers ONE narrow question and is NOT the LLM gate roll-up above - do not carry Subprocessor_Gate_Type, location or personal-data gates into it.
+- Scenario: Rogo adds, replaces or upgrades an AI inference / machine learning model through an EXISTING provider (e.g. Fireworks, OpenAI). The provider, API connection, hosting, processing locations, data and purposes remain unchanged.
+- Question: does the model change ITSELF require customer notice or approval? If so, what triggers it, when must Rogo act, and must Rogo wait before using the model?
+- Review: read the agreement and every attached amendment, schedule and order. Apply the contract's definitions and order of precedence. Check model-specific clauses (STEP 0B) AND broader clauses (change management, service changes, updates) that actually apply to a model change.
+- Scope: EXCLUDE requirements triggered by separate changes to subprocessors, APIs, hosting, locations or infrastructure, and do not add precautionary "check whether" notes about those. EXCLUDE training restrictions and other AI duties unless they require notice or approval for the model change. A broader clause that applies only if the change degrades the service, adds customer obligations or reduces scope does NOT apply to every model change - mention it only if it is the operative requirement.
+- Interpretation: distinguish new models, material changes and routine updates. Do not assume every model change is material, or that every new model is a new "AI Tool". Determine whether existing approval (an approved list, AI Tools named in an order/SOW, a system description) already covers the change. Where the language is ambiguous, state Rogo's reasonable, defensible reading and the specific uncertainty briefly.
+- Model_Change_Requirement = exactly one of "Notice", "Approval", "Approval + notice", "None identified", "Unresolved". Use "Unresolved" when missing terms prevent an answer (e.g. a referenced AI Schedule or Model Addendum is not attached); "None identified" only when the attached documents genuinely contain no such requirement.
+- Model_Change_Terms = that heading, a colon, then ONE or TWO short sentences: the covered model change, the deadline, and any objection, rejection or testing requirement that determines when Rogo may use the model, then the section references. Preserve business-day vs calendar-day distinctions and material exceptions; say "no fixed lead time" when none is specified. Examples:
+  * "Notice: 30 days before material model changes; customer may reject. Model Addendum §2.3."
+  * "Approval: Before introducing a model outside the approved list; no fixed lead time. AI Schedule §4."
+  * "Approval + notice: 90 days' notice for approval of a new model not covered by the AI Tools identified in the Transaction Document. No blanket requirement to reapprove every update to an identified tool. §§1, 2.3."
+  * "None identified: No notice or approval requirement identified for changing models through an existing provider."
+  * "Unresolved: Referenced AI Schedule is missing."
+- Accuracy: verify each conclusion against the contract text; never invent requirements or citations. Add an Extract_Evidence entry for Model_Change_Requirement quoting the operative clause (or, for None identified / Unresolved, what you checked and what is missing).
+
 LOGO / PUBLICITY RIGHTS:
 - Determine whether Rogo may use the CUSTOMER's name, logo, or trademarks for marketing / publicity / commercial purposes (customer lists, website, press releases, case studies, "reference customer"). Search the order form, MSA, and T&C - the clause is often titled "Publicity", "Marketing", "Use of Name/Marks", "Reference Customer", or sits in a general/miscellaneous section.
 - Set Logo_Publicity_Rights to exactly one of:
@@ -244,7 +262,7 @@ LOGO / PUBLICITY RIGHTS:
 
 EXTRACT_EVIDENCE FIELD:
 - Return Extract_Evidence as a JSON OBJECT keyed by field name; each value is { "clause": "<section / clause / exhibit ref>", "quote": "<short verbatim excerpt, <= ~300 chars>" }. Example: {"Subprocessor_Gate_Type": {"clause":"8.1(a)", "quote":"...90 days prior written notice..."}}.
-- REQUIRED for every LLM-gate field you return with a value other than "Not specified" / null (Subprocessor_Gate_Type, Subprocessor_Notice_Period_Days, Consent_Revocable, Subprocessor_Objection_Consequence, AI_Model_Change_Gate_Days, AI_Model_Change_Carveout, Processing_Location_Gate, Personal_Data_Disclosure_Gate, AI_Training_Prohibition, and the rest), and for Value_Basis, Recurring_Fees_Stated, Incremental_Recurring_Fees, Unit_Price, Contract_Length_Months, Total_Contract_Value, Credits_Purchased, Credits_Added, Credit_Rate_Stated, Overage_Rate, Free_Tier_Retained, Contract_End_Date, Signature_Date, Sub_Processor_List, Renewal_Terms / Renewal_Fee_Escalator when inferred, and any value taken from a rider overriding the base contract.
+- REQUIRED for every LLM-gate field you return with a value other than "Not specified" / null (Subprocessor_Gate_Type, Subprocessor_Notice_Period_Days, Consent_Revocable, Subprocessor_Objection_Consequence, AI_Model_Change_Gate_Days, AI_Model_Change_Carveout, Model_Change_Requirement, Processing_Location_Gate, Personal_Data_Disclosure_Gate, AI_Training_Prohibition, and the rest), and for Value_Basis, Recurring_Fees_Stated, Incremental_Recurring_Fees, Unit_Price, Contract_Length_Months, Total_Contract_Value, Credits_Purchased, Credits_Added, Credit_Rate_Stated, Overage_Rate, Free_Tier_Retained, Contract_End_Date, Signature_Date, Sub_Processor_List, Renewal_Terms / Renewal_Fee_Escalator when inferred, and any value taken from a rider overriding the base contract.
 - Skip trivial extractions that appear plainly in labeled fields (Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name).
 - Keep each quote short and total length well under 30,000 characters. Return null only if there is genuinely nothing to cite.
 - Each "quote" (and every other value) is ONE JSON string: do not join fragments with a semicolon between closing and opening quotes ("...a"; "b..."), and do not append an editorial "note:" as a second quoted string. If a clause conflicts with another or you must caveat it, write it as ordinary prose INSIDE the single quoted string (or put the caveat in Subprocessor_Restrictions), never as separate quoted fragments.

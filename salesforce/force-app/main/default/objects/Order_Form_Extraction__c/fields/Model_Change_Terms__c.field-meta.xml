@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Model_Change_Terms__c</fullName>
+    <description>Legal's contract-requirements cell: heading (Notice / Approval / Approval + notice / None identified / Unresolved) then one or two short sentences - covered change, deadline, objection / rejection / testing that gates use - with section references. Scenario (Legal, 2026-10-09): Rogo adds, replaces or upgrades a model through an existing provider (e.g. Fireworks, OpenAI) with provider, API, hosting, locations, data and purposes unchanged.</description>
+    <inlineHelpText>Heading, then the covered model change, deadline and any objection or testing requirement, with section references.</inlineHelpText>
+    <label>Model Changes: Notice or Approval</label>
+    <length>2000</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

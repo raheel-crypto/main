@@ -128,6 +128,21 @@ public with sharing class OrderFormPicklistMapper {
         return 'Not specified';
     }
 
+    // Model_Change_Requirement (Legal's "Model changes: notice or approval"
+    // heading). Approval + notice before either alone; null when unrecognised.
+    public static String mapModelChangeRequirement(String raw) {
+        if (String.isBlank(raw)) return null;
+        String s = raw.toLowerCase();
+        if (s.contains('unresolved') || s.contains('missing')) return 'Unresolved';
+        if (s.startsWith('none') || s.contains('no notice or approval') || s.contains('not identified')) return 'None identified';
+        Boolean approval = s.contains('approval') || s.contains('consent');
+        Boolean notice = s.contains('notice') || s.contains('notif');
+        if (approval && notice) return 'Approval + notice';
+        if (approval) return 'Approval';
+        if (notice) return 'Notice';
+        return null;
+    }
+
     // Processing_Location_Gate: None / Notice / Consent / Not specified.
     public static String mapLocationGate(String raw) {
         if (String.isBlank(raw)) return 'Not specified';

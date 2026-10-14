@@ -718,6 +718,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.AI_Model_Change_Documentation__c = truncate(extracted.get('AI_Model_Change_Documentation'), 32768);
         row.AI_Model_Change_Carveout__c = truncate(extracted.get('AI_Model_Change_Carveout'), 255);
         row.AI_Change_Reporting_Trigger__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Change_Reporting_Trigger'));
+        // Legal's "Model changes: notice or approval" column (heading + cell text).
+        row.Model_Change_Requirement__c = OrderFormPicklistMapper.mapModelChangeRequirement(asStr(extracted.get('Model_Change_Requirement')));
+        row.Model_Change_Terms__c = truncate(extracted.get('Model_Change_Terms'), 2000);
         row.Processing_Location_Gate__c = OrderFormPicklistMapper.mapLocationGate((String) extracted.get('Processing_Location_Gate'));
         row.Approved_Locations__c = truncate(extracted.get('Approved_Locations'), 255);
         row.Personal_Data_Disclosure_Gate__c = OrderFormPicklistMapper.mapDisclosureGate((String) extracted.get('Personal_Data_Disclosure_Gate'));

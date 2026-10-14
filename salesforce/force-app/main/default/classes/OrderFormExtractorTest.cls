@@ -2492,6 +2492,28 @@ private class OrderFormExtractorTest {
         System.assert(misread.Extract_Evidence__c.contains('misread'), misread.Extract_Evidence__c);
     }
 
+    // ---- Legal's "Model changes: notice or approval" column ----
+
+    @isTest
+    static void modelChange_headingAndCellAreCaptured() {
+        Opportunity opp = insertOpp('Model Change', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business',
+                'Model_Change_Requirement' => 'Approval + Notice',
+                'Model_Change_Terms' => 'Approval + notice: 90 days\' notice for approval of a new model not covered by the AI Tools identified in the Transaction Document. §§1, 2.3.' }));
+        System.assertEquals('Approval + notice', row.Model_Change_Requirement__c);
+        System.assert(row.Model_Change_Terms__c.startsWith('Approval + notice: 90 days'), row.Model_Change_Terms__c);
+
+        System.assertEquals('Notice', OrderFormPicklistMapper.mapModelChangeRequirement('Notice'));
+        System.assertEquals('Approval', OrderFormPicklistMapper.mapModelChangeRequirement('approval'));
+        System.assertEquals('Approval + notice', OrderFormPicklistMapper.mapModelChangeRequirement('Conditional notice / approval'));
+        System.assertEquals('None identified', OrderFormPicklistMapper.mapModelChangeRequirement('None identified'));
+        System.assertEquals('Unresolved', OrderFormPicklistMapper.mapModelChangeRequirement('Unresolved'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapModelChangeRequirement('maybe'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapModelChangeRequirement(null));
+    }
+
     // ---- 6. Clamp out-of-range numbers ----
 
     @isTest

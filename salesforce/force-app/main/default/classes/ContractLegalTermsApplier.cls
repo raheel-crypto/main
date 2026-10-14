@@ -40,6 +40,7 @@ public with sharing class ContractLegalTermsApplier {
     // never a conflict, and replaced by any real value.
     private static final String NOT_SPECIFIED = 'Not specified';
     private static final Integer SPECIAL_TERMS_MAX = 32768;
+    private static final Set<String> MODEL_CHANGE_SILENT = new Set<String>{ 'None identified', 'Unresolved' };
 
     // Statuses whose legal terms may be applied. Failed reads never are.
     private static final Set<String> APPLICABLE_STATUSES =
@@ -94,6 +95,7 @@ public with sharing class ContractLegalTermsApplier {
                    Renewal_Terms__c, Renewal_Fee_Escalator__c, Payment_Terms__c, Credit_Terms__c,
                    Rate_Limitable__c, Rate_Limit_Notes__c,
                    Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
+                   Model_Change_Requirement__c, Model_Change_Terms__c,
                    ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c, Credits_Purchased__c,
                    Credits_Added__c,
                    Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
@@ -142,6 +144,7 @@ public with sharing class ContractLegalTermsApplier {
                 SELECT Id, Renewal_Terms__c, Renewal_Fee_Escalator__c, Payment_Terms__c, Credit_Terms__c,
                        Rate_Limitable__c, Rate_Limit_Notes__c,
                        Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
+                   Model_Change_Requirement__c, Model_Change_Terms__c,
                        ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
                        Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
                        Opportunity__c, Source_Opportunity_Id__c,
@@ -338,6 +341,7 @@ public with sharing class ContractLegalTermsApplier {
             changes.Special_Terms__c = truncate(ofe.Special_Terms__c, SPECIAL_TERMS_MAX);
             log.add('Wrote Special_Terms__c');
         }
+        applyModelChange(current, ofe, changes, log, false);
         // Contact info: straight write of whatever the order form states.
         for (LegalField f : CONTACT_FIELDS) {
             Object v = ofe.get(f.ofe);
@@ -377,6 +381,7 @@ public with sharing class ContractLegalTermsApplier {
             }
         }
         appendSpecialTerms(current, ofe, changes, log);
+        if (applyModelChange(current, ofe, changes, log, true)) conflict = true;
         // Contact info: latest order form wins - fill blanks and update changes,
         // but a differing contact is NOT a legal conflict and never triggers review.
         for (LegalField f : CONTACT_FIELDS) {
@@ -417,6 +422,38 @@ public with sharing class ContractLegalTermsApplier {
         String combined = existing + '\n\n[' + label + '] ' + added.trim();
         changes.Special_Terms__c = truncate(combined, SPECIAL_TERMS_MAX);
         log.add('Added Special_Terms__c from ' + label + (combined.length() > SPECIAL_TERMS_MAX ? ' (truncated to fit)' : ''));
+    }
+
+    // Legal's "Model changes: notice or approval" column: the heading
+    // (Model_Change_Requirement__c) and its cell text travel together. "None
+    // identified" / "Unresolved" never replace a real answer - an upsell paper
+    // without the MSA's AI terms says nothing about them. On an amendment a
+    // different real answer is a conflict for legal review; the contract keeps
+    // its value. Returns true on a conflict.
+    private static Boolean applyModelChange(Contract current, Order_Form_Extraction__c ofe, Contract changes,
+                                            List<String> log, Boolean isAmend) {
+        String incoming = ofe.Model_Change_Requirement__c;
+        if (String.isBlank(incoming)) return false;
+        String existing = (current == null) ? null : current.Model_Change_Requirement__c;
+        Boolean incomingReal = !MODEL_CHANGE_SILENT.contains(incoming);
+        Boolean existingReal = String.isNotBlank(existing) && !MODEL_CHANGE_SILENT.contains(existing);
+        if (!incomingReal && existingReal) return false;
+        if (isAmend && existingReal && existing != incoming) {
+            log.add('CONFLICT Model_Change_Requirement__c: contract="' + existing + '" vs order form="' + incoming
+                + '" (' + ofe.Model_Change_Terms__c + ') - left contract unchanged, needs legal review');
+            return true;
+        }
+        if (isAmend && existing == incoming) {
+            if (String.isBlank(current.Model_Change_Terms__c) && String.isNotBlank(ofe.Model_Change_Terms__c)) {
+                changes.Model_Change_Terms__c = ofe.Model_Change_Terms__c;
+                log.add('Wrote Model_Change_Terms__c (new)');
+            }
+            return false;
+        }
+        changes.Model_Change_Requirement__c = incoming;
+        changes.Model_Change_Terms__c = ofe.Model_Change_Terms__c;
+        log.add('Wrote Model_Change_Requirement__c = ' + incoming);
+        return false;
     }
 
     private static Boolean sameValue(Object a, Object b) {
