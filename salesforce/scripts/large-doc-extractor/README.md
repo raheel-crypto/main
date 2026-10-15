@@ -3,7 +3,7 @@
 Extracts order-form / MSA data from documents too large for Salesforce Apex.
 Apex's async heap is 12 MB, so it can't process files bigger than ~10 MB (a
 25 MB scan can't even be read). This script does those off-platform using the
-Anthropic **Files API** (good up to 32 MB), then writes the result back through
+Anthropic API with the files sent inline (up to ~22 MB of files per deal, inside the 32 MB request limit), then writes the result back through
 a Salesforce REST endpoint that runs the *same* field mapping as the in-platform
 pipeline — so the `Order_Form_Extraction__c` it creates is identical to a normal
 one.

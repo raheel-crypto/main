@@ -4,13 +4,13 @@ extract_large_docs.py
 
 Extract order-form / MSA data from documents too large for Salesforce Apex
 (> ~10 MB, up to Anthropic's 32 MB PDF limit), off-platform, using the
-Anthropic Files API. Apex can't even load a file that big into its 12 MB heap,
+Anthropic Messages API (files sent inline). Apex can't even load a file that big into its 12 MB heap,
 so these have to be processed here instead.
 
 For each Opportunity Id you pass, it:
   1. finds the documents on the Opp (+ its Base Opportunity),
   2. downloads each supported file (PDF / PNG / JPG / GIF / WEBP),
-  3. uploads each to the Anthropic Files API and runs the SAME extraction
+  3. sends them inline (base64) to the Anthropic Messages API and runs the SAME extraction
      prompt (staticresources/OrderFormPrompt.txt) via the Messages API,
   4. --write: POSTs the raw Anthropic response to the Salesforce REST endpoint
      /services/apexrest/OrderFormExtractionFromResponse, which runs your normal
@@ -34,7 +34,7 @@ Usage:
 """
 
 import argparse
-import io
+import base64
 import json
 import os
 import subprocess
@@ -51,8 +51,11 @@ API_VERSION = "v62.0"
 # with the ~1,300 done in Apex. Override with --model if you ever change it.
 DEFAULT_MODEL = "claude-sonnet-5"  # keep in step with OrderFormExtractionJob.MODEL
 MAX_TOKENS = 8192
-# Anthropic's PDF ceiling is 32 MB; stop before that with a little headroom.
-MAX_FILE_BYTES = 31 * 1024 * 1024
+# Files go inline (base64) in one request, and Anthropic's request ceiling is
+# 32 MB. Base64 adds a third, so keep the encoded total under ~30 MB (about
+# 22 MB of original files). The Files API isn't used: some organisations can't
+# reach it (POST /v1/files returned 404 for ours).
+REQUEST_BUDGET_BYTES = 30 * 1024 * 1024
 
 # Extension -> (anthropic content-block type, mime type). Mirrors Apex getMediaType.
 MEDIA = {
@@ -165,22 +168,24 @@ def deal_context(opp):
 
 def extract_one(client, model, system_prompt, opp, docs, target_org):
     blocks, used_doc_ids = [], []
+    used_bytes = 0
     for d in docs:
         media = MEDIA.get(d["ext"])
         if not media:
             print(f"    skip (unsupported .{d['ext']}): {d['title']}")
             continue
-        if d["size"] and d["size"] > MAX_FILE_BYTES:
-            print(f"    skip (>{MAX_FILE_BYTES} bytes, over Anthropic's limit): {d['title']}")
+        encoded_size = ((d["size"] or 0) + 2) // 3 * 4
+        if used_bytes + encoded_size > REQUEST_BUDGET_BYTES:
+            print(f"    skip (would push the request past {REQUEST_BUDGET_BYTES} encoded bytes): {d['title']}")
             continue
         block_type, mime = media
-        print(f"    downloading + uploading: {d['title']} ({d['size']} bytes, .{d['ext']})")
-        data = download(target_org, d["versionId"])
-        uploaded = client.files.upload(file=(f"{d['title']}.{d['ext']}", io.BytesIO(data), mime))
+        print(f"    downloading: {d['title']} ({d['size']} bytes, .{d['ext']})")
+        data = base64.standard_b64encode(download(target_org, d["versionId"])).decode("ascii")
+        used_bytes += len(data)
         # Label every file so the model can classify each one (Documents[] in the
         # prompt); this job sends a single group, so all files are the current deal.
         blocks.append({"type": "text", "text": f"FILE {len(used_doc_ids) + 1} (CURRENT DEAL): {d['title']}"})
-        blocks.append({"type": block_type, "source": {"type": "file", "file_id": uploaded.id}})
+        blocks.append({"type": block_type, "source": {"type": "base64", "media_type": mime, "data": data}})
         used_doc_ids.append(d["contentDocumentId"])
 
     if not blocks:
@@ -214,7 +219,7 @@ def write_back(target_org, opp_id, doc_ids, response_body):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Extract oversized order forms via the Anthropic Files API.")
+    ap = argparse.ArgumentParser(description="Extract oversized order forms off-platform via the Anthropic API.")
     ap.add_argument("opportunity_ids", nargs="+", help="Salesforce Opportunity Ids")
     ap.add_argument("--target-org", default="rogo", help="sf CLI org alias (default: rogo)")
     ap.add_argument("--model", default=DEFAULT_MODEL, help=f"Anthropic model (default: {DEFAULT_MODEL})")
