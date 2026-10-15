@@ -48,8 +48,10 @@ worklist. The script reads the same prompt the Apex pipeline uses
 
 - **Model** defaults to `claude-sonnet-5` (thinking disabled) to match the in-platform pipeline. Each file is sent with a `FILE n (CURRENT DEAL): <title>` label so the model can classify it (Order Form / MSA / MNDA / DPA / Other); a run with no order form is recorded as **No Order Form**.
   Override with `--model` if you change the Apex model.
-- Files 3–4 MB and under still belong in the normal Apex flow; this is only for
-  the oversized tail.
+- Deals whose usable files total about 4 MB or less (each file 4 MB or less) go
+  through the normal Apex flow; this is only for the oversized tail. A row with
+  `Docs_Dropped__c` checked lists what Apex left out in its notes ("too large",
+  "dropped to fit size budget" or "dropped to fit memory").
 - Anything over ~32 MB exceeds Anthropic's per-request PDF limit and is skipped —
   those need splitting first.
 - If you re-run an opp that already has a row, you'll get a second (newer) row;

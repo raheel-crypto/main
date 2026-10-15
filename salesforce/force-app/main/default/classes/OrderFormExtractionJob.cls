@@ -21,12 +21,23 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     @TestVisible private static final Integer ERROR_MESSAGE_LIMIT = 32768;
     @TestVisible private static final Integer FILE_NAME_LIMIT = 255;
     @TestVisible private static final Integer DOC_ID_LIMIT = 255;
-    // Base64 expands 1.33x and JSON.serialize makes another copy of the encoded
-    // string, so peak heap during request build is roughly 2.7x the raw PDF
-    // bytes. Async heap ceiling is 12MB, so cap raw payload at 3MB total (~8MB
-    // peak) with a per-file cap so a single 6MB behemoth doesn't blow it alone.
-    @TestVisible private static final Integer MAX_TOTAL_PDF_BYTES = 3 * 1024 * 1024;
+    // Files are chosen from metadata (ContentSize) and each one's bytes are
+    // loaded, base64-encoded and released one at a time, so peak heap is the
+    // encoded files plus the joined request body that repeats them (~2.7x the
+    // raw bytes). The old path held every raw blob, every encoded copy and the
+    // serialized body at once (~3.7x), which capped it at 3MB; 4MB now peaks no
+    // higher than 3MB did. Async heap ceiling is 12MB. A runtime check against
+    // the live heap (see encodeWithinHeap) is the backstop: a file that would
+    // not fit is dropped and recorded instead of hitting the uncatchable limit.
+    @TestVisible private static final Integer MAX_TOTAL_PDF_BYTES = 4 * 1024 * 1024;
     @TestVisible private static final Integer MAX_PER_FILE_BYTES = 4 * 1024 * 1024;
+    // Headroom kept free at the peak for the response, parsing and the row.
+    @TestVisible private static final Integer HEAP_RESERVE_BYTES = 750000;
+    // Request text around the files beyond the system prompt (deal context,
+    // labels, JSON framing) - generous so the heap projection stays safe.
+    @TestVisible private static final Integer SKELETON_SLACK_CHARS = 20000;
+    // Tests lower this to exercise the drop path; null = the real heap limit.
+    @TestVisible private static Integer heapLimitOverride;
 
     private final Id opportunityId;
     private final List<Id> contentDocumentIds;
@@ -63,6 +74,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
      */
     public static Order_Form_Extraction__c buildExtraction(Id opportunityId, List<Id> contentDocumentIds) {
         List<Id> docIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
+        // Metadata only - file bytes are loaded one file at a time later.
         Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(docIds);
         Opportunity parentOpp = loadParentOpp(opportunityId);
 
@@ -75,30 +87,36 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         );
 
         try {
-            // Split files by source so Claude can be told which are the CURRENT
-            // deal and which are PARENT CONTRACT context.
-            List<ContentVersion> currentFiles = new List<ContentVersion>();
-            List<ContentVersion> baseFiles = new List<ContentVersion>();
+            // Rank the usable files and pick what fits the size budget (from
+            // metadata - no file bytes loaded yet).
+            List<RankedDoc> chosen = new List<RankedDoc>();
             List<String> skipped = new List<String>();
             classifyFilesBySource(docIds, versionByDocId, opportunityId,
                 parentOpp == null ? null : parentOpp.Base_Opportunity__c,
-                currentFiles, baseFiles, skipped);
+                chosen, skipped);
+
+            // Split the files actually sent by source so Claude can be told which
+            // are the CURRENT deal and which are PARENT CONTRACT context. The
+            // body build can still drop a file if the live heap is short.
+            List<ContentVersion> currentFiles = new List<ContentVersion>();
+            List<ContentVersion> baseFiles = new List<ContentVersion>();
+            String body = chosen.isEmpty() ? null
+                : buildRequestBody(chosen, opportunityId, parentOpp, currentFiles, baseFiles, skipped);
 
             // Flag the row whenever any file was excluded (unsupported type, over
-            // the per-file cap, or dropped for the heap budget) so a possibly
+            // the per-file cap, or dropped for the size/heap budget) so a possibly
             // incomplete extraction - e.g. a null Sub_Processor_List__c because
             // the DPA got dropped - is queryable, not buried in Error_Message__c.
             row.Docs_Dropped__c = !skipped.isEmpty();
 
-            if (currentFiles.isEmpty() && baseFiles.isEmpty()) {
+            if (body == null) {
                 row.Extraction_Status__c = 'No Document';
                 row.Error_Message__c = skipped.isEmpty()
                     ? 'No ContentVersion data found for the supplied ContentDocument Ids.'
-                    : 'No usable files. Skipped unsupported types: ' + String.join(skipped, ', ');
+                    : truncate('No usable files. Skipped: ' + String.join(skipped, ', '), ERROR_MESSAGE_LIMIT);
                 return row;
             }
 
-            String body = buildRequestBody(currentFiles, baseFiles, opportunityId, parentOpp);
             HttpResponse resp = callAnthropic(body);
             row.HTTP_Status_Code__c = resp.getStatusCode();
             row.Raw_Response__c = truncate(resp.getBody(), RAW_RESPONSE_LIMIT);
@@ -149,7 +167,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
     /**
      * Build a row from an Anthropic Messages response obtained OUTSIDE Apex - for
-     * documents too large for the Apex heap, extracted by a local Files-API job.
+     * documents too large for the Apex heap, extracted by the local large-doc script.
      * No callout and NO VersionData load here (so the file size is irrelevant);
      * it reuses the exact same parsing + field mapping as buildExtraction, so the
      * resulting row is identical to an in-platform one. Caller inserts it.
@@ -188,7 +206,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             // the one that actually produced this response.
             String served = responseModel(responseBody);
             if (String.isNotBlank(served)) row.Model__c = served;
-            // File groups are not known here (the Files-API job sends one group).
+            // File groups are not known here (the local script sends one group).
             finishRow(row, extracted, parentOpp, null, new List<String>());
         } catch (Exception e) {
             row.Extraction_Status__c = 'Parse Failed';
@@ -216,8 +234,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         Map<Id, ContentVersion> versionByDocId,
         Id currentOppId,
         Id baseOppId,
-        List<ContentVersion> currentFilesOut,
-        List<ContentVersion> baseFilesOut,
+        List<RankedDoc> chosenOut,
         List<String> skippedOut
     ) {
         if (docIds == null || docIds.isEmpty()) return;
@@ -240,69 +257,73 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             sourceByDoc.put(cdl.ContentDocumentId, cdl.LinkedEntityId);
         }
 
-        // First pass: split candidates into current vs base, filtering out
-        // unsupported types and files bigger than the per-file cap.
-        List<ContentVersion> currentCandidates = new List<ContentVersion>();
-        List<ContentVersion> baseCandidates = new List<ContentVersion>();
+        // First pass: filter out unsupported types and files bigger than the
+        // per-file cap, using ContentSize - no file bytes are loaded here.
+        List<ContentVersion> candidates = new List<ContentVersion>();
+        Set<Id> currentIds = new Set<Id>();
         Set<Id> seen = new Set<Id>();
         for (Id docId : docIds) {
             if (seen.contains(docId)) continue;
             seen.add(docId);
             ContentVersion cv = versionByDocId.get(docId);
-            if (cv == null || cv.VersionData == null) continue;
+            if (cv == null || cv.ContentSize == null || cv.ContentSize == 0) continue;
             if (getMediaType(cv) == null) {
-                skippedOut.add((cv.Title == null ? String.valueOf(cv.Id) : cv.Title) + ' (unsupported: ' + cv.FileExtension + ')');
+                skippedOut.add(displayName(cv) + ' (unsupported: ' + cv.FileExtension + ')');
                 continue;
             }
-            Integer sz = cv.VersionData.size();
-            if (sz > MAX_PER_FILE_BYTES) {
-                skippedOut.add((cv.Title == null ? String.valueOf(cv.Id) : cv.Title) +
-                    ' (too large: ' + sz + ' bytes; cap ' + MAX_PER_FILE_BYTES + ')');
+            if (cv.ContentSize > MAX_PER_FILE_BYTES) {
+                skippedOut.add(displayName(cv) +
+                    ' (too large: ' + cv.ContentSize + ' bytes; cap ' + MAX_PER_FILE_BYTES + ')');
                 continue;
             }
+            // Base only when linked to the base Opp (a doc on both counts as
+            // current); unknown linkage defaults to "current deal".
             Id linkedTo = sourceByDoc.get(docId);
-            if (linkedTo == currentOppId) currentCandidates.add(cv);
-            else if (linkedTo == baseOppId) baseCandidates.add(cv);
-            else currentCandidates.add(cv); // unknown linkage defaults to "current deal"
+            if (baseOppId == null || linkedTo != baseOppId) currentIds.add(cv.Id);
+            candidates.add(cv);
         }
 
-        // Second pass: fit EVERY file (current + base) within MAX_TOTAL_PDF_BYTES.
-        // The whole request is base64-encoded into one JSON string at ~3x the raw
-        // bytes in peak heap and the async heap ceiling is 12MB, so this budget
-        // MUST cover current-deal files too - not just base files (an opp with an
-        // Order Form + MSA + DPA + rider can otherwise blow heap with an
-        // uncatchable limit exception). Order files so the most extraction-
-        // relevant survive when over budget: current-deal files ahead of
-        // base/context files, and within each group the order form + legal / DPA /
-        // subprocessor / MSA docs ahead of incidental attachments (NDAs, W-9s).
-        // Whatever does not fit is dropped and recorded (Docs_Dropped__c flags it).
-        List<RankedDoc> ordered = new List<RankedDoc>();
-        for (ContentVersion cv : currentCandidates) {
-            ordered.add(new RankedDoc(docRelevanceRank(cv), cv.VersionData.size(), cv, true));
+        // An unsigned copy of a file that is also attached signed (billing's
+        // "signed__" prefix, "Executed", "Countersigned") repeats it - rank it
+        // with the incidental files so it is the first to go.
+        Set<String> signedKeys = new Set<String>();
+        for (ContentVersion cv : candidates) {
+            if (isSignedCopy(cv.Title)) signedKeys.add(twinKey(cv.Title));
         }
-        for (ContentVersion cv : baseCandidates) {
-            // +100 keeps all base/context files behind all current-deal files.
-            ordered.add(new RankedDoc(100 + docRelevanceRank(cv), cv.VersionData.size(), cv, false));
+        signedKeys.remove('');
+
+        // Second pass: fit EVERY file (current + base) within MAX_TOTAL_PDF_BYTES,
+        // most extraction-relevant first (see dropPriority). Whatever does not
+        // fit is dropped and recorded (Docs_Dropped__c flags it).
+        List<RankedDoc> ordered = new List<RankedDoc>();
+        for (ContentVersion cv : candidates) {
+            Integer rank = docRelevanceRank(cv);
+            if (!isSignedCopy(cv.Title) && signedKeys.contains(twinKey(cv.Title))) rank = UNSIGNED_TWIN_RANK;
+            Boolean isCurrent = currentIds.contains(cv.Id);
+            ordered.add(new RankedDoc(dropPriority(rank, isCurrent), cv.ContentSize, cv, isCurrent));
         }
         ordered.sort();
 
         Integer usedBytes = 0;
         for (RankedDoc rd : ordered) {
             if (usedBytes + rd.size > MAX_TOTAL_PDF_BYTES) {
-                skippedOut.add((rd.cv.Title == null ? String.valueOf(rd.cv.Id) : rd.cv.Title) +
-                    ' (dropped to fit heap budget: ' + rd.size + ' bytes would put the request over the ' +
+                skippedOut.add(displayName(rd.cv) +
+                    ' (dropped to fit size budget: ' + rd.size + ' bytes would put the request over the ' +
                     MAX_TOTAL_PDF_BYTES + '-byte cap)');
                 continue;
             }
-            if (rd.isCurrent) currentFilesOut.add(rd.cv);
-            else baseFilesOut.add(rd.cv);
+            chosenOut.add(rd);
             usedBytes += rd.size;
         }
     }
 
-    // Priority score for fitting files into the heap budget. Lower = keep first.
-    // Compliance-relevant docs (order form, DPA/subprocessor, MSA) rank ahead of
-    // incidental attachments so, when we must drop something, an NDA/W-9 goes
+    private static String displayName(ContentVersion cv) {
+        return cv.Title == null ? String.valueOf(cv.Id) : cv.Title;
+    }
+
+    // Relevance of a file by its title. Lower = keep first. Compliance-relevant
+    // docs (order form, DPA/subprocessor, MSA) rank ahead of incidental
+    // attachments so, when we must drop something, an NDA/W-9/invoice goes
     // before a contract. Keyword-based and deliberately forgiving - it only
     // orders the drop queue, it does not decide what gets extracted.
     @TestVisible
@@ -315,6 +336,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (t.contains('dpa') || t.contains('data processing') || t.contains('data protection')
             || t.contains('subprocessor') || t.contains('sub-processor') || t.contains('sub processor')) {
             return 1; // data-protection / subprocessor text - compliance critical
+        }
+        if (t.contains('invoice') || t.contains('receipt') || t.contains('remittance')) {
+            return 8; // billing paperwork - checked before "subscription" below
         }
         if (t.contains('msa') || t.contains('mssa') || t.contains('master') || t.contains('agreement')
             || t.contains('schedule') || t.contains('addendum') || t.contains('rider')
@@ -329,14 +353,48 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return 5; // unknown - middle priority
     }
 
-    // Sortable wrapper: primary key rank (base/context files carry a +100 offset
-    // so they trail current-deal files), then size ascending so smaller files of
-    // equal rank pack in first.
+    @TestVisible private static final Integer UNSIGNED_TWIN_RANK = 9;
+
+    // Drop order across both groups. Current-deal files keep their relevance
+    // order. The base deal's contracts (order form, DPA, MSA - they still govern
+    // an amendment) come next, ahead of the current deal's invoices, NDAs and
+    // duplicate copies, but behind its unknown-titled files, which are often the
+    // real order form under a customer-specific name. Other base files go last.
+    @TestVisible
+    private static Integer dropPriority(Integer rank, Boolean isCurrent) {
+        if (isCurrent) return rank * 10;
+        return rank <= 2 ? 60 + rank : 90 + rank;
+    }
+
+    private static final Pattern SIGNED_MARK =
+        Pattern.compile('(^|[^a-z])(executed|countersigned|signed)([^a-z]|$)');
+    private static final String TWIN_NOISE =
+        'complete[ _]with[ _]docusign|docusign|fully[ _-]?executed|countersigned|executed|signed|\\(\\d+\\)';
+
+    @TestVisible
+    private static Boolean isSignedCopy(String title) {
+        if (title == null) return false;
+        String t = title.toLowerCase();
+        return t.startsWith('signed__') || SIGNED_MARK.matcher(t).find();
+    }
+
+    // Title with signing markers, copy counters and punctuation removed, so
+    // "signed__Rogo Order Form - Acme (1)" and "Rogo_Order_Form_-_Acme" match.
+    @TestVisible
+    private static String twinKey(String title) {
+        if (title == null) return '';
+        String t = title.toLowerCase().removeStart('signed__');
+        return t.replaceAll(TWIN_NOISE, '').replaceAll('[^a-z0-9]', '');
+    }
+
+    // Sortable wrapper: drop priority first, then size ascending so smaller
+    // files of equal priority pack in first.
+    @TestVisible
     private class RankedDoc implements Comparable {
-        Integer rank;
-        Integer size;
-        ContentVersion cv;
-        Boolean isCurrent;
+        public Integer rank;
+        public Integer size;
+        public ContentVersion cv;
+        public Boolean isCurrent;
         RankedDoc(Integer rank, Integer size, ContentVersion cv, Boolean isCurrent) {
             this.rank = rank;
             this.size = size;
@@ -367,7 +425,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         Map<Id, ContentVersion> byDoc = new Map<Id, ContentVersion>();
         if (contentDocumentIds == null || contentDocumentIds.isEmpty()) return byDoc;
         for (ContentVersion cv : [
-            SELECT Id, ContentDocumentId, VersionData, Title, PathOnClient, FileType, FileExtension
+            SELECT Id, ContentDocumentId, ContentSize, Title, PathOnClient, FileType, FileExtension
             FROM ContentVersion
             WHERE ContentDocumentId IN :contentDocumentIds AND IsLatest = true
         ]) {
@@ -408,18 +466,64 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             + (String.isBlank(title) ? 'untitled' : title);
     }
 
-    private static Map<String, Object> makeFileBlock(ContentVersion cv) {
+    // 'data' is a placeholder token; buildRequestBody splices the encoded file
+    // in after serializing, so the encoded text is never copied by JSON.serialize.
+    private static Map<String, Object> makeFileBlock(ContentVersion cv, String data) {
         String mediaType = getMediaType(cv);
-        if (mediaType == null) return null;
         String blockType = mediaType.startsWith('image/') ? 'image' : 'document';
         return new Map<String, Object>{
             'type' => blockType,
             'source' => new Map<String, Object>{
                 'type' => 'base64',
                 'media_type' => mediaType,
-                'data' => EncodingUtil.base64Encode(cv.VersionData)
+                'data' => data
             }
         };
+    }
+
+    @TestVisible
+    private static Integer base64Length(Integer rawBytes) {
+        return 4 * ((rawBytes + 2) / 3);
+    }
+
+    /**
+     * Base64-encode the chosen files one at a time, most relevant first. Each
+     * file's bytes are queried alone and released as soon as they are encoded,
+     * so at most one raw file is in memory. Before loading a file, project the
+     * heap at the final join (live heap now + this file's encoded text + the
+     * joined body, which repeats every encoded file and the request text around
+     * them) and skip the file if that would not leave HEAP_RESERVE_BYTES free -
+     * a recorded drop instead of an uncatchable heap limit. Returns encoded
+     * text by ContentVersion Id.
+     */
+    private static Map<Id, String> encodeWithinHeap(
+            List<RankedDoc> chosen, Integer skeletonChars, List<String> skippedOut) {
+        Map<Id, String> encodedById = new Map<Id, String>();
+        Integer heapLimit = heapLimitOverride != null ? heapLimitOverride : Limits.getLimitHeapSize();
+        Integer encodedChars = 0;
+        for (RankedDoc rd : chosen) {
+            Integer fileChars = base64Length(rd.size);
+            Integer projected = Limits.getHeapSize() + fileChars
+                + (encodedChars + fileChars + skeletonChars) + skeletonChars + HEAP_RESERVE_BYTES;
+            if (projected > heapLimit) {
+                skippedOut.add(displayName(rd.cv) + ' (dropped to fit memory: ' + rd.size +
+                    ' bytes would need ~' + projected + ' of ' + heapLimit + ' heap bytes)');
+                continue;
+            }
+            // One query per file (deals carry well under ten); keep clear of the
+            // query limit anyway.
+            if (Limits.getQueries() >= Limits.getLimitQueries() - 10) {
+                skippedOut.add(displayName(rd.cv) + ' (dropped: query limit reached)');
+                continue;
+            }
+            List<ContentVersion> rows = [SELECT VersionData FROM ContentVersion WHERE Id = :rd.cv.Id];
+            if (rows.isEmpty() || rows[0].VersionData == null) continue;
+            String data = EncodingUtil.base64Encode(rows[0].VersionData);
+            rows = null; // release the raw bytes before the next file loads
+            encodedById.put(rd.cv.Id, data);
+            encodedChars += data.length();
+        }
+        return encodedById;
     }
 
     @TestVisible
@@ -455,23 +559,47 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return names.isEmpty() ? null : String.join(names, '; ');
     }
 
+    /**
+     * Build the Messages request for the chosen files (in drop-priority order).
+     * Fills currentFilesOut / baseFilesOut with the files actually sent, in
+     * request order, and returns null when none could be sent. The request is
+     * serialized with a placeholder in each file's 'data' field and the encoded
+     * files are spliced in with one String.join, so the encoded text exists
+     * twice at the peak (the parts and the joined body) rather than three times.
+     */
     @TestVisible
     private static String buildRequestBody(
-        List<ContentVersion> currentFiles,
-        List<ContentVersion> baseFiles,
+        List<RankedDoc> chosen,
         Id currentOppId,
-        Opportunity parentOpp
+        Opportunity parentOpp,
+        List<ContentVersion> currentFilesOut,
+        List<ContentVersion> baseFilesOut,
+        List<String> skippedOut
     ) {
         String systemPrompt = loadPrompt();
+        Map<Id, String> encodedById = encodeWithinHeap(
+            chosen, systemPrompt.length() + SKELETON_SLACK_CHARS, skippedOut);
+        for (RankedDoc rd : chosen) {
+            if (!encodedById.containsKey(rd.cv.Id)) continue;
+            if (rd.isCurrent) currentFilesOut.add(rd.cv);
+            else baseFilesOut.add(rd.cv);
+        }
+        if (encodedById.isEmpty()) return null;
+
         List<Object> content = new List<Object>();
+        // Placeholder per file, in request order. The random part keeps a file
+        // title from ever colliding with one.
+        String tokenStem = '@@OFE_FILE_' + String.valueOf(Crypto.getRandomInteger()).replace('-', 'n') + '_';
+        List<String> tokens = new List<String>();
+        List<Id> tokenFileIds = new List<Id>();
 
         // Deal context header so Claude knows WHICH deal it's extracting.
         List<String> currentTitles = new List<String>();
-        for (ContentVersion cv : currentFiles) if (String.isNotBlank(cv.Title)) currentTitles.add(cv.Title);
+        for (ContentVersion cv : currentFilesOut) if (String.isNotBlank(cv.Title)) currentTitles.add(cv.Title);
         content.add(new Map<String, Object>{
             'type' => 'text',
             'text' => buildDealContext(currentOppId, parentOpp,
-                                       currentFiles.size(), baseFiles.size(),
+                                       currentFilesOut.size(), baseFilesOut.size(),
                                        String.join(currentTitles, ', '))
         });
 
@@ -479,34 +607,36 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         // the model can classify each one (Documents[]); files 1..currentFiles
         // are the current deal, the rest parent-contract context.
         Integer fileNo = 0;
-        if (!currentFiles.isEmpty()) {
+        if (!currentFilesOut.isEmpty()) {
             content.add(new Map<String, Object>{
                 'type' => 'text',
                 'text' => '--- CURRENT DEAL DOCUMENTS (extract THIS deal) ---'
             });
-            for (ContentVersion cv : currentFiles) {
-                Object block = makeFileBlock(cv);
-                if (block == null) continue;
+            for (ContentVersion cv : currentFilesOut) {
                 fileNo++;
+                String token = tokenStem + fileNo + '@@';
+                tokens.add(token);
+                tokenFileIds.add(cv.Id);
                 content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, true, cv.Title) });
-                content.add(block);
+                content.add(makeFileBlock(cv, token));
             }
         }
 
         // Base/parent docs next, explicitly labeled as context.
-        if (!baseFiles.isEmpty()) {
+        if (!baseFilesOut.isEmpty()) {
             content.add(new Map<String, Object>{
                 'type' => 'text',
                 'text' => '--- PARENT CONTRACT DOCUMENTS (CONTEXT ONLY - do NOT extract these as the deal) ---\n' +
                           'Use these only for: unchanged MSA boilerplate (renewal terms, payment terms, credit terms), ' +
                           'and as a reference for the base ARR / seats that the current deal expands or renews.'
             });
-            for (ContentVersion cv : baseFiles) {
-                Object block = makeFileBlock(cv);
-                if (block == null) continue;
+            for (ContentVersion cv : baseFilesOut) {
                 fileNo++;
+                String token = tokenStem + fileNo + '@@';
+                tokens.add(token);
+                tokenFileIds.add(cv.Id);
                 content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, false, cv.Title) });
-                content.add(block);
+                content.add(makeFileBlock(cv, token));
             }
         }
 
@@ -518,7 +648,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             'role' => 'user',
             'content' => content
         };
-        return JSON.serialize(new Map<String, Object>{
+        String skeleton = JSON.serialize(new Map<String, Object>{
             'model' => MODEL,
             'max_tokens' => MAX_TOKENS,
             // Sonnet 5 runs adaptive thinking by default; on a ~280K-token
@@ -531,6 +661,24 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             'system' => systemPrompt,
             'messages' => new List<Object>{ userMessage }
         });
+
+        // Splice: base64 text (A-Z a-z 0-9 + / =) needs no JSON escaping.
+        List<String> parts = new List<String>();
+        Integer pos = 0;
+        for (Integer i = 0; i < tokens.size(); i++) {
+            Integer at = skeleton.indexOf(tokens[i], pos);
+            if (at < 0) throw new OrderFormException('Request placeholder missing for file ' + (i + 1) + '.');
+            parts.add(skeleton.substring(pos, at));
+            parts.add(encodedById.get(tokenFileIds[i]));
+            pos = at + tokens[i].length();
+        }
+        parts.add(skeleton.substring(pos));
+        skeleton = null;
+        encodedById = null;
+        String body = String.join(parts, '');
+        System.debug(LoggingLevel.INFO, 'OFE request body ' + body.length() + ' chars; heap ' +
+            Limits.getHeapSize() + ' of ' + Limits.getLimitHeapSize());
+        return body;
     }
 
     @TestVisible

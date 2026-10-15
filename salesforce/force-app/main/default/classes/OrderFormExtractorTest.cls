@@ -1597,6 +1597,182 @@ private class OrderFormExtractorTest {
         System.assertEquals(5, OrderFormExtractionJob.docRelevanceRank(new ContentVersion()));
     }
 
+    @isTest
+    static void docRelevanceRank_invoicesRankWithIncidentals() {
+        System.assertEquals(8, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'Rogo Invoice - JPMorgan Chase PO 2026.08.21')));
+        // "subscription" would otherwise make it an agreement (2)
+        System.assertEquals(8, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'Invoice - Annual Subscription 2026')));
+        System.assertEquals(8, OrderFormExtractionJob.docRelevanceRank(new ContentVersion(Title = 'Payment Receipt')));
+    }
+
+    @isTest
+    static void dropPriority_baseContractsSitBetweenCurrentFiles() {
+        // Current deal: order form < agreements < unknown-titled.
+        System.assert(OrderFormExtractionJob.dropPriority(2, true) < OrderFormExtractionJob.dropPriority(5, true));
+        // A current unknown-titled file (often the real order form) beats the base MSA...
+        System.assert(OrderFormExtractionJob.dropPriority(5, true) < OrderFormExtractionJob.dropPriority(0, false));
+        System.assert(OrderFormExtractionJob.dropPriority(5, true) < OrderFormExtractionJob.dropPriority(2, false));
+        // ...but the base contracts beat the current deal's invoices, NDAs and duplicates.
+        System.assert(OrderFormExtractionJob.dropPriority(2, false) < OrderFormExtractionJob.dropPriority(8, true));
+        System.assert(OrderFormExtractionJob.dropPriority(2, false) < OrderFormExtractionJob.dropPriority(9, true));
+        // Other base files go last.
+        System.assert(OrderFormExtractionJob.dropPriority(9, true) < OrderFormExtractionJob.dropPriority(5, false));
+    }
+
+    @isTest
+    static void twinDetection_matchesSignedAndUnsignedCopies() {
+        System.assert(OrderFormExtractionJob.isSignedCopy('signed__Rogo Order Form - Acme'));
+        System.assert(OrderFormExtractionJob.isSignedCopy('Rogo-William_Blair_MSA (Fully Executed)'));
+        System.assert(OrderFormExtractionJob.isSignedCopy('15804 Rogo Vince [Rogo Countersigned]'));
+        System.assert(!OrderFormExtractionJob.isSignedCopy('Rogo Order Form - Acme'));
+        System.assert(!OrderFormExtractionJob.isSignedCopy('Unsigned draft'));
+        System.assert(!OrderFormExtractionJob.isSignedCopy('Designed deck'));
+        System.assertEquals(
+            OrderFormExtractionJob.twinKey('Rogo Order Form - Acme'),
+            OrderFormExtractionJob.twinKey('signed__Rogo_Order_Form_-_Acme (1)'));
+        System.assertEquals(
+            OrderFormExtractionJob.twinKey('Rogo_MSA'),
+            OrderFormExtractionJob.twinKey('Rogo MSA (Fully Executed)'));
+        System.assertNotEquals(
+            OrderFormExtractionJob.twinKey('Rogo Order Form - Acme'),
+            OrderFormExtractionJob.twinKey('signed__Rogo Order Form - Beta'));
+    }
+
+    private static List<Id> docIdsOn(Set<Id> entityIds) {
+        List<Id> ids = new List<Id>();
+        for (ContentDocumentLink cdl : [
+            SELECT ContentDocumentId FROM ContentDocumentLink WHERE LinkedEntityId IN :entityIds
+        ]) {
+            ids.add(cdl.ContentDocumentId);
+        }
+        return ids;
+    }
+
+    @isTest
+    static void classifyFiles_usesMetadataAndDemotesUnsignedTwin() {
+        Opportunity opp = insertOpp('Twin Files', '4 - Proposal');
+        attachSignedFile(opp.Id, 'Rogo Order Form - Acme');
+        attachSignedFile(opp.Id, 'signed__Rogo Order Form - Acme');
+        attachSignedFile(opp.Id, 'Kickoff Notes');
+        List<Id> docIds = docIdsOn(new Set<Id>{ opp.Id });
+
+        Map<Id, ContentVersion> versions = OrderFormExtractionJob.loadLatestVersionsByDoc(docIds);
+        // File selection must not load the file bytes.
+        try {
+            Blob b = versions.values()[0].VersionData;
+            System.assert(false, 'VersionData should not be queried for selection');
+        } catch (SObjectException e) {
+            System.assert(true);
+        }
+
+        List<OrderFormExtractionJob.RankedDoc> chosen = new List<OrderFormExtractionJob.RankedDoc>();
+        List<String> skipped = new List<String>();
+        OrderFormExtractionJob.classifyFilesBySource(docIds, versions, opp.Id, null, chosen, skipped);
+
+        System.assertEquals(3, chosen.size());
+        System.assert(skipped.isEmpty(), String.valueOf(skipped));
+        System.assertEquals('signed__Rogo Order Form - Acme', chosen[0].cv.Title);
+        System.assertEquals('Kickoff Notes', chosen[1].cv.Title);
+        System.assertEquals('Rogo Order Form - Acme', chosen[2].cv.Title, 'unsigned copy of a signed file goes last');
+        for (OrderFormExtractionJob.RankedDoc rd : chosen) System.assert(rd.isCurrent);
+    }
+
+    @isTest
+    static void buildRequestBody_splicesEachFileIntoValidJson() {
+        Opportunity baseOpp = insertOpp('Splice Base', 'Closed Won');
+        attachSignedFile(baseOpp.Id, 'signed__Base MSA', 'pdf', Blob.valueOf('%PDF-1.4 base msa'));
+        Opportunity opp = new Opportunity(Name = 'Splice Upsell', StageName = '5 - Contracting',
+            CloseDate = Date.today(), Base_Opportunity__c = baseOpp.Id);
+        insert opp;
+        attachSignedFile(opp.Id, 'signed__MSA', 'pdf', Blob.valueOf('%PDF-1.4 current msa'));
+        attachSignedFile(opp.Id, 'signed__Order Form', 'pdf', Blob.valueOf('%PDF-1.4 current order form'));
+        List<Id> docIds = docIdsOn(new Set<Id>{ opp.Id, baseOpp.Id });
+
+        List<OrderFormExtractionJob.RankedDoc> chosen = new List<OrderFormExtractionJob.RankedDoc>();
+        List<String> skipped = new List<String>();
+        OrderFormExtractionJob.classifyFilesBySource(docIds,
+            OrderFormExtractionJob.loadLatestVersionsByDoc(docIds), opp.Id, baseOpp.Id, chosen, skipped);
+        List<ContentVersion> currentFiles = new List<ContentVersion>();
+        List<ContentVersion> baseFiles = new List<ContentVersion>();
+        String body = OrderFormExtractionJob.buildRequestBody(chosen, opp.Id,
+            OrderFormExtractionJob.loadParentOpp(opp.Id), currentFiles, baseFiles, skipped);
+
+        System.assertEquals(2, currentFiles.size());
+        System.assertEquals(1, baseFiles.size());
+        System.assert(!body.contains('@@OFE_FILE_'), 'every placeholder is replaced');
+
+        Map<String, Object> req = (Map<String, Object>) JSON.deserializeUntyped(body);
+        System.assertEquals(false, String.isBlank((String) req.get('system')));
+        List<Object> content = (List<Object>) ((Map<String, Object>) ((List<Object>) req.get('messages'))[0]).get('content');
+        List<String> data = new List<String>();
+        List<String> labels = new List<String>();
+        for (Object o : content) {
+            Map<String, Object> block = (Map<String, Object>) o;
+            if ('document'.equals(block.get('type'))) {
+                data.add((String) ((Map<String, Object>) block.get('source')).get('data'));
+            } else if (((String) block.get('text')).startsWith('FILE ')) {
+                labels.add((String) block.get('text'));
+            }
+        }
+        // Current deal first (order form ahead of MSA), then the parent context file.
+        System.assertEquals(new List<String>{
+            EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4 current order form')),
+            EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4 current msa')),
+            EncodingUtil.base64Encode(Blob.valueOf('%PDF-1.4 base msa'))
+        }, data);
+        System.assertEquals('FILE 1 (CURRENT DEAL): signed__Order Form', labels[0]);
+        System.assertEquals('FILE 3 (PARENT CONTEXT): signed__Base MSA', labels[2]);
+    }
+
+    @isTest
+    static void buildRequestBody_dropsFileThatWouldNotFitHeap() {
+        Opportunity opp = insertOpp('Heap Drop', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__Order Form', 'pdf', Blob.valueOf('%PDF-1.4 small order form'));
+        attachSignedFile(opp.Id, 'Kickoff Notes', 'pdf', Blob.valueOf('x'.repeat(600000)));
+        List<Id> docIds = docIdsOn(new Set<Id>{ opp.Id });
+
+        List<OrderFormExtractionJob.RankedDoc> chosen = new List<OrderFormExtractionJob.RankedDoc>();
+        List<String> skipped = new List<String>();
+        OrderFormExtractionJob.classifyFilesBySource(docIds,
+            OrderFormExtractionJob.loadLatestVersionsByDoc(docIds), opp.Id, null, chosen, skipped);
+        System.assertEquals(2, chosen.size());
+
+        // Room for the small order form, nowhere near room for the 600KB file
+        // (which needs ~1.6MB more: its encoded text plus its copy in the body).
+        Integer skeleton = OrderFormExtractionJob.loadPrompt().length() + OrderFormExtractionJob.SKELETON_SLACK_CHARS;
+        OrderFormExtractionJob.heapLimitOverride = Limits.getHeapSize() + 2 * skeleton
+            + OrderFormExtractionJob.HEAP_RESERVE_BYTES + 500000;
+        List<ContentVersion> currentFiles = new List<ContentVersion>();
+        List<ContentVersion> baseFiles = new List<ContentVersion>();
+        String body = OrderFormExtractionJob.buildRequestBody(chosen, opp.Id,
+            OrderFormExtractionJob.loadParentOpp(opp.Id), currentFiles, baseFiles, skipped);
+
+        System.assertNotEquals(null, body);
+        System.assertEquals(1, currentFiles.size());
+        System.assertEquals('signed__Order Form', currentFiles[0].Title);
+        System.assertEquals(1, skipped.size());
+        System.assert(skipped[0].startsWith('Kickoff Notes (dropped to fit memory'), skipped[0]);
+    }
+
+    @isTest
+    static void extractionJob_noFileFitsHeap_recordsDropWithoutCallout() {
+        Opportunity opp = insertOpp('Heap None', '4 - Proposal');
+        attachSignedFile(opp.Id, 'signed__Order Form');
+        List<Id> docIds = docIdsOn(new Set<Id>{ opp.Id });
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business' });
+        Test.setMock(HttpCalloutMock.class, mock);
+        OrderFormExtractionJob.heapLimitOverride = 1;
+
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildExtraction(opp.Id, docIds);
+
+        System.assertEquals('No Document', row.Extraction_Status__c);
+        System.assertEquals(true, row.Docs_Dropped__c);
+        System.assert(row.Error_Message__c.contains('dropped to fit memory'), row.Error_Message__c);
+        System.assertEquals(0, mock.callCount);
+    }
+
     // ===== Picklist mapper =====
 
     @isTest
