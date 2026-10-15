@@ -719,9 +719,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.AI_Model_Change_Carveout__c = truncate(extracted.get('AI_Model_Change_Carveout'), 255);
         row.AI_Change_Reporting_Trigger__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Change_Reporting_Trigger'));
         // Legal's "Model changes: notice or approval" column (heading + cell text).
+        String requirementQuote = evidenceQuote(extracted, 'Model_Change_Requirement');
+        String consentQuote = evidenceQuote(extracted, 'Model_Change_Consent');
+        String noticeQuote = evidenceQuote(extracted, 'Model_Change_Notice');
         row.Model_Change_Requirement__c = modelChangeHeading(
             OrderFormPicklistMapper.mapModelChangeRequirement(asStr(extracted.get('Model_Change_Requirement'))),
-            toBoolean(extracted.get('Model_Change_Consent')), toBoolean(extracted.get('Model_Change_Notice')),
+            supportedConsent(toBoolean(extracted.get('Model_Change_Consent')), consentQuote != null ? consentQuote : requirementQuote),
+            supportedNotice(toBoolean(extracted.get('Model_Change_Notice')), noticeQuote != null ? noticeQuote : requirementQuote),
             toBoolean(extracted.get('Model_Change_Conditional')));
         row.Model_Change_Terms__c = truncate(
             modelChangeCell(row.Model_Change_Requirement__c, asStr(extracted.get('Model_Change_Terms'))), 2000);
@@ -1613,6 +1617,45 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (consent == true) return 'Approval';
         if (notice == true) return 'Notice';
         return stated;
+    }
+
+    // A "yes" must be borne out by the words it quotes; the bare yes/no drifted
+    // between runs (BofA's notice-only clause answered consent = yes; GS's
+    // "promptly notify" answered notice = yes). Consent needs consent / approval
+    // / agreement words - a right to reject or object after notice is not
+    // consent. Notice needs notice words AND a stated period, and a period that
+    // only governs when a request for consent is made is part of the approval
+    // (Citizens), unlike notice given so the customer can approve (Truist). With
+    // no quote to check, the answer stands.
+    private static final Pattern CONSENT_WORDS = Pattern.compile(
+        '(?i)\\b(consent\\w*|approv\\w*|agreement of|authori[sz]\\w*|permission)\\b');
+    private static final Pattern NOTICE_WORDS = Pattern.compile('(?i)\\b(notice|notif\\w*|inform\\w*)\\b');
+    private static final Pattern PERIOD_WORDS = Pattern.compile(
+        '(?i)\\b(\\d+|one|two|three|four|five|six|seven|ten|fourteen|fifteen|twenty|thirty|forty|forty-five|sixty|ninety|hundred)\\b'
+        + '[^.;]{0,25}\\b(business |calendar )?(days?|weeks?|months?)\\b');
+    private static final Pattern REQUEST_FOR_CONSENT = Pattern.compile(
+        '(?i)\\brequest\\w*\\b[^.;]{0,40}\\b(consent|approv\\w*)');
+
+    @TestVisible
+    private static Boolean supportedConsent(Boolean said, String quote) {
+        if (said != true || String.isBlank(quote)) return said;
+        return CONSENT_WORDS.matcher(quote).find();
+    }
+
+    @TestVisible
+    private static Boolean supportedNotice(Boolean said, String quote) {
+        if (said != true || String.isBlank(quote)) return said;
+        if (!NOTICE_WORDS.matcher(quote).find() || !PERIOD_WORDS.matcher(quote).find()) return false;
+        return !REQUEST_FOR_CONSENT.matcher(quote).find();
+    }
+
+    private static String evidenceQuote(Map<String, Object> extracted, String key) {
+        Object ev = extracted.get('Extract_Evidence');
+        if (!(ev instanceof Map<String, Object>)) return null;
+        Object entry = ((Map<String, Object>) ev).get(key);
+        if (!(entry instanceof Map<String, Object>)) return null;
+        Object q = ((Map<String, Object>) entry).get('quote');
+        return (q == null) ? null : String.valueOf(q);
     }
 
     // Legal's cell starts with its heading ("Notice: ..."). The model sometimes

@@ -2526,12 +2526,36 @@ private class OrderFormExtractorTest {
         System.assertEquals('Notice', OrderFormExtractionJob.modelChangeHeading('Notice', null, null, null),
             'Missing answers keep the label');
 
+        // A "yes" must be borne out by its quote.
+        String bofa = 'Any initial use or material changes to any Model requires (ninety) 90 days\' prior written notice to the Relationship Manager and documentation';
+        System.assertEquals(false, OrderFormExtractionJob.supportedConsent(true, bofa), 'Notice is not consent');
+        System.assertEquals(true, OrderFormExtractionJob.supportedNotice(true, bofa));
+        System.assertEquals(false, OrderFormExtractionJob.supportedConsent(true,
+            'JPMC, upon notification of a Material Model Change, may reject the Material Model Change.'),
+            'A right to reject is not consent');
+        System.assertEquals(false, OrderFormExtractionJob.supportedNotice(true,
+            'Provider shall not, without GS\'s prior written consent, materially change any AI System'),
+            'No notice words');
+        System.assertEquals(false, OrderFormExtractionJob.supportedNotice(true, 'Provider must promptly notify GS of any new AI Tool.'),
+            'Notice without a stated period does not count');
+        String citizens = 'Any Supplier request for consent to use an AI Tool will be provided on no less than 90 days\' prior written notice';
+        System.assertEquals(true, OrderFormExtractionJob.supportedConsent(true, citizens));
+        System.assertEquals(false, OrderFormExtractionJob.supportedNotice(true, citizens),
+            'A lead time for the consent request is part of the approval');
+        String truist = 'Supplier will also provide Truist with 90 days\' notice of any new AI Tools for Truist\'s approval';
+        System.assertEquals(true, OrderFormExtractionJob.supportedConsent(true, truist));
+        System.assertEquals(true, OrderFormExtractionJob.supportedNotice(true, truist), 'Notice so the customer can approve');
+        System.assertEquals(true, OrderFormExtractionJob.supportedNotice(true, null), 'No quote: the answer stands');
+        System.assertEquals(false, OrderFormExtractionJob.supportedConsent(false, truist), 'A no stays a no');
+
         // End to end: the derived heading also leads the cell.
         Order_Form_Extraction__c derived = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
             makeAnthropicResponse(new Map<String, Object>{
                 'Type' => 'New Business', 'Model_Change_Requirement' => 'Approval',
-                'Model_Change_Consent' => false, 'Model_Change_Notice' => true, 'Model_Change_Conditional' => false,
-                'Model_Change_Terms' => 'Approval: 90 days\' notice before initial use or a material change. §8.5.' }));
+                'Model_Change_Consent' => true, 'Model_Change_Notice' => true, 'Model_Change_Conditional' => false,
+                'Model_Change_Terms' => 'Approval: 90 days\' notice before initial use or a material change. §8.5.',
+                'Extract_Evidence' => new Map<String, Object>{ 'Model_Change_Requirement' => new Map<String, Object>{
+                    'clause' => '§8.5', 'quote' => 'Any initial use or material change requires 90 days\' prior written notice and documentation.' } } }));
         System.assertEquals('Notice', derived.Model_Change_Requirement__c);
         System.assert(derived.Model_Change_Terms__c.startsWith('Notice: 90 days'), derived.Model_Change_Terms__c);
 
