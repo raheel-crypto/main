@@ -133,6 +133,7 @@ public with sharing class OrderFormPicklistMapper {
     public static String mapModelChangeRequirement(String raw) {
         if (String.isBlank(raw)) return null;
         String s = raw.toLowerCase();
+        if (s.contains('conditional')) return 'Conditional';
         if (s.contains('unresolved') || s.contains('missing')) return 'Unresolved';
         if (s.startsWith('none') || s.contains('no notice or approval') || s.contains('not identified')) return 'None identified';
         Boolean approval = s.contains('approval') || s.contains('consent');

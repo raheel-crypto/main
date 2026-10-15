@@ -13,6 +13,7 @@
             <value><fullName>Notice</fullName><default>false</default><label>Notice</label></value>
             <value><fullName>Approval</fullName><default>false</default><label>Approval</label></value>
             <value><fullName>Approval + notice</fullName><default>false</default><label>Approval + notice</label></value>
+            <value><fullName>Conditional</fullName><default>false</default><label>Conditional</label></value>
             <value><fullName>None identified</fullName><default>false</default><label>None identified</label></value>
             <value><fullName>Unresolved</fullName><default>false</default><label>Unresolved</label></value>
         </valueSetDefinition>

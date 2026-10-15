@@ -2507,11 +2507,33 @@ private class OrderFormExtractorTest {
 
         System.assertEquals('Notice', OrderFormPicklistMapper.mapModelChangeRequirement('Notice'));
         System.assertEquals('Approval', OrderFormPicklistMapper.mapModelChangeRequirement('approval'));
-        System.assertEquals('Approval + notice', OrderFormPicklistMapper.mapModelChangeRequirement('Conditional notice / approval'));
+        System.assertEquals('Conditional', OrderFormPicklistMapper.mapModelChangeRequirement('Conditional notice / approval'));
         System.assertEquals('None identified', OrderFormPicklistMapper.mapModelChangeRequirement('None identified'));
         System.assertEquals('Unresolved', OrderFormPicklistMapper.mapModelChangeRequirement('Unresolved'));
         System.assertEquals(null, OrderFormPicklistMapper.mapModelChangeRequirement('maybe'));
         System.assertEquals(null, OrderFormPicklistMapper.mapModelChangeRequirement(null));
+
+        // The heading comes from the three yes/no answers, not the model's label.
+        System.assertEquals('Notice', OrderFormExtractionJob.modelChangeHeading('Approval', false, true, false),
+            'BofA: notice only, whatever the label says');
+        System.assertEquals('Approval + notice', OrderFormExtractionJob.modelChangeHeading('Approval', true, true, false),
+            'Truist: notice ahead so the customer can approve');
+        System.assertEquals('Approval', OrderFormExtractionJob.modelChangeHeading('Approval + notice', true, false, false),
+            'Citizens: a deadline for the approval request is part of the approval');
+        System.assertEquals('Conditional', OrderFormExtractionJob.modelChangeHeading('Approval + notice', true, true, true),
+            'BNP: only when the agreed description / purpose / risk changes');
+        System.assertEquals('Unresolved', OrderFormExtractionJob.modelChangeHeading('Unresolved', true, true, false));
+        System.assertEquals('Notice', OrderFormExtractionJob.modelChangeHeading('Notice', null, null, null),
+            'Missing answers keep the label');
+
+        // End to end: the derived heading also leads the cell.
+        Order_Form_Extraction__c derived = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Model_Change_Requirement' => 'Approval',
+                'Model_Change_Consent' => false, 'Model_Change_Notice' => true, 'Model_Change_Conditional' => false,
+                'Model_Change_Terms' => 'Approval: 90 days\' notice before initial use or a material change. §8.5.' }));
+        System.assertEquals('Notice', derived.Model_Change_Requirement__c);
+        System.assert(derived.Model_Change_Terms__c.startsWith('Notice: 90 days'), derived.Model_Change_Terms__c);
 
         // The cell always leads with its heading, not a clause title.
         System.assertEquals('Notice: Any initial use or material change requires 90 days\' notice. §8.5.',

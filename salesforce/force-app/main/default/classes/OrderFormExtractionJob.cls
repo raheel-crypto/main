@@ -719,7 +719,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.AI_Model_Change_Carveout__c = truncate(extracted.get('AI_Model_Change_Carveout'), 255);
         row.AI_Change_Reporting_Trigger__c = OrderFormPicklistMapper.mapYesNoNotSpecified((String) extracted.get('AI_Change_Reporting_Trigger'));
         // Legal's "Model changes: notice or approval" column (heading + cell text).
-        row.Model_Change_Requirement__c = OrderFormPicklistMapper.mapModelChangeRequirement(asStr(extracted.get('Model_Change_Requirement')));
+        row.Model_Change_Requirement__c = modelChangeHeading(
+            OrderFormPicklistMapper.mapModelChangeRequirement(asStr(extracted.get('Model_Change_Requirement'))),
+            toBoolean(extracted.get('Model_Change_Consent')), toBoolean(extracted.get('Model_Change_Notice')),
+            toBoolean(extracted.get('Model_Change_Conditional')));
         row.Model_Change_Terms__c = truncate(
             modelChangeCell(row.Model_Change_Requirement__c, asStr(extracted.get('Model_Change_Terms'))), 2000);
         row.Processing_Location_Gate__c = OrderFormPicklistMapper.mapLocationGate((String) extracted.get('Processing_Location_Gate'));
@@ -1592,6 +1595,24 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             return null;
         }
         return null;
+    }
+
+    // Legal's heading, derived from the model's three yes/no answers rather than
+    // its own label, which flipped between runs (BofA's notice-only clause came
+    // back "Approval"). Conditional: the requirement bites only when the change
+    // alters the agreed system description / purpose / risk level (BNP). Consent
+    // + a separate notice obligation is "Approval + notice" (Truist: notice 90
+    // days ahead so Truist can approve); a deadline for submitting the approval
+    // request is part of Approval (Citizens). None identified / Unresolved, or
+    // missing answers, keep the model's label.
+    @TestVisible
+    private static String modelChangeHeading(String stated, Boolean consent, Boolean notice, Boolean conditional) {
+        if (stated == 'None identified' || stated == 'Unresolved') return stated;
+        if (conditional == true) return 'Conditional';
+        if (consent == true && notice == true) return 'Approval + notice';
+        if (consent == true) return 'Approval';
+        if (notice == true) return 'Notice';
+        return stated;
     }
 
     // Legal's cell starts with its heading ("Notice: ..."). The model sometimes
