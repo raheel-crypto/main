@@ -1519,6 +1519,45 @@ private class OrderFormExtractorTest {
             'Sub-processor list should be mapped from the passed-in response');
     }
 
+    private static Order_Form_Extraction__c renewalRow(String quote) {
+        Opportunity opp = insertOpp('Renewal Check ' + Crypto.getRandomInteger(), 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Renewal_Terms' => 'Manual renewal',
+            'Extract_Evidence' => new Map<String, Object>{
+                'Renewal_Terms' => new Map<String, Object>{ 'quote' => quote, 'clause' => 'MSA 15(a)' }
+            }
+        });
+        return OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+    }
+
+    @isTest
+    static void renewal_manualAnswerContradictedByItsQuoteBecomesAutoRenew() {
+        // "Mutually agreed" is about price; the agreement renews on its own.
+        Order_Form_Extraction__c priceOnly = renewalRow('The Agreement will automatically renew in accordance with the '
+            + 'Agreement at Rogo\'s then-current list pricing unless otherwise mutually agreed.');
+        System.assertEquals('Auto-renew (30-day)', priceOnly.Renewal_Terms__c);
+        System.assert(priceOnly.Derived_Fields__c.contains('Renewal_Terms'), priceOnly.Derived_Fields__c);
+
+        Order_Form_Extraction__c sixty = renewalRow('unless either party gives the other party written notice of '
+            + 'non-renewal at least sixty (60) days prior to the expiration of the then-current term');
+        System.assertEquals('Auto-renew (60-day)', sixty.Renewal_Terms__c);
+    }
+
+    @isTest
+    static void renewal_genuineManualAnswersStay() {
+        System.assertEquals('Manual renewal', renewalRow('The Agreement will not automatically renew. Any renewal '
+            + 'must be agreed in writing.').Renewal_Terms__c);
+        // Redlined template: "automatically" struck, the non-renewal tail kept.
+        System.assertEquals('Manual renewal', renewalRow('This Agreement will renew by mutual written agreement for '
+            + 'additional successive terms ... or either party gives written notice of non-renewal at least thirty (30) '
+            + 'days prior').Renewal_Terms__c);
+        System.assertEquals('Manual renewal', renewalRow('The Agreement will automatically renew only upon the mutual '
+            + 'consent of both Rogo and the Customer.').Renewal_Terms__c);
+        System.assertEquals('Manual renewal', renewalRow('Customer shall have the option, but not the obligation, '
+            + 'to renew for two (2) one-year renewal terms.').Renewal_Terms__c);
+    }
+
     @isTest
     static void rest_doPost_createsExtraction() {
         Opportunity opp = insertOpp('Large Doc REST', 'Closed Won');

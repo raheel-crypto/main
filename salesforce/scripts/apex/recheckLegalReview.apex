@@ -13,6 +13,12 @@
 // re-applied, so legal edits made by hand on the Contract are kept. Contracts
 // flagged with no CONFLICT in their notes (possibly by hand) are left alone.
 //
+// Second pass (2026-10-16): reworded free-text clauses (Subprocessor
+// Restrictions, Rate Limit Notes) no longer conflict, and the "Manual renewal"
+// misread is fixed in the extractor. After the full refresh and
+// repairRenewalTerms.apex, this re-checks every flagged contract again
+// (MARK changed, so contracts re-checked on 2026-10-09 qualify again).
+//
 // Deploy the applier changes FIRST, or this re-flags the same contracts.
 //
 // DRY_RUN = true (default) lists what it would re-check. Resumable: each
@@ -24,7 +30,7 @@
 
 Boolean DRY_RUN = true;   // <-- false to re-check
 Integer CAP = 25;         // contracts per run (stops early near a governor limit)
-String MARK = 'Review re-checked 2026-10-09';
+String MARK = 'Review re-checked 2026-10-16';
 Set<String> AMEND = new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
 
 List<Contract> todo = new List<Contract>();
@@ -64,8 +70,12 @@ for (Contract c : todo) {
     ];
     update new Contract(Id = c.Id, Needs_Legal_Review__c = false);
 
-    // Each apply rewrites the notes, so keep every amendment's log.
+    // Each apply rewrites the notes, so keep every amendment's log - and any
+    // renewal correction repairRenewalTerms.apex noted.
     List<String> log = new List<String>();
+    for (String line : (c.Reconciliation_Notes__c == null ? '' : c.Reconciliation_Notes__c).split('\n')) {
+        if (line.startsWith('Renewal_Terms__c corrected')) log.add(line);
+    }
     for (Order_Form_Extraction__c o : amendRows) {
         ContractLegalTermsApplier.Request req = new ContractLegalTermsApplier.Request();
         req.extractionId = o.Id;

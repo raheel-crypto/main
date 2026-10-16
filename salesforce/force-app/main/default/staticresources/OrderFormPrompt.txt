@@ -386,6 +386,9 @@ INTERPRETATION HINTS:
 - "Auto-renews unless 90 days written notice" -> Renewal_Terms = "Auto-renew (90-day)"
 - "Evergreen" without a notice period -> Renewal_Terms = "Auto-renew (30-day)"
 - "Will not auto-renew" / "Renewal subject to mutual agreement" -> "Manual renewal"
+- "Renews unless either party gives written notice of non-renewal at least thirty (30) days prior" -> "Auto-renew (30-day)"
+- "Will automatically renew ... at Rogo's then-current list pricing unless otherwise mutually agreed" -> "Auto-renew (30-day)", or the non-renewal notice period if one is stated. "Mutually agreed" there is about the PRICE; the agreement still renews on its own. "Manual renewal" is only for an agreement that does NOT renew unless someone acts: an option to renew, a notice of renewal, a new / renewal order form, or mutual agreement to renew.
+- An amendment / rider that co-terms with the Agreement takes the Agreement's renewal clause; co-terming or proration does not make it "Manual renewal".
 - "Net 30 days from invoice" -> Credit_Terms = "Net-30"
 - Pilot agreement with $0 fee -> Paid_Trial = false, Type = "Pilot", Total_Contract_Value = 0
 - Pilot agreement with any fee -> Paid_Trial = true, Type = "Pilot", Trial_Price = the fee

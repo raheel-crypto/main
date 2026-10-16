@@ -16,7 +16,8 @@
  *       * Contract blank, OFE has value      -> write (new term)
  *       * OFE null / silent                  -> preserve the Contract value
  *       * Both present and different         -> CONFLICT: do NOT overwrite,
- *         record it in Reconciliation_Notes__c and set Needs_Legal_Review__c.
+ *         record it in Reconciliation_Notes__c and set Needs_Legal_Review__c
+ *         (free-text clause summaries are reworded, not changed: noted only).
  *       * Boolean legal terms (ELA, credit commits) only go false->true
  *         (a term can be added by an upsell, never silently removed).
  */
@@ -69,6 +70,16 @@ public with sharing class ContractLegalTermsApplier {
         new LegalField('Credit_Commit__c', 'Credit_Commit__c', true),
         new LegalField('Credit_Overcommit_Obligation__c', 'Credit_Overcommit_Obligation__c', true)
     };
+
+    // Free-text clause summaries. The model rewords the same clause on every
+    // read (an amendment re-reads the parent MSA), so on an amendment differing
+    // wording is not a change of terms: the contract keeps its text, the
+    // paper's wording is noted, and review is not flagged. The structured terms
+    // (notice period, model changes, the picklists) still conflict.
+    private static final Set<String> TEXT_FIELDS = new Set<String>{
+        'Subprocessor_Restrictions__c', 'Rate_Limit_Notes__c'
+    };
+    private static final Integer NOTED_TEXT_MAX = 300;
 
     // Contact-info fields (NOT legal terms). Applied to the Contract too, but a
     // changed primary contact is normal info churn, not a legal conflict: the
@@ -375,6 +386,11 @@ public with sharing class ContractLegalTermsApplier {
                 changes.put(f.contract, ofeVal);
                 log.add('Wrote ' + f.contract + ' = ' + ofeVal + ' (new term)');
             } else if (!sameValue(curVal, ofeVal)) {
+                if (TEXT_FIELDS.contains(f.contract)) {
+                    log.add('Kept ' + f.contract + ' (this order words it differently: "'
+                        + truncate(String.valueOf(ofeVal), NOTED_TEXT_MAX) + '")');
+                    continue;
+                }
                 conflict = true;
                 log.add('CONFLICT ' + f.contract + ': contract="' + curVal + '" vs order form="' + ofeVal
                         + '" - left contract unchanged, needs legal review');

@@ -628,6 +628,38 @@ private class ContractLegalTermsApplierTest {
         System.assertEquals(1, after.Special_Terms__c.countMatches('co-termed'), 'Added once: ' + after.Special_Terms__c);
     }
 
+    @isTest
+    static void freeText_rewordingIsNotedNotFlagged() {
+        // Great Hill / Annaly: the amendment re-reads the same MSA clause and the
+        // model words it differently. A structured term still conflicts.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, new Map<String, Object>{
+            'Subprocessor_Restrictions__c' => 'Arvo may not amend the DPA adversely without Client consent (Rider 2.1).',
+            'Rate_Limit_Notes__c' => 'Rogo may throttle excessive use.'
+        });
+        Opportunity o = makeOpp(a.Id, 'Upsell', c.Id, null);
+        Order_Form_Extraction__c ofe = makeOfe(o.Id, new Map<String, Object>{
+            'Subprocessor_Restrictions__c' => 'DPA may not be amended in a way that adversely affects Client without its consent (Rider Section 2.1).',
+            'Rate_Limit_Notes__c' => 'Excessive use may be limited or throttled by Rogo.'
+        });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        Contract after = [
+            SELECT Subprocessor_Restrictions__c, Rate_Limit_Notes__c, Needs_Legal_Review__c, Reconciliation_Notes__c
+            FROM Contract WHERE Id = :c.Id
+        ];
+        System.assertEquals(false, res.needsReview, res.notes);
+        System.assertEquals(false, after.Needs_Legal_Review__c);
+        System.assert(after.Subprocessor_Restrictions__c.startsWith('Arvo may not amend'), 'contract keeps its text');
+        System.assertEquals('Rogo may throttle excessive use.', after.Rate_Limit_Notes__c);
+        System.assert(after.Reconciliation_Notes__c.contains('Kept Subprocessor_Restrictions__c (this order words it differently'),
+            after.Reconciliation_Notes__c);
+        System.assert(!after.Reconciliation_Notes__c.contains('CONFLICT'), after.Reconciliation_Notes__c);
+    }
+
     // ===== Legal's "Model changes: notice or approval" column =====
 
     @isTest

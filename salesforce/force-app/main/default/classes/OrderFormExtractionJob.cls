@@ -983,9 +983,46 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         // credit keys either - only the (cleared) row.
         computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d);
         checkStatedSplit(row, extracted, d);
+        verifyRenewalTerms(row, extracted, d);
         clampToFieldLimits(row, d);
         d.writeTo(row);
         applyStatus(row, hasOrderForm, skipped);
+    }
+
+    // The model has answered "Manual renewal" for clauses that renew on their
+    // own - "will automatically renew ... at Rogo's then-current list pricing
+    // unless otherwise mutually agreed" (the agreement is about price) or "unless
+    // either party gives notice of non-renewal" - 456 of 640 Manual answers on
+    // 2026-10-16. A Manual answer whose own quote says the agreement renews
+    // automatically, and nothing that needs someone to act (not automatically,
+    // may renew, by / upon mutual agreement, an option or notice of renewal -
+    // redlined templates keep the non-renewal tail after striking
+    // "automatically"), becomes Auto-renew with the quote's notice period
+    // (30-day when none is stated, as the prompt says).
+    private static final Pattern AUTO_RENEW_WORDS = Pattern.compile(
+        '(?i)(automatic(ally)?[ -]+renew|auto[ -]?renew|renews? automatically|evergreen'
+        + '|notice of non-?renewal|non-?renewal notice)');
+    private static final Pattern MANUAL_RENEW_WORDS = Pattern.compile(
+        '(?i)(\\bnot\\b[^.;]{0,20}(automatic(ally)?[ -]+renew|auto[ -]?renew|renew automatically)'
+        + '|\\bno auto(matic)?[ -]?renewal|without auto(matic)?[ -]?renewal|\\bmay (be )?renew'
+        + '|\\b(by|subject to|upon) (the )?mutual (written )?(agreement|consent)'
+        + '|mutual(ly)? agree\\w* (in writing )?to renew|option[^.;]{0,30}to renew|notice of renewal)');
+    private static final Pattern NOTICE_DAYS = Pattern.compile(
+        '(?i)(\\d{2,3})\\)?\\s*(calendar\\s+|business\\s+)?days');
+
+    @TestVisible
+    private static void verifyRenewalTerms(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d) {
+        if (row.Renewal_Terms__c != 'Manual renewal') return;
+        String quote = evidenceQuote(extracted, 'Renewal_Terms');
+        if (String.isBlank(quote)) return;
+        if (!AUTO_RENEW_WORDS.matcher(quote).find() || MANUAL_RENEW_WORDS.matcher(quote).find()) return;
+        Matcher m = NOTICE_DAYS.matcher(quote);
+        Integer days = m.find() ? Integer.valueOf(m.group(1)) : null;
+        if (days != null && days >= 90) row.Renewal_Terms__c = 'Auto-renew (90-day)';
+        else if (days != null && days >= 60) row.Renewal_Terms__c = 'Auto-renew (60-day)';
+        else row.Renewal_Terms__c = 'Auto-renew (30-day)';
+        d.mark('Renewal_Terms', 'Model answered Manual renewal, but its quote renews automatically; '
+            + (days == null ? 'no notice period stated, so 30-day.' : days + '-day notice in the quote.'));
     }
 
     // Records the model's per-file classification and reports whether the CURRENT
