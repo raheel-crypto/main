@@ -110,6 +110,7 @@ public with sharing class ContractLegalTermsApplier {
                    ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c, Credits_Purchased__c,
                    Credits_Added__c,
                    Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
+                   Billing_Contact_Email__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
                    Opportunity__r.Name, Opportunity__r.CloseDate, Opportunity__r.CreatedDate,
                    Type__c, Extracted_At__c, Package_Tier__c, Unlimited_Lite__c, Free_Max_Mid_Credits__c,
                    Free_Max_Mid_Amount__c, Free_Tier_Retained__c, Overage_Rate__c, Credit_Rate__c,
@@ -158,6 +159,8 @@ public with sharing class ContractLegalTermsApplier {
                    Model_Change_Requirement__c, Model_Change_Terms__c,
                        ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
                        Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
+                       Billing_Contact__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
+                       BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry,
                        Opportunity__c, Source_Opportunity_Id__c,
                        Package_Tier__c, Unlimited_Lite__c, Free_Max_Mid_Credits__c, Free_Max_Mid_Amount__c,
                        Free_Tier_Retained__c, Overage_Rate__c, Credits_Per_Year__c, Credit_Rate__c,
@@ -241,6 +244,7 @@ public with sharing class ContractLegalTermsApplier {
             Boolean conflict = isAmend
                 ? reconcile(current, ofe, changes, log)
                 : freshWrite(current, ofe, changes, log);
+            fillBillingDetails(current, ofe, changes, log);
 
             // Only point the contract at this extraction when it really is this
             // contract's paper: the contract was resolved from the deal's own (or
@@ -470,6 +474,85 @@ public with sharing class ContractLegalTermsApplier {
         changes.Model_Change_Terms__c = ofe.Model_Change_Terms__c;
         log.add('Wrote Model_Change_Requirement__c = ' + incoming);
         return false;
+    }
+
+    // Billing details (AP email, billing entity, its address) are contact info,
+    // not legal terms: filled when blank on the contract, never overwritten, on
+    // any deal type. The address is kept whole in Billing_Entity_Address__c and,
+    // when the standard Billing Address is empty and BillingAddressParser can
+    // read the line, split into its parts.
+    private static final List<String> BILLING_ADDRESS_FIELDS = new List<String>{
+        'BillingStreet', 'BillingCity', 'BillingState', 'BillingPostalCode', 'BillingCountry'
+    };
+
+    private static void fillBillingDetails(Contract current, Order_Form_Extraction__c ofe, Contract changes,
+                                           List<String> log) {
+        fillBlank(current, changes, 'Billing_Contact__c', ofe.Billing_Contact_Email__c, 80, log);
+        fillBlank(current, changes, 'Billing_Entity_Name__c', ofe.Billing_Entity_Name__c, 255, log);
+        fillBlank(current, changes, 'Billing_Entity_Address__c', ofe.Billing_Entity_Address__c, 255, log);
+        if (String.isBlank(ofe.Billing_Entity_Address__c)) return;
+        for (String f : BILLING_ADDRESS_FIELDS) {
+            if (String.isNotBlank(valueNow(current, changes, f))) return;   // never mix two addresses
+        }
+        BillingAddressParser.Parts p = BillingAddressParser.parse(ofe.Billing_Entity_Address__c);
+        if (p == null) {
+            log.add('Billing address not split (format not recognised); kept whole in Billing_Entity_Address__c');
+            return;
+        }
+        changes.BillingStreet = truncate(p.street, 255);
+        changes.BillingCity = truncate(p.city, 40);
+        if (p.state != null) changes.BillingState = truncate(p.state, 80);
+        if (p.postalCode != null) changes.BillingPostalCode = truncate(p.postalCode, 20);
+        if (p.country != null) changes.BillingCountry = truncate(p.country, 80);
+        log.add('Wrote Billing Address from the billing entity address: ' + p.street + ' | ' + p.city
+            + (p.state == null ? '' : ' | ' + p.state) + (p.postalCode == null ? '' : ' | ' + p.postalCode)
+            + (p.country == null ? '' : ' | ' + p.country));
+    }
+
+    private static void fillBlank(Contract current, Contract changes, String field, String value, Integer maxLen,
+                                  List<String> log) {
+        if (String.isBlank(value) || String.isNotBlank(valueNow(current, changes, field))) return;
+        changes.put(field, truncate(value, maxLen));
+        log.add('Wrote ' + field + ' = ' + value + ' (was blank)');
+    }
+
+    // The value as it stands in this call: an earlier OFE's pending change, else the contract's.
+    private static String valueNow(Contract current, Contract changes, String field) {
+        Map<String, Object> pending = changes.getPopulatedFieldsAsMap();
+        if (pending.containsKey(field)) return (String) pending.get(field);
+        return current == null ? null : (String) current.get(field);
+    }
+
+    /**
+     * Fill blank billing details on existing Contracts from the extractions
+     * already applied to them (current ones, in deal order) - for contracts
+     * applied before these fields were carried over. Returns the changes,
+     * unsaved; the caller saves them. Legal terms are not touched.
+     */
+    public static List<Contract> billingBackfill(Set<Id> contractIds) {
+        List<Contract> out = new List<Contract>();
+        if (contractIds == null || contractIds.isEmpty()) return out;
+        Map<Id, Contract> contracts = new Map<Id, Contract>([
+            SELECT Id, Billing_Contact__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
+                   BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry
+            FROM Contract WHERE Id IN :contractIds
+        ]);
+        Map<Id, Contract> changesById = new Map<Id, Contract>();
+        for (Order_Form_Extraction__c ofe : [
+            SELECT Applied_Contract__c, Billing_Contact_Email__c, Billing_Entity_Name__c, Billing_Entity_Address__c
+            FROM Order_Form_Extraction__c
+            WHERE Applied_Contract__c IN :contracts.keySet() AND Is_Current__c = true
+              AND Extraction_Status__c IN :APPLICABLE_STATUSES
+            ORDER BY Opportunity__r.CloseDate ASC NULLS FIRST, Opportunity__r.CreatedDate ASC
+        ]) {
+            Id cid = ofe.Applied_Contract__c;
+            if (!changesById.containsKey(cid)) changesById.put(cid, new Contract(Id = cid));
+            fillBillingDetails(contracts.get(cid), ofe, changesById.get(cid), new List<String>());
+        }
+        for (Contract c : changesById.values()) {
+            if (c.getPopulatedFieldsAsMap().size() > 1) out.add(c);
+        }
+        return out;
     }
 
     private static Boolean sameValue(Object a, Object b) {

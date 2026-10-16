@@ -298,6 +298,105 @@ private class ContractLegalTermsApplierTest {
         System.assertEquals(false, upAfter.Needs_Legal_Review__c);
     }
 
+    // ===== Billing details: fill blanks only =====
+
+    @isTest
+    static void billing_freshDealFillsBlanksAndSplitsAddress() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity o = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofe = makeOfe(o.Id, new Map<String, Object>{
+            'Billing_Contact_Email__c' => 'ap@acmecapital.com',
+            'Billing_Entity_Name__c' => 'Acme Capital LLC',
+            'Billing_Entity_Address__c' => '711 Fifth Avenue, 10th Floor, New York, NY 10022'
+        });
+
+        Test.startTest();
+        runOne(ofe.Id);
+        Test.stopTest();
+
+        Contract after = [
+            SELECT Billing_Contact__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
+                   BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry
+            FROM Contract WHERE Id = :c.Id
+        ];
+        System.assertEquals('ap@acmecapital.com', after.Billing_Contact__c);
+        System.assertEquals('Acme Capital LLC', after.Billing_Entity_Name__c);
+        System.assertEquals('711 Fifth Avenue, 10th Floor, New York, NY 10022', after.Billing_Entity_Address__c);
+        System.assertEquals('711 Fifth Avenue, 10th Floor', after.BillingStreet);
+        System.assertEquals('New York', after.BillingCity);
+        System.assertEquals('NY', after.BillingState);
+        System.assertEquals('10022', after.BillingPostalCode);
+        System.assertEquals('United States', after.BillingCountry);
+    }
+
+    @isTest
+    static void billing_neverOverwritesExistingValues() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, new Map<String, Object>{
+            'Billing_Contact__c' => 'old-ap@acmecapital.com',
+            'BillingStreet' => '1 Old Road',
+            'BillingCity' => 'Boston'
+        });
+        Opportunity o = makeOpp(a.Id, 'Upsell', c.Id, null);
+        Order_Form_Extraction__c ofe = makeOfe(o.Id, new Map<String, Object>{
+            'Billing_Contact_Email__c' => 'new-ap@acmecapital.com',
+            'Billing_Entity_Name__c' => 'Acme Capital LLC',
+            'Billing_Entity_Address__c' => '711 Fifth Avenue, New York, NY 10022'
+        });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        Contract after = [
+            SELECT Billing_Contact__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
+                   BillingStreet, BillingCity, BillingState, Needs_Legal_Review__c
+            FROM Contract WHERE Id = :c.Id
+        ];
+        System.assertEquals(false, res.needsReview);
+        System.assertEquals('old-ap@acmecapital.com', after.Billing_Contact__c, 'existing AP email kept');
+        System.assertEquals('Acme Capital LLC', after.Billing_Entity_Name__c, 'blank filled');
+        System.assertEquals('711 Fifth Avenue, New York, NY 10022', after.Billing_Entity_Address__c, 'blank filled');
+        System.assertEquals('1 Old Road', after.BillingStreet, 'existing address never mixed with another');
+        System.assertEquals('Boston', after.BillingCity);
+        System.assertEquals(null, after.BillingState);
+    }
+
+    @isTest
+    static void billingBackfill_fillsFromAppliedExtractionsInDealOrder() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity first = new Opportunity(Name = 'First Opp', StageName = 'Closed Won', AccountId = a.Id,
+            Type = 'New Business', CloseDate = Date.today().addDays(-30));
+        insert first;
+        Opportunity later = makeOpp(a.Id, 'Upsell', null, first.Id);
+        // Incomplete rows: legal terms apply, and no create-time automation touches them.
+        makeOfe(first.Id, new Map<String, Object>{
+            'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true, 'Applied_Contract__c' => c.Id,
+            'Billing_Entity_Name__c' => 'First Entity LLC',
+            'Billing_Entity_Address__c' => '86 Brook Street, London W1K 5AY'
+        });
+        makeOfe(later.Id, new Map<String, Object>{
+            'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true, 'Applied_Contract__c' => c.Id,
+            'Billing_Entity_Name__c' => 'Later Entity LLC',
+            'Billing_Contact_Email__c' => 'ap@later.com'
+        });
+
+        Test.startTest();
+        List<Contract> changes = ContractLegalTermsApplier.billingBackfill(new Set<Id>{ c.Id });
+        Test.stopTest();
+
+        System.assertEquals(1, changes.size());
+        Contract ch = changes[0];
+        System.assertEquals('First Entity LLC', ch.Billing_Entity_Name__c, 'earliest deal wins');
+        System.assertEquals('ap@later.com', ch.Billing_Contact__c, 'a later deal still fills a blank');
+        System.assertEquals('86 Brook Street', ch.BillingStreet);
+        System.assertEquals('London', ch.BillingCity);
+        System.assertEquals('W1K 5AY', ch.BillingPostalCode);
+        System.assertEquals('United Kingdom', ch.BillingCountry);
+    }
+
     // ===== Running credit total (signed: Downsell subtracts) =====
 
     @isTest
