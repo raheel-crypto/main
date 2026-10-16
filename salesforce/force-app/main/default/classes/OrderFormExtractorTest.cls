@@ -1468,6 +1468,51 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void runRefresh_resumeRedoesRowsOnlyStampedSinceTheCutoff() {
+        // A stopped pass resumed with its original cutoff: a row the applier
+        // touched after the cutoff (modified, not re-extracted) is still refreshed.
+        Opportunity opp = insertOpp('Refresh Resume', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+        Order_Form_Extraction__c existing = new Order_Form_Extraction__c(
+            Opportunity__c = opp.Id, Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now().addDays(-1), Seat_Licenses__c = 1);
+        insert existing;   // modified now, i.e. after the cutoff below
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business', 'Seat_Licenses' => 9 });
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        Test.startTest();
+        OrderFormBackfillBatch.runRefresh(Datetime.now().addHours(-1));
+        Test.stopTest();
+
+        System.assertEquals(9, [SELECT Seat_Licenses__c FROM Order_Form_Extraction__c WHERE Id = :existing.Id].Seat_Licenses__c);
+    }
+
+    @isTest
+    static void runRefresh_resumeSkipsRowsAlreadyExtractedThisPass() {
+        Opportunity opp = insertOpp('Refresh Done', 'Closed Won');
+        attachSignedFile(opp.Id, 'signed__OrderForm');
+        Order_Form_Extraction__c existing = new Order_Form_Extraction__c(
+            Opportunity__c = opp.Id, Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now(), Seat_Licenses__c = 1);
+        insert existing;
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business', 'Seat_Licenses' => 9 });
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        Test.startTest();
+        OrderFormBackfillBatch.runRefresh(Datetime.now().addHours(-1));
+        Test.stopTest();
+
+        System.assertEquals(0, mock.callCount, 'already extracted in this pass');
+        System.assertEquals(1, [SELECT Seat_Licenses__c FROM Order_Form_Extraction__c WHERE Id = :existing.Id].Seat_Licenses__c);
+    }
+
+    @isTest
     static void runRefresh_failedRerunLeavesRowUntouched() {
         Opportunity opp = insertOpp('Refresh Fail Safe', 'Closed Won');
         attachSignedFile(opp.Id, 'signed__OrderForm');

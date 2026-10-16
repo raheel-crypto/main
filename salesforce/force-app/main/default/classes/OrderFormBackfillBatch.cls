@@ -60,12 +60,14 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         if (cutoff == null) cutoff = Datetime.now();
         if (refreshMode) {
             // Every Closed Won opp EXCEPT those already refreshed in this pass
-            // (an extraction row modified at/after the cutoff). execute() updates
-            // the latest row in place. Oldest first, as for reruns.
+            // (an extraction row EXTRACTED at/after the cutoff - not merely
+            // modified: the applier stamps rows, which must not count as
+            // refreshed when a stopped pass is resumed). execute() updates the
+            // latest row in place. Oldest first, as for reruns.
             return Database.getQueryLocator(
                 'SELECT Id, Name FROM Opportunity ' +
                 'WHERE StageName = \'Closed Won\' ' +
-                'AND Id NOT IN (SELECT Opportunity__c FROM Order_Form_Extraction__c WHERE LastModifiedDate >= :cutoff) ' +
+                'AND Id NOT IN (SELECT Opportunity__c FROM Order_Form_Extraction__c WHERE Extracted_At__c >= :cutoff) ' +
                 'ORDER BY CloseDate ASC, CreatedDate ASC'
             );
         }
@@ -148,7 +150,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         List<Order_Form_Extraction__c> toInsert = new List<Order_Form_Extraction__c>();
         for (Opportunity opp : scope) {
             Order_Form_Extraction__c existing = currentByOpp.get(opp.Id);
-            if (existing != null && existing.LastModifiedDate >= cutoff) continue; // already refreshed this pass
+            if (existing != null && existing.Extracted_At__c >= cutoff) continue; // already refreshed this pass
 
             List<Id> docs = docsByOpp.get(opp.Id);
             if (docs == null || docs.isEmpty()) { totalSkippedNoFile++; continue; }

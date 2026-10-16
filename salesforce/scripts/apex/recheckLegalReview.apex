@@ -17,7 +17,9 @@
 // Restrictions, Rate Limit Notes) no longer conflict, and the "Manual renewal"
 // misread is fixed in the extractor. After the full refresh and
 // repairRenewalTerms.apex, this re-checks every flagged contract again
-// (MARK changed, so contracts re-checked on 2026-10-09 qualify again).
+// (MARK changed, so contracts re-checked on 2026-10-09 qualify again). The
+// mark changed once more for the run after the resumed refresh, because the
+// first second-pass run saw only a third of the refreshed rows.
 //
 // Deploy the applier changes FIRST, or this re-flags the same contracts.
 //
@@ -30,7 +32,7 @@
 
 Boolean DRY_RUN = true;   // <-- false to re-check
 Integer CAP = 25;         // contracts per run (stops early near a governor limit)
-String MARK = 'Review re-checked 2026-10-16';
+String MARK = 'Review re-checked after refresh 2026-10-16';
 Set<String> AMEND = new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
 
 List<Contract> todo = new List<Contract>();
