@@ -380,11 +380,13 @@ private class ContractLegalTermsApplierTest {
         makeOfe(later.Id, new Map<String, Object>{
             'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true, 'Applied_Contract__c' => c.Id,
             'Billing_Entity_Name__c' => 'Later Entity LLC',
-            'Billing_Contact_Email__c' => 'ap@later.com'
+            'Billing_Contact_Email__c' => 'ap@later.com',
+            'Seat_Adds_By_Email__c' => true,
+            'Seat_Adds_By_Email_Terms__c' => 'Customer may add users by emailing sales@rogo.ai.'
         });
 
         Test.startTest();
-        List<Contract> changes = ContractLegalTermsApplier.billingBackfill(new Set<Id>{ c.Id });
+        List<Contract> changes = ContractLegalTermsApplier.backfillBillingAndSeatAdds(new Set<Id>{ c.Id });
         Test.stopTest();
 
         System.assertEquals(1, changes.size());
@@ -395,6 +397,41 @@ private class ContractLegalTermsApplierTest {
         System.assertEquals('London', ch.BillingCity);
         System.assertEquals('W1K 5AY', ch.BillingPostalCode);
         System.assertEquals('United Kingdom', ch.BillingCountry);
+        System.assertEquals(true, ch.Seat_Adds_By_Email__c, 'a later deal adds the seat-adds term');
+        System.assertEquals('Customer may add users by emailing sales@rogo.ai.', ch.Seat_Adds_By_Email_Terms__c);
+    }
+
+    @isTest
+    static void seatAdds_freshWritesAndAmendmentOnlyAdds() {
+        Account a = makeAccount();
+        Contract withTerm = makeContract(a.Id, new Map<String, Object>{
+            'Seat_Adds_By_Email__c' => true,
+            'Seat_Adds_By_Email_Terms__c' => 'Add seats by emailing sales@rogo.ai.'
+        });
+        Contract without = makeContract(a.Id, null);
+        Opportunity upKeep = makeOpp(a.Id, 'Upsell', withTerm.Id, null);
+        Opportunity upAdd = makeOpp(a.Id, 'Upsell', without.Id, null);
+        // An upsell silent on it never removes the term...
+        Order_Form_Extraction__c silent = makeOfe(upKeep.Id, new Map<String, Object>{ 'Seat_Adds_By_Email__c' => false });
+        // ...and one that grants it adds it, with its sentence.
+        Order_Form_Extraction__c grants = makeOfe(upAdd.Id, new Map<String, Object>{
+            'Seat_Adds_By_Email__c' => true,
+            'Seat_Adds_By_Email_Terms__c' => 'Customer may add Authorized Users by contacting its Account Executive.'
+        });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result r1 = runOne(silent.Id);
+        ContractLegalTermsApplier.Result r2 = runOne(grants.Id);
+        Test.stopTest();
+
+        Contract kept = [SELECT Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c FROM Contract WHERE Id = :withTerm.Id];
+        Contract added = [SELECT Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c FROM Contract WHERE Id = :without.Id];
+        System.assertEquals(false, r1.needsReview);
+        System.assertEquals(false, r2.needsReview);
+        System.assertEquals(true, kept.Seat_Adds_By_Email__c);
+        System.assertEquals('Add seats by emailing sales@rogo.ai.', kept.Seat_Adds_By_Email_Terms__c);
+        System.assertEquals(true, added.Seat_Adds_By_Email__c);
+        System.assert(added.Seat_Adds_By_Email_Terms__c.contains('Account Executive'), added.Seat_Adds_By_Email_Terms__c);
     }
 
     // ===== Running credit total (signed: Downsell subtracts) =====

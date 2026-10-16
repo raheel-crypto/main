@@ -1603,6 +1603,34 @@ private class OrderFormExtractorTest {
             + 'to renew for two (2) one-year renewal terms.').Renewal_Terms__c);
     }
 
+    private static Order_Form_Extraction__c seatAddsRow(Object stated, String terms) {
+        Opportunity opp = insertOpp('Seat Adds ' + Crypto.getRandomInteger(), 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Seat_Adds_By_Email' => stated,
+            'Seat_Adds_By_Email_Terms' => terms
+        });
+        return OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+    }
+
+    @isTest
+    static void seatAddsByEmail_keptWhenItsSentenceNamesTheRoute() {
+        String clause = 'Customer may purchase additional Authorized Users at any time by emailing sales@rogo.ai or '
+            + 'contacting Customer\'s designated Account Executive, prorated for the remaining term.';
+        Order_Form_Extraction__c row = seatAddsRow(true, clause);
+        System.assertEquals(true, row.Seat_Adds_By_Email__c);
+        System.assertEquals(clause, row.Seat_Adds_By_Email_Terms__c);
+
+        Order_Form_Extraction__c unsupported = seatAddsRow(true, 'Additional seats per the Agreement.');
+        System.assertEquals(false, unsupported.Seat_Adds_By_Email__c);
+        System.assertEquals(null, unsupported.Seat_Adds_By_Email_Terms__c);
+        System.assert(unsupported.Derived_Fields__c.contains('Seat_Adds_By_Email'), unsupported.Derived_Fields__c);
+
+        Order_Form_Extraction__c silent = seatAddsRow(null, null);
+        System.assertEquals(false, silent.Seat_Adds_By_Email__c);
+        System.assertEquals(null, silent.Seat_Adds_By_Email_Terms__c);
+    }
+
     @isTest
     static void rest_doPost_createsExtraction() {
         Opportunity opp = insertOpp('Large Doc REST', 'Closed Won');

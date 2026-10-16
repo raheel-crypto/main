@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Seat_Adds_By_Email__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>True when the paper lets the customer add seats by emailing Rogo (e.g. sales@rogo.ai) or contacting its Account Executive, without a new order form or amendment. Usually in the Subscription Fee section; extracted from the order form.</description>
+    <label>Seat Adds by Email</label>
+    <type>Checkbox</type>
+</CustomField>

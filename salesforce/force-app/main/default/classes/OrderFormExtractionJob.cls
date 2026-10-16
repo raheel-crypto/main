@@ -984,6 +984,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d);
         checkStatedSplit(row, extracted, d);
         verifyRenewalTerms(row, extracted, d);
+        populateSeatAddsByEmail(row, extracted, d);
         clampToFieldLimits(row, d);
         d.writeTo(row);
         applyStatus(row, hasOrderForm, skipped);
@@ -1009,6 +1010,29 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         + '|mutual(ly)? agree\\w* (in writing )?to renew|option[^.;]{0,30}to renew|notice of renewal)');
     private static final Pattern NOTICE_DAYS = Pattern.compile(
         '(?i)(\\d{2,3})\\)?\\s*(calendar\\s+|business\\s+)?days');
+
+    // Seats addable by email / through the Account Executive (usually in the
+    // Subscription Fee section). A yes is kept only when its sentence names
+    // that route and what is added; otherwise it is stored false and marked.
+    private static final Pattern SEAT_ADD_ROUTE = Pattern.compile(
+        '(?i)(e-?mail|@|account executive|account manager|account team|sales representative)');
+    private static final Pattern SEAT_ADD_OBJECT = Pattern.compile(
+        '(?i)(seat|licen[cs]e|user|subscription)');
+
+    @TestVisible
+    private static void populateSeatAddsByEmail(Order_Form_Extraction__c row, Map<String, Object> extracted,
+                                                Derivations d) {
+        String terms = asStr(extracted.get('Seat_Adds_By_Email_Terms'));
+        Boolean stated = toBoolean(extracted.get('Seat_Adds_By_Email')) == true;
+        Boolean supported = String.isNotBlank(terms)
+            && SEAT_ADD_ROUTE.matcher(terms).find() && SEAT_ADD_OBJECT.matcher(terms).find();
+        row.Seat_Adds_By_Email__c = stated && supported;
+        row.Seat_Adds_By_Email_Terms__c = row.Seat_Adds_By_Email__c ? truncate(terms.trim(), 2000) : null;
+        if (stated && !supported) {
+            d.mark('Seat_Adds_By_Email', 'Model answered true, but its sentence does not name adding seats by '
+                + 'email or through the Account Executive; stored false.');
+        }
+    }
 
     @TestVisible
     private static void verifyRenewalTerms(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d) {

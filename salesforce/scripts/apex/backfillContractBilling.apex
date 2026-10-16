@@ -1,5 +1,5 @@
 // =============================================================================
-// Fill blank billing details on existing Contracts from their extractions
+// Fill blank billing details and the seat-adds term on existing Contracts
 // =============================================================================
 // The applier now carries the AP / billing email (Billing_Contact__c), the
 // billing entity (Billing_Entity_Name__c) and its address
@@ -8,6 +8,10 @@
 // Contracts applied before that change get them here, from the current
 // extractions already applied to them, in deal order (the earliest deal that
 // states a value wins, as it would have on the first apply).
+//
+// It also adds Seat_Adds_By_Email__c (add-only: true once any applied deal
+// lets the customer add seats by email / through the Account Executive) and
+// fills Seat_Adds_By_Email_Terms__c when blank.
 //
 // Run AFTER the full refresh and applyContractTermsInOrder.apex.
 // DRY_RUN = true (default) counts what would be filled and shows a sample of
@@ -27,10 +31,11 @@ for (AggregateResult ar : [
     contractIds.add((Id) ar.get('c'));
 }
 
-List<Contract> changes = ContractLegalTermsApplier.billingBackfill(contractIds);
+List<Contract> changes = ContractLegalTermsApplier.backfillBillingAndSeatAdds(contractIds);
 
 Map<String, Integer> filled = new Map<String, Integer>{
-    'Billing_Contact__c' => 0, 'Billing_Entity_Name__c' => 0, 'Billing_Entity_Address__c' => 0, 'BillingStreet' => 0
+    'Billing_Contact__c' => 0, 'Billing_Entity_Name__c' => 0, 'Billing_Entity_Address__c' => 0, 'BillingStreet' => 0,
+    'Seat_Adds_By_Email__c' => 0
 };
 Integer shown = 0;
 for (Contract c : changes) {
@@ -44,7 +49,8 @@ for (Contract c : changes) {
 }
 System.debug('--- Contracts with applied extractions: ' + contractIds.size() + '; contracts to fill: ' + changes.size());
 System.debug('--- AP email: ' + filled.get('Billing_Contact__c') + '; billing entity: ' + filled.get('Billing_Entity_Name__c')
-    + '; address text: ' + filled.get('Billing_Entity_Address__c') + '; standard address split: ' + filled.get('BillingStreet'));
+    + '; address text: ' + filled.get('Billing_Entity_Address__c') + '; standard address split: ' + filled.get('BillingStreet')
+    + '; seat adds by email: ' + filled.get('Seat_Adds_By_Email__c'));
 if (DRY_RUN) {
     System.debug('--- DRY RUN: nothing written. Set DRY_RUN = false to fill.');
     return;

@@ -68,7 +68,9 @@ public with sharing class ContractLegalTermsApplier {
         new LegalField('Subprocessor_Restrictions__c', 'Subprocessor_Restrictions__c', false),
         new LegalField('ELA__c', 'ELA__c', true),
         new LegalField('Credit_Commit__c', 'Credit_Commit__c', true),
-        new LegalField('Credit_Overcommit_Obligation__c', 'Credit_Overcommit_Obligation__c', true)
+        new LegalField('Credit_Overcommit_Obligation__c', 'Credit_Overcommit_Obligation__c', true),
+        new LegalField('Seat_Adds_By_Email__c', 'Seat_Adds_By_Email__c', true),
+        new LegalField('Seat_Adds_By_Email_Terms__c', 'Seat_Adds_By_Email_Terms__c', false)
     };
 
     // Free-text clause summaries. The model rewords the same clause on every
@@ -77,7 +79,7 @@ public with sharing class ContractLegalTermsApplier {
     // paper's wording is noted, and review is not flagged. The structured terms
     // (notice period, model changes, the picklists) still conflict.
     private static final Set<String> TEXT_FIELDS = new Set<String>{
-        'Subprocessor_Restrictions__c', 'Rate_Limit_Notes__c'
+        'Subprocessor_Restrictions__c', 'Rate_Limit_Notes__c', 'Seat_Adds_By_Email_Terms__c'
     };
     private static final Integer NOTED_TEXT_MAX = 300;
 
@@ -108,6 +110,7 @@ public with sharing class ContractLegalTermsApplier {
                    Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
                    Model_Change_Requirement__c, Model_Change_Terms__c,
                    ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c, Credits_Purchased__c,
+                   Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c,
                    Credits_Added__c,
                    Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
                    Billing_Contact_Email__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
@@ -158,6 +161,7 @@ public with sharing class ContractLegalTermsApplier {
                        Subprocessor_Notice_Period__c, Subprocessor_Restrictions__c, Special_Terms__c,
                    Model_Change_Requirement__c, Model_Change_Terms__c,
                        ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
+                       Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c,
                        Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
                        Billing_Contact__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
                        BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry,
@@ -524,22 +528,25 @@ public with sharing class ContractLegalTermsApplier {
     }
 
     /**
-     * Fill blank billing details on existing Contracts from the extractions
-     * already applied to them (current ones, in deal order) - for contracts
-     * applied before these fields were carried over. Returns the changes,
-     * unsaved; the caller saves them. Legal terms are not touched.
+     * For contracts applied before these fields were carried over: fill blank
+     * billing details, and add the seat-adds-by-email term (add-only; its
+     * sentence fills a blank), from the extractions already applied to each
+     * Contract - current ones, in deal order. Returns the changes, unsaved;
+     * the caller saves them. Other legal terms are not touched.
      */
-    public static List<Contract> billingBackfill(Set<Id> contractIds) {
+    public static List<Contract> backfillBillingAndSeatAdds(Set<Id> contractIds) {
         List<Contract> out = new List<Contract>();
         if (contractIds == null || contractIds.isEmpty()) return out;
         Map<Id, Contract> contracts = new Map<Id, Contract>([
             SELECT Id, Billing_Contact__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
-                   BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry
+                   BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry,
+                   Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c
             FROM Contract WHERE Id IN :contractIds
         ]);
         Map<Id, Contract> changesById = new Map<Id, Contract>();
         for (Order_Form_Extraction__c ofe : [
-            SELECT Applied_Contract__c, Billing_Contact_Email__c, Billing_Entity_Name__c, Billing_Entity_Address__c
+            SELECT Applied_Contract__c, Billing_Contact_Email__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
+                   Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c
             FROM Order_Form_Extraction__c
             WHERE Applied_Contract__c IN :contracts.keySet() AND Is_Current__c = true
               AND Extraction_Status__c IN :APPLICABLE_STATUSES
@@ -547,7 +554,14 @@ public with sharing class ContractLegalTermsApplier {
         ]) {
             Id cid = ofe.Applied_Contract__c;
             if (!changesById.containsKey(cid)) changesById.put(cid, new Contract(Id = cid));
-            fillBillingDetails(contracts.get(cid), ofe, changesById.get(cid), new List<String>());
+            Contract current = contracts.get(cid);
+            Contract changes = changesById.get(cid);
+            fillBillingDetails(current, ofe, changes, new List<String>());
+            if (ofe.Seat_Adds_By_Email__c == true) {
+                if (current.Seat_Adds_By_Email__c != true) changes.Seat_Adds_By_Email__c = true;
+                fillBlank(current, changes, 'Seat_Adds_By_Email_Terms__c', ofe.Seat_Adds_By_Email_Terms__c, 2000,
+                    new List<String>());
+            }
         }
         for (Contract c : changesById.values()) {
             if (c.getPopulatedFieldsAsMap().size() > 1) out.add(c);

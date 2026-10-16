@@ -114,6 +114,8 @@ JSON SCHEMA (return exactly these keys):
   "Free_Max_Mid_Stated": boolean | null,
   "Free_Max_Mid_Amount": number | null,
   "Seats_Added": number | null,
+  "Seat_Adds_By_Email": boolean | null,
+  "Seat_Adds_By_Email_Terms": "verbatim sentence letting the customer add seats by email or through its Account Executive, or null" | null,
   "Named_Users": "newline-separated list of individuals to provision, with email if given" | null,
   "Requested_By_Name": "person who requested/authorized the change" | null,
   "Requested_By_Email": "their email" | null,
@@ -259,6 +261,12 @@ This is Legal's contract-requirements column. It answers ONE narrow question and
   * "None identified: No notice or approval requirement identified for changing models through an existing provider."
   * "Unresolved: Referenced AI Schedule is missing."
 - Accuracy: verify each conclusion against the contract text; never invent requirements or citations. Add an Extract_Evidence entry for Model_Change_Requirement quoting the operative clause (or, for None identified / Unresolved, what you checked and what is missing).
+
+SEAT ADDS BY EMAIL:
+- Set Seat_Adds_By_Email true when the paper lets the customer add seats / licenses / users by emailing Rogo (a sales@ address such as sales@rogo.ai or sales@rogodata.com) or by contacting the customer's designated Account Executive / account team - that is, without signing a new order form or amendment. It is usually in or just after the Subscription Fee section, e.g. "Customer may add additional Authorized Users at any time by emailing sales@rogo.ai or contacting Customer's designated Account Executive." Rate or proration wording in the same sentence does not change the answer.
+- Seat_Adds_By_Email_Terms = that sentence verbatim, including any rate / proration wording in it. Null when Seat_Adds_By_Email is not true.
+- false when the paper says added seats need a new order form, an amendment or mutual written agreement and gives no email / Account Executive route; null when the paper is silent.
+- Read only the CURRENT deal's documents for this; a parent contract's clause is recorded on the parent deal.
 
 LOGO / PUBLICITY RIGHTS:
 - Determine whether Rogo may use the CUSTOMER's name, logo, or trademarks for marketing / publicity / commercial purposes (customer lists, website, press releases, case studies, "reference customer"). Search the order form, MSA, and T&C - the clause is often titled "Publicity", "Marketing", "Use of Name/Marks", "Reference Customer", or sits in a general/miscellaneous section.
