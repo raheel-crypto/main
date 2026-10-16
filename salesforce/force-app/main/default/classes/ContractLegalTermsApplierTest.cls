@@ -215,6 +215,74 @@ private class ContractLegalTermsApplierTest {
     }
 
     @isTest
+    static void fresh_pilotWithoutOwnContractNeverLandsOnAccountContract() {
+        // LionTree: a pilot with no contract of its own overwrote the Land contract.
+        Account a = makeAccount();
+        Contract land = makeContract(a.Id, new Map<String, Object>{ 'Payment_Terms__c' => 'Annual' });
+        Opportunity pilot = makeOpp(a.Id, 'Pilot', null, null);
+        Order_Form_Extraction__c ofe = makeOfe(pilot.Id, new Map<String, Object>{ 'Payment_Terms__c' => 'Monthly' });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        System.assertEquals('NoContract', res.status);
+        System.assert(res.notes.contains('No Contract of its own'), res.notes);
+        System.assertEquals('Annual', [SELECT Payment_Terms__c FROM Contract WHERE Id = :land.Id].Payment_Terms__c);
+        System.assertEquals(null, [SELECT Applied_Contract__c FROM Order_Form_Extraction__c WHERE Id = :ofe.Id].Applied_Contract__c);
+    }
+
+    @isTest
+    static void fresh_landsOnContractThatRecordsItsOpportunity() {
+        Account a = makeAccount();
+        Opportunity nb = makeOpp(a.Id, 'New Business', null, null);
+        Contract other = makeContract(a.Id, null);
+        Contract own = makeContract(a.Id, new Map<String, Object>{ 'Source_Opportunity_Id__c' => String.valueOf(nb.Id) });
+        Contract newest = makeContract(a.Id, null);
+        Order_Form_Extraction__c ofe = makeOfe(nb.Id, new Map<String, Object>{ 'Payment_Terms__c' => 'Quarterly' });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        System.assertEquals(own.Id, res.contractId);
+        System.assertEquals('Quarterly', [SELECT Payment_Terms__c FROM Contract WHERE Id = :own.Id].Payment_Terms__c);
+        System.assertEquals(null, [SELECT Payment_Terms__c FROM Contract WHERE Id = :newest.Id].Payment_Terms__c);
+        System.assertEquals(ofe.Id, [SELECT Latest_Order_Form_Extraction__c FROM Contract WHERE Id = :own.Id].Latest_Order_Form_Extraction__c);
+    }
+
+    @isTest
+    static void upsellFallback_prefersTheAccountsNonPilotContract() {
+        Account a = makeAccount();
+        Contract main = makeContract(a.Id, null);
+        Opportunity pilotOpp = makeOpp(a.Id, 'Pilot', null, null);
+        Contract pilotContract = makeContract(a.Id, new Map<String, Object>{ 'Opportunity__c' => pilotOpp.Id });  // newer
+        Opportunity up = makeOpp(a.Id, 'Upsell', null, null);
+        Order_Form_Extraction__c ofe = makeOfe(up.Id, new Map<String, Object>{ 'Subprocessor_Notice_Period__c' => 60 });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        System.assertEquals(main.Id, res.contractId, 'the pilot contract is newer but is a pilot\'s');
+        System.assertEquals(null, [SELECT Subprocessor_Notice_Period__c FROM Contract WHERE Id = :pilotContract.Id].Subprocessor_Notice_Period__c);
+    }
+
+    @isTest
+    static void clearedTerms_blanksManagedTermsOnly() {
+        Contract c = ContractLegalTermsApplier.clearedTerms(null);
+        Map<String, Object> f = c.getPopulatedFieldsAsMap();
+        System.assertEquals(null, f.get('Renewal_Terms__c'));
+        System.assert(f.containsKey('Renewal_Terms__c'));
+        System.assertEquals(false, f.get('ELA__c'));
+        System.assertEquals(false, f.get('Seat_Adds_By_Email__c'));
+        System.assert(f.containsKey('Credits_Per_Year__c') && f.get('Credits_Per_Year__c') == null);
+        System.assertEquals(false, f.get('Needs_Legal_Review__c'));
+        System.assert(!f.containsKey('Primary_Contact__c'), 'contacts kept');
+        System.assert(!f.containsKey('Billing_Entity_Name__c'), 'billing kept');
+    }
+
+    @isTest
     static void noContract_returnsNoContractStatus() {
         Account a = makeAccount();
         Opportunity o = makeOpp(a.Id, 'New Business', null, null);

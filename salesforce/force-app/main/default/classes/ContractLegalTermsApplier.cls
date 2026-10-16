@@ -122,34 +122,50 @@ public with sharing class ContractLegalTermsApplier {
             WHERE Id IN :extractionIds
         ]);
 
-        // Resolve target Contract Ids and bulk-load the account-fallback contracts.
+        // Resolve target Contract Ids. A fresh deal (new business / renewal /
+        // pilot) lands only on the contract made for it: its opportunity's
+        // contract, or one that records the opportunity as its source. Only an
+        // amendment with no contract of its own or its base deal's falls back to
+        // the account - a pilot or a renewal applied to "the account's newest
+        // contract" overwrote the real contract's terms (LionTree, BlackRock).
         Map<Id, Id> targetContractByOfe = new Map<Id, Id>();
         Set<Id> resolvedDirectly = new Set<Id>();   // OFEs whose contract came from their own / base opp
         Set<Id> accountsNeedingFallback = new Set<Id>();
+        Set<Id> freshOppsWithoutContract = new Set<Id>();
         for (Order_Form_Extraction__c ofe : ofes.values()) {
             Id direct = resolveDirectContract(ofe);
             if (direct != null) { targetContractByOfe.put(ofe.Id, direct); resolvedDirectly.add(ofe.Id); }
-            else if (ofe.Opportunity__r != null && ofe.Opportunity__r.AccountId != null)
-                accountsNeedingFallback.add(ofe.Opportunity__r.AccountId);
+            else if (ofe.Opportunity__r == null) continue;
+            else if (AMEND_TYPES.contains(ofe.Opportunity__r.Type)) {
+                if (ofe.Opportunity__r.AccountId != null) accountsNeedingFallback.add(ofe.Opportunity__r.AccountId);
+            } else {
+                freshOppsWithoutContract.add(ofe.Opportunity__c);
+            }
         }
-        Map<Id, Id> latestContractByAccount = new Map<Id, Id>();
+        Map<Id, Id> sourcedContractByOpp = contractsSourcedFrom(freshOppsWithoutContract);
+        Map<Id, Id> fallbackContractByAccount = new Map<Id, Id>();
         if (!accountsNeedingFallback.isEmpty()) {
+            Map<Id, Contract> best = new Map<Id, Contract>();
             for (Contract c : [
-                SELECT Id, AccountId FROM Contract
+                SELECT Id, AccountId, Status, Opportunity__r.Type FROM Contract
                 WHERE AccountId IN :accountsNeedingFallback
                 ORDER BY CreatedDate DESC
             ]) {
-                if (!latestContractByAccount.containsKey(c.AccountId))
-                    latestContractByAccount.put(c.AccountId, c.Id);
+                Contract have = best.get(c.AccountId);
+                if (have == null || fallbackScore(c) > fallbackScore(have)) best.put(c.AccountId, c);
             }
+            for (Contract c : best.values()) fallbackContractByAccount.put(c.AccountId, c.Id);
         }
 
         // Load the target Contracts with the legal fields for reconciliation.
         Set<Id> contractIds = new Set<Id>(targetContractByOfe.values());
         for (Order_Form_Extraction__c ofe : ofes.values()) {
-            if (!targetContractByOfe.containsKey(ofe.Id) && ofe.Opportunity__r != null
-                    && ofe.Opportunity__r.AccountId != null) {
-                Id fb = latestContractByAccount.get(ofe.Opportunity__r.AccountId);
+            if (targetContractByOfe.containsKey(ofe.Id) || ofe.Opportunity__r == null) continue;
+            Id own = sourcedContractByOpp.get(ofe.Opportunity__c);
+            if (own != null) {
+                targetContractByOfe.put(ofe.Id, own); contractIds.add(own); resolvedDirectly.add(ofe.Id);
+            } else if (AMEND_TYPES.contains(ofe.Opportunity__r.Type) && ofe.Opportunity__r.AccountId != null) {
+                Id fb = fallbackContractByAccount.get(ofe.Opportunity__r.AccountId);
                 if (fb != null) { targetContractByOfe.put(ofe.Id, fb); contractIds.add(fb); }
             }
         }
@@ -235,7 +251,10 @@ public with sharing class ContractLegalTermsApplier {
             Id contractId = targetContractByOfe.get(ofe.Id);
             if (contractId == null) {
                 res.status = 'NoContract';
-                res.notes = 'No Contract linked to the Opportunity or its Account.';
+                res.notes = (ofe.Opportunity__r != null && !AMEND_TYPES.contains(ofe.Opportunity__r.Type))
+                    ? 'No Contract of its own: a ' + ofe.Opportunity__r.Type + ' deal applies only to the contract '
+                        + 'made for it, never to another of the account\'s contracts.'
+                    : 'No Contract linked to the Opportunity, its base Opportunity or its Account.';
                 continue;
             }
             res.contractId = contractId;
@@ -342,6 +361,58 @@ public with sharing class ContractLegalTermsApplier {
             return ofe.Opportunity__r.Base_Opportunity__r.ContractId;
         }
         return ofe.Opportunity__r.ContractId;   // may be null -> caller falls back to Account
+    }
+
+    // Contracts that record one of these opportunities as their source (the
+    // lookup or the external id), newest first - for a fresh deal whose
+    // opportunity has no ContractId back-link.
+    private static Map<Id, Id> contractsSourcedFrom(Set<Id> oppIds) {
+        Map<Id, Id> out = new Map<Id, Id>();
+        if (oppIds == null || oppIds.isEmpty()) return out;
+        Set<String> idText = new Set<String>();
+        for (Id o : oppIds) { idText.add(String.valueOf(o)); idText.add(String.valueOf(o).left(15)); }
+        for (Contract c : [
+            SELECT Id, Opportunity__c, Source_Opportunity_Id__c FROM Contract
+            WHERE Opportunity__c IN :oppIds OR Source_Opportunity_Id__c IN :idText
+            ORDER BY CreatedDate DESC
+        ]) {
+            Id opp = (c.Opportunity__c != null && oppIds.contains(c.Opportunity__c)) ? c.Opportunity__c : null;
+            if (opp == null) {
+                try { opp = Id.valueOf(c.Source_Opportunity_Id__c); } catch (Exception e) { continue; }
+            }
+            if (oppIds.contains(opp) && !out.containsKey(opp)) out.put(opp, c.Id);
+        }
+        return out;
+    }
+
+    // An amendment with no contract of its own or its base deal's lands on the
+    // account's newest active contract that is not a pilot's; failing that its
+    // newest non-pilot contract; failing that its newest contract.
+    private static Integer fallbackScore(Contract c) {
+        Integer score = 0;
+        if (c.Opportunity__r == null || c.Opportunity__r.Type != 'Pilot') score += 2;
+        if (c.Status == 'Activated') score += 1;
+        return score;
+    }
+
+    /**
+     * The term fields this applier manages on a Contract, blanked - for
+     * rebuilding a contract another deal's paper was applied to by mistake,
+     * before re-applying the contract's own deals in order. Contact and
+     * billing details are kept (same customer); Pricing_Structure__c is
+     * re-derived by the usage rollup on the next apply.
+     */
+    public static Contract clearedTerms(Id contractId) {
+        Contract c = new Contract(Id = contractId);
+        for (LegalField f : LEGAL_FIELDS) c.put(f.contract, f.isBoolean ? (Object) false : null);
+        for (String f : new List<String>{ 'Special_Terms__c', 'Model_Change_Requirement__c', 'Model_Change_Terms__c',
+                'Package_Tier__c', 'Unlimited_Lite__c', 'Free_Max_Mid_Credits__c', 'Free_Max_Mid_Amount__c',
+                'Free_Tier_Retained__c', 'Overage_Rate__c', 'Credits_Per_Year__c', 'Credit_Rate__c',
+                'Total_Credits_Purchased__c', 'Latest_Order_Form_Extraction__c' }) {
+            c.put(f, null);
+        }
+        c.Needs_Legal_Review__c = false;
+        return c;
     }
 
     /** Fresh contract: authoritative write of every non-null legal term. */

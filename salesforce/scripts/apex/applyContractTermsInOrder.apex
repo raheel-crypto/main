@@ -27,10 +27,10 @@
 // Resumable - applied OFEs get stamped Applied_Contract__c, so re-run until
 // "Remaining" is 0.
 //
-// Deals with NO Contract to land on (none on the opp, its base opp, or anywhere
-// on the account - typically [Arvo] lands and pilots) are listed, not attempted:
-// the applier would answer NoContract every time and they would block the
-// queue. They apply on a later run once a Contract exists. New Success rows are
+// Deals with NO Contract to land on are listed, not attempted: a fresh deal
+// (new business / renewal / pilot) with no contract of its own, or an
+// amendment with none on its opp, its base opp or the account. The applier
+// would answer NoContract every time and they would block the queue. They apply on a later run once a Contract exists. New Success rows are
 // also applied automatically by the "Order Form Extraction [Async] Update Slack
 // CW Notice to RevOps" flow; this script catches everything else.
 //
@@ -43,7 +43,7 @@ Integer CAP = 25;   // apply() calls per run; re-run until nothing remains
 Set<String> AMEND = new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
 String UNAPPLIED_FILTER = 'Extraction_Status__c IN (\'Success\', \'Incomplete\', \'No Order Form\') '
     + 'AND Is_Current__c = true AND Applied_Contract__c = null AND Opportunity__c != null';
-String UNAPPLIED_SOQL = 'SELECT Id, Opportunity__r.Name, Opportunity__r.Type, Opportunity__r.CloseDate, '
+String UNAPPLIED_SOQL = 'SELECT Id, Opportunity__c, Opportunity__r.Name, Opportunity__r.Type, Opportunity__r.CloseDate, '
     + 'Opportunity__r.AccountId, Opportunity__r.ContractId, Opportunity__r.Base_Opportunity__r.ContractId '
     + 'FROM Order_Form_Extraction__c WHERE ' + UNAPPLIED_FILTER
     + ' ORDER BY Opportunity__r.CloseDate ASC NULLS LAST';
@@ -59,16 +59,36 @@ for (AggregateResult ar : [SELECT AccountId a FROM Contract WHERE AccountId IN :
     acctsWithContract.add((Id) ar.get('a'));
 }
 
-// Partition: no contract anywhere (reported) / fresh-contract deals / amendments.
+// A fresh deal (new business / renewal / pilot) applies only to its own
+// contract: the opp's ContractId or a contract recording the opp as its source.
+Set<Id> freshOppIds = new Set<Id>();
+for (Order_Form_Extraction__c o : unapplied) {
+    if (o.Opportunity__r.ContractId == null && (o.Opportunity__r.Type == null || !AMEND.contains(o.Opportunity__r.Type))) {
+        freshOppIds.add(o.Opportunity__c);
+    }
+}
+Set<String> freshIdText = new Set<String>();
+for (Id oid : freshOppIds) { freshIdText.add(String.valueOf(oid)); freshIdText.add(String.valueOf(oid).left(15)); }
+Set<Id> oppsWithSourcedContract = new Set<Id>();
+for (Contract c : [
+    SELECT Opportunity__c, Source_Opportunity_Id__c FROM Contract
+    WHERE Opportunity__c IN :freshOppIds OR Source_Opportunity_Id__c IN :freshIdText
+]) {
+    if (c.Opportunity__c != null) oppsWithSourcedContract.add(c.Opportunity__c);
+    try { if (String.isNotBlank(c.Source_Opportunity_Id__c)) oppsWithSourcedContract.add(Id.valueOf(c.Source_Opportunity_Id__c)); }
+    catch (Exception e) { }
+}
+
+// Partition: no contract to land on (reported) / fresh-contract deals / amendments.
 List<Order_Form_Extraction__c> ordered = new List<Order_Form_Extraction__c>();
 List<Order_Form_Extraction__c> amends = new List<Order_Form_Extraction__c>();
 List<String> noContract = new List<String>();
 for (Order_Form_Extraction__c o : unapplied) {
     Opportunity opp = o.Opportunity__r;
-    Boolean hasTarget = opp.ContractId != null
-        || (opp.Base_Opportunity__r != null && opp.Base_Opportunity__r.ContractId != null)
-        || acctsWithContract.contains(opp.AccountId);
-    if (!hasTarget) { noContract.add(opp.Name + ' [' + opp.Type + ']'); continue; }
+    if (!hasTarget(opp, o.Opportunity__c, AMEND, acctsWithContract, oppsWithSourcedContract)) {
+        noContract.add(opp.Name + ' [' + opp.Type + ']');
+        continue;
+    }
     if (opp.Type != null && AMEND.contains(opp.Type)) amends.add(o);
     else ordered.add(o);   // New Business / Renewal / Pilot / (untyped) first
 }
@@ -124,11 +144,20 @@ for (String n : notable) System.debug('NOTE: ' + n);
 
 Integer remaining = 0;
 for (Order_Form_Extraction__c o : Database.query(UNAPPLIED_SOQL)) {
-    Opportunity opp = o.Opportunity__r;
-    if (opp.ContractId != null || (opp.Base_Opportunity__r != null && opp.Base_Opportunity__r.ContractId != null)
-            || acctsWithContract.contains(opp.AccountId)) remaining++;
+    if (hasTarget(o.Opportunity__r, o.Opportunity__c, AMEND, acctsWithContract, oppsWithSourcedContract)) remaining++;
 }
 System.debug('--- Remaining to apply: ' + remaining + (remaining > 0 ? ' (re-run)' : ' - done'));
 if (!noContract.isEmpty()) {
-    System.debug('--- No Contract to land on (' + noContract.size() + '): ' + String.join(noContract, '; ').left(3000));
+    System.debug('--- No Contract to land on (' + noContract.size() + '; a fresh deal needs its own): '
+        + String.join(noContract, '; ').left(3000));
+}
+
+// Own contract (or a contract recording the opp) for any deal; the base deal's
+// or, for an amendment only, any of the account's contracts.
+Boolean hasTarget(Opportunity opp, Id oppId, Set<String> amend, Set<Id> acctsWithContract, Set<Id> sourced) {
+    if (opp.ContractId != null || sourced.contains(oppId)) return true;
+    Boolean isAmend = opp.Type != null && amend.contains(opp.Type);
+    if (!isAmend) return false;
+    return (opp.Base_Opportunity__r != null && opp.Base_Opportunity__r.ContractId != null)
+        || acctsWithContract.contains(opp.AccountId);
 }
