@@ -715,6 +715,67 @@ public with sharing class ContractLegalTermsApplier {
         return out;
     }
 
+    /**
+     * For contracts whose Model_Change_Requirement__c is blank because they were
+     * applied before legal's "Model changes: notice or approval" column existed:
+     * lay the column down from the current extractions applied to each Contract,
+     * in deal order, with the apply rules (applyModelChange - a fresh deal
+     * writes, an amendment's silence keeps, a different real answer on an
+     * amendment is a conflict). A conflict flags review and is noted. Returns
+     * the changes, unsaved; the caller saves them.
+     */
+    public static List<Contract> backfillModelChange(Set<Id> contractIds) {
+        List<Contract> out = new List<Contract>();
+        if (contractIds == null || contractIds.isEmpty()) return out;
+        Map<Id, Contract> contracts = new Map<Id, Contract>([
+            SELECT Id, Reconciliation_Notes__c FROM Contract
+            WHERE Id IN :contractIds AND Model_Change_Requirement__c = null
+        ]);
+        if (contracts.isEmpty()) return out;
+        Map<Id, Contract> working = new Map<Id, Contract>();
+        Map<Id, Contract> changesById = new Map<Id, Contract>();
+        Map<Id, List<String>> conflictsById = new Map<Id, List<String>>();
+        for (Order_Form_Extraction__c ofe : [
+            SELECT Applied_Contract__c, Model_Change_Requirement__c, Model_Change_Terms__c,
+                   Opportunity__r.Type, Opportunity__r.Name
+            FROM Order_Form_Extraction__c
+            WHERE Applied_Contract__c IN :contracts.keySet() AND Is_Current__c = true
+              AND Extraction_Status__c IN :APPLICABLE_STATUSES AND Model_Change_Requirement__c != null
+            ORDER BY Opportunity__r.CloseDate ASC NULLS FIRST, Opportunity__r.CreatedDate ASC
+        ]) {
+            Id cid = ofe.Applied_Contract__c;
+            if (!working.containsKey(cid)) {
+                working.put(cid, new Contract(Id = cid));
+                changesById.put(cid, new Contract(Id = cid));
+            }
+            Contract step = new Contract(Id = cid);
+            List<String> log = new List<String>();
+            Boolean isAmend = ofe.Opportunity__r != null && AMEND_TYPES.contains(ofe.Opportunity__r.Type);
+            if (applyModelChange(working.get(cid), ofe, step, log, isAmend)) {
+                if (!conflictsById.containsKey(cid)) conflictsById.put(cid, new List<String>());
+                for (String line : log) conflictsById.get(cid).add('[' + ofe.Opportunity__r.Name + '] ' + line);
+            }
+            Map<String, Object> stepFields = step.getPopulatedFieldsAsMap();
+            for (String f : new List<String>{ 'Model_Change_Requirement__c', 'Model_Change_Terms__c' }) {
+                if (!stepFields.containsKey(f)) continue;
+                working.get(cid).put(f, stepFields.get(f));
+                changesById.get(cid).put(f, stepFields.get(f));
+            }
+        }
+        for (Id cid : changesById.keySet()) {
+            Contract c = changesById.get(cid);
+            if (conflictsById.containsKey(cid)) {
+                c.Needs_Legal_Review__c = true;
+                String existing = contracts.get(cid).Reconciliation_Notes__c;
+                String note = 'Model changes column laid down 2026-10-18 from this contract\'s deals:\n'
+                    + String.join(conflictsById.get(cid), '\n');
+                c.Reconciliation_Notes__c = truncate(String.isBlank(existing) ? note : existing + '\n\n' + note, 32768);
+            }
+            if (c.getPopulatedFieldsAsMap().size() > 1) out.add(c);
+        }
+        return out;
+    }
+
     private static Boolean sameValue(Object a, Object b) {
         if (a == null && b == null) return true;
         if (a == null || b == null) return false;

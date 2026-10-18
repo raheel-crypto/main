@@ -565,6 +565,40 @@ private class ContractLegalTermsApplierTest {
         System.assert(added.Seat_Adds_By_Email_Terms__c.contains('Account Executive'), added.Seat_Adds_By_Email_Terms__c);
     }
 
+    @isTest
+    static void backfillModelChange_laysTheColumnDownInDealOrder() {
+        Account a = makeAccount();
+        Contract quiet = makeContract(a.Id, null);
+        Contract disputed = makeContract(a.Id, null);
+        Opportunity nb1 = closedOpp(a.Id, 'New Business', 300, null);
+        Opportunity up1 = closedOpp(a.Id, 'Upsell', 100, null);
+        Opportunity nb2 = closedOpp(a.Id, 'New Business', 300, null);
+        Opportunity up2 = closedOpp(a.Id, 'Upsell', 100, null);
+        // Incomplete rows: no create-time automation applies them.
+        makeOfe(nb1.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => quiet.Id, 'Model_Change_Requirement__c' => 'Approval',
+            'Model_Change_Terms__c' => 'Approval: before a model outside the approved list. AI Schedule 4.' });
+        makeOfe(up1.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => quiet.Id, 'Model_Change_Requirement__c' => 'None identified' });
+        makeOfe(nb2.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => disputed.Id, 'Model_Change_Requirement__c' => 'Notice',
+            'Model_Change_Terms__c' => 'Notice: 30 days before material model changes. 2.3.' });
+        makeOfe(up2.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => disputed.Id, 'Model_Change_Requirement__c' => 'Approval',
+            'Model_Change_Terms__c' => 'Approval: prior written consent. AI Addendum 5.' });
+
+        Test.startTest();
+        List<Contract> changes = ContractLegalTermsApplier.backfillModelChange(new Set<Id>{ quiet.Id, disputed.Id });
+        Test.stopTest();
+
+        Map<Id, Contract> byId = new Map<Id, Contract>(changes);
+        System.assertEquals('Approval', byId.get(quiet.Id).Model_Change_Requirement__c, 'an upsell\'s silence keeps the answer');
+        System.assertEquals(null, byId.get(quiet.Id).getPopulatedFieldsAsMap().get('Needs_Legal_Review__c'));
+        System.assertEquals('Notice', byId.get(disputed.Id).Model_Change_Requirement__c, 'the contract keeps the first answer');
+        System.assertEquals(true, byId.get(disputed.Id).Needs_Legal_Review__c, 'a different real answer is a conflict');
+        System.assert(byId.get(disputed.Id).Reconciliation_Notes__c.contains('CONFLICT Model_Change_Requirement__c'));
+    }
+
     // ===== Running credit total (signed: Downsell subtracts) =====
 
     @isTest
