@@ -268,6 +268,69 @@ private class ContractLegalTermsApplierTest {
         System.assertEquals(null, [SELECT Subprocessor_Notice_Period__c FROM Contract WHERE Id = :pilotContract.Id].Subprocessor_Notice_Period__c);
     }
 
+    private static Opportunity closedOpp(Id accountId, String type, Integer daysAgo, Id contractId) {
+        Opportunity o = new Opportunity(Name = type + ' ' + daysAgo, StageName = 'Closed Won', AccountId = accountId,
+            Type = type, CloseDate = Date.today().addDays(-daysAgo), ContractId = contractId);
+        insert o;
+        return o;
+    }
+
+    @isTest
+    static void upsellWithoutBase_landsOnTheLatestPriorRenewalsContract() {
+        // Core Advisors / Creuza "Renewal Upsell": no base deal, closed with the
+        // renewal - it amends the renewal's contract, not the account's newest.
+        Account a = makeAccount();
+        Contract nbContract = makeContract(a.Id, null);
+        Contract renewalContract = makeContract(a.Id, null);
+        Contract laterContract = makeContract(a.Id, null);
+        closedOpp(a.Id, 'New Business', 400, nbContract.Id);
+        closedOpp(a.Id, 'Renewal', 10, renewalContract.Id);
+        closedOpp(a.Id, 'New Business', -30, laterContract.Id);   // closes after the upsell
+        Opportunity up = closedOpp(a.Id, 'Upsell', 10, null);
+        Order_Form_Extraction__c ofe = makeOfe(up.Id, new Map<String, Object>{ 'Subprocessor_Notice_Period__c' => 45 });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Map<Id, Id> targets = ContractLegalTermsApplier.currentTargets(new Set<Id>{ ofe.Id });
+        Test.stopTest();
+
+        System.assertEquals(renewalContract.Id, res.contractId);
+        System.assertEquals(renewalContract.Id, targets.get(ofe.Id), 'the repair check agrees with the applier');
+        System.assertEquals(45, [SELECT Subprocessor_Notice_Period__c FROM Contract WHERE Id = :renewalContract.Id].Subprocessor_Notice_Period__c);
+    }
+
+    @isTest
+    static void upsellOnAContractMadeForIt_landsOnTheBaseDealsContract() {
+        Account a = makeAccount();
+        Contract nbContract = makeContract(a.Id, null);
+        closedOpp(a.Id, 'New Business', 200, nbContract.Id);
+        Opportunity up = closedOpp(a.Id, 'Upsell', 20, null);
+        Contract madeForUpsell = makeContract(a.Id, new Map<String, Object>{ 'Opportunity__c' => up.Id });
+        up.ContractId = madeForUpsell.Id;
+        update up;
+        Order_Form_Extraction__c ofe = makeOfe(up.Id, new Map<String, Object>{ 'Payment_Terms__c' => 'Annual' });
+
+        Test.startTest();
+        ContractLegalTermsApplier.Result res = runOne(ofe.Id);
+        Test.stopTest();
+
+        System.assertEquals(nbContract.Id, res.contractId, 'the upsell amends the contract it was sold on');
+    }
+
+    @isTest
+    static void currentTargets_freshDealWithoutOwnContractHasNone() {
+        Account a = makeAccount();
+        makeContract(a.Id, null);
+        Opportunity pilot = makeOpp(a.Id, 'Pilot', null, null);
+        Order_Form_Extraction__c ofe = makeOfe(pilot.Id, new Map<String, Object>{ 'Payment_Terms__c' => 'Monthly' });
+
+        Test.startTest();
+        Map<Id, Id> targets = ContractLegalTermsApplier.currentTargets(new Set<Id>{ ofe.Id });
+        Test.stopTest();
+
+        System.assert(!targets.containsKey(ofe.Id), String.valueOf(targets));
+    }
+
     @isTest
     static void clearedTerms_blanksManagedTermsOnly() {
         Contract c = ContractLegalTermsApplier.clearedTerms(null);

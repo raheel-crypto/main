@@ -220,6 +220,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (opportunityId == null) return null;
         List<Opportunity> opps = [
             SELECT Id, Name, Type, CloseDate, CreatedDate, AccountId, Annual_Recurring_Revenue__c, ContractId,
+                   Expected_Renewal__c,
                    Base_Opportunity__c,
                    Base_Opportunity__r.Name, Base_Opportunity__r.CloseDate,
                    Base_Opportunity__r.Annual_Recurring_Revenue__c, Base_Opportunity__r.ContractId
@@ -1337,7 +1338,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 d.mark('Annual_Recurring_Revenue', (totalHow != null ? totalHow : String.valueOf(totalStated))
                     + termNote + ' = ' + totalAnnual + ' per year.');
             }
-            computeIncrementalARR(row, parentOpp);
+            computeIncrementalARR(row, parentOpp, d);
         } else {
             Baseline base = resolveAmendmentBaseline(row, parentOpp, gov, totalAnnual,
                 row.Seat_Licenses__c, row.Credits_Purchased__c);
@@ -1704,19 +1705,24 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     // Non-amendment rows: New Business / Pilot -> incremental = total; Renewal ->
-    // total minus the prior ARR.
+    // total minus the renewal base: the renewal opportunity's Expected Renewal
+    // (the ARR that was up for renewal), else the prior ARR (resolveBaseArr).
     @TestVisible
-    private static void computeIncrementalARR(Order_Form_Extraction__c row, Opportunity parentOpp) {
+    private static void computeIncrementalARR(Order_Form_Extraction__c row, Opportunity parentOpp, Derivations d) {
         Decimal totalARR = row.Annual_Recurring_Revenue__c;
         if (totalARR == null) return;
         if (row.Type__c != 'Renewal') {
             row.Incremental_ARR__c = totalARR;
             return;
         }
-        BaseValue b = resolveBaseArr(parentOpp, totalARR);
+        BaseValue b = (parentOpp != null && parentOpp.Expected_Renewal__c != null && parentOpp.Expected_Renewal__c > 0)
+            ? new BaseValue(parentOpp.Expected_Renewal__c, 'the opportunity\'s Expected Renewal')
+            : resolveBaseArr(parentOpp, totalARR);
         if (b.value == null) return;
         row.Base_ARR__c = b.value;
         row.Incremental_ARR__c = totalARR - b.value;
+        d.mark('Incremental_ARR', 'Renewal ARR ' + totalARR + ' minus ' + b.source + ' ' + b.value
+            + ' = ' + row.Incremental_ARR__c + '.');
     }
 
     // An out-of-range number fails the whole DML (and, in a batch, the whole

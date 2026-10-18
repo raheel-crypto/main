@@ -745,10 +745,28 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void extractionJob_renewalBaseIsTheOpportunitysExpectedRenewal() {
+        Opportunity opp = new Opportunity(
+            Name = 'Renewal: Siris', StageName = 'Closed Won', CloseDate = Date.today(), Type = 'Renewal',
+            Annual_Recurring_Revenue__c = 45000, Expected_Renewal__c = 55000);
+        insertOppSafely(opp);
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'Renewal', 'Annual_Recurring_Revenue' => 45000 });
+
+        Test.startTest();
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+        Test.stopTest();
+
+        System.assertEquals(55000, row.Base_ARR__c, 'base = Expected Renewal, not the opportunity ARR');
+        System.assertEquals(-10000, row.Incremental_ARR__c, '45k renewed against 55k expected');
+        System.assert(row.Derived_Fields__c.contains('Incremental_ARR'), row.Derived_Fields__c);
+    }
+
+    @isTest
     static void extractionJob_renewalUsesOwnArrAsBaseWhenNoBaseOpp() {
-        // Renewals have no Base_Opportunity__c. The prior/aggregate ARR is
-        // carried on the renewal Opp's own Annual_Recurring_Revenue__c (55k),
-        // renewing up to the extracted 81k -> incremental 26k.
+        // No Expected Renewal and no Base_Opportunity__c: fall back to the
+        // renewal Opp's own Annual_Recurring_Revenue__c (55k), renewing up to
+        // the extracted 81k -> incremental 26k.
         Opportunity opp = new Opportunity(
             Name = 'Renewal: Harbor View',
             StageName = 'Closed Won',

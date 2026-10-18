@@ -9,7 +9,10 @@
 // contract, and upsells applied before their base deal was linked landed on a
 // different contract than the base deal's. The applier no longer does this.
 //
-// For each damaged Contract this, in one all-or-nothing step:
+// A deal is on the wrong contract when the applier would now put it somewhere
+// else (ContractLegalTermsApplier.currentTargets - the same rules it applies
+// with; an upsell goes on its base deal's contract, or the latest new business
+// / renewal before it). For each damaged Contract this, in one step:
 //   1. detaches the wrongly applied deals (Applied_Contract__c cleared - the
 //      next applyContractTermsInOrder.apex puts each on its own contract, or
 //      lists it as having none),
@@ -33,43 +36,45 @@ Set<String> APPLICABLE = new Set<String>{ 'Success', 'Incomplete', 'No Order For
 
 List<Order_Form_Extraction__c> rows = [
     SELECT Id, Opportunity__c, Opportunity__r.Name, Opportunity__r.Type, Opportunity__r.CloseDate,
-           Opportunity__r.CreatedDate, Opportunity__r.ContractId, Opportunity__r.Base_Opportunity__r.ContractId,
-           Extraction_Status__c, Applied_Contract__c, Applied_Contract__r.ContractNumber,
-           Applied_Contract__r.Account.Name, Applied_Contract__r.Opportunity__c,
-           Applied_Contract__r.Source_Opportunity_Id__c
+           Opportunity__r.CreatedDate, Extraction_Status__c, Applied_Contract__c,
+           Applied_Contract__r.ContractNumber, Applied_Contract__r.Account.Name
     FROM Order_Form_Extraction__c
     WHERE Is_Current__c = true AND Applied_Contract__c != null
     ORDER BY Opportunity__r.CloseDate ASC NULLS FIRST, Opportunity__r.CreatedDate ASC
 ];
 
+// Where the applier would put each one now. A row is on the wrong contract
+// when that differs from where it was applied (or it has no contract now).
+Set<Id> rowIds = new Set<Id>();
+for (Order_Form_Extraction__c r : rows) rowIds.add(r.Id);
+Map<Id, Id> targets = ContractLegalTermsApplier.currentTargets(rowIds);
+
 Map<Id, List<Order_Form_Extraction__c>> wrongByContract = new Map<Id, List<Order_Form_Extraction__c>>();
 Map<Id, List<Order_Form_Extraction__c>> rightByContract = new Map<Id, List<Order_Form_Extraction__c>>();
+Map<Id, String> moveTo = new Map<Id, String>();   // OFE -> where it goes next (for the dry run)
 for (Order_Form_Extraction__c r : rows) {
-    Opportunity o = r.Opportunity__r;
-    Boolean wrong;
-    if (o.Type != null && AMEND.contains(o.Type)) {
-        Id right = (o.Base_Opportunity__r != null && o.Base_Opportunity__r.ContractId != null)
-            ? o.Base_Opportunity__r.ContractId : o.ContractId;
-        wrong = right != null && right != r.Applied_Contract__c;
-    } else {
-        Boolean sourced = r.Applied_Contract__r.Opportunity__c == r.Opportunity__c;
-        String src = r.Applied_Contract__r.Source_Opportunity_Id__c;
-        if (!sourced && String.isNotBlank(src)) {
-            try { sourced = Id.valueOf(src) == r.Opportunity__c; } catch (Exception e) { sourced = false; }
-        }
-        wrong = o.ContractId != r.Applied_Contract__c && !sourced;
-    }
-    Map<Id, List<Order_Form_Extraction__c>> target = wrong ? wrongByContract : rightByContract;
-    if (!target.containsKey(r.Applied_Contract__c)) target.put(r.Applied_Contract__c, new List<Order_Form_Extraction__c>());
-    target.get(r.Applied_Contract__c).add(r);
+    Id t = targets.get(r.Id);
+    Boolean wrong = t != r.Applied_Contract__c;
+    if (wrong) moveTo.put(r.Id, t == null ? 'no contract of its own' : String.valueOf(t));
+    Map<Id, List<Order_Form_Extraction__c>> bucket = wrong ? wrongByContract : rightByContract;
+    if (!bucket.containsKey(r.Applied_Contract__c)) bucket.put(r.Applied_Contract__c, new List<Order_Form_Extraction__c>());
+    bucket.get(r.Applied_Contract__c).add(r);
 }
+Map<Id, String> numberById = new Map<Id, String>();
+Set<Id> destIds = new Set<Id>();
+for (String v : moveTo.values()) if (v.startsWith('800')) destIds.add(Id.valueOf(v));
+for (Contract c : [SELECT Id, ContractNumber FROM Contract WHERE Id IN :destIds]) numberById.put(c.Id, c.ContractNumber);
 
 System.debug('--- Damaged contracts: ' + wrongByContract.size());
 if (DRY_RUN) {
     for (Id cid : wrongByContract.keySet()) {
         Order_Form_Extraction__c firstRow = wrongByContract.get(cid)[0];
         List<String> wrongNames = new List<String>();
-        for (Order_Form_Extraction__c r : wrongByContract.get(cid)) wrongNames.add(r.Opportunity__r.Name + ' [' + r.Opportunity__r.Type + ']');
+        for (Order_Form_Extraction__c r : wrongByContract.get(cid)) {
+            String dest = moveTo.get(r.Id);
+            if (dest != null && dest.startsWith('800') && numberById.containsKey(Id.valueOf(dest))) dest = numberById.get(Id.valueOf(dest));
+            wrongNames.add(r.Opportunity__r.Name + ' [' + r.Opportunity__r.Type + '] -> ' + dest);
+        }
         List<String> rightNames = new List<String>();
         if (rightByContract.containsKey(cid)) for (Order_Form_Extraction__c r : rightByContract.get(cid)) rightNames.add(r.Opportunity__r.Name);
         System.debug(firstRow.Applied_Contract__r.ContractNumber + ' | ' + firstRow.Applied_Contract__r.Account.Name
