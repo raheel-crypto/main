@@ -9,7 +9,9 @@ so these have to be processed here instead.
 
 For each Opportunity Id you pass, it:
   1. finds the documents on the Opp (+ its Base Opportunity),
-  2. downloads each supported file (PDF / PNG / JPG / GIF / WEBP),
+  2. downloads each supported file (PDF / PNG / JPG / GIF / WEBP) - and opens
+     ZIP files (e.g. DocuSign "Complete_with_Docusign_..." envelopes) to send the
+     PDFs / images inside them,
   3. sends them inline (base64) to the Anthropic Messages API and runs the SAME extraction
      prompt (staticresources/OrderFormPrompt.txt) via the Messages API,
   4. --write: POSTs the raw Anthropic response to the Salesforce REST endpoint
@@ -35,11 +37,13 @@ Usage:
 
 import argparse
 import base64
+import io
 import json
 import os
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 from urllib.parse import quote
 
@@ -66,6 +70,31 @@ MEDIA = {
     "gif": ("image", "image/gif"),
     "webp": ("image", "image/webp"),
 }
+
+# Lower = sent first, so the order form survives when a deal's files do not all
+# fit. Mirrors the Apex docRelevanceRank keywords.
+def relevance(title):
+    t = (title or "").lower()
+    if any(k in t for k in ("order form", "order_form", "orderform", "order-form", "customer agreement form")):
+        return 0
+    if any(k in t for k in ("dpa", "data processing", "data protection", "subprocessor", "sub-processor")):
+        return 1
+    if any(k in t for k in ("invoice", "receipt", "remittance")):
+        return 8
+    if any(k in t for k in ("msa", "master", "agreement", "schedule", "addendum", "rider", "amendment",
+                            "saas", "subscription")):
+        return 2
+    if any(k in t for k in ("nda", "non-disclosure", "nondisclosure", "w-9", "w9", "insurance", "logo",
+                            "certificate")):
+        return 9
+    return 5
+
+
+def is_docusign_certificate(member_name):
+    """DocuSign envelopes carry a 'Summary.pdf' certificate of completion."""
+    base = Path(member_name).name.lower()
+    return base.startswith("summary") or "certificate" in base
+
 
 PROMPT_PATH = (
     Path(__file__).resolve().parents[2]
@@ -166,10 +195,77 @@ def deal_context(opp):
     )
 
 
+def zip_members(raw, zip_title, budget_left):
+    """(label, block_type, mime, bytes) for each PDF / image inside a ZIP, most
+    relevant first and the DocuSign certificate last, while they fit in
+    budget_left. Nothing is written to disk; each member's declared size is
+    checked before it is read."""
+    out = []
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(raw))
+    except zipfile.BadZipFile:
+        print(f"    skip (not a readable zip): {zip_title}")
+        return out
+    infos = [i for i in zf.infolist()
+             if not i.is_dir() and not i.filename.startswith("__MACOSX/")
+             and not Path(i.filename).name.startswith(".")]
+    infos.sort(key=lambda i: (is_docusign_certificate(i.filename), relevance(Path(i.filename).name)))
+    for info in infos:
+        name = Path(info.filename).name
+        ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+        media = MEDIA.get(ext)
+        if not media:
+            print(f"      (in zip) skip unsupported .{ext}: {name}")
+            continue
+        if info.flag_bits & 0x1:
+            print(f"      (in zip) skip password-protected: {name}")
+            continue
+        encoded = (info.file_size + 2) // 3 * 4
+        if encoded > budget_left:
+            print(f"      (in zip) skip, would push the request past the size limit: {name} ({info.file_size} bytes)")
+            continue
+        data = zf.read(info)
+        budget_left -= encoded
+        print(f"      (in zip) {name} ({len(data)} bytes)")
+        out.append((f"{zip_title} / {name}", media[0], media[1], data))
+    return out
+
+
 def extract_one(client, model, system_prompt, opp, docs, target_org):
     blocks, used_doc_ids = [], []
     used_bytes = 0
-    for d in docs:
+    file_no = 0
+
+    def add_block(label, block_type, mime, raw):
+        nonlocal used_bytes, file_no
+        data = base64.standard_b64encode(raw).decode("ascii")
+        used_bytes += len(data)
+        file_no += 1
+        # Label every file so the model can classify each one (Documents[] in the
+        # prompt); this job sends a single group, so all files are the current deal.
+        blocks.append({"type": "text", "text": f"FILE {file_no} (CURRENT DEAL): {label}"})
+        blocks.append({"type": block_type, "source": {"type": "base64", "media_type": mime, "data": data}})
+
+    # Most relevant first (order form, DPA, agreements). A ZIP is usually the
+    # signed DocuSign envelope, so it goes right behind an explicit order form.
+    def rank(d):
+        r = relevance(d["title"])
+        return min(r, 1) if d["ext"] == "zip" else r
+
+    for d in sorted(docs, key=rank):
+        if d["ext"] == "zip":
+            # Don't download a huge archive; the files inside are size-checked one by one.
+            if (d["size"] or 0) > 2 * REQUEST_BUDGET_BYTES:
+                print(f"    skip (zip too large): {d['title']} ({d['size']} bytes)")
+                continue
+            print(f"    opening zip: {d['title']} ({d['size']} bytes)")
+            members = zip_members(download(target_org, d["versionId"]), d["title"],
+                                  REQUEST_BUDGET_BYTES - used_bytes)
+            for label, block_type, mime, raw in members:
+                add_block(label, block_type, mime, raw)
+            if members:
+                used_doc_ids.append(d["contentDocumentId"])
+            continue
         media = MEDIA.get(d["ext"])
         if not media:
             print(f"    skip (unsupported .{d['ext']}): {d['title']}")
@@ -178,14 +274,8 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
         if used_bytes + encoded_size > REQUEST_BUDGET_BYTES:
             print(f"    skip (would push the request past {REQUEST_BUDGET_BYTES} encoded bytes): {d['title']}")
             continue
-        block_type, mime = media
         print(f"    downloading: {d['title']} ({d['size']} bytes, .{d['ext']})")
-        data = base64.standard_b64encode(download(target_org, d["versionId"])).decode("ascii")
-        used_bytes += len(data)
-        # Label every file so the model can classify each one (Documents[] in the
-        # prompt); this job sends a single group, so all files are the current deal.
-        blocks.append({"type": "text", "text": f"FILE {len(used_doc_ids) + 1} (CURRENT DEAL): {d['title']}"})
-        blocks.append({"type": block_type, "source": {"type": "base64", "media_type": mime, "data": data}})
+        add_block(d["title"], media[0], media[1], download(target_org, d["versionId"]))
         used_doc_ids.append(d["contentDocumentId"])
 
     if not blocks:

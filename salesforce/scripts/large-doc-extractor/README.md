@@ -52,7 +52,17 @@ worklist. The script reads the same prompt the Apex pipeline uses
   through the normal Apex flow; this is only for the oversized tail. A row with
   `Docs_Dropped__c` checked lists what Apex left out in its notes ("too large",
   "dropped to fit size budget" or "dropped to fit memory").
+- ZIP files (DocuSign "Complete_with_Docusign_..." envelopes) are opened and the
+  PDFs / images inside are sent as their own files, labelled `<zip title> /
+  <file name>`; DocuSign's certificate of completion (`Summary.pdf`) goes last.
+  Nothing is written to disk, and each file's size is checked before it is read.
+- Files are sent most relevant first (order form, DPA, agreements; a ZIP right
+  behind an explicit order form), so when a deal's files do not all fit, the
+  incidental ones are the ones left out.
 - Anything over ~32 MB exceeds Anthropic's per-request PDF limit and is skipped —
   those need splitting first.
+- A later full refresh in Salesforce can replace a row this script wrote when its
+  own read ranks the same (it cannot see inside ZIPs or past 4 MB). Re-run the
+  script for those deals after a full refresh.
 - If you re-run an opp that already has a row, you'll get a second (newer) row;
   clean up with `scripts/apex/dedupeExtractions.apex` as usual.
