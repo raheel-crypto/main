@@ -64,6 +64,17 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         } catch (Exception e) {
             System.debug(LoggingLevel.ERROR, 'Failed to insert extraction row: ' + e.getMessage());
         }
+        splitRenewalUpsellPairs(new Set<Id>{ opportunityId });
+    }
+
+    // A renewal and an upsell sold together: the expansion counts on the upsell
+    // (RenewalUpsellSplit). Never blocks the extraction itself.
+    public static void splitRenewalUpsellPairs(Set<Id> oppIds) {
+        try {
+            RenewalUpsellSplit.applyForOpportunities(oppIds);
+        } catch (Exception e) {
+            System.debug(LoggingLevel.ERROR, 'Renewal + upsell split failed: ' + e.getMessage());
+        }
     }
 
     /**

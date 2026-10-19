@@ -119,6 +119,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         Set<Id> reExtracted = new Set<Id>();
         for (Order_Form_Extraction__c r : rowsToInsert) reExtracted.add(r.Opportunity__c);
         OrderFormVersioning.insertWithVersioning(rowsToInsert, rerunFlagged ? reExtracted : null);
+        OrderFormExtractionJob.splitRenewalUpsellPairs(reExtracted);
 
         // Rerun-flagged mode: keep the flagged rows (they are the version history
         // the new rows point back to) and clear the flag wherever the rerun took
@@ -175,6 +176,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
             }
         }
         if (!toInsert.isEmpty()) OrderFormVersioning.insertWithVersioning(toInsert);
+        if (!toUpdate.isEmpty() || !toInsert.isEmpty()) OrderFormExtractionJob.splitRenewalUpsellPairs(oppIds);
     }
 
     public void finish(Database.BatchableContext bc) {

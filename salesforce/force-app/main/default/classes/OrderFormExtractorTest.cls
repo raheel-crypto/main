@@ -1649,6 +1649,88 @@ private class OrderFormExtractorTest {
         System.assertEquals(null, silent.Seat_Adds_By_Email_Terms__c);
     }
 
+    private static Opportunity pairOpp(Id accountId, String type, Integer daysAgo, Decimal arr) {
+        Opportunity o = new Opportunity(Name = type + ' pair ' + daysAgo, StageName = 'Closed Won', AccountId = accountId,
+            Type = type, CloseDate = Date.today().addDays(-daysAgo), Annual_Recurring_Revenue__c = arr);
+        insertOppSafely(o);
+        return o;
+    }
+
+    private static Order_Form_Extraction__c pairRow(Opportunity o, Decimal total, Decimal base, Decimal inc) {
+        return insertExtraction(o.Id, new Map<String, Object>{
+            'Type__c' => o.Type, 'Is_Current__c' => true, 'Extraction_Status__c' => 'Incomplete',
+            'Annual_Recurring_Revenue__c' => total, 'Base_ARR__c' => base, 'Incremental_ARR__c' => inc,
+            'Extract_Evidence__c' => '{}' });
+    }
+
+    @isTest
+    static void renewalUpsellSplit_expansionCountsOnTheUpsell() {
+        // BaseRock: one paper says 66k; the renewal booked flat at 45k (its
+        // Expected Renewal) and the growth was sold on the "Renewal Upsell".
+        Account a = new Account(Name = 'Pair A');
+        insert a;
+        Opportunity ren = pairOpp(a.Id, 'Renewal', 5, 45000);
+        Opportunity up = pairOpp(a.Id, 'Upsell', 5, 21000);
+        Order_Form_Extraction__c renRow = pairRow(ren, 66000, 45000, 21000);
+        Order_Form_Extraction__c upRow = pairRow(up, 66000, null, 0);
+
+        Test.startTest();
+        RenewalUpsellSplit.applyForOpportunities(new Set<Id>{ ren.Id });
+        List<Order_Form_Extraction__c> again = RenewalUpsellSplit.planForAccounts(new Set<Id>{ a.Id });
+        Test.stopTest();
+
+        Order_Form_Extraction__c r = [SELECT Incremental_ARR__c, Derived_Fields__c, Extract_Evidence__c FROM Order_Form_Extraction__c WHERE Id = :renRow.Id];
+        Order_Form_Extraction__c u = [SELECT Incremental_ARR__c, Derived_Fields__c FROM Order_Form_Extraction__c WHERE Id = :upRow.Id];
+        System.assertEquals(0, r.Incremental_ARR__c, 'the renewal shows only its own change');
+        System.assertEquals(21000, u.Incremental_ARR__c, 'the expansion counts on the upsell');
+        System.assert(r.Derived_Fields__c.contains(RenewalUpsellSplit.MARK));
+        System.assert(r.Extract_Evidence__c.contains('counts there'), r.Extract_Evidence__c);
+        System.assert(again.isEmpty(), 'idempotent: ' + again);
+    }
+
+    @isTest
+    static void renewalUpsellSplit_upsellKeepsItsOwnStatedIncrement() {
+        // Raymond James: both rows counted the expansion; the upsell's own paper
+        // states 1.38M, the renewal booked flat at 120k.
+        Account a = new Account(Name = 'Pair B');
+        insert a;
+        Opportunity ren = pairOpp(a.Id, 'Renewal', 3, 120000);
+        Opportunity up = pairOpp(a.Id, 'Upsell', 0, 1380000);
+        Order_Form_Extraction__c renRow = pairRow(ren, 1530000, 120000, 1410000);
+        Order_Form_Extraction__c upRow = pairRow(up, 1500000, 120000, 1380000);
+
+        Test.startTest();
+        RenewalUpsellSplit.applyForOpportunities(new Set<Id>{ up.Id });
+        Test.stopTest();
+
+        System.assertEquals(0, [SELECT Incremental_ARR__c FROM Order_Form_Extraction__c WHERE Id = :renRow.Id].Incremental_ARR__c);
+        System.assertEquals(1380000, [SELECT Incremental_ARR__c FROM Order_Form_Extraction__c WHERE Id = :upRow.Id].Incremental_ARR__c);
+    }
+
+    @isTest
+    static void renewalUpsellSplit_separatePapersAndDistantUpsellsAreLeftAlone() {
+        Account a = new Account(Name = 'Pair C');
+        insert a;
+        // Peryton: the renewal paper is just the renewal; the upsell has its own paper.
+        Opportunity ren = pairOpp(a.Id, 'Renewal', 10, 20000);
+        Opportunity up = pairOpp(a.Id, 'Upsell', 10, 5000);
+        pairRow(ren, 20000, 20000, 0);
+        pairRow(up, 25000, 20000, 5000);
+        // A renewal whose paper grew, with the only upsell a month away.
+        Account b = new Account(Name = 'Pair D');
+        insert b;
+        Opportunity ren2 = pairOpp(b.Id, 'Renewal', 60, 30000);
+        Opportunity up2 = pairOpp(b.Id, 'Upsell', 20, 0);
+        pairRow(ren2, 40000, 30000, 10000);
+        pairRow(up2, 40000, null, 0);
+
+        Test.startTest();
+        List<Order_Form_Extraction__c> plan = RenewalUpsellSplit.planForAccounts(new Set<Id>{ a.Id, b.Id });
+        Test.stopTest();
+
+        System.assert(plan.isEmpty(), String.valueOf(RenewalUpsellSplit.notes));
+    }
+
     @isTest
     static void rest_doPost_createsExtraction() {
         Opportunity opp = insertOpp('Large Doc REST', 'Closed Won');
