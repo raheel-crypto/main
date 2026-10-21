@@ -162,8 +162,8 @@ private class OrderFormOpsTest {
         Order_Form_Extraction__c old = currentOfe(nb.Id, c.Id, new Map<String, Object>{
             'Subprocessor_Notice_Period__c' => 77, 'Docs_Dropped__c' => false });
         attachFile(nb.Id);
-        insert new ContentVersion(Title = 'Redline', PathOnClient = 'Redline.docx',
-            VersionData = Blob.valueOf('docx bytes'), FirstPublishLocationId = nb.Id);   // not readable in Apex
+        insert new ContentVersion(Title = 'Pricing', PathOnClient = 'Pricing.xlsx',
+            VersionData = Blob.valueOf('xlsx bytes'), FirstPublishLocationId = nb.Id);   // not readable in Apex
         Test.setMock(HttpCalloutMock.class, new MockAnthropic(45));
 
         Test.startTest();

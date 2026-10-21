@@ -9,9 +9,9 @@ so these have to be processed here instead.
 
 For each Opportunity Id you pass, it:
   1. finds the documents on the Opp (+ its Base Opportunity),
-  2. downloads each supported file (PDF / PNG / JPG / GIF / WEBP) - and opens
-     ZIP files (e.g. DocuSign "Complete_with_Docusign_..." envelopes) to send the
-     PDFs / images inside them,
+  2. downloads each supported file (PDF / PNG / JPG / GIF / WEBP, and Word .docx
+     sent as its text) - and opens ZIP files (e.g. DocuSign
+     "Complete_with_Docusign_..." envelopes) to send the files inside them,
   3. sends them inline (base64) to the Anthropic Messages API and runs the SAME extraction
      prompt (staticresources/OrderFormPrompt.txt) via the Messages API,
   4. --write: POSTs the raw Anthropic response to the Salesforce REST endpoint
@@ -40,10 +40,12 @@ import base64
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import quote
 
@@ -62,6 +64,7 @@ MAX_TOKENS = 8192
 REQUEST_BUDGET_BYTES = 30 * 1024 * 1024
 
 # Extension -> (anthropic content-block type, mime type). Mirrors Apex getMediaType.
+# "text" = a Word file, sent as its text (docx_text).
 MEDIA = {
     "pdf": ("document", "application/pdf"),
     "png": ("image", "image/png"),
@@ -69,7 +72,67 @@ MEDIA = {
     "jpeg": ("image", "image/jpeg"),
     "gif": ("image", "image/gif"),
     "webp": ("image", "image/webp"),
+    "docx": ("text", "text/plain"),
 }
+
+# Same wording as the Apex WORD_NOTE, appended to a Word file's label.
+WORD_NOTE = ("\n(Word file, sent as its text: images, signatures and e-signature stamps are not "
+             "visible, and tracked changes are shown accepted.)")
+W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+MC = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+# A Word body bigger than this is not read (zip-bomb guard; real contracts are a few MB).
+MAX_DOCX_BODY_BYTES = 50 * 1024 * 1024
+
+
+def docx_text(raw):
+    """Text of a Word .docx - Claude reads PDFs and images, not Word. Mirrors the
+    Apex DocxText class: paragraphs as lines, table cells joined by " | ",
+    tracked changes as accepted (deleted / moved-away text left out), a text box
+    read once. None when the file is not a readable .docx."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            info = zf.getinfo("word/document.xml")
+            if info.file_size > MAX_DOCX_BODY_BYTES:
+                return None
+            xml = zf.read(info)
+    except (zipfile.BadZipFile, KeyError, RuntimeError):
+        return None
+    if b"<!DOCTYPE" in xml:  # Word never declares one; refuse entity tricks
+        return None
+    try:
+        root = ET.fromstring(xml)
+    except ET.ParseError:
+        return None
+
+    out = []
+    skip = (MC + "Fallback", W + "moveFrom", W + "tabs", W + "delText", W + "instrText")
+
+    def walk(el, in_cell):
+        tag = el.tag
+        if tag in skip:
+            return
+        if tag == W + "t":
+            out.append(el.text or "")
+            return
+        if tag == W + "tab":
+            out.append("\t")
+            return
+        if tag in (W + "br", W + "cr"):
+            out.append("\n")
+            return
+        for child in el:
+            walk(child, in_cell or tag == W + "tc")
+        if tag == W + "p":
+            out.append(" " if in_cell else "\n")
+        elif tag == W + "tc":
+            out.append(" | ")
+        elif tag == W + "tr":
+            out.append("\n")
+
+    walk(root, False)
+    text = re.sub(r" +\| ", " | ", "".join(out))
+    text = text.replace(" | \n", "\n")
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 # Lower = sent first, so the order form survives when a deal's files do not all
 # fit. Mirrors the Apex docRelevanceRank keywords.
@@ -196,7 +259,7 @@ def deal_context(opp):
 
 
 def zip_members(raw, zip_title, budget_left):
-    """(label, block_type, mime, bytes) for each PDF / image inside a ZIP, most
+    """(label, block_type, mime, bytes) for each PDF / image / .docx inside a ZIP, most
     relevant first and the DocuSign certificate last, while they fit in
     budget_left. Nothing is written to disk; each member's declared size is
     checked before it is read."""
@@ -237,14 +300,26 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
     file_no = 0
 
     def add_block(label, block_type, mime, raw):
+        """Add one file; False when it could not be used."""
         nonlocal used_bytes, file_no
-        data = base64.standard_b64encode(raw).decode("ascii")
-        used_bytes += len(data)
+        if block_type == "text":
+            text = docx_text(raw)
+            if not text:
+                print(f"    skip (Word file with no readable text): {label}")
+                return False
+            block = {"type": "document", "source": {"type": "text", "media_type": mime, "data": text}}
+            used_bytes += len(text.encode("utf-8"))
+            label += WORD_NOTE
+        else:
+            data = base64.standard_b64encode(raw).decode("ascii")
+            block = {"type": block_type, "source": {"type": "base64", "media_type": mime, "data": data}}
+            used_bytes += len(data)
         file_no += 1
         # Label every file so the model can classify each one (Documents[] in the
         # prompt); this job sends a single group, so all files are the current deal.
         blocks.append({"type": "text", "text": f"FILE {file_no} (CURRENT DEAL): {label}"})
-        blocks.append({"type": block_type, "source": {"type": "base64", "media_type": mime, "data": data}})
+        blocks.append(block)
+        return True
 
     # Most relevant first (order form, DPA, agreements). A ZIP is usually the
     # signed DocuSign envelope, so it goes right behind an explicit order form.
@@ -261,9 +336,8 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
             print(f"    opening zip: {d['title']} ({d['size']} bytes)")
             members = zip_members(download(target_org, d["versionId"]), d["title"],
                                   REQUEST_BUDGET_BYTES - used_bytes)
-            for label, block_type, mime, raw in members:
-                add_block(label, block_type, mime, raw)
-            if members:
+            added = [add_block(label, block_type, mime, raw) for label, block_type, mime, raw in members]
+            if any(added):
                 used_doc_ids.append(d["contentDocumentId"])
             continue
         media = MEDIA.get(d["ext"])
@@ -275,8 +349,8 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
             print(f"    skip (would push the request past {REQUEST_BUDGET_BYTES} encoded bytes): {d['title']}")
             continue
         print(f"    downloading: {d['title']} ({d['size']} bytes, .{d['ext']})")
-        add_block(d["title"], media[0], media[1], download(target_org, d["versionId"]))
-        used_doc_ids.append(d["contentDocumentId"])
+        if add_block(d["title"], media[0], media[1], download(target_org, d["versionId"])):
+            used_doc_ids.append(d["contentDocumentId"])
 
     if not blocks:
         return None, [], None

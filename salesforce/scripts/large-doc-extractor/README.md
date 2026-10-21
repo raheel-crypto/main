@@ -56,6 +56,11 @@ worklist. The script reads the same prompt the Apex pipeline uses
   PDFs / images inside are sent as their own files, labelled `<zip title> /
   <file name>`; DocuSign's certificate of completion (`Summary.pdf`) goes last.
   Nothing is written to disk, and each file's size is checked before it is read.
+- Word files (`.docx`, on the deal or inside a ZIP) are sent as their text,
+  labelled as Word text: images, signatures and DocuSign stamps are not
+  visible, and tracked changes read as accepted. The Apex extractor does the
+  same (`DocxText`), so only an oversized Word file needs this script. Old
+  binary `.doc` files are not read - save them as `.docx` or PDF.
 - Files are sent most relevant first (order form, DPA, agreements; a ZIP right
   behind an explicit order form), so when a deal's files do not all fit, the
   incidental ones are the ones left out.

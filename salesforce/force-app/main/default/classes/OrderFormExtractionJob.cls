@@ -479,9 +479,16 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     // 'data' is a placeholder token; buildRequestBody splices the encoded file
-    // in after serializing, so the encoded text is never copied by JSON.serialize.
+    // (or a Word file's escaped text) in after serializing, so the file text is
+    // never copied by JSON.serialize.
     private static Map<String, Object> makeFileBlock(ContentVersion cv, String data) {
         String mediaType = getMediaType(cv);
+        if (mediaType == TEXT_MEDIA_TYPE) {
+            return new Map<String, Object>{
+                'type' => 'document',
+                'source' => new Map<String, Object>{ 'type' => 'text', 'media_type' => mediaType, 'data' => data }
+            };
+        }
         String blockType = mediaType.startsWith('image/') ? 'image' : 'document';
         return new Map<String, Object>{
             'type' => blockType,
@@ -530,13 +537,48 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             }
             List<ContentVersion> rows = [SELECT VersionData FROM ContentVersion WHERE Id = :rd.cv.Id];
             if (rows.isEmpty() || rows[0].VersionData == null) continue;
-            String data = EncodingUtil.base64Encode(rows[0].VersionData);
+            String data;
+            if (getMediaType(rd.cv) == TEXT_MEDIA_TYPE) {
+                data = wordText(rd.cv, rows[0].VersionData,
+                    heapLimit - (encodedChars + 2 * skeletonChars) - HEAP_RESERVE_BYTES, skippedOut);
+                if (data == null) continue;
+            } else {
+                data = EncodingUtil.base64Encode(rows[0].VersionData);
+            }
             rows = null; // release the raw bytes before the next file loads
             encodedById.put(rd.cv.Id, data);
             encodedChars += data.length();
         }
         return encodedById;
     }
+
+    /**
+     * A Word file's text, JSON-escaped for splicing into the request (without
+     * the quotes). roomBytes is the heap still free at the final join once the
+     * files so far and the request text are counted; reading the body takes
+     * about four times its size, and its text ends up in the body too. Null,
+     * with the reason recorded, when the file cannot be read or does not fit.
+     */
+    private static String wordText(ContentVersion cv, Blob raw, Integer roomBytes, List<String> skippedOut) {
+        String text;
+        try {
+            text = DocxText.read(raw, (roomBytes - Limits.getHeapSize()) / 5);
+        } catch (DocxText.DocxException e) {
+            skippedOut.add(displayName(cv) + ' (Word file ' + e.getMessage() + ')');
+            return null;
+        }
+        if (String.isBlank(text)) {
+            skippedOut.add(displayName(cv) + ' (Word file has no text)');
+            return null;
+        }
+        String escaped = JSON.serialize(text);
+        text = null;
+        return escaped.substring(1, escaped.length() - 1);
+    }
+
+    @TestVisible private static final String TEXT_MEDIA_TYPE = 'text/plain';
+    @TestVisible private static final String WORD_NOTE = '\n(Word file, sent as its text: images, signatures and '
+        + 'e-signature stamps are not visible, and tracked changes are shown accepted.)';
 
     @TestVisible
     private static String getMediaType(ContentVersion cv) {
@@ -552,6 +594,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (e == 'jpg' || e == 'jpeg') return 'image/jpeg';
         if (e == 'gif') return 'image/gif';
         if (e == 'webp') return 'image/webp';
+        // Word: sent as its text (DocxText) - Claude does not read .docx itself.
+        if (e == 'docx') return TEXT_MEDIA_TYPE;
         return null;
     }
 
@@ -629,7 +673,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 String token = tokenStem + fileNo + '@@';
                 tokens.add(token);
                 tokenFileIds.add(cv.Id);
-                content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, true, cv.Title) });
+                content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, true, cv.Title)
+                    + (getMediaType(cv) == TEXT_MEDIA_TYPE ? WORD_NOTE : '') });
                 content.add(makeFileBlock(cv, token));
             }
         }
@@ -647,7 +692,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 String token = tokenStem + fileNo + '@@';
                 tokens.add(token);
                 tokenFileIds.add(cv.Id);
-                content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, false, cv.Title) });
+                content.add(new Map<String, Object>{ 'type' => 'text', 'text' => fileLabel(fileNo, false, cv.Title)
+                    + (getMediaType(cv) == TEXT_MEDIA_TYPE ? WORD_NOTE : '') });
                 content.add(makeFileBlock(cv, token));
             }
         }
@@ -674,7 +720,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             'messages' => new List<Object>{ userMessage }
         });
 
-        // Splice: base64 text (A-Z a-z 0-9 + / =) needs no JSON escaping.
+        // Splice: base64 text (A-Z a-z 0-9 + / =) needs no JSON escaping, and
+        // Word text arrives already escaped (wordText).
         List<String> parts = new List<String>();
         Integer pos = 0;
         for (Integer i = 0; i < tokens.size(); i++) {
