@@ -29,6 +29,8 @@ public with sharing class DocxText {
         } catch (Exception e) {
             throw new DocxException('not a readable Word file (' + e.getMessage() + ')');
         }
+        // getEntry answers null (not an exception) when the zip has no Word body.
+        if (body == null) throw new DocxException('not a readable Word file (no ' + BODY_PART + ')');
         Long size = body.getUncompressedSize();
         if (maxBodyBytes != null && size > maxBodyBytes) {
             throw new DocxException('too large to read in memory: ' + size + ' bytes of text markup, room for '

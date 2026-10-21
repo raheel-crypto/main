@@ -106,7 +106,7 @@ public class DocxTextTest {
         Order_Form_Extraction__c row = OrderFormExtractionJob.buildExtraction(opp.Id, new List<Id>{ docId });
         Test.stopTest();
 
-        System.assertEquals('Success', row.Extraction_Status__c, row.Error_Message__c);
+        System.assertEquals('Success', row.Extraction_Status__c, 'notes: ' + row.Error_Message__c);
         System.assertEquals(false, row.Docs_Dropped__c, 'the Word file was sent, not skipped');
 
         // The request is valid JSON and carries the file's text as a plain-text document.
