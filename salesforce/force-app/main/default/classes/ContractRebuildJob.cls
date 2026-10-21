@@ -15,6 +15,7 @@ public with sharing class ContractRebuildJob implements Queueable {
         this.contractIds = contractIds;
     }
 
+    @TestVisible
     private ContractRebuildJob(List<Id> pending) {
         this.pending = pending;
     }

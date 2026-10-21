@@ -235,4 +235,25 @@ private class OrderFormOpsTest {
         String rebuilt = [SELECT Reconciliation_Notes__c FROM Contract WHERE Id = :c.Id].Reconciliation_Notes__c;
         System.assert(rebuilt.startsWith('Rebuilt ' + String.valueOf(Date.today())) && rebuilt.contains('[Continue NB]'), rebuilt);
     }
+
+    @isTest
+    static void followUpJob_appliesTheRestAndAddsToTheNotes() {
+        Account a = new Account(Name = 'Follow Up Co');
+        insert a;
+        Contract c = makeContract(a.Id, new Map<String, Object>{
+            'Reconciliation_Notes__c' => 'Rebuilt today.\n\n' + OrderFormOps.NONE_LANDED });
+        Opportunity nb = closedOpp(a.Id, 'Follow Up NB', 'New Business', 100, c.Id, null);
+        Order_Form_Extraction__c r = currentOfe(nb.Id, null, new Map<String, Object>{ 'Payment_Terms__c' => 'Annual' });
+
+        Test.startTest();
+        System.enqueueJob(new ContractRebuildJob(new List<Id>{ r.Id }));
+        Test.stopTest();
+
+        Contract after = [SELECT Payment_Terms__c, Reconciliation_Notes__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals('Annual', after.Payment_Terms__c);
+        System.assert(after.Reconciliation_Notes__c.startsWith('Rebuilt today.')
+            && after.Reconciliation_Notes__c.contains('[Follow Up NB]'), after.Reconciliation_Notes__c);
+        System.assert(!after.Reconciliation_Notes__c.contains(OrderFormOps.NONE_LANDED), after.Reconciliation_Notes__c);
+        System.assertEquals(c.Id, [SELECT Applied_Contract__c FROM Order_Form_Extraction__c WHERE Id = :r.Id].Applied_Contract__c);
+    }
 }
