@@ -13,7 +13,8 @@
  * Re-reads run in OrderFormRerunBatch (one deal at a time, oldest first); a
  * readable result replaces the deal's current extraction - except that a read
  * which had to leave files out never replaces one that did not (rows written
- * by the large-document script keep their fuller read). Rebuilds run in
+ * by the large-document script keep their fuller read; the re-read is kept as
+ * history). Rebuilds run in
  * ContractRebuildJob: the deals' extractions are detached, the term fields the
  * applier manages are blanked (contacts and billing kept), and the deals are
  * re-applied new business / renewal / pilot first, then amendments, each

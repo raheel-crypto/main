@@ -153,6 +153,33 @@ private class OrderFormOpsTest {
     }
 
     @isTest
+    static void rerunOpportunity_keepsAFullerReadOverOneThatDroppedFiles() {
+        Account a = new Account(Name = 'Fuller Co');
+        insert a;
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = closedOpp(a.Id, 'Fuller NB', 'New Business', 100, c.Id, null);
+        // e.g. written by the large-document script: every file read.
+        Order_Form_Extraction__c old = currentOfe(nb.Id, c.Id, new Map<String, Object>{
+            'Subprocessor_Notice_Period__c' => 77, 'Docs_Dropped__c' => false });
+        attachFile(nb.Id);
+        insert new ContentVersion(Title = 'Redline', PathOnClient = 'Redline.docx',
+            VersionData = Blob.valueOf('docx bytes'), FirstPublishLocationId = nb.Id);   // not readable in Apex
+        Test.setMock(HttpCalloutMock.class, new MockAnthropic(45));
+
+        Test.startTest();
+        OrderFormOps.rerunOpportunity(nb.Id);
+        Test.stopTest();
+
+        Order_Form_Extraction__c reread = [SELECT Is_Current__c, Supersedes__c, Docs_Dropped__c FROM Order_Form_Extraction__c
+                                           WHERE Opportunity__c = :nb.Id AND Id != :old.Id];
+        System.assertEquals(true, reread.Docs_Dropped__c);
+        System.assertEquals(false, reread.Is_Current__c, 'kept as history only');
+        System.assertEquals(old.Id, reread.Supersedes__c);
+        System.assertEquals(true, [SELECT Is_Current__c FROM Order_Form_Extraction__c WHERE Id = :old.Id].Is_Current__c);
+        System.assertEquals(77, [SELECT Subprocessor_Notice_Period__c FROM Contract WHERE Id = :c.Id].Subprocessor_Notice_Period__c);
+    }
+
+    @isTest
     static void rerunAccount_rereadsDealsWithFilesThenRebuilds() {
         Account a = new Account(Name = 'Account Rerun Co');
         insert a;

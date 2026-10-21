@@ -5,8 +5,9 @@
  * Each deal is read from every file on it and its base deal. A readable result
  * replaces the current extraction even when it ranks lower on the quality
  * ladder (a person asked for the re-read) - unless the re-read had to leave
- * files out and the current row did not: rows from the large-document script
- * read everything, so there the ladder decides. The old row stays as history.
+ * files out and the current row did not (rows from the large-document script
+ * read everything): then the re-read is kept only as history. A replaced row
+ * stays as history too.
  *
  * finish: account mode rebuilds every contract on the accounts; deal mode
  * rebuilds the contract the deal now belongs on and the one it was on.
@@ -53,12 +54,22 @@ public with sharing class OrderFormRerunBatch implements Database.Batchable<SObj
         }
         if (rows.isEmpty()) return;
 
-        Set<Id> forced = new Set<Id>();
+        List<Order_Form_Extraction__c> replacing = new List<Order_Form_Extraction__c>();
+        List<Order_Form_Extraction__c> historyOnly = new List<Order_Form_Extraction__c>();
         for (Order_Form_Extraction__c r : rows) {
             Order_Form_Extraction__c cur = currentByOpp.get(r.Opportunity__c);
-            if (cur == null || r.Docs_Dropped__c != true || cur.Docs_Dropped__c == true) forced.add(r.Opportunity__c);
+            if (cur == null || r.Docs_Dropped__c != true || cur.Docs_Dropped__c == true) {
+                replacing.add(r);
+            } else {
+                r.Is_Current__c = false;
+                r.Supersedes__c = cur.Id;
+                historyOnly.add(r);
+            }
         }
-        OrderFormVersioning.insertWithVersioning(rows, forced);
+        Set<Id> forced = new Set<Id>();
+        for (Order_Form_Extraction__c r : replacing) forced.add(r.Opportunity__c);
+        OrderFormVersioning.insertWithVersioning(replacing, forced);
+        if (!historyOnly.isEmpty()) insert historyOnly;
         OrderFormExtractionJob.splitRenewalUpsellPairs(ids);
 
         Set<Id> nowCurrent = new Set<Id>();
