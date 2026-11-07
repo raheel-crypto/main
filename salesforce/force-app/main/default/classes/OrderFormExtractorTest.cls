@@ -2880,6 +2880,97 @@ private class OrderFormExtractorTest {
         System.assert(misread.Extract_Evidence__c.contains('misread'), misread.Extract_Evidence__c);
     }
 
+    // ---- Co-termed supplements (DC Advisory, ATLAS - 2026-11-07) ----
+
+    // A live contract July 1 2026 - June 30 2027 and its paper on file.
+    private static Opportunity coTermedSupplement(Decimal baseCredits, Date closeDate) {
+        Account a = new Account(Name = 'Supplement Co');
+        insert a;
+        Contract c = new Contract(AccountId = a.Id, Status = 'Draft', StartDate = Date.newInstance(2026, 7, 1), ContractTerm = 12);
+        insert c;
+        Opportunity base = new Opportunity(Name = 'Supplement Base', StageName = 'Closed Won',
+            CloseDate = Date.newInstance(2026, 6, 25), AccountId = a.Id, Type = 'Renewal', ContractId = c.Id);
+        insertOppSafely(base);
+        insert new Order_Form_Extraction__c(Opportunity__c = base.Id, Extraction_Status__c = 'Success',
+            Is_Current__c = true, Extracted_At__c = System.now().addDays(-60), Type__c = 'Renewal',
+            Contract_Start_Date__c = Date.newInstance(2026, 7, 1), Contract_End_Date__c = Date.newInstance(2027, 6, 30),
+            Annual_Recurring_Revenue__c = 941460, Seat_Licenses__c = 260,
+            Credits_Purchased__c = baseCredits, Credits_Period__c = 'year', Applied_Contract__c = c.Id);
+        Opportunity up = new Opportunity(Name = 'Supplement', StageName = '5 - Contracting',
+            CloseDate = closeDate, AccountId = a.Id, Type = 'Upsell', Base_Opportunity__c = base.Id);
+        insert up;
+        return up;
+    }
+
+    @isTest
+    static void supplement_creditsItBuysAndTheirRateOverAStubTerm() {
+        // DCA: 40 added users at $100,000/yr; $320,414 "per year" credit commitment for
+        // 16,020,723 paid credits counted for the 236-day co-termed period; 1M free.
+        Opportunity up = coTermedSupplement(11821400, Date.newInstance(2026, 11, 6));
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual',
+                'Contract_Start_Date' => '2026-11-06', 'Contract_End_Date' => '2027-06-30',
+                'Contract_Length_Days' => 236,   // the proration count, misread as the term
+                'Seats_Added' => 40, 'License_Fees' => 100000, 'Incremental_Recurring_Fees' => 100000,
+                'Credit_Commit_Fee' => 320414, 'Credits_Purchased' => 16020723, 'Credits_Added' => 16020723,
+                'Credits_Period' => 'contract', 'Free_Credits' => 1000000, 'Overage_Rate' => 0.02 }));
+
+        System.assertEquals(Date.newInstance(2027, 6, 30), row.Contract_End_Date__c,
+            'Co-termed with the contract ending June 30 - not start + 236 days - 1');
+        System.assertEquals('Stated', row.End_Date_Source__c);
+        System.assertEquals(16020723, row.Credits_Added__c, 'The credits the supplement buys, not 16,020,723 - 11,821,400');
+        System.assertEquals(null, row.Credits_Per_Year__c, 'Only an increment was priced');
+        System.assertEquals(0.02, row.Credit_Rate__c, '320,414 / 16,020,723 for the term, not annualised');
+        System.assertEquals(100000, row.Incremental_ARR__c);
+        System.assertEquals(300, row.Resulting_Seats__c);
+        System.assertEquals(40, row.Seat_Licenses__c, 'The seats on this order form');
+        System.assertEquals(40, row.Seats_Added__c);
+        System.assert(!row.Derived_Fields__c.contains('Credit_Commit_Fee'),
+            'No split warning against the contract\'s ARR: ' + row.Derived_Fields__c);
+    }
+
+    @isTest
+    static void supplement_commitmentPricesThePapersOwnCredits() {
+        // ATLAS: "$80,000 for the Credit Allocation set forth above" of 4,000,000 credits,
+        // September 30 2026 to June 30 2027. Even when the 4M is read as a total and the
+        // change derived against the contract, the commitment prices the paper's 4M.
+        Opportunity up = coTermedSupplement(2250000, Date.newInstance(2026, 9, 30));
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Term',
+                'Contract_Start_Date' => '2026-09-30', 'Contract_End_Date' => '2027-06-30',
+                'Incremental_Recurring_Fees' => 80000, 'Credit_Commit_Fee' => 80000,
+                'Credits_Purchased' => 4000000, 'Credits_Period' => 'contract', 'Overage_Rate' => 0.02 }));
+        System.assertEquals(Date.newInstance(2027, 6, 30), row.Contract_End_Date__c,
+            'June 30 is the contract\'s end, not the 9-month anniversary of September 30');
+        System.assertEquals(0.02, row.Credit_Rate__c, '80,000 / 4,000,000');
+
+        // Not co-termed: an amendment ending on its own anniversary is still normalised.
+        Order_Form_Extraction__c own = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual', 'Incremental_Recurring_Fees' => 5000,
+                'Contract_Start_Date' => '2026-09-30', 'Contract_End_Date' => '2027-09-30' }));
+        System.assertEquals(Date.newInstance(2027, 9, 29), own.Contract_End_Date__c);
+        System.assertEquals('Normalized', own.End_Date_Source__c);
+    }
+
+    @isTest
+    static void supplement_seatCountGivenOnceIsTheChange() {
+        // Goldman: 500 users added to a 500-user contract, the count reported as both
+        // the total and the change on a paper that prices only the users it adds.
+        Opportunity up = coTermedSupplement(null, Date.newInstance(2026, 11, 1));   // prior paper: 260 seats
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual', 'Incremental_Recurring_Fees' => 862789,
+                'Contract_Start_Date' => '2026-11-01', 'Contract_End_Date' => '2027-06-30',
+                'Seat_Licenses' => 260, 'Seats_Added' => 260 }));
+        System.assertEquals(260, row.Seats_Added__c, 'Not 260 - 260 = 0');
+        System.assertEquals(520, row.Resulting_Seats__c);
+        System.assertEquals(260, row.Seat_Licenses__c, 'The seats on this order form');
+        System.assertEquals(862789, row.Incremental_ARR__c);
+    }
+
     // ---- Legal's "Model changes: notice or approval" column ----
 
     @isTest

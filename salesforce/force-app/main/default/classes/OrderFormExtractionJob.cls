@@ -1036,7 +1036,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             row.Pricing_Structure__c = derivePricingStructure(row);   // without the MSA's credits
         }
         if (hasOrderForm != false) deriveStartDate(row, parentOpp, d);
-        normaliseTerm(row, d);
+        normaliseTerm(row, parentOpp, d);
         coTermAmendment(row, parentOpp, d);
         // With no order form the economics step must not see the model's fee /
         // credit keys either - only the (cleared) row.
@@ -1200,13 +1200,19 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     //    day (End_Date_Source 'Normalized'); any other stated end is kept ('Stated').
     //  - No stated end: derive start + term - 1 day from a stated term ('Derived').
     //  - Term length not stated: compute it from the dates.
-    private static void normaliseTerm(Order_Form_Extraction__c row, Derivations d) {
+    //  - An amendment whose stated end is the end of a contract or earlier paper
+    //    on the account is co-termed with it, and that end is already inclusive
+    //    (DCA, ATLAS: "to June 30, 2027" under a July 1 contract) - not an
+    //    anniversary of its own start, and its day count is a proration: kept.
+    private static void normaliseTerm(Order_Form_Extraction__c row, Opportunity parentOpp, Derivations d) {
         Date startD = row.Contract_Start_Date__c;
         Date endD = row.Contract_End_Date__c;
         row.End_Date_Source__c = (endD != null) ? 'Stated' : null;
         if (startD == null) return;
 
-        if (endD != null) {
+        Boolean coTermed = endD != null && AMEND_TYPES.contains(row.Type__c)
+            && isExistingEnd(parentOpp, row.Opportunity__c, endD);
+        if (endD != null && !coTermed) {
             Integer k = startD.monthsBetween(endD);
             Integer statedDays = (row.Contract_Length_Days__c == null) ? null : row.Contract_Length_Days__c.intValue();
             if (statedDays != null && statedDays > 0 && endD == startD.addDays(statedDays)) {
@@ -1261,6 +1267,17 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             d.mark('Contract_Start_Date', 'Not stated and no signature date on the paper; the opportunity\'s close date '
                 + String.valueOf(parentOpp.CloseDate) + '.');
         }
+    }
+
+    // Whether a contract or another deal's paper on the account ends on this date.
+    private static Boolean isExistingEnd(Opportunity parentOpp, Id oppId, Date endD) {
+        if (parentOpp == null || parentOpp.AccountId == null || endD == null) return false;
+        if (![SELECT Id FROM Contract WHERE AccountId = :parentOpp.AccountId AND EndDate = :endD LIMIT 1].isEmpty()) {
+            return true;
+        }
+        return ![SELECT Id FROM Order_Form_Extraction__c
+                 WHERE Opportunity__r.AccountId = :parentOpp.AccountId AND Opportunity__c != :oppId
+                   AND Contract_End_Date__c = :endD LIMIT 1].isEmpty();
     }
 
     // An amendment that states neither an end date nor a term runs to the end of
@@ -1445,11 +1462,19 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             Decimal baseSeats = base.seats;
             Decimal totalSeats = row.Seat_Licenses__c;
             String seatsWhy = '';
+            Boolean pricesOnlyChange = extracted.get('Recurring_Fees_Stated') == null
+                && extracted.get('Incremental_Recurring_Fees') != null;
             if (added != null && added == totalSeats && baseSeats != null && baseSeats > 0) {
-                // JPM true-up: 819 reported as both the total and the change.
-                added = null;
-                row.Seats_Added__c = null;
-                seatsWhy = ' (the paper gave ' + totalSeats + ' as both the total and the change)';
+                if (pricesOnlyChange) {
+                    // Goldman / DCA supplement: a paper that prices only the users it
+                    // adds gives their count once - it is the change, not a total.
+                    totalSeats = null;
+                } else {
+                    // JPM true-up: 819 reported as both the total and the change.
+                    added = null;
+                    row.Seats_Added__c = null;
+                    seatsWhy = ' (the paper gave ' + totalSeats + ' as both the total and the change)';
+                }
             }
             if (isUpsell && added == null && totalSeats != null && baseSeats != null && totalSeats < baseSeats) {
                 // A new schedule's own seat count, not the contract's total.
@@ -1471,13 +1496,31 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 d.mark('Resulting_Seats', base.seatsSource + ' ' + baseSeats + ' + ' + added
                     + ' added = ' + row.Resulting_Seats__c + '.');
             }
+            // Seat_Licenses is the seat count on this paper: for one that lists only
+            // the users it adds, that number (Resulting_Seats holds the total).
+            if (isUpsell && row.Seat_Licenses__c == null && row.Seats_Added__c != null && row.Seats_Added__c > 0) {
+                row.Seat_Licenses__c = row.Seats_Added__c;
+                d.mark('Seat_Licenses', 'The paper lists only the ' + row.Seats_Added__c + ' users it adds, shown as its seats'
+                    + (row.Resulting_Seats__c == null ? '.' : '; ' + row.Resulting_Seats__c + ' in total after it.'));
+            }
 
             // Credits: Credits_Purchased is the stated TOTAL, Credits_Added the stated change.
             Decimal cAdded = toDecimal(extracted.get('Credits_Added'));
             if (cAdded != null && isDownsell && cAdded > 0) cAdded = -cAdded;
             Decimal baseCredits = base.credits;
+            // DCA supplement: a paper that prices only the change and carries its own
+            // credit commitment is buying the credits it lists.
+            Boolean buysOwnCredits = extracted.get('Recurring_Fees_Stated') == null
+                && extracted.get('Incremental_Recurring_Fees') != null
+                && row.Credit_Commit_Fee__c != null && row.Credit_Commit_Fee__c > 0;
             if (cAdded != null && cAdded == row.Credits_Purchased__c && baseCredits != null && baseCredits > 0) {
-                cAdded = null;   // same figure as total and change: derive the change
+                if (buysOwnCredits) {
+                    creditsAreIncrement = true;
+                    d.mark('Credits_Added', 'Paper gives ' + cAdded + ' as both the total and the change; it prices '
+                        + 'only the change and its credit commitment buys these credits, so they are the credits added.');
+                } else {
+                    cAdded = null;   // same figure as total and change: derive the change
+                }
             }
             if (isUpsell && cAdded == null && row.Credits_Purchased__c != null && baseCredits != null
                     && row.Credits_Purchased__c < baseCredits) {
@@ -1526,9 +1569,20 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             if (usesCommitFee) {
                 fee = row.Credit_Commit_Fee__c;
                 rateFeeFactor = 1;
+                // The commitment is "for the Credit Allocation set forth above": the
+                // paper's own credit figure, never one derived against the contract.
+                Decimal statedAdded = toDecimal(extracted.get('Credits_Added'));
+                if (statedAdded != null && statedAdded > 0) credits = statedAdded;
+                else if (row.Credits_Purchased__c != null) credits = row.Credits_Purchased__c;
             }
+            // DCA / ATLAS: on a term shorter than a year the credits are counted for
+            // that term and the commitment is their charge, even when labelled "per
+            // year" ($320,414 for 16,020,723 credits = $0.02): the two divide directly.
+            Boolean stubCommit = usesCommitFee && period == 'contract' && months != null && months < 12;
             Boolean bothTerm = !usesCommitFee && basis == 'Term' && period == 'contract';
-            Decimal rate = creditRate(fee, rateFeeFactor, credits, creditFac, bothTerm);
+            Decimal rate = stubCommit
+                ? creditRate(fee, 1, credits, 1, false)
+                : creditRate(fee, rateFeeFactor, credits, creditFac, bothTerm);
             if (rate != null && rate > MAX_DERIVED_CREDIT_RATE) {
                 // William Blair: a $500k licence over a 250,000-credit allowance is $2 a
                 // credit - the fee buys seats, not the credits. Not a rate.
@@ -1537,8 +1591,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             } else if (rate != null) {
                 row.Credit_Rate__c = rate;
                 d.mark('Credit_Rate', 'Derived: ' + (usesCommitFee ? 'credit commitment fee ' : 'committed fee ') + fee
-                    + ' (' + (usesCommitFee || basis == null ? 'Annual' : basis)
-                    + ') / ' + credits + ' credits (' + period + ') = ' + rate + ' per credit.');
+                    + (stubCommit ? ' for the ' + months + '-month term' : ' (' + (usesCommitFee || basis == null ? 'Annual' : basis) + ')')
+                    + ' / ' + credits + ' credits (' + period + ') = ' + rate + ' per credit.');
             }
         }
     }
@@ -1666,7 +1720,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             Decimal creditSum = 0;
             for (Order_Form_Extraction__c p : [
                 SELECT Opportunity__c, Opportunity__r.Type, Opportunity__r.CloseDate, Opportunity__r.CreatedDate,
-                       Type__c, Annual_Recurring_Revenue__c, Resulting_Seats__c, Seat_Licenses__c,
+                       Type__c, Annual_Recurring_Revenue__c, Resulting_Seats__c, Seat_Licenses__c, Seats_Added__c,
                        Credits_Purchased__c, Credits_Added__c
                 FROM Order_Form_Extraction__c
                 WHERE Extraction_Status__c = 'Success'
@@ -1687,12 +1741,16 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                     b.arr = p.Annual_Recurring_Revenue__c;
                     b.arrSource = what + ' ARR';
                 }
-                Decimal seats = (p.Resulting_Seats__c != null) ? p.Resulting_Seats__c : p.Seat_Licenses__c;
+                String t = (p.Opportunity__r.Type != null) ? p.Opportunity__r.Type : p.Type__c;
+                // An amendment whose Seat_Licenses is just its added users is no total.
+                Boolean ownSeatsOnly = AMEND_TYPES.contains(t) && p.Seat_Licenses__c != null
+                    && p.Seat_Licenses__c == p.Seats_Added__c;
+                Decimal seats = (p.Resulting_Seats__c != null) ? p.Resulting_Seats__c
+                    : (ownSeatsOnly ? null : p.Seat_Licenses__c);
                 if (b.seats == null && seats != null) {
                     b.seats = seats;
                     b.seatsSource = what + ' seats';
                 }
-                String t = (p.Opportunity__r.Type != null) ? p.Opportunity__r.Type : p.Type__c;
                 Decimal contribution = (AMEND_TYPES.contains(t) && p.Credits_Added__c != null)
                     ? p.Credits_Added__c
                     : (p.Credits_Purchased__c == null ? null : (t == 'Downsell' ? -p.Credits_Purchased__c : p.Credits_Purchased__c));
@@ -1985,7 +2043,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static void checkStatedSplit(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d) {
         if (row.License_Fees__c == null || row.Credit_Commit_Fee__c == null) return;
         Decimal stated = toDecimal(extracted.get('Recurring_Fees_Stated'));
-        if (stated == null) stated = row.Annual_Recurring_Revenue__c;
+        // On an amendment the row's ARR is the contract after the change (derived),
+        // not this paper's fees - nothing to check against.
+        if (stated == null && !AMEND_TYPES.contains(row.Type__c)) stated = row.Annual_Recurring_Revenue__c;
         if (stated == null) return;
         Decimal parts = row.License_Fees__c + row.Credit_Commit_Fee__c + nz(row.Platform_Connection_Fee__c);
         if ((parts - stated).abs() > 1) {
