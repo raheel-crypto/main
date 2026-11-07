@@ -1227,7 +1227,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                     + '-month anniversary of ' + String.valueOf(startD) + '; normalised to the inclusive end '
                     + String.valueOf(row.Contract_End_Date__c) + '.');
             }
-        } else {
+        } else if (endD == null) {
             Decimal m = row.Contract_Length_Months__c;
             if (m != null && m > 0 && m == m.setScale(0, RoundingMode.DOWN)) {
                 row.Contract_End_Date__c = startD.addMonths(m.intValue()).addDays(-1);
