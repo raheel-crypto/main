@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Rollover__c</fullName>
+    <description>What happens to unused credits when the period they were allocated for ends: No Rollover (they expire), Negotiable (only by mutual agreement - DC Advisory), Partial (a capped share rolls over - LionTree 20%), Full, or Not specified. Using credits any time within the term is not rollover. Extracted from the order form.</description>
+    <inlineHelpText>Do unused credits roll over into the next period or term?</inlineHelpText>
+    <label>Credit Rollover</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>No Rollover</fullName><default>false</default><label>No Rollover</label></value>
+            <value><fullName>Negotiable</fullName><default>false</default><label>Negotiable</label></value>
+            <value><fullName>Partial</fullName><default>false</default><label>Partial</label></value>
+            <value><fullName>Full</fullName><default>false</default><label>Full</label></value>
+            <value><fullName>Not specified</fullName><default>false</default><label>Not specified</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

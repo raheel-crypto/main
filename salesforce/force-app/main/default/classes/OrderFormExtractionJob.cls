@@ -1044,6 +1044,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         checkStatedSplit(row, extracted, d);
         verifyRenewalTerms(row, extracted, d);
         populateSeatAddsByEmail(row, extracted, d);
+        populateCreditRollover(row, extracted, d);
         clampToFieldLimits(row, d);
         d.writeTo(row);
         applyStatus(row, hasOrderForm, skipped);
@@ -1091,6 +1092,41 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             d.mark('Seat_Adds_By_Email', 'Model answered true, but its sentence does not name adding seats by '
                 + 'email or through the Account Executive; stored false.');
         }
+    }
+
+    // A rollover clause speaks of credits rolling / carrying over, expiring, or a
+    // later period. "Carry forward ... during the Initial Subscription Period" is
+    // use within the term (ATLAS), not rollover.
+    private static final Pattern ROLLOVER_WORDS = Pattern.compile('(?i)(roll(ed|s|ing)?[ -]?over|carr(y|ies|ied)[ -]?over'
+        + '|expir|forfeit|laps|(new|next|subsequent|following|renewal|succeeding) (term|period|subscription|year|contract))');
+    private static final Pattern ROLLOVER_PERCENT = Pattern.compile('(?i)(\\d{1,3}(\\.\\d+)?)\\s*(%|percent)');
+
+    @TestVisible
+    private static void populateCreditRollover(Order_Form_Extraction__c row, Map<String, Object> extracted,
+                                               Derivations d) {
+        String value = OrderFormPicklistMapper.mapCreditRollover(asStr(extracted.get('Credit_Rollover')));
+        String terms = asStr(extracted.get('Credit_Rollover_Terms'));
+        Decimal pct = toDecimal(extracted.get('Credit_Rollover_Percent'));
+        row.Credit_Rollover__c = value;
+        row.Credit_Rollover_Percent__c = null;
+        row.Credit_Rollover_Terms__c = null;
+        if (value == null || value == 'Not specified') return;
+        if (String.isBlank(terms) || !ROLLOVER_WORDS.matcher(terms).find()) {
+            row.Credit_Rollover__c = 'Not specified';
+            d.mark('Credit_Rollover', 'Model answered ' + value + ', but its clause does not speak of unused credits '
+                + 'rolling over, expiring or a later period; stored Not specified.');
+            return;
+        }
+        row.Credit_Rollover_Terms__c = truncate(terms.trim(), 2000);
+        if (value != 'Partial') return;
+        if (pct == null) {
+            Matcher m = ROLLOVER_PERCENT.matcher(terms);
+            if (m.find()) {
+                pct = Decimal.valueOf(m.group(1));
+                d.mark('Credit_Rollover_Percent', 'Read from the clause: "' + m.group(0) + '".');
+            }
+        }
+        if (pct != null && pct > 0 && pct <= 100) row.Credit_Rollover_Percent__c = pct;
     }
 
     @TestVisible

@@ -118,6 +118,9 @@ JSON SCHEMA (return exactly these keys):
   "Seats_Added": number | null,
   "Seat_Adds_By_Email": boolean | null,
   "Seat_Adds_By_Email_Terms": "verbatim sentence letting the customer add seats by email or through its Account Executive, or null" | null,
+  "Credit_Rollover": "No Rollover" | "Negotiable" | "Partial" | "Full" | "Not specified",
+  "Credit_Rollover_Percent": number | null,
+  "Credit_Rollover_Terms": "verbatim clause on what happens to unused credits when their period ends, or null" | null,
   "Named_Users": "newline-separated list of individuals to provision, with email if given" | null,
   "Requested_By_Name": "person who requested/authorized the change" | null,
   "Requested_By_Email": "their email" | null,
@@ -270,6 +273,17 @@ SEAT ADDS BY EMAIL:
 - false when the paper says added seats need a new order form, an amendment or mutual written agreement and gives no email / Account Executive route; null when the paper is silent.
 - Read only the CURRENT deal's documents for this; a parent contract's clause is recorded on the parent deal.
 
+CREDIT ROLLOVER:
+- What happens to UNUSED credits when the period they were allocated for ends (a contract year, a Subscription Period, or the term). Look in the credit section of the order form, the Credit Addendum, and the MSA's fees / credits clauses. Set Credit_Rollover to exactly one of:
+  * "No Rollover" - unused credits expire, are forfeited, or do not roll over / carry into the next period or a new term ("Unused Credits do not roll over to a new term", "Credits expire at the end of each Subscription Period").
+  * "Negotiable" - rollover only by mutual agreement or negotiation, with no commitment ("unused credits at term end may be negotiated to roll over into the new term by mutual conversation").
+  * "Partial" - a stated share or amount rolls over ("up to 20% of unused Credits roll over from a Subscription Period"). Put the percentage in Credit_Rollover_Percent (20); when the cap is a number of credits rather than a percentage, leave the percent null - the clause keeps the amount.
+  * "Full" - all unused credits roll over into the next period or term.
+  * "Not specified" - the papers say nothing about unused credits at the end of a period.
+- Using credits at any time WITHIN the term ("the Credit Allocation will carry forward for consumption at any point during the Initial Subscription Period") is not rollover - it says nothing about the next period. Neither is a clause that only says fees are non-refundable or unused credits are not refunded. Both are "Not specified" unless the paper also addresses the end of the period.
+- Credit_Rollover_Terms = the clause verbatim (null when Not specified). Credit_Rollover_Percent is null unless Partial.
+- Read the CURRENT deal's documents (including its own MSA / Credit Addendum when attached as current); a parent contract's clause is recorded on the parent deal.
+
 LOGO / PUBLICITY RIGHTS:
 - Determine whether Rogo may use the CUSTOMER's name, logo, or trademarks for marketing / publicity / commercial purposes (customer lists, website, press releases, case studies, "reference customer"). Search the order form, MSA, and T&C - the clause is often titled "Publicity", "Marketing", "Use of Name/Marks", "Reference Customer", or sits in a general/miscellaneous section.
 - Set Logo_Publicity_Rights to exactly one of:
@@ -281,7 +295,7 @@ LOGO / PUBLICITY RIGHTS:
 
 EXTRACT_EVIDENCE FIELD:
 - Return Extract_Evidence as a JSON OBJECT keyed by field name; each value is { "clause": "<section / clause / exhibit ref>", "quote": "<short verbatim excerpt, <= ~300 chars>" }. Example: {"Subprocessor_Gate_Type": {"clause":"8.1(a)", "quote":"...90 days prior written notice..."}}.
-- REQUIRED for every LLM-gate field you return with a value other than "Not specified" / null (Subprocessor_Gate_Type, Subprocessor_Notice_Period_Days, Consent_Revocable, Subprocessor_Objection_Consequence, AI_Model_Change_Gate_Days, AI_Model_Change_Carveout, Model_Change_Requirement, Processing_Location_Gate, Personal_Data_Disclosure_Gate, AI_Training_Prohibition, and the rest), and for Value_Basis, Recurring_Fees_Stated, Incremental_Recurring_Fees, Unit_Price, Contract_Length_Months, Total_Contract_Value, Credits_Purchased, Credits_Added, Credit_Rate_Stated, Overage_Rate, Free_Tier_Retained, Contract_End_Date, Signature_Date, Sub_Processor_List, Renewal_Terms / Renewal_Fee_Escalator when inferred, and any value taken from a rider overriding the base contract.
+- REQUIRED for every LLM-gate field you return with a value other than "Not specified" / null (Subprocessor_Gate_Type, Subprocessor_Notice_Period_Days, Consent_Revocable, Subprocessor_Objection_Consequence, AI_Model_Change_Gate_Days, AI_Model_Change_Carveout, Model_Change_Requirement, Processing_Location_Gate, Personal_Data_Disclosure_Gate, AI_Training_Prohibition, and the rest), and for Value_Basis, Recurring_Fees_Stated, Incremental_Recurring_Fees, Unit_Price, Contract_Length_Months, Total_Contract_Value, Credits_Purchased, Credits_Added, Credit_Rate_Stated, Overage_Rate, Free_Tier_Retained, Credit_Rollover (when not "Not specified"), Contract_End_Date, Signature_Date, Sub_Processor_List, Renewal_Terms / Renewal_Fee_Escalator when inferred, and any value taken from a rider overriding the base contract.
 - Skip trivial extractions that appear plainly in labeled fields (Seat_Licenses, Contract_Start_Date, Billing_Contact_Email, Customer_Signer_Name).
 - Keep each quote short and total length well under 30,000 characters. Return null only if there is genuinely nothing to cite.
 - Each "quote" (and every other value) is ONE JSON string: do not join fragments with a semicolon between closing and opening quotes ("...a"; "b..."), and do not append an editorial "note:" as a second quoted string. If a clause conflicts with another or you must caveat it, write it as ordinary prose INSIDE the single quoted string (or put the caveat in Subprocessor_Restrictions), never as separate quoted fragments.

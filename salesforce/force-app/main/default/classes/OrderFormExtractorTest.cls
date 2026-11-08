@@ -2971,6 +2971,54 @@ private class OrderFormExtractorTest {
         System.assertEquals(862789, row.Incremental_ARR__c);
     }
 
+    // ---- Credit rollover (2026-11-08) ----
+
+    private static Order_Form_Extraction__c rolloverRead(Id oppId, Map<String, Object> fields) {
+        Map<String, Object> f = new Map<String, Object>{ 'Type' => 'New Business' };
+        f.putAll(fields);
+        return OrderFormExtractionJob.buildFromResponseBody(oppId, new List<Id>(), makeAnthropicResponse(f));
+    }
+
+    @isTest
+    static void creditRollover_readAndChecked() {
+        Opportunity opp = insertOpp('Rollover', 'Closed Won');
+
+        // DC Advisory: non-binding.
+        Order_Form_Extraction__c dca = rolloverRead(opp.Id, new Map<String, Object>{ 'Credit_Rollover' => 'Negotiable',
+            'Credit_Rollover_Terms' => 'Unused credits at term end may be negotiated to roll over into new term by mutual conversation.' });
+        System.assertEquals('Negotiable', dca.Credit_Rollover__c);
+        System.assertEquals(null, dca.Credit_Rollover_Percent__c);
+        System.assert(dca.Credit_Rollover_Terms__c.startsWith('Unused credits at term end'), dca.Credit_Rollover_Terms__c);
+
+        // LionTree: a capped share; the percent is read from the clause when not given.
+        Order_Form_Extraction__c lionTree = rolloverRead(opp.Id, new Map<String, Object>{ 'Credit_Rollover' => 'Partial',
+            'Credit_Rollover_Terms' => 'Up to 20% of unused Credits will roll over from a Subscription Period.' });
+        System.assertEquals('Partial', lionTree.Credit_Rollover__c);
+        System.assertEquals(20, lionTree.Credit_Rollover_Percent__c);
+
+        // The usual clause.
+        Order_Form_Extraction__c none = rolloverRead(opp.Id, new Map<String, Object>{ 'Credit_Rollover' => 'No rollover',
+            'Credit_Rollover_Percent' => 15, 'Credit_Rollover_Terms' => 'Unused Credits do not roll over to a new term.' });
+        System.assertEquals('No Rollover', none.Credit_Rollover__c);
+        System.assertEquals(null, none.Credit_Rollover_Percent__c, 'Only a Partial answer carries a cap');
+
+        // ATLAS: use any time within the term is not rollover.
+        Order_Form_Extraction__c withinTerm = rolloverRead(opp.Id, new Map<String, Object>{ 'Credit_Rollover' => 'Full',
+            'Credit_Rollover_Terms' => 'The Credit Allocation will carry forward for consumption at any point during the Initial Subscription Period.' });
+        System.assertEquals('Not specified', withinTerm.Credit_Rollover__c);
+        System.assertEquals(null, withinTerm.Credit_Rollover_Terms__c);
+        System.assert(withinTerm.Derived_Fields__c.contains('Credit_Rollover'), withinTerm.Derived_Fields__c);
+
+        // Silent.
+        Order_Form_Extraction__c silent = rolloverRead(opp.Id, new Map<String, Object>{ 'Credit_Rollover' => 'Not specified' });
+        System.assertEquals('Not specified', silent.Credit_Rollover__c);
+
+        System.assertEquals('Full', OrderFormPicklistMapper.mapCreditRollover('Full'));
+        System.assertEquals('Partial', OrderFormPicklistMapper.mapCreditRollover('up to 20%'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapCreditRollover('something else'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapCreditRollover(null));
+    }
+
     // ---- Legal's "Model changes: notice or approval" column ----
 
     @isTest

@@ -144,6 +144,18 @@ public with sharing class OrderFormPicklistMapper {
         return null;
     }
 
+    // Credit_Rollover: No Rollover / Negotiable / Partial / Full / Not specified.
+    public static String mapCreditRollover(String raw) {
+        if (String.isBlank(raw)) return null;
+        String s = raw.toLowerCase();
+        if (s.contains('not specified') || s.contains('silent') || s == 'unknown') return 'Not specified';
+        if (s.contains('negotia') || s.contains('mutual') || s.contains('discretion')) return 'Negotiable';
+        if (s.contains('partial') || s.contains('capped') || s.contains('up to') || s.contains('%')) return 'Partial';
+        if (s.startsWith('no') || s.contains('none') || s.contains('expire') || s.contains('forfeit')) return 'No Rollover';
+        if (s.contains('full') || s == 'all' || s.contains('all unused')) return 'Full';
+        return null;
+    }
+
     // Processing_Location_Gate: None / Notice / Consent / Not specified.
     public static String mapLocationGate(String raw) {
         if (String.isBlank(raw)) return 'Not specified';

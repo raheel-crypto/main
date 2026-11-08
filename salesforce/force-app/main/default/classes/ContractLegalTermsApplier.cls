@@ -70,7 +70,10 @@ public with sharing class ContractLegalTermsApplier {
         new LegalField('Credit_Commit__c', 'Credit_Commit__c', true),
         new LegalField('Credit_Overcommit_Obligation__c', 'Credit_Overcommit_Obligation__c', true),
         new LegalField('Seat_Adds_By_Email__c', 'Seat_Adds_By_Email__c', true),
-        new LegalField('Seat_Adds_By_Email_Terms__c', 'Seat_Adds_By_Email_Terms__c', false)
+        new LegalField('Seat_Adds_By_Email_Terms__c', 'Seat_Adds_By_Email_Terms__c', false),
+        new LegalField('Credit_Rollover__c', 'Credit_Rollover__c', false),
+        new LegalField('Credit_Rollover_Terms__c', 'Credit_Rollover_Terms__c', false)
+        // Credit_Rollover_Percent__c moves with a Partial answer: applyRolloverPercent.
     };
 
     // Free-text clause summaries. The model rewords the same clause on every
@@ -79,7 +82,7 @@ public with sharing class ContractLegalTermsApplier {
     // paper's wording is noted, and review is not flagged. The structured terms
     // (notice period, model changes, the picklists) still conflict.
     private static final Set<String> TEXT_FIELDS = new Set<String>{
-        'Subprocessor_Restrictions__c', 'Rate_Limit_Notes__c', 'Seat_Adds_By_Email_Terms__c'
+        'Subprocessor_Restrictions__c', 'Rate_Limit_Notes__c', 'Seat_Adds_By_Email_Terms__c', 'Credit_Rollover_Terms__c'
     };
     private static final Integer NOTED_TEXT_MAX = 300;
 
@@ -111,6 +114,7 @@ public with sharing class ContractLegalTermsApplier {
                    Model_Change_Requirement__c, Model_Change_Terms__c,
                    ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c, Credits_Purchased__c,
                    Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c,
+                   Credit_Rollover__c, Credit_Rollover_Percent__c, Credit_Rollover_Terms__c,
                    Credits_Added__c,
                    Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
                    Billing_Contact_Email__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
@@ -135,6 +139,7 @@ public with sharing class ContractLegalTermsApplier {
                    Model_Change_Requirement__c, Model_Change_Terms__c,
                        ELA__c, Credit_Commit__c, Credit_Overcommit_Obligation__c,
                        Seat_Adds_By_Email__c, Seat_Adds_By_Email_Terms__c,
+                       Credit_Rollover__c, Credit_Rollover_Percent__c, Credit_Rollover_Terms__c,
                        Primary_Contact__c, Primary_Contact_Phone__c, Primary_Contact_Email__c,
                        Billing_Contact__c, Billing_Entity_Name__c, Billing_Entity_Address__c,
                        BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry,
@@ -483,7 +488,7 @@ public with sharing class ContractLegalTermsApplier {
         for (String f : new List<String>{ 'Special_Terms__c', 'Model_Change_Requirement__c', 'Model_Change_Terms__c',
                 'Package_Tier__c', 'Unlimited_Lite__c', 'Free_Max_Mid_Credits__c', 'Free_Max_Mid_Amount__c',
                 'Free_Tier_Retained__c', 'Overage_Rate__c', 'Credits_Per_Year__c', 'Credit_Rate__c',
-                'Total_Credits_Purchased__c', 'Latest_Order_Form_Extraction__c' }) {
+                'Total_Credits_Purchased__c', 'Latest_Order_Form_Extraction__c', 'Credit_Rollover_Percent__c' }) {
             c.put(f, null);
         }
         c.Needs_Legal_Review__c = false;
@@ -507,6 +512,7 @@ public with sharing class ContractLegalTermsApplier {
             log.add('Wrote Special_Terms__c');
         }
         applyModelChange(current, ofe, changes, log, false);
+        applyRolloverPercent(current, ofe, changes, log, false);
         // Contact info: straight write of whatever the order form states.
         for (LegalField f : CONTACT_FIELDS) {
             Object v = ofe.get(f.ofe);
@@ -552,6 +558,7 @@ public with sharing class ContractLegalTermsApplier {
         }
         appendSpecialTerms(current, ofe, changes, log);
         if (applyModelChange(current, ofe, changes, log, true)) conflict = true;
+        if (applyRolloverPercent(current, ofe, changes, log, true)) conflict = true;
         // Contact info: latest order form wins - fill blanks and update changes,
         // but a differing contact is NOT a legal conflict and never triggers review.
         for (LegalField f : CONTACT_FIELDS) {
@@ -569,6 +576,34 @@ public with sharing class ContractLegalTermsApplier {
 
         if (conflict) log.add('>>> One or more legal terms conflict with the existing contract. Review required.');
         return conflict;
+    }
+
+    // The rollover cap belongs to a Partial answer, so it follows the contract's
+    // answer after this paper: written with the paper's Partial, cleared when a
+    // fresh paper answers otherwise, and kept when the contract kept another
+    // answer (that conflict is already noted). Two different caps on Partial
+    // papers conflict on an amendment.
+    private static Boolean applyRolloverPercent(Contract current, Order_Form_Extraction__c ofe, Contract changes,
+                                                List<String> log, Boolean isAmend) {
+        String answer = valueNow(current, changes, 'Credit_Rollover__c');
+        Decimal cur = current == null ? null : current.Credit_Rollover_Percent__c;
+        if (answer != 'Partial') {
+            if (!isAmend && cur != null && answer != null && answer != NOT_SPECIFIED) {
+                changes.Credit_Rollover_Percent__c = null;
+                log.add('Cleared Credit_Rollover_Percent__c (rollover is ' + answer + ')');
+            }
+            return false;
+        }
+        Decimal pct = ofe.Credit_Rollover__c == 'Partial' ? ofe.Credit_Rollover_Percent__c : null;
+        if (pct == null || sameValue(cur, pct)) return false;
+        if (isAmend && cur != null) {
+            log.add('CONFLICT Credit_Rollover_Percent__c: contract="' + cur + '" vs order form="' + pct
+                + '" - left contract unchanged, needs legal review');
+            return true;
+        }
+        changes.Credit_Rollover_Percent__c = pct;
+        log.add('Wrote Credit_Rollover_Percent__c = ' + pct + (isAmend ? ' (new term)' : ''));
+        return false;
     }
 
     // Special terms accumulate across amendments: each paper's terms are added
@@ -772,6 +807,67 @@ public with sharing class ContractLegalTermsApplier {
                 c.Reconciliation_Notes__c = truncate(String.isBlank(existing) ? note : existing + '\n\n' + note, 32768);
             }
             if (c.getPopulatedFieldsAsMap().size() > 1) out.add(c);
+        }
+        return out;
+    }
+
+    /**
+     * For contracts applied before the credit rollover fields existed (blank
+     * Credit_Rollover__c): lay them down from the current extractions applied to
+     * each Contract, in deal order, with the apply rules - a fresh deal writes,
+     * an amendment's silence keeps, a different answer on an amendment is a
+     * conflict (flags review, noted; a reworded clause is not). Returns the
+     * changes, unsaved; the caller saves them.
+     */
+    public static List<Contract> backfillCreditRollover(Set<Id> contractIds) {
+        List<Contract> out = new List<Contract>();
+        if (contractIds == null || contractIds.isEmpty()) return out;
+        Map<Id, Contract> contracts = new Map<Id, Contract>([
+            SELECT Id, Reconciliation_Notes__c FROM Contract
+            WHERE Id IN :contractIds AND Credit_Rollover__c = null
+        ]);
+        if (contracts.isEmpty()) return out;
+        Map<Id, Contract> changesById = new Map<Id, Contract>();
+        Map<Id, List<String>> conflictsById = new Map<Id, List<String>>();
+        for (Order_Form_Extraction__c ofe : [
+            SELECT Applied_Contract__c, Credit_Rollover__c, Credit_Rollover_Percent__c, Credit_Rollover_Terms__c,
+                   Opportunity__r.Type, Opportunity__r.Name
+            FROM Order_Form_Extraction__c
+            WHERE Applied_Contract__c IN :contracts.keySet() AND Is_Current__c = true
+              AND Extraction_Status__c IN :APPLICABLE_STATUSES
+              AND Credit_Rollover__c != null AND Credit_Rollover__c != :NOT_SPECIFIED
+            ORDER BY Opportunity__r.CloseDate ASC NULLS FIRST, Opportunity__r.CreatedDate ASC
+        ]) {
+            Id cid = ofe.Applied_Contract__c;
+            Contract c = changesById.get(cid);
+            Boolean isAmend = ofe.Opportunity__r != null && AMEND_TYPES.contains(ofe.Opportunity__r.Type);
+            if (c == null || !isAmend) {
+                changesById.put(cid, new Contract(Id = cid, Credit_Rollover__c = ofe.Credit_Rollover__c,
+                    Credit_Rollover_Percent__c = ofe.Credit_Rollover_Percent__c,
+                    Credit_Rollover_Terms__c = ofe.Credit_Rollover_Terms__c));
+            } else if (sameValue(c.Credit_Rollover__c, ofe.Credit_Rollover__c) && c.Credit_Rollover_Percent__c == null) {
+                c.Credit_Rollover_Percent__c = ofe.Credit_Rollover_Percent__c;
+            } else if (!sameValue(c.Credit_Rollover__c, ofe.Credit_Rollover__c)
+                    || (ofe.Credit_Rollover_Percent__c != null
+                        && !sameValue(c.Credit_Rollover_Percent__c, ofe.Credit_Rollover_Percent__c))) {
+                if (!conflictsById.containsKey(cid)) conflictsById.put(cid, new List<String>());
+                conflictsById.get(cid).add('[' + ofe.Opportunity__r.Name + '] CONFLICT Credit_Rollover__c: contract="'
+                    + c.Credit_Rollover__c + (c.Credit_Rollover_Percent__c == null ? '' : ' ' + c.Credit_Rollover_Percent__c + '%')
+                    + '" vs order form="' + ofe.Credit_Rollover__c
+                    + (ofe.Credit_Rollover_Percent__c == null ? '' : ' ' + ofe.Credit_Rollover_Percent__c + '%')
+                    + '" - left contract unchanged, needs legal review');
+            }
+        }
+        for (Id cid : changesById.keySet()) {
+            Contract c = changesById.get(cid);
+            if (conflictsById.containsKey(cid)) {
+                c.Needs_Legal_Review__c = true;
+                String existing = contracts.get(cid).Reconciliation_Notes__c;
+                String note = 'Credit rollover laid down ' + String.valueOf(Date.today()) + ' from this contract\'s deals:\n'
+                    + String.join(conflictsById.get(cid), '\n');
+                c.Reconciliation_Notes__c = truncate(String.isBlank(existing) ? note : existing + '\n\n' + note, 32768);
+            }
+            out.add(c);
         }
         return out;
     }

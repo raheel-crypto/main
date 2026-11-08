@@ -961,6 +961,104 @@ private class ContractLegalTermsApplierTest {
         System.assert(!after.Reconciliation_Notes__c.contains('CONFLICT'), after.Reconciliation_Notes__c);
     }
 
+    // ===== Credit rollover =====
+
+    @isTest
+    static void creditRollover_freshWritesRewordingKeepsAndConflictFlags() {
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofeNb = makeOfe(nb.Id, new Map<String, Object>{
+            'Credit_Rollover__c' => 'Negotiable',
+            'Credit_Rollover_Terms__c' => 'Unused credits at term end may be negotiated to roll over into new term by mutual conversation.' });
+        // DC Advisory's +172 upsell: similar non-binding wording - noted, never a conflict.
+        Opportunity up1 = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeSame = makeOfe(up1.Id, new Map<String, Object>{
+            'Credit_Rollover__c' => 'Negotiable',
+            'Credit_Rollover_Terms__c' => 'Unused Credits may roll over to the renewal term if the parties so agree.' });
+        // A hard carve-out on a later paper: a different term - legal review, and its cap stays off.
+        Opportunity up2 = makeOpp(a.Id, 'Upsell', null, nb.Id);
+        Order_Form_Extraction__c ofeDiffers = makeOfe(up2.Id, new Map<String, Object>{
+            'Credit_Rollover__c' => 'Partial', 'Credit_Rollover_Percent__c' => 20,
+            'Credit_Rollover_Terms__c' => 'Up to 20% of unused Credits roll over from a Subscription Period.' });
+
+        Test.startTest();
+        runOne(ofeNb.Id);
+        ContractLegalTermsApplier.Result sameRes = runOne(ofeSame.Id);
+        Contract afterSame = [SELECT Credit_Rollover__c, Credit_Rollover_Terms__c, Needs_Legal_Review__c
+                              FROM Contract WHERE Id = :c.Id];
+        ContractLegalTermsApplier.Result differsRes = runOne(ofeDiffers.Id);
+        Test.stopTest();
+
+        System.assertEquals('Negotiable', afterSame.Credit_Rollover__c);
+        System.assert(afterSame.Credit_Rollover_Terms__c.startsWith('Unused credits at term end'), afterSame.Credit_Rollover_Terms__c);
+        System.assertEquals(false, sameRes.needsReview, 'Same term, reworded');
+        System.assertEquals(false, afterSame.Needs_Legal_Review__c);
+
+        Contract after = [SELECT Credit_Rollover__c, Credit_Rollover_Percent__c, Needs_Legal_Review__c, Reconciliation_Notes__c
+                          FROM Contract WHERE Id = :c.Id];
+        System.assertEquals(true, differsRes.needsReview);
+        System.assertEquals('Negotiable', after.Credit_Rollover__c, 'Conflict never overwrites');
+        System.assertEquals(null, after.Credit_Rollover_Percent__c, 'A cap is not laid on a Negotiable contract');
+        System.assertEquals(true, after.Needs_Legal_Review__c);
+        System.assert(after.Reconciliation_Notes__c.contains('CONFLICT Credit_Rollover__c'), after.Reconciliation_Notes__c);
+    }
+
+    @isTest
+    static void creditRollover_partialCapIsWrittenWithItsAnswer() {
+        // LionTree: up to 20% of unused credits roll over.
+        Account a = makeAccount();
+        Contract c = makeContract(a.Id, new Map<String, Object>{ 'Credit_Rollover_Percent__c' => 50 });
+        Opportunity nb = makeOpp(a.Id, 'New Business', c.Id, null);
+        Order_Form_Extraction__c ofe = makeOfe(nb.Id, new Map<String, Object>{
+            'Credit_Rollover__c' => 'Partial', 'Credit_Rollover_Percent__c' => 20,
+            'Credit_Rollover_Terms__c' => 'Up to 20% of unused Credits roll over from a Subscription Period.' });
+
+        Test.startTest();
+        runOne(ofe.Id);
+        Test.stopTest();
+
+        Contract after = [SELECT Credit_Rollover__c, Credit_Rollover_Percent__c FROM Contract WHERE Id = :c.Id];
+        System.assertEquals('Partial', after.Credit_Rollover__c);
+        System.assertEquals(20, after.Credit_Rollover_Percent__c, 'A fresh paper sets the cap');
+        System.assertEquals(null, ContractLegalTermsApplier.clearedTerms(c.Id).Credit_Rollover_Percent__c);
+    }
+
+    @isTest
+    static void backfillCreditRollover_laysItDownInDealOrder() {
+        Account a = makeAccount();
+        Contract quiet = makeContract(a.Id, null);
+        Contract disputed = makeContract(a.Id, null);
+        Opportunity nb1 = closedOpp(a.Id, 'New Business', 300, null);
+        Opportunity up1 = closedOpp(a.Id, 'Upsell', 100, null);
+        Opportunity nb2 = closedOpp(a.Id, 'New Business', 300, null);
+        Opportunity up2 = closedOpp(a.Id, 'Upsell', 100, null);
+        // Incomplete rows: no create-time automation applies them.
+        makeOfe(nb1.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => quiet.Id, 'Credit_Rollover__c' => 'Partial',
+            'Credit_Rollover_Terms__c' => 'Up to 20% of unused Credits roll over.' });
+        makeOfe(up1.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => quiet.Id, 'Credit_Rollover__c' => 'Partial', 'Credit_Rollover_Percent__c' => 20 });
+        makeOfe(nb2.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => disputed.Id, 'Credit_Rollover__c' => 'No Rollover',
+            'Credit_Rollover_Terms__c' => 'Unused Credits do not roll over to a new term.' });
+        makeOfe(up2.Id, new Map<String, Object>{ 'Extraction_Status__c' => 'Incomplete', 'Is_Current__c' => true,
+            'Applied_Contract__c' => disputed.Id, 'Credit_Rollover__c' => 'Full',
+            'Credit_Rollover_Terms__c' => 'All unused Credits roll over to the next Subscription Period.' });
+
+        Test.startTest();
+        List<Contract> changes = ContractLegalTermsApplier.backfillCreditRollover(new Set<Id>{ quiet.Id, disputed.Id });
+        Test.stopTest();
+
+        Map<Id, Contract> byId = new Map<Id, Contract>(changes);
+        System.assertEquals('Partial', byId.get(quiet.Id).Credit_Rollover__c);
+        System.assertEquals(20, byId.get(quiet.Id).Credit_Rollover_Percent__c, 'A later paper fills the blank cap');
+        System.assertEquals(null, byId.get(quiet.Id).getPopulatedFieldsAsMap().get('Needs_Legal_Review__c'));
+        System.assertEquals('No Rollover', byId.get(disputed.Id).Credit_Rollover__c, 'The contract keeps the first answer');
+        System.assertEquals(true, byId.get(disputed.Id).Needs_Legal_Review__c, 'A different answer is a conflict');
+        System.assert(byId.get(disputed.Id).Reconciliation_Notes__c.contains('CONFLICT Credit_Rollover__c'));
+    }
+
     // ===== Legal's "Model changes: notice or approval" column =====
 
     @isTest

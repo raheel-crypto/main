@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Rollover_Percent__c</fullName>
+    <description>For a Partial rollover, the share of unused credits that rolls over (LionTree: up to 20%). Blank when the cap is an amount of credits or there is no partial rollover. Applied from the order form extractions (ContractLegalTermsApplier); on an amendment a silent paper keeps it and a different answer flags legal review.</description>
+    <inlineHelpText>Share of unused credits that rolls over (Partial rollover only).</inlineHelpText>
+    <label>Credit Rollover %</label>
+    <precision>5</precision>
+    <required>false</required>
+    <scale>2</scale>
+    <type>Percent</type>
+</CustomField>
