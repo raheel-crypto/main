@@ -2928,6 +2928,17 @@ private class OrderFormExtractorTest {
         System.assertEquals(40, row.Seats_Added__c);
         System.assert(!row.Derived_Fields__c.contains('Credit_Commit_Fee'),
             'No split warning against the contract\'s ARR: ' + row.Derived_Fields__c);
+
+        // The 2026-11-09 read: only the credits added, no period, no total.
+        Order_Form_Extraction__c noPeriod = OrderFormExtractionJob.buildFromResponseBody(up.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell', 'Value_Basis' => 'Annual',
+                'Contract_Start_Date' => '2026-11-06', 'Contract_End_Date' => '2027-06-30',
+                'Seats_Added' => 40, 'Incremental_Recurring_Fees' => 100000,
+                'Credit_Commit_Fee' => 320414, 'Credits_Added' => 16020723, 'Free_Credits' => 1000000 }));
+        System.assertEquals('contract', noPeriod.Credits_Period__c, 'The stub term\'s credits');
+        System.assertEquals(0.02, noPeriod.Credit_Rate__c);
+        System.assertEquals(16020723, noPeriod.Credits_Added__c);
     }
 
     @isTest

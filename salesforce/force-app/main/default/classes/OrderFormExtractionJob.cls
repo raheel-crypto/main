@@ -1573,6 +1573,14 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             row.Credits_Added__c = cAdded;
         }
 
+        // DCA supplement: an amendment's credits with no period stated, on a term
+        // under a year, are the paper's credits for that term.
+        if (isAmend && row.Credits_Period__c == null && months != null && months < 12
+                && (row.Credits_Purchased__c != null || row.Credits_Added__c != null)) {
+            row.Credits_Period__c = 'contract';
+            d.mark('Credits_Period', 'No period stated; the credits are for this paper\'s ' + months + '-month term.');
+        }
+
         // Credits per year (the contract's allocation; null when only an increment is priced).
         Decimal creditFac = creditFactor(row.Credits_Period__c, months);
         row.Credits_Per_Year__c = creditsAreIncrement
