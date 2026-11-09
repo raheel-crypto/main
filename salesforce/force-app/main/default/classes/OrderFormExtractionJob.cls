@@ -1639,6 +1639,16 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                     + ' / ' + credits + ' credits (' + period + ') = ' + rate + ' per credit.');
             }
         }
+
+        // Credits_Purchased shows the credits on this paper, as Seat_Licenses shows
+        // its seats: for a supplement that lists only the paid credits it adds,
+        // that figure (DCA: 16,020,723). Set last - the rate, per-year figure and
+        // contract totals above work from Credits_Added on an amendment.
+        if (isUpsell && row.Credits_Purchased__c == null && row.Credits_Added__c != null && row.Credits_Added__c > 0) {
+            row.Credits_Purchased__c = row.Credits_Added__c;
+            d.mark('Credits_Purchased', 'The paper lists only the ' + row.Credits_Added__c
+                + ' paid credits it adds, shown as its credits.');
+        }
     }
 
     // How a fee in this basis was scaled to a year, for the evidence text.

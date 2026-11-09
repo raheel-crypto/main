@@ -125,6 +125,27 @@ private class OrderFormOpsTest {
     }
 
     @isTest
+    static void rebuildContract_oldVersionsNoLongerCount() {
+        // DCA: a superseded read of a deal that moved stays stamped to the old contract.
+        Account a = new Account(Name = 'Stale Co');
+        insert a;
+        Contract c = makeContract(a.Id, null);
+        Opportunity nb = closedOpp(a.Id, 'Stale NB', 'New Business', 200, c.Id, null);
+        Opportunity up = closedOpp(a.Id, 'Stale Upsell', 'Upsell', 50, null, nb.Id);
+        currentOfe(nb.Id, c.Id, new Map<String, Object>{ 'Credits_Purchased__c' => 1000, 'Credits_Period__c' => 'year' });
+        Order_Form_Extraction__c old = currentOfe(up.Id, c.Id, new Map<String, Object>{
+            'Is_Current__c' => false, 'Credits_Added__c' => 500 });
+
+        Test.startTest();
+        OrderFormOps.rebuildContract(c.Id);
+        Test.stopTest();
+
+        System.assertEquals(1000, [SELECT Total_Credits_Purchased__c FROM Contract WHERE Id = :c.Id].Total_Credits_Purchased__c,
+            'Only the current deals count');
+        System.assertEquals(null, [SELECT Applied_Contract__c FROM Order_Form_Extraction__c WHERE Id = :old.Id].Applied_Contract__c);
+    }
+
+    @isTest
     static void rerunOpportunity_replacesTheCurrentReadAndRebuildsItsContract() {
         Account a = new Account(Name = 'Rerun Co');
         insert a;

@@ -117,7 +117,7 @@ public with sharing class OrderFormOps {
         List<Id> fresh = new List<Id>();
         List<Id> amends = new List<Id>();
         Set<Id> toClear = new Set<Id>(extra);
-        List<Order_Form_Extraction__c> detach = new List<Order_Form_Extraction__c>();
+        Map<Id, Order_Form_Extraction__c> detach = new Map<Id, Order_Form_Extraction__c>();
         for (Order_Form_Extraction__c r : rows) {
             Id t = targets.get(r.Id);
             if (byContract && !extra.contains(r.Applied_Contract__c) && !extra.contains(t)) continue;
@@ -125,11 +125,21 @@ public with sharing class OrderFormOps {
                 if (r.Applied_Contract__c != null) toClear.add(r.Applied_Contract__c);
                 if (t != null) toClear.add(t);
             }
-            if (r.Applied_Contract__c != null) detach.add(new Order_Form_Extraction__c(Id = r.Id, Applied_Contract__c = null));
+            if (r.Applied_Contract__c != null) detach.put(r.Id, new Order_Form_Extraction__c(Id = r.Id, Applied_Contract__c = null));
             if (r.Opportunity__r != null && AMEND_TYPES.contains(r.Opportunity__r.Type)) amends.add(r.Id);
             else fresh.add(r.Id);
         }
-        if (!detach.isEmpty()) update detach;
+        // Older versions keep the contract they were applied to; left there, the
+        // applier still counts their credits on it (DCA's superseded 40-seat read
+        // on 00000873 after the deal moved to 00000874).
+        if (!toClear.isEmpty()) {
+            for (Order_Form_Extraction__c old : [
+                SELECT Id FROM Order_Form_Extraction__c WHERE Applied_Contract__c IN :toClear AND Is_Current__c = false
+            ]) {
+                detach.put(old.Id, new Order_Form_Extraction__c(Id = old.Id, Applied_Contract__c = null));
+            }
+        }
+        if (!detach.isEmpty()) update detach.values();
         List<Contract> cleared = new List<Contract>();
         for (Id cid : toClear) {
             Contract c = ContractLegalTermsApplier.clearedTerms(cid);

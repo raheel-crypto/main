@@ -2939,6 +2939,8 @@ private class OrderFormExtractorTest {
         System.assertEquals('contract', noPeriod.Credits_Period__c, 'The stub term\'s credits');
         System.assertEquals(0.02, noPeriod.Credit_Rate__c);
         System.assertEquals(16020723, noPeriod.Credits_Added__c);
+        System.assertEquals(16020723, noPeriod.Credits_Purchased__c, 'The credits on this order form');
+        System.assertEquals(null, noPeriod.Credits_Per_Year__c, 'Still only an increment - not a contract allocation');
     }
 
     @isTest
