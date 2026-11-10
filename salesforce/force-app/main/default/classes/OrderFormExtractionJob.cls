@@ -226,6 +226,52 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return row;
     }
 
+    // ===== Focused re-reads (field backfills such as CreditRolloverBackfillBatch) =====
+
+    /**
+     * Ask the model about a deal's files with a focused system prompt: the same
+     * file choice, deal context and file labels as buildExtraction. Returns the
+     * reply's JSON object, or null when no file could be sent or the reply was
+     * unusable; skippedOut lists the files left out. A callout, NO DML.
+     */
+    public static Map<String, Object> readWithPrompt(Id opportunityId, List<Id> contentDocumentIds,
+                                                     String systemPrompt, List<String> skippedOut) {
+        List<Id> docIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
+        Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(docIds);
+        Opportunity parentOpp = loadParentOpp(opportunityId);
+        List<RankedDoc> chosen = new List<RankedDoc>();
+        classifyFilesBySource(docIds, versionByDocId, opportunityId,
+            parentOpp == null ? null : parentOpp.Base_Opportunity__c, chosen, skippedOut);
+        if (chosen.isEmpty()) return null;
+        String body = buildRequestBody(chosen, opportunityId, parentOpp, new List<ContentVersion>(),
+            new List<ContentVersion>(), skippedOut, systemPrompt);
+        if (body == null) return null;
+        HttpResponse resp = callAnthropic(body);
+        if (resp.getStatusCode() < 200 || resp.getStatusCode() >= 300) return null;
+        try {
+            return parseAssistantJson(resp.getBody());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** One section of the extraction prompt ("CREDIT ROLLOVER"), heading included, so a focused read uses the same rules. */
+    public static String promptSection(String heading) {
+        String prompt = loadPrompt();
+        Integer start = prompt.indexOf('\n' + heading + ':\n');
+        if (start < 0) throw new OrderFormException('Prompt section "' + heading + '" not found.');
+        Integer stop = prompt.indexOf('\n\n', start + 1);
+        return (stop < 0 ? prompt.substring(start) : prompt.substring(start, stop)).trim();
+    }
+
+    /** The credit rollover fields for this extraction from a reply, checked as in a full read (populateCreditRollover). */
+    public static Order_Form_Extraction__c creditRolloverFrom(Id extractionId, Map<String, Object> reply) {
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(Id = extractionId);
+        populateCreditRollover(row, reply == null ? new Map<String, Object>() : reply,
+            new Derivations(reply == null ? null : reply.get('Extract_Evidence')));
+        return row;
+    }
+
     @TestVisible
     private static Opportunity loadParentOpp(Id opportunityId) {
         if (opportunityId == null) return null;
@@ -632,7 +678,19 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         List<ContentVersion> baseFilesOut,
         List<String> skippedOut
     ) {
-        String systemPrompt = loadPrompt();
+        return buildRequestBody(chosen, currentOppId, parentOpp, currentFilesOut, baseFilesOut, skippedOut, loadPrompt());
+    }
+
+    // The same request with another system prompt (readWithPrompt).
+    private static String buildRequestBody(
+        List<RankedDoc> chosen,
+        Id currentOppId,
+        Opportunity parentOpp,
+        List<ContentVersion> currentFilesOut,
+        List<ContentVersion> baseFilesOut,
+        List<String> skippedOut,
+        String systemPrompt
+    ) {
         Map<Id, String> encodedById = encodeWithinHeap(
             chosen, systemPrompt.length() + SKELETON_SLACK_CHARS, skippedOut);
         for (RankedDoc rd : chosen) {
