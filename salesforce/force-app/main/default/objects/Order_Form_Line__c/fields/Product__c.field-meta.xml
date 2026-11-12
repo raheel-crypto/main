@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Product__c</fullName>
+    <description>What the line sells. Arvo Seats are Arvo / Rogo Notes licenses; Included Credits come with the seats at no price of their own; Free Seats / Free Credits are complimentary.</description>
+    <label>Product</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Rogo Seats</fullName><default>false</default><label>Rogo Seats</label></value>
+            <value><fullName>Arvo Seats</fullName><default>false</default><label>Arvo Seats</label></value>
+            <value><fullName>Free Seats</fullName><default>false</default><label>Free Seats</label></value>
+            <value><fullName>Paid Credits</fullName><default>false</default><label>Paid Credits</label></value>
+            <value><fullName>Included Credits</fullName><default>false</default><label>Included Credits</label></value>
+            <value><fullName>Free Credits</fullName><default>false</default><label>Free Credits</label></value>
+            <value><fullName>Hosting</fullName><default>false</default><label>Hosting</label></value>
+            <value><fullName>Data Connection</fullName><default>false</default><label>Data Connection</label></value>
+            <value><fullName>Professional Services</fullName><default>false</default><label>Professional Services</label></value>
+            <value><fullName>Pilot Fee</fullName><default>false</default><label>Pilot Fee</label></value>
+            <value><fullName>True-Up</fullName><default>false</default><label>True-Up</label></value>
+            <value><fullName>Other</fullName><default>false</default><label>Other</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

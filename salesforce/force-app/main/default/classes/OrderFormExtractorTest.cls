@@ -2984,6 +2984,83 @@ private class OrderFormExtractorTest {
         System.assertEquals(862789, row.Incremental_ARR__c);
     }
 
+    // ---- Product lines (2026-11-12) ----
+
+    private static Map<String, Object> line(String product, String label, Object quantity, Object unitPrice,
+                                            Object amount, String basis) {
+        return new Map<String, Object>{ 'product' => product, 'label' => label, 'quantity' => quantity,
+            'unit_price' => unitPrice, 'amount' => amount, 'basis' => basis, 'quote' => label };
+    }
+
+    @isTest
+    static void lines_rogoAndArvoOnOnePaper() {
+        Opportunity opp = insertOpp('Mixed Paper', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Annual', 'Contract_Length_Months' => 12,
+                'Seat_Licenses' => 10, 'License_Fees' => 50000, 'Recurring_Fees_Stated' => 74000,
+                'Line_Items' => new List<Object>{
+                    line('Rogo Seats', 'Platform Fee', 10, null, 50000, 'Annual'),
+                    line('Rogo Notes', 'Arvo Subscription', 20, 100, null, 'per license per month'),
+                    line('Free Credits', 'Incentive Credits', 100000, null, null, null),
+                    line('Professional Services', 'CRM Integration', null, null, 4000, 'One-time') } }));
+
+        System.assertEquals(10, row.Seat_Licenses__c, 'Rogo seats only');
+        System.assertEquals(20, row.Arvo_Seats__c, 'Rogo Notes is Arvo');
+        System.assertEquals(100000, row.Free_Credits__c);
+        System.assertEquals(74000, row.Lines_Recurring_Annual__c, '50,000 + 100 x 20 x 12; the integration is one-time');
+        System.assertEquals(false, row.Lines_Mismatch__c);
+        List<OrderFormLines.Line> lines = OrderFormLines.fromJson(row.Line_Items__c);
+        System.assertEquals(4, lines.size());
+        System.assertEquals('Arvo Seats', lines[1].product);
+        System.assertEquals(24000, lines[1].annualAmount);
+        System.assertEquals(false, lines[3].recurring);
+        System.assertNotEquals(null, row.Lines_Read_At__c);
+    }
+
+    @isTest
+    static void lines_perLicensePriceIsNotTheFee() {
+        // Haveli (Arvo): "Month 1-12 Fees (per license per month): $100" read as the
+        // recurring fees and the licence fee - ARR came out at 1,200.
+        Opportunity opp = insertOpp('Arvo Per License', 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'New Business', 'Value_Basis' => 'Monthly', 'Contract_Length_Months' => 12,
+                'Seat_Licenses' => 20, 'Recurring_Fees_Stated' => 100, 'License_Fees' => 100, 'Unit_Price' => 100,
+                'Line_Items' => new List<Object>{ line('Arvo Seats', 'Month 1-12 Fees', 20, 100, null, 'Monthly') } }));
+        System.assertEquals(24000, row.Annual_Recurring_Revenue__c, '100 x 20 licenses x 12, not 100 x 12');
+        System.assertEquals(null, row.License_Fees__c, 'A per-license price is not the licence fee');
+        System.assertEquals(20, row.Arvo_Seats__c);
+        System.assertEquals(false, row.Lines_Mismatch__c);
+    }
+
+    @isTest
+    static void lines_auditAgainstTheArr() {
+        // Peel Hunt with lines: the credit line supplies the missed commitment.
+        Opportunity opp = insertOpp('Lines Audit', 'Closed Won');
+        Map<String, Object> fields = new Map<String, Object>{
+            'Type' => 'New Business', 'Value_Basis' => 'Annual', 'Contract_Length_Months' => 12,
+            'Seat_Licenses' => 25, 'License_Fees' => 69000, 'Recurring_Fees_Stated' => 115000,
+            'Credits_Purchased' => 2300000, 'Credits_Period' => 'contract',
+            'Line_Items' => new List<Object>{
+                line('Rogo Seats', 'Platform Fee', 25, null, 69000, 'Annual'),
+                line('Paid Credits', 'Credit Commitment', 2300000, null, 46000, 'Annual') } };
+        Order_Form_Extraction__c ok = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(fields));
+        System.assertEquals(46000, ok.Credit_Commit_Fee__c, 'From the credit line');
+        System.assertEquals(0.02, ok.Credit_Rate__c);
+        System.assertEquals(115000, ok.Lines_Recurring_Annual__c);
+        System.assertEquals(false, ok.Lines_Mismatch__c);
+
+        // A line missing from the read: the lines no longer add up to the ARR.
+        fields.put('Credit_Commit_Fee', 46000);
+        fields.put('Line_Items', new List<Object>{ line('Rogo Seats', 'Platform Fee', 25, null, 69000, 'Annual') });
+        Order_Form_Extraction__c off = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(fields));
+        System.assertEquals(true, off.Lines_Mismatch__c);
+        System.assert(off.Extract_Evidence__c.contains('The lines add up to 69000'), off.Extract_Evidence__c);
+    }
+
     // ---- Credit commitment missed by the read (Peel Hunt, 2026-11-12) ----
 
     @isTest

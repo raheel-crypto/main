@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Lines_Mismatch__c</fullName>
+    <description>The lines' recurring fees differ from the booked ARR (or the paper's stated total) by more than 1% - something was misread. The evidence says what was compared.</description>
+    <label>Lines Mismatch</label>
+    <defaultValue>false</defaultValue>
+    <type>Checkbox</type>
+</CustomField>

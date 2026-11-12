@@ -264,6 +264,15 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return (stop < 0 ? prompt.substring(start) : prompt.substring(start, stop)).trim();
     }
 
+    /** One key's line of the prompt's JSON schema ("Line_Items"), so a focused read asks for the same shape. */
+    public static String promptSchemaLine(String key) {
+        String prompt = loadPrompt();
+        Integer start = prompt.indexOf('\n  "' + key + '":');
+        if (start < 0) throw new OrderFormException('Prompt schema key "' + key + '" not found.');
+        Integer stop = prompt.indexOf('\n', start + 1);
+        return (stop < 0 ? prompt.substring(start) : prompt.substring(start, stop)).trim().removeEnd(',');
+    }
+
     /** The credit rollover fields for this extraction from a reply, checked as in a full read (populateCreditRollover). */
     public static Order_Form_Extraction__c creditRolloverFrom(Id extractionId, Map<String, Object> reply) {
         Order_Form_Extraction__c row = new Order_Form_Extraction__c(Id = extractionId);
@@ -1096,10 +1105,15 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (hasOrderForm != false) deriveStartDate(row, parentOpp, d);
         normaliseTerm(row, parentOpp, d);
         coTermAmendment(row, parentOpp, d);
+        // The paper's product lines (OrderFormLines) - none without an order form.
+        List<OrderFormLines.Line> lines = hasOrderForm == false
+            ? new List<OrderFormLines.Line>()
+            : OrderFormLines.parse(extracted.get('Line_Items'), row.Contract_Length_Months__c);
         // With no order form the economics step must not see the model's fee /
         // credit keys either - only the (cleared) row.
-        computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d);
-        checkStatedSplit(row, extracted, d);
+        computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d, lines);
+        checkStatedSplit(row, extracted, d, lines);
+        applyLines(row, lines, parentOpp, d, extracted.containsKey('Line_Items'));
         verifyRenewalTerms(row, extracted, d);
         populateSeatAddsByEmail(row, extracted, d);
         populateCreditRollover(row, extracted, d);
@@ -1200,6 +1214,68 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         else row.Renewal_Terms__c = 'Auto-renew (30-day)';
         d.mark('Renewal_Terms', 'Model answered Manual renewal, but its quote renews automatically; '
             + (days == null ? 'no notice period stated, so 30-day.' : days + '-day notice in the quote.'));
+    }
+
+    /**
+     * The paper's product lines onto the row: the normalised list (Line_Items__c,
+     * which the trigger turns into Order_Form_Line__c records), the per-product
+     * totals, and the audit - the lines' recurring fees a year against the row's
+     * own ARR (the change on an amendment, unless its lines restate the total).
+     * More than 1% apart flags Lines_Mismatch__c; the booked ARR is noted too.
+     */
+    private static void applyLines(Order_Form_Extraction__c row, List<OrderFormLines.Line> lines,
+                                   Opportunity parentOpp, Derivations d, Boolean read) {
+        if (read) row.Lines_Read_At__c = System.now();
+        row.Line_Items__c = OrderFormLines.toJson(lines);
+        row.Arvo_Seats__c = OrderFormLines.quantityOf(lines, 'Arvo Seats');
+        row.Free_Seats__c = OrderFormLines.quantityOf(lines, 'Free Seats');
+        row.Included_Credits__c = OrderFormLines.quantityOf(lines, 'Included Credits');
+        if (row.Free_Credits__c == null) {
+            Decimal free = OrderFormLines.quantityOf(lines, 'Free Credits');
+            if (free != null) {
+                row.Free_Credits__c = free;
+                d.mark('Free_Credits', 'From the order form\'s free credits line.');
+            }
+        }
+        row.Lines_Recurring_Annual__c = OrderFormLines.recurringAnnual(lines);
+        row.Lines_Mismatch__c = false;
+        Decimal lineTotal = row.Lines_Recurring_Annual__c;
+        if (lineTotal == null) return;
+        Boolean isAmend = AMEND_TYPES.contains(row.Type__c);
+        Boolean restated = OrderFormLines.restatesTotal(lines);
+        Decimal expected = isAmend ? (restated ? row.Resulting_ARR__c : row.Incremental_ARR__c) : row.Annual_Recurring_Revenue__c;
+        String against = isAmend ? (restated ? 'the contract ARR this paper states' : 'its incremental ARR') : 'its ARR';
+        Decimal booked = parentOpp == null ? null : parentOpp.Annual_Recurring_Revenue__c;
+        String bookedNote = (booked == null || (booked - lineTotal).abs() <= Math.max((Decimal) 1, booked.abs() * 0.01))
+            ? '' : ' The booked ARR is ' + booked + '.';
+        if (expected != null && (lineTotal - expected).abs() > Math.max((Decimal) 1, expected.abs() * 0.01)) {
+            row.Lines_Mismatch__c = true;
+            d.mark('Lines_Recurring_Annual', 'The lines add up to ' + lineTotal + ' a year but ' + against + ' is '
+                + expected + ' - a line or the total was misread.' + bookedNote);
+        } else if (bookedNote != '') {
+            d.mark('Lines_Recurring_Annual', 'The lines add up to ' + lineTotal + ' a year.' + bookedNote);
+        }
+    }
+
+    /**
+     * The line fields for this extraction from a focused read's reply
+     * (OrderFormLinesBackfillBatch): Line_Items__c, the per-product totals and
+     * the audit, checked as in a full read. Other fields are left as they are.
+     */
+    public static Order_Form_Extraction__c linesFrom(Id extractionId, Map<String, Object> reply) {
+        Order_Form_Extraction__c cur = [
+            SELECT Id, Opportunity__c, Type__c, Contract_Length_Months__c, Annual_Recurring_Revenue__c,
+                   Incremental_ARR__c, Resulting_ARR__c, Free_Credits__c
+            FROM Order_Form_Extraction__c WHERE Id = :extractionId
+        ];
+        Order_Form_Extraction__c row = cur.clone(true, true, false, false);
+        List<OrderFormLines.Line> lines = OrderFormLines.parse(
+            reply == null ? null : reply.get('Line_Items'), cur.Contract_Length_Months__c);
+        applyLines(row, lines, loadParentOpp(cur.Opportunity__c), new Derivations(null), true);
+        return new Order_Form_Extraction__c(Id = cur.Id, Lines_Read_At__c = row.Lines_Read_At__c,
+            Line_Items__c = row.Line_Items__c, Arvo_Seats__c = row.Arvo_Seats__c, Free_Seats__c = row.Free_Seats__c,
+            Included_Credits__c = row.Included_Credits__c, Free_Credits__c = row.Free_Credits__c,
+            Lines_Recurring_Annual__c = row.Lines_Recurring_Annual__c, Lines_Mismatch__c = row.Lines_Mismatch__c);
     }
 
     // Records the model's per-file classification and reports whether the CURRENT
@@ -1431,7 +1507,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     // Annualised ARR, amendment increments / resulting totals, credits per year
     // and the effective credit rate.
     private static void computeEconomics(Order_Form_Extraction__c row, Map<String, Object> extracted,
-                                         Opportunity parentOpp, Derivations d) {
+                                         Opportunity parentOpp, Derivations d, List<OrderFormLines.Line> lines) {
         // Reset everything computed below so an in-place refresh never keeps a
         // stale value from the previous extraction.
         row.Annual_Recurring_Revenue__c = null;
@@ -1455,6 +1531,27 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         Decimal incStated = toDecimal(extracted.get('Incremental_Recurring_Fees'));
         String totalHow = null;
         String incHow = null;
+        // Haveli (Arvo): "Fees (per license per month): $100" given as the recurring
+        // fees and as the licence fee. With the licences counted (on the paper, or on
+        // its seat line at that price) it is the unit price: fees = price x licences.
+        Decimal statedUnitPrice = toDecimal(extracted.get('Unit_Price'));
+        if (statedUnitPrice != null && statedUnitPrice > 0) {
+            Decimal licences = toDecimal(extracted.get('Unit_Quantity'));
+            if (licences == null) licences = OrderFormLines.seatsAt(lines, statedUnitPrice);
+            if (licences != null && licences > 1) {
+                if (row.License_Fees__c == statedUnitPrice) {
+                    row.License_Fees__c = null;
+                    d.mark('License_Fees', 'The per-license price ' + statedUnitPrice + ' is not the licence fee; left blank.');
+                }
+                Boolean asChange = isAmend && row.Seats_Added__c != null && licences == Math.abs(row.Seats_Added__c);
+                if (asChange ? incStated == statedUnitPrice : totalStated == statedUnitPrice) {
+                    String how = 'Unit price ' + statedUnitPrice + ' x ' + licences
+                        + ' licenses (the per-license price was given as the fee)';
+                    if (asChange) { incStated = statedUnitPrice * licences; incHow = how; }
+                    else { totalStated = statedUnitPrice * licences; totalHow = how; }
+                }
+            }
+        }
         if (isAmend && totalStated != null && totalStated == incStated) {
             // Mitsui: one figure reported as both the contract total and the
             // change. It is the change - the contract after an upsell is more.
@@ -1638,16 +1735,23 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         // and hosting fees is the commitment.
         Decimal statedTotal = toDecimal(extracted.get('Recurring_Fees_Stated'));
         String totalQuote = evidenceQuote(extracted, 'Recurring_Fees_Stated');
+        Decimal creditLine = OrderFormLines.annualFor(lines, new Set<String>{ 'Paid Credits' });
+        Decimal otherLines = OrderFormLines.annualFor(lines, OrderFormLines.OTHER_RECURRING);
+        if (row.Credit_Commit_Fee__c == null && creditLine != null && creditLine > 0) {
+            row.Credit_Commit_Fee__c = creditLine;
+            d.mark('Credit_Commit_Fee', 'Not read on its own; the order form\'s paid credits line is ' + creditLine + ' a year.');
+        }
         if (row.Credit_Commit_Fee__c == null && statedTotal != null && row.License_Fees__c != null
                 && (basis == null || basis == 'Annual')
                 && (row.Credits_Purchased__c != null || row.Credits_Added__c != null)
                 && totalQuote != null && totalQuote.toLowerCase().contains('credit')) {
-            Decimal rest = statedTotal - row.License_Fees__c - nz(row.Platform_Connection_Fee__c);
+            Decimal rest = statedTotal - row.License_Fees__c - nz(row.Platform_Connection_Fee__c) - nz(otherLines);
             if (rest > 0) {
                 row.Credit_Commit_Fee__c = rest;
                 d.mark('Credit_Commit_Fee', 'Not read on its own; the stated recurring fees ' + statedTotal
                     + ' quote a credit commitment: ' + statedTotal + ' - licence ' + row.License_Fees__c
                     + (row.Platform_Connection_Fee__c == null ? '' : ' - hosting ' + row.Platform_Connection_Fee__c)
+                    + (otherLines == null ? '' : ' - other lines (Arvo, data) ' + otherLines)
                     + ' = ' + rest + '.');
             }
         }
@@ -2173,17 +2277,22 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     // recurring fees; a gap means one of them was misread (Oppenheimer: a
     // "$84,0000" typo read as 840,000 against a 253,784 total).
     @TestVisible
-    private static void checkStatedSplit(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d) {
+    private static void checkStatedSplit(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d,
+                                         List<OrderFormLines.Line> lines) {
         if (row.License_Fees__c == null || row.Credit_Commit_Fee__c == null) return;
         Decimal stated = toDecimal(extracted.get('Recurring_Fees_Stated'));
         // On an amendment the row's ARR is the contract after the change (derived),
         // not this paper's fees - nothing to check against.
         if (stated == null && !AMEND_TYPES.contains(row.Type__c)) stated = row.Annual_Recurring_Revenue__c;
         if (stated == null) return;
-        Decimal parts = row.License_Fees__c + row.Credit_Commit_Fee__c + nz(row.Platform_Connection_Fee__c);
+        // Arvo seats, data connections etc. sit in the total too (annual lines, so only on an annual paper).
+        Decimal others = (row.Value_Basis__c == null || row.Value_Basis__c == 'Annual')
+            ? nz(OrderFormLines.annualFor(lines, OrderFormLines.OTHER_RECURRING)) : 0;
+        Decimal parts = row.License_Fees__c + row.Credit_Commit_Fee__c + nz(row.Platform_Connection_Fee__c) + others;
         if ((parts - stated).abs() > 1) {
             d.mark('Credit_Commit_Fee', 'License fees ' + row.License_Fees__c + ' + credit commit ' + row.Credit_Commit_Fee__c
-                + ' + hosting ' + nz(row.Platform_Connection_Fee__c) + ' = ' + parts + ' does not equal the stated recurring fees '
+                + ' + hosting ' + nz(row.Platform_Connection_Fee__c) + (others == 0 ? '' : ' + other lines ' + others)
+                + ' = ' + parts + ' does not equal the stated recurring fees '
                 + stated + '; one component is misread - verify before booking the split.');
         }
     }

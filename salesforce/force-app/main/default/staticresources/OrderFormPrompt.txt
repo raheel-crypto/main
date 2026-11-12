@@ -121,6 +121,7 @@ JSON SCHEMA (return exactly these keys):
   "Credit_Rollover": "No Rollover" | "Negotiable" | "Partial" | "Full" | "Not specified",
   "Credit_Rollover_Percent": number | null,
   "Credit_Rollover_Terms": "verbatim clause on what happens to unused credits when their period ends, or null" | null,
+  "Line_Items": [{"product": "Rogo Seats" | "Arvo Seats" | "Free Seats" | "Paid Credits" | "Included Credits" | "Free Credits" | "Hosting" | "Data Connection" | "Professional Services" | "Pilot Fee" | "True-Up" | "Other", "label": "the line's own name on the paper", "quantity": number | null, "unit_price": number | null, "amount": number | null, "basis": "Monthly" | "Quarterly" | "Annual" | "Term" | "One-time" | null, "period": "year" | "month" | "quarter" | "contract" | null, "change": "Added" | "Total" | null, "credits_per_seat": number | null, "quote": "the line verbatim"}] | null,
   "Named_Users": "newline-separated list of individuals to provision, with email if given" | null,
   "Requested_By_Name": "person who requested/authorized the change" | null,
   "Requested_By_Email": "their email" | null,
@@ -283,6 +284,24 @@ CREDIT ROLLOVER:
 - Using credits at any time WITHIN the term ("the Credit Allocation will carry forward for consumption at any point during the Initial Subscription Period") is not rollover - it says nothing about the next period. Neither is a clause that only says fees are non-refundable or unused credits are not refunded. Both are "Not specified" unless the paper also addresses the end of the period.
 - Credit_Rollover_Terms = the clause verbatim (null when Not specified). Credit_Rollover_Percent is null unless Partial.
 - Read the CURRENT deal's documents (including its own MSA / Credit Addendum when attached as current); a parent contract's clause is recorded on the parent deal.
+
+LINE ITEMS:
+- Line_Items lists what the CURRENT deal's paper sells, one entry per product line, so each product can be audited on its own. Rogo sells Arvo (also called Rogo Notes) beside regular Rogo seats, sometimes on the same order form - keep them on separate lines.
+- product, exactly one of:
+  * "Rogo Seats" - Rogo platform / subscription seats (Authorized Users), whatever the fee is called (Platform Fee, Subscription Fee, License Fee).
+  * "Arvo Seats" - Arvo or Rogo Notes licenses (an Arvo "Service Order" / "Subscription Order" is Arvo). Never fold them into Rogo Seats.
+  * "Free Seats" - seats given at no charge ("5 complimentary seats").
+  * "Paid Credits" - credits bought by their own price, usually a "Credit Commitment" (amount = the commitment).
+  * "Included Credits" - credits that come with the seats and have no price of their own ("Credit Allocation included in the Platform Fee").
+  * "Free Credits" - complimentary / incentive / bonus credits.
+  * "Hosting" (single-tenant / dedicated hosting fee), "Data Connection" (platform or data connection fee), "Professional Services" (implementation, integration, training - usually one-time), "Pilot Fee", "True-Up", "Other".
+- quantity / unit_price / amount AS WRITTEN - never multiply, add or annualise yourself; Apex works out each line's annual amount. "$100 per license per month" with 20 licenses: quantity 20, unit_price 100, amount null, basis "Monthly".
+- basis = how that line's price is written ("per month" Monthly, "per year" Annual, once for the whole subscription period Term, a one-time fee One-time). period = for credits, the period the quantity covers ("per year" year, "for the Subscription Period" contract).
+- credits_per_seat = credits that come with each seat on that line ("An additional 92,000 Credits will be added for each additional Authorized User" on the seats line).
+- change (amendments only): "Added" when the line lists what this paper adds ("40 additional Authorized Users"), "Total" when it restates the contract's total; null on new business, renewals and pilots.
+- An optional item the customer may buy later (a rate for adding seats, an optional integration) is not a line unless this paper buys it. A price per added seat belongs in Seat_Adds_By_Email_Terms, not in a line.
+- Seat_Licenses counts the Rogo seats. On a paper that sells only Arvo, Seat_Licenses is the Arvo licenses; on a paper with both, the Arvo licenses are only in their Arvo Seats line.
+- null when the paper prices nothing (an MSA, an NDA, an email that states no seats or fees).
 
 LOGO / PUBLICITY RIGHTS:
 - Determine whether Rogo may use the CUSTOMER's name, logo, or trademarks for marketing / publicity / commercial purposes (customer lists, website, press releases, case studies, "reference customer"). Search the order form, MSA, and T&C - the clause is often titled "Publicity", "Marketing", "Use of Name/Marks", "Reference Customer", or sits in a general/miscellaneous section.

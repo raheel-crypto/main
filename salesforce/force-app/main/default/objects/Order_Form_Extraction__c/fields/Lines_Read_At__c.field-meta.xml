@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Lines_Read_At__c</fullName>
+    <description>When this extraction's product lines were read (blank: read before line items existed - OrderFormLinesBackfillBatch fills it).</description>
+    <label>Lines Read At</label>
+    <required>false</required>
+    <type>DateTime</type>
+</CustomField>
