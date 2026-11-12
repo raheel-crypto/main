@@ -2984,6 +2984,35 @@ private class OrderFormExtractorTest {
         System.assertEquals(862789, row.Incremental_ARR__c);
     }
 
+    // ---- Credit commitment missed by the read (Peel Hunt, 2026-11-12) ----
+
+    @isTest
+    static void creditCommit_recoveredFromTheStatedTotal() {
+        // "Platform Fee: USD $69,000.00 per year ... Credit Commitment: USD $46,000.00 per year"
+        // for 2,300,000 credits, read with no Credit_Commit_Fee.
+        Opportunity opp = insertOpp('Peel Hunt Land', 'Closed Won');
+        Map<String, Object> fields = new Map<String, Object>{
+            'Type' => 'New Business', 'Value_Basis' => 'Annual', 'Contract_Length_Months' => 12,
+            'License_Fees' => 69000, 'Recurring_Fees_Stated' => 115000,
+            'Credits_Purchased' => 2300000, 'Credits_Period' => 'contract', 'Overage_Rate' => 0.02,
+            'Extract_Evidence' => new Map<String, Object>{ 'Recurring_Fees_Stated' => new Map<String, Object>{
+                'quote' => 'Platform Fee: USD $69,000.00 per year ... Credit Commitment: USD $46,000.00 per year',
+                'clause' => 'Order Form - Platform Fee and Credit Commitment' } } };
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(fields));
+        System.assertEquals(46000, row.Credit_Commit_Fee__c, '115,000 - 69,000');
+        System.assertEquals(0.02, row.Credit_Rate__c, '46,000 / 2,300,000 - not the seats\' 69,000');
+        System.assertEquals(115000, row.Annual_Recurring_Revenue__c);
+        System.assert(row.Derived_Fields__c.contains('Credit_Commit_Fee'), row.Derived_Fields__c);
+
+        // A total that does not quote a credit line says nothing about a commitment.
+        fields.put('Extract_Evidence', new Map<String, Object>{ 'Recurring_Fees_Stated' => new Map<String, Object>{
+            'quote' => 'Platform Fee: USD $69,000.00 per year; Data Fee: USD $46,000.00 per year', 'clause' => 'Fees' } });
+        Order_Form_Extraction__c other = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(fields));
+        System.assertEquals(null, other.Credit_Commit_Fee__c);
+    }
+
     // ---- Credit rollover (2026-11-08) ----
 
     private static Order_Form_Extraction__c rolloverRead(Id oppId, Map<String, Object> fields) {

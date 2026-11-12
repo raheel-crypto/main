@@ -1631,6 +1631,27 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             row.Credits_Added__c = cAdded;
         }
 
+        // Peel Hunt, DCA renewal: the paper prices its credits on their own line
+        // ("Credit Commitment: USD $46,000.00 per year") but the read missed it, so
+        // the licence fee - the seats' price - was priced against the credits. The
+        // stated recurring total quotes the line: what it leaves after the licence
+        // and hosting fees is the commitment.
+        Decimal statedTotal = toDecimal(extracted.get('Recurring_Fees_Stated'));
+        String totalQuote = evidenceQuote(extracted, 'Recurring_Fees_Stated');
+        if (row.Credit_Commit_Fee__c == null && statedTotal != null && row.License_Fees__c != null
+                && (basis == null || basis == 'Annual')
+                && (row.Credits_Purchased__c != null || row.Credits_Added__c != null)
+                && totalQuote != null && totalQuote.toLowerCase().contains('credit')) {
+            Decimal rest = statedTotal - row.License_Fees__c - nz(row.Platform_Connection_Fee__c);
+            if (rest > 0) {
+                row.Credit_Commit_Fee__c = rest;
+                d.mark('Credit_Commit_Fee', 'Not read on its own; the stated recurring fees ' + statedTotal
+                    + ' quote a credit commitment: ' + statedTotal + ' - licence ' + row.License_Fees__c
+                    + (row.Platform_Connection_Fee__c == null ? '' : ' - hosting ' + row.Platform_Connection_Fee__c)
+                    + ' = ' + rest + '.');
+            }
+        }
+
         // DCA supplement: an amendment's credits with no period stated, on a term
         // under a year, are the paper's credits for that term.
         if (isAmend && row.Credits_Period__c == null && months != null && months < 12
