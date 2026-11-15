@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status__c</fullName>
+    <description>Clear: the review ran, every required source and field was covered, no findings and no failed checks. Findings: findings or failed checks to look at. Incomplete: a required source was missing or required fields were not reviewed. Failed: no usable review (timeout, refusal, HTTP error, malformed or cut-off reply, no files sent) - never treated as clear. Independent of the extraction's status.</description>
+    <label>Review Status</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Clear</fullName><default>false</default><label>Clear</label></value>
+            <value><fullName>Findings</fullName><default>false</default><label>Findings</label></value>
+            <value><fullName>Incomplete</fullName><default>false</default><label>Incomplete</label></value>
+            <value><fullName>Failed</fullName><default>false</default><label>Failed</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

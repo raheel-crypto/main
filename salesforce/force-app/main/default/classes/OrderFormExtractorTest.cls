@@ -1597,10 +1597,13 @@ private class OrderFormExtractorTest {
     @isTest
     static void renewal_manualAnswerContradictedByItsQuoteBecomesAutoRenew() {
         // "Mutually agreed" is about price; the agreement renews on its own.
+        // ... but it states no non-renewal notice period: blank with an enum-gap
+        // issue, never an invented 30-day default (Peel Hunt).
         Order_Form_Extraction__c priceOnly = renewalRow('The Agreement will automatically renew in accordance with the '
             + 'Agreement at Rogo\'s then-current list pricing unless otherwise mutually agreed.');
-        System.assertEquals('Auto-renew (30-day)', priceOnly.Renewal_Terms__c);
+        System.assertEquals(null, priceOnly.Renewal_Terms__c);
         System.assert(priceOnly.Derived_Fields__c.contains('Renewal_Terms'), priceOnly.Derived_Fields__c);
+        System.assert(priceOnly.Extraction_Issues__c.contains('[enum_gap] Renewal_Terms'), priceOnly.Extraction_Issues__c);
 
         Order_Form_Extraction__c sixty = renewalRow('unless either party gives the other party written notice of '
             + 'non-renewal at least sixty (60) days prior to the expiration of the then-current term');
@@ -1993,8 +1996,11 @@ private class OrderFormExtractorTest {
         System.assertEquals('Auto-renew (90-day)', OrderFormPicklistMapper.mapRenewalTerms('renews unless 90 days notice'));
         System.assertEquals('Auto-renew (60-day)', OrderFormPicklistMapper.mapRenewalTerms('auto with 60 day notice'));
         System.assertEquals('Auto-renew (30-day)', OrderFormPicklistMapper.mapRenewalTerms('30 day auto'));
-        System.assertEquals('Auto-renew (30-day)', OrderFormPicklistMapper.mapRenewalTerms('evergreen'));
-        System.assertEquals('Auto-renew (30-day)', OrderFormPicklistMapper.mapRenewalTerms('auto-renews each term'));
+        // No notice period stated (or another one): an enum gap, never a 30-day default.
+        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms('evergreen'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms('auto-renews each term'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms('auto-renews; 45 days notice'));
+        System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms('auto-renews; 120 days notice'));
         System.assertEquals('Manual renewal', OrderFormPicklistMapper.mapRenewalTerms('mutual written agreement'));
         System.assertEquals('Manual renewal', OrderFormPicklistMapper.mapRenewalTerms('will not auto-renew'));
         System.assertEquals(null, OrderFormPicklistMapper.mapRenewalTerms(null));

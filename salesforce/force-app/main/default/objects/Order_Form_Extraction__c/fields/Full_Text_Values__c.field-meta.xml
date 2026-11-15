@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Full_Text_Values__c</fullName>
+    <description>JSON object of values that did not fit their field, keyed by field API name: the full text of a value longer than its field, or the exact number behind a whole-number field that was rounded. The field keeps the cut value; Derived_Fields__c lists it as Field(truncated) or Field(rounded).</description>
+    <label>Full Text Values (JSON)</label>
+    <length>131072</length>
+    <type>LongTextArea</type>
+    <visibleLines>5</visibleLines>
+</CustomField>

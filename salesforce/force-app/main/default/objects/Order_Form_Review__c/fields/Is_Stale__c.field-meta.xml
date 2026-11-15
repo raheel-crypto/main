@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Is_Stale__c</fullName>
+    <description>The extraction values, product lines, source files or prompts changed after this review, so its findings describe an older version.</description>
+    <label>Stale</label>
+    <defaultValue>false</defaultValue>
+    <type>Checkbox</type>
+</CustomField>

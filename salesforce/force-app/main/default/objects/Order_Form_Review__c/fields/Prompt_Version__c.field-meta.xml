@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Prompt_Version__c</fullName>
+    <description>SHA-256 of the reviewer prompt, the extraction field definitions, the response schema and the model settings.</description>
+    <label>Prompt Version</label>
+    <length>64</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

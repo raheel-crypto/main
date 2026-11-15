@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Missing_Required_Sources__c</fullName>
+    <description>Required sources (OrderFormReviewCoverage) that were not sent or could not be read - kept visible; the review cannot be Clear while any is listed.</description>
+    <label>Missing Required Sources</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>

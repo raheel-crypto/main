@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Use_Fallbacks__c</fullName>
+    <description>Send fallbacks: default (beta server-side-fallback-2026-07-01) so a declined request is retried on Anthropic's recommended fallback model. A refusal that still comes back is a Failed review.</description>
+    <fieldManageability>DeveloperControlled</fieldManageability>
+    <label>Use Server-side Fallbacks</label>
+    <defaultValue>true</defaultValue>
+    <type>Checkbox</type>
+</CustomField>

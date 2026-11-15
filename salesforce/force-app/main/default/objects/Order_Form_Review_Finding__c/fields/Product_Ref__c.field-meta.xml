@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Product_Ref__c</fullName>
+    <description>Stable product line reference: L&lt;line number&gt;:&lt;product&gt; (e.g. L2:Paid Credits), matching Order_Form_Line__c Line_Number__c / Product__c.</description>
+    <label>Product Ref</label>
+    <length>80</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

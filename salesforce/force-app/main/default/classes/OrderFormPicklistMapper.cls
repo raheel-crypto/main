@@ -13,14 +13,17 @@ public with sharing class OrderFormPicklistMapper {
         return null;
     }
 
+    private static final Pattern RENEWAL_DAYS = Pattern.compile('\\b(30|60|90)\\b');
+
     public static String mapRenewalTerms(String raw) {
         if (String.isBlank(raw)) return null;
         String s = raw.toLowerCase();
         if (s.contains('manual') || s.contains('mutual') || s.contains('no auto') || s.contains('will not auto')) return 'Manual renewal';
-        if (s.contains('90')) return 'Auto-renew (90-day)';
-        if (s.contains('60')) return 'Auto-renew (60-day)';
-        if (s.contains('30')) return 'Auto-renew (30-day)';
-        if (s.contains('auto') || s.contains('evergreen')) return 'Auto-renew (30-day)';
+        // Only a stated 30, 60 or 90-day notice maps. An auto-renewal with no notice
+        // period, or another one, is an enum gap - left blank and recorded as an
+        // issue by the extractor, never given a default or the closest value.
+        Matcher m = RENEWAL_DAYS.matcher(s);
+        if (m.find()) return 'Auto-renew (' + m.group(1) + '-day)';
         return null;
     }
 

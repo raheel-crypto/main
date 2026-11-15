@@ -1,0 +1,15 @@
+{
+  "_comment": "Reviewed values per Opportunity Id, in the extraction's raw keys (null = the paper does not state it). Fill in only fields you have checked against the source documents. The Peel Hunt values below come from the org's saved data and the known regressions - verify each against the signed paper before relying on the scores.",
+  "006V400000Gy4QvIAJ": {
+    "fields": {
+      "Renewal_Terms": null,
+      "Billing_Contact_Email": "accounts-payable@peelhunt.com",
+      "Total_Contract_Value": null,
+      "Renewal_Fee_Escalator_Percent": 5,
+      "Seat_Licenses": 25,
+      "License_Fees": 69000,
+      "Credit_Commit_Fee": 46000,
+      "Credits_Purchased": 2300000
+    }
+  }
+}

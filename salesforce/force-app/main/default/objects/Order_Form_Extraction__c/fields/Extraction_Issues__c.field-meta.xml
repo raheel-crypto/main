@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Extraction_Issues__c</fullName>
+    <description>Conflicts between sources, enum gaps (a stated term no picklist value fits, left blank rather than mapped to the closest value), missing referenced terms and ambiguities - one per line, as [kind] Field: note | stated: "..." | files. Reported by the extraction model (its Issues key) and by Apex (unmapped picklist answers, renewal clauses without an allowed notice period, non-USD currency).</description>
+    <inlineHelpText>Issues the extraction found and left visible instead of guessing: source conflicts, enum gaps, missing referenced terms.</inlineHelpText>
+    <label>Extraction Issues</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>5</visibleLines>
+</CustomField>

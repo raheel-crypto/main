@@ -71,3 +71,29 @@ worklist. The script reads the same prompt the Apex pipeline uses
   script for those deals after a full refresh.
 - If you re-run an opp that already has a row, you'll get a second (newer) row;
   clean up with `scripts/apex/dedupeExtractions.apex` as usual.
+
+
+## Comparing the extractor and the reviewer (review_eval.py)
+
+Read-only: nothing is written to Salesforce. For each deal it runs the extraction
+prompt from before the November 2026 changes (`prompts/extraction_baseline.txt`),
+the updated prompt, and the reviewer on the updated reply, then writes
+`eval-output/report.md` (field differences, reviewer findings, latency, tokens and
+cost) and `eval-output/results.json`.
+
+```
+source ~/.venvs/sf-extractor/bin/activate
+cd ~/sf-visualizer/salesforce/scripts/large-doc-extractor
+python3 review_eval.py --selftest
+export ANTHROPIC_API_KEY=$(pbpaste | tr -d '"\r\n ')
+cp truth.example.json truth.json        # then check / edit the reviewed values
+python3 review_eval.py --truth truth.json --with-org-addendum 006V400000Gy4QvIAJ
+open eval-output/report.md
+```
+
+`--with-org-addendum` adds the org's OrderFormPromptAddendum to the old prompt, as
+production ran it. Each deal is three API calls (two extractions on
+claude-sonnet-5, one review on claude-opus-5-5). The Apex calculations and
+deterministic checks are not re-run here, so the reviewer sees raw values - the
+in-org reviewer also gets the calculated values and checks. `eval-output/` and
+`truth.json` stay out of git (they hold customer data).

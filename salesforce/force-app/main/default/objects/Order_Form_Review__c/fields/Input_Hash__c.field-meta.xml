@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Input_Hash__c</fullName>
+    <description>SHA-256 of the extraction values, product lines, derived values and evidence the review saw. A different hash on the extraction now means the review is stale.</description>
+    <label>Input Hash</label>
+    <length>64</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

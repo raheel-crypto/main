@@ -16,6 +16,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     // in a second resource appended at load time, so the production prompt stays
     // byte-identical and the addendum can be deployed and reverted on its own.
     @TestVisible private static final String PROMPT_ADDENDUM_RESOURCE = 'OrderFormPromptAddendum';
+    @TestVisible private static final String FOLDED_ADDENDUM_KEY = '"Ramp_Schedule"';
     @TestVisible private static final Integer RAW_RESPONSE_LIMIT = 131072;
     @TestVisible private static final Integer EXTRACTED_JSON_LIMIT = 32768;
     @TestVisible private static final Integer ERROR_MESSAGE_LIMIT = 32768;
@@ -253,6 +254,95 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         } catch (Exception e) {
             return null;
         }
+    }
+
+    // ===== Reviewer support (OrderFormReviewer) =====
+
+    /** What the reviewer request carried: the body, and the files sent / left out. */
+    public class SourceRequest {
+        public String body;
+        public List<String> sentLabels = new List<String>();
+        public List<String> sentTitles = new List<String>();
+        public List<Boolean> sentIsCurrent = new List<Boolean>();
+        public List<Id> sentVersionIds = new List<Id>();
+        public List<String> skipped = new List<String>();
+        public Integer currentCount = 0;
+        public Integer parentCount = 0;
+    }
+
+    /**
+     * A request over the deal's files chosen and labelled exactly as extraction
+     * does (classifyFilesBySource, the heap-safe encoder, FILE n (CURRENT DEAL /
+     * PARENT CONTEXT) labels), with the caller's shell, extra blocks and final
+     * instruction. The original PDFs / images are sent, not extracted text. No callout.
+     */
+    public static SourceRequest buildSourceRequest(Id opportunityId, List<Id> contentDocumentIds,
+            Map<String, Object> shell, List<Object> extraBlocks, String finalInstruction) {
+        SourceRequest out = new SourceRequest();
+        List<Id> docIds = contentDocumentIds == null ? new List<Id>() : contentDocumentIds;
+        Map<Id, ContentVersion> versionByDocId = loadLatestVersionsByDoc(docIds);
+        Opportunity parentOpp = loadParentOpp(opportunityId);
+        List<RankedDoc> chosen = new List<RankedDoc>();
+        classifyFilesBySource(docIds, versionByDocId, opportunityId,
+            parentOpp == null ? null : parentOpp.Base_Opportunity__c, chosen, out.skipped);
+        if (chosen.isEmpty()) return out;
+        List<ContentVersion> cur = new List<ContentVersion>();
+        List<ContentVersion> base = new List<ContentVersion>();
+        out.body = assembleBody(chosen, opportunityId, parentOpp, cur, base, out.skipped, shell, extraBlocks,
+            finalInstruction);
+        Integer n = 0;
+        for (ContentVersion cv : cur) {
+            n++;
+            out.sentLabels.add(fileLabel(n, true, cv.Title));
+            out.sentTitles.add(cv.Title);
+            out.sentIsCurrent.add(true);
+            out.sentVersionIds.add(cv.Id);
+        }
+        for (ContentVersion cv : base) {
+            n++;
+            out.sentLabels.add(fileLabel(n, false, cv.Title));
+            out.sentTitles.add(cv.Title);
+            out.sentIsCurrent.add(false);
+            out.sentVersionIds.add(cv.Id);
+        }
+        out.currentCount = cur.size();
+        out.parentCount = base.size();
+        return out;
+    }
+
+    /** The extraction prompt as sent (the field definitions the reviewer reuses). */
+    public static String extractionPrompt() {
+        return loadPrompt();
+    }
+
+    /** The keys of the prompt's JSON SCHEMA block, in order - the one authoritative key list. */
+    public static List<String> promptSchemaKeys() {
+        String prompt = loadPrompt();
+        List<String> keys = new List<String>();
+        Integer start = prompt.indexOf('JSON SCHEMA');
+        if (start < 0) return keys;
+        Integer open = prompt.indexOf('\n{', start);
+        Integer close = prompt.indexOf('\n}', open + 1);
+        if (open < 0 || close < 0) return keys;
+        Matcher m = Pattern.compile('(?m)^  "([A-Za-z_]+)":').matcher(prompt.substring(open, close));
+        while (m.find()) keys.add(m.group(1));
+        return keys;
+    }
+
+    /** The assistant JSON of a Messages reply (text blocks; tolerant of prose / fences). */
+    public static Map<String, Object> replyJson(String responseBody) {
+        return parseAssistantJson(responseBody);
+    }
+
+    /** The extraction's own reading of a stored reply, rebuilt with the current code - no callout, no DML. */
+    public static Order_Form_Extraction__c rebuildFromReply(Id opportunityId, List<Id> contentDocumentIds,
+                                                            String responseBody) {
+        return buildFromResponseBody(opportunityId, contentDocumentIds, responseBody);
+    }
+
+    /** The non-renewal notice period a renewal clause states, in days (null when none). */
+    public static Integer statedNonRenewalDays(String quote) {
+        return nonRenewalNoticeDays(quote);
     }
 
     /** One section of the extraction prompt ("CREDIT ROLLOVER"), heading included, so a focused read uses the same rules. */
@@ -520,10 +610,11 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                 (String.isBlank(currentFileNames) ? 'n/a' : currentFileNames) + '\n' +
             '- Parent-contract context documents attached: ' + numBase;
         if (baseName != null) s += ' (from base Opportunity "' + baseName + '")';
-        s += '\n\nIMPORTANT: Extract THE CURRENT deal. If parent-contract documents are present, treat them as CONTEXT ONLY ' +
-             '(for unchanged MSA terms, base ARR/seats for incremental computation, prior renewal cadence). ' +
-             'Do NOT report figures from the parent contract as if they were the current deal. ' +
-             'When the parent and current deal describe different legal entities, customers, seat counts, or terms, the CURRENT-deal documents win.';
+        // Nov 2026: the precedence rules live in the prompt (SOURCE PRECEDENCE, MULTI-DOCUMENT
+        // GUIDANCE); this only says which deal it is. The old text also asked for "base ARR/seats
+        // for incremental computation", which contradicted the prompt's no-arithmetic rule.
+        s += '\n\nExtract THE CURRENT deal. Parent-contract documents are context only: never report their figures '
+            + 'as the current deal\'s.';
         return s;
     }
 
@@ -700,8 +791,43 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         List<String> skippedOut,
         String systemPrompt
     ) {
-        Map<Id, String> encodedById = encodeWithinHeap(
-            chosen, systemPrompt.length() + SKELETON_SLACK_CHARS, skippedOut);
+        Map<String, Object> shell = new Map<String, Object>{
+            'model' => MODEL,
+            'max_tokens' => MAX_TOKENS,
+            // Sonnet 5 runs adaptive thinking by default; on a ~280K-token
+            // contract it burned the ENTIRE max_tokens budget on thinking and
+            // never emitted the JSON (stop_reason=max_tokens, 0 text tokens).
+            // This is deterministic field extraction - the prompt encodes the
+            // rules - so disable thinking: all output tokens go to the JSON, and
+            // it matches Sonnet 4.6's default (no-thinking) behavior we validated.
+            'thinking' => new Map<String, Object>{ 'type' => 'disabled' },
+            'system' => systemPrompt
+        };
+        return assembleBody(chosen, currentOppId, parentOpp, currentFilesOut, baseFilesOut, skippedOut, shell,
+            null, 'Extract the CURRENT deal per the schema, using parent docs only for context. Return JSON only.');
+    }
+
+    /**
+     * The request around the chosen files: shell holds every top-level key but
+     * messages (model, max_tokens, system, output_config...). The user turn is the
+     * deal context, the labelled files (current deal first, then parent context),
+     * any extra blocks, then the final instruction. Shared by extraction and the
+     * reviewer (OrderFormReviewer), so both see the same files with the same labels.
+     */
+    private static String assembleBody(
+        List<RankedDoc> chosen,
+        Id currentOppId,
+        Opportunity parentOpp,
+        List<ContentVersion> currentFilesOut,
+        List<ContentVersion> baseFilesOut,
+        List<String> skippedOut,
+        Map<String, Object> shell,
+        List<Object> extraBlocks,
+        String finalInstruction
+    ) {
+        Integer skeletonChars = JSON.serialize(shell).length() + SKELETON_SLACK_CHARS
+            + (extraBlocks == null ? 0 : JSON.serialize(extraBlocks).length());
+        Map<Id, String> encodedById = encodeWithinHeap(chosen, skeletonChars, skippedOut);
         for (RankedDoc rd : chosen) {
             if (!encodedById.containsKey(rd.cv.Id)) continue;
             if (rd.isCurrent) currentFilesOut.add(rd.cv);
@@ -750,9 +876,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (!baseFilesOut.isEmpty()) {
             content.add(new Map<String, Object>{
                 'type' => 'text',
-                'text' => '--- PARENT CONTRACT DOCUMENTS (CONTEXT ONLY - do NOT extract these as the deal) ---\n' +
-                          'Use these only for: unchanged MSA boilerplate (renewal terms, payment terms, credit terms), ' +
-                          'and as a reference for the base ARR / seats that the current deal expands or renews.'
+                'text' => '--- PARENT CONTRACT DOCUMENTS (CONTEXT ONLY - do NOT extract these as the deal) ---'
             });
             for (ContentVersion cv : baseFilesOut) {
                 fileNo++;
@@ -765,27 +889,15 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             }
         }
 
-        content.add(new Map<String, Object>{
-            'type' => 'text',
-            'text' => 'Extract the CURRENT deal per the schema, using parent docs only for context. Return JSON only.'
-        });
+        if (extraBlocks != null) content.addAll(extraBlocks);
+        content.add(new Map<String, Object>{ 'type' => 'text', 'text' => finalInstruction });
         Map<String, Object> userMessage = new Map<String, Object>{
             'role' => 'user',
             'content' => content
         };
-        String skeleton = JSON.serialize(new Map<String, Object>{
-            'model' => MODEL,
-            'max_tokens' => MAX_TOKENS,
-            // Sonnet 5 runs adaptive thinking by default; on a ~280K-token
-            // contract it burned the ENTIRE max_tokens budget on thinking and
-            // never emitted the JSON (stop_reason=max_tokens, 0 text tokens).
-            // This is deterministic field extraction - the prompt encodes the
-            // rules - so disable thinking: all output tokens go to the JSON, and
-            // it matches Sonnet 4.6's default (no-thinking) behavior we validated.
-            'thinking' => new Map<String, Object>{ 'type' => 'disabled' },
-            'system' => systemPrompt,
-            'messages' => new List<Object>{ userMessage }
-        });
+        Map<String, Object> request = new Map<String, Object>(shell);
+        request.put('messages', new List<Object>{ userMessage });
+        String skeleton = JSON.serialize(request);
 
         // Splice: base64 text (A-Z a-z 0-9 + / =) needs no JSON escaping, and
         // Word text arrives already escaped (wordText).
@@ -807,26 +919,42 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         return body;
     }
 
+    // One read per transaction: a review asks for the prompt (definitions, schema keys) several times.
+    private static String promptCache;
+
     @TestVisible
     private static String loadPrompt() {
+        if (promptCache != null) return promptCache;
         List<StaticResource> resources = [SELECT Body FROM StaticResource WHERE Name = :PROMPT_RESOURCE LIMIT 1];
         if (resources.isEmpty()) {
             throw new OrderFormException('Static resource "' + PROMPT_RESOURCE + '" not found.');
         }
         String prompt = resources[0].Body.toString();
-        List<StaticResource> addendum = [SELECT Body FROM StaticResource WHERE Name = :PROMPT_ADDENDUM_RESOURCE LIMIT 1];
-        if (!addendum.isEmpty()) prompt += '\n\n' + addendum[0].Body.toString();
+        // Nov 2026: Ramp_Schedule, Free_Credits and Credit_Commit_Fee are defined in
+        // the prompt itself (one definition, shared with the reviewer). The older
+        // addendum is appended only to a prompt that does not define them yet, so
+        // the keys are never defined twice.
+        if (!prompt.contains(FOLDED_ADDENDUM_KEY)) {
+            List<StaticResource> addendum = [SELECT Body FROM StaticResource WHERE Name = :PROMPT_ADDENDUM_RESOURCE LIMIT 1];
+            if (!addendum.isEmpty()) prompt += '\n\n' + addendum[0].Body.toString();
+        }
+        promptCache = prompt;
         return prompt;
     }
 
     @TestVisible
     private static HttpResponse callAnthropic(String body) {
+        return callAnthropic(body, 'pdfs-2024-09-25', 120000);
+    }
+
+    /** POST /v1/messages through the Anthropic named credential (extraction and reviewer). */
+    public static HttpResponse callAnthropic(String body, String betaHeader, Integer timeoutMs) {
         HttpRequest req = new HttpRequest();
         req.setEndpoint(NAMED_CRED + '/v1/messages');
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
-        req.setHeader('anthropic-beta', 'pdfs-2024-09-25');
-        req.setTimeout(120000);
+        if (String.isNotBlank(betaHeader)) req.setHeader('anthropic-beta', betaHeader);
+        req.setTimeout(timeoutMs == null ? 120000 : Math.min(timeoutMs, 120000));
         req.setBody(body);
         return new Http().send(req);
     }
@@ -912,6 +1040,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Logo_Publicity_Rights__c = OrderFormPicklistMapper.mapPublicityRights((String) extracted.get('Logo_Publicity_Rights'));
         row.Logo_Publicity_Language__c = truncate(extracted.get('Logo_Publicity_Language'), 32768);
         row.Renewal_Fee_Escalator__c = toDecimal(extracted.get('Renewal_Fee_Escalator_Percent'));
+        row.Renewal_Fee_Escalator_Terms__c = truncate(extracted.get('Renewal_Fee_Escalator_Terms'), 2000);
         row.Billing_Entity_Name__c = truncate(extracted.get('Billing_Entity_Name'), 255);
         row.Billing_Entity_Review__c = toBoolean(extracted.get('Billing_Entity_Is_Derived')) == true;
         row.Billing_Entity_Reg_Id__c = truncate(extracted.get('Billing_Entity_Reg_Id'), 100);
@@ -1096,6 +1225,15 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
                                   Opportunity parentOpp, Integer currentFileCount, List<String> skipped) {
         Derivations d = new Derivations(extracted.get('Extract_Evidence'));
         populateExtractedFields(row, extracted);
+        // Conflicts, enum gaps and missing referenced terms the model reported,
+        // plus the ones Apex finds below - kept visible, never resolved silently.
+        List<String> issues = issuesFrom(extracted.get('Issues'));
+        addEnumGaps(row, extracted, issues);
+        String statedCurrency = asStr(extracted.get('Currency'));
+        if (String.isNotBlank(statedCurrency) && statedCurrency.trim().toUpperCase() != 'USD') {
+            issues.add(issue('currency', 'Currency', statedCurrency.trim(), 'Amounts are stored as written in '
+                + statedCurrency.trim() + '; the Salesforce currency fields do not convert them.', null));
+        }
         overrideTypeFromOpp(row, parentOpp);
         Boolean hasOrderForm = classifyDocuments(row, extracted, currentFileCount);
         if (hasOrderForm == false) {
@@ -1114,10 +1252,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         computeEconomics(row, hasOrderForm == false ? new Map<String, Object>() : extracted, parentOpp, d, lines);
         checkStatedSplit(row, extracted, d, lines);
         applyLines(row, lines, parentOpp, d, extracted.containsKey('Line_Items'));
-        verifyRenewalTerms(row, extracted, d);
+        verifyRenewalTerms(row, extracted, d, issues);
+        deriveEscalatorFromRamp(row, d);
         populateSeatAddsByEmail(row, extracted, d);
         populateCreditRollover(row, extracted, d);
+        row.Extraction_Issues__c = issues.isEmpty() ? null : truncate(String.join(issues, '\n'), 32768);
         clampToFieldLimits(row, d);
+        retainFullValues(row, extracted, d);
         d.writeTo(row);
         applyStatus(row, hasOrderForm, skipped);
     }
@@ -1201,19 +1342,143 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         if (pct != null && pct > 0 && pct <= 100) row.Credit_Rollover_Percent__c = pct;
     }
 
+    // Nov 2026: no invented default and no closest value. Only a stated 30, 60 or
+    // 90-day NON-RENEWAL notice maps to a value; an auto-renewal that states none
+    // (Peel Hunt) or another period stays blank with an enum-gap issue. A price-
+    // increase notice in the same clause is not the non-renewal notice.
     @TestVisible
-    private static void verifyRenewalTerms(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d) {
+    private static void verifyRenewalTerms(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d,
+                                           List<String> issues) {
         if (row.Renewal_Terms__c != 'Manual renewal') return;
         String quote = evidenceQuote(extracted, 'Renewal_Terms');
         if (String.isBlank(quote)) return;
         if (!AUTO_RENEW_WORDS.matcher(quote).find() || MANUAL_RENEW_WORDS.matcher(quote).find()) return;
-        Matcher m = NOTICE_DAYS.matcher(quote);
-        Integer days = m.find() ? Integer.valueOf(m.group(1)) : null;
-        if (days != null && days >= 90) row.Renewal_Terms__c = 'Auto-renew (90-day)';
-        else if (days != null && days >= 60) row.Renewal_Terms__c = 'Auto-renew (60-day)';
-        else row.Renewal_Terms__c = 'Auto-renew (30-day)';
-        d.mark('Renewal_Terms', 'Model answered Manual renewal, but its quote renews automatically; '
-            + (days == null ? 'no notice period stated, so 30-day.' : days + '-day notice in the quote.'));
+        Integer days = nonRenewalNoticeDays(quote);
+        String mapped = (days == 30 || days == 60 || days == 90) ? 'Auto-renew (' + days + '-day)' : null;
+        row.Renewal_Terms__c = mapped;
+        if (mapped != null) {
+            d.mark('Renewal_Terms', 'Model answered Manual renewal, but its quote renews automatically with a '
+                + days + '-day non-renewal notice.');
+            return;
+        }
+        String why = days == null ? 'it states no non-renewal notice period'
+            : 'its ' + days + '-day non-renewal notice is not an allowed value';
+        d.mark('Renewal_Terms', 'Model answered Manual renewal, but its quote renews automatically; ' + why
+            + ', so left blank (no default).');
+        issues.add(issue('enum_gap', 'Renewal_Terms', quote, 'Auto-renews; ' + why + '.', null));
+    }
+
+    private static final Pattern DAY_COUNT = Pattern.compile(
+        '(?i)(?:\\b(thirty|sixty|ninety|forty[- ]five|fifteen|one hundred (?:and )?twenty)\\s*(?:\\(\\d{1,3}\\)\\s*)?'
+        + '|(\\d{1,3})\\)?\\s*)(?:calendar\\s+|business\\s+)?days');
+    private static final Pattern PRICE_NOTICE_WORDS = Pattern.compile(
+        '(?i)(increase|price|pricing|fee|rate card|invoice|payment)');
+    private static final Pattern NON_RENEWAL_WORDS = Pattern.compile(
+        '(?i)(non-?renew|not to renew|not renew|terminat|cancel|expir|end of the)');
+
+    /** The non-renewal notice in days from a renewal clause, or null when it states none. */
+    @TestVisible
+    private static Integer nonRenewalNoticeDays(String quote) {
+        if (String.isBlank(quote)) return null;
+        Matcher m = DAY_COUNT.matcher(quote);
+        Integer fallback = null;
+        while (m.find()) {
+            Integer days = m.group(2) != null ? Integer.valueOf(m.group(2)) : wordDays(m.group(1));
+            if (days == null) continue;
+            String before = quote.substring(Math.max(0, m.start() - 100), m.start());
+            String after = quote.substring(m.end(), Math.min(quote.length(), m.end() + 60));
+            Boolean renewalContext = NON_RENEWAL_WORDS.matcher(before).find();
+            if (renewalContext) return days;
+            // "sixty (60) days notice of any price increase": a price notice, not the renewal one.
+            Boolean priceContext = PRICE_NOTICE_WORDS.matcher(before).find() || PRICE_NOTICE_WORDS.matcher(after).find();
+            if (!priceContext && fallback == null) fallback = days;
+        }
+        return fallback;
+    }
+
+    private static Integer wordDays(String w) {
+        if (w == null) return null;
+        String s = w.toLowerCase();
+        if (s == 'thirty') return 30;
+        if (s == 'sixty') return 60;
+        if (s == 'ninety') return 90;
+        if (s == 'fifteen') return 15;
+        if (s.startsWith('forty')) return 45;
+        if (s.startsWith('one hundred')) return 120;
+        return null;
+    }
+
+    // The in-term step-up as a percentage when the paper gives only each phase's
+    // fee (the prompt leaves that arithmetic to Apex). Phases that add seats are a
+    // ramp, not a price escalator, and are left alone.
+    @TestVisible
+    private static void deriveEscalatorFromRamp(Order_Form_Extraction__c row, Derivations d) {
+        if (row.Renewal_Fee_Escalator__c != null || String.isBlank(row.Ramp_Schedule__c)) return;
+        List<Object> steps;
+        try {
+            steps = (List<Object>) JSON.deserializeUntyped(row.Ramp_Schedule__c);
+        } catch (Exception e) {
+            return;
+        }
+        if (steps == null || steps.size() < 2) return;
+        Map<String, Object> a = (Map<String, Object>) steps[0];
+        Map<String, Object> b = (Map<String, Object>) steps[1];
+        Decimal f1 = toDecimal(a.get('platform_fee_annual'));
+        Decimal f2 = toDecimal(b.get('platform_fee_annual'));
+        if (f1 == null || f2 == null || f1 <= 0 || f2 <= f1) return;
+        if (toDecimal(a.get('seats')) != toDecimal(b.get('seats'))) return;
+        Decimal pct = ((f2 - f1) / f1 * 100).setScale(1, RoundingMode.HALF_UP);
+        row.Renewal_Fee_Escalator__c = pct;
+        d.mark('Renewal_Fee_Escalator', 'In-term step-up from the phases: (' + f2 + ' - ' + f1 + ') / ' + f1
+            + ' x 100 = ' + pct + '%.');
+    }
+
+    // ===== Issues (conflicts, enum gaps, missing referenced terms) =====
+
+    @TestVisible
+    private static List<String> issuesFrom(Object raw) {
+        List<String> out = new List<String>();
+        if (!(raw instanceof List<Object>)) return out;
+        for (Object o : (List<Object>) raw) {
+            if (o instanceof Map<String, Object>) {
+                Map<String, Object> m = (Map<String, Object>) o;
+                out.add(issue(asStr(m.get('kind')), asStr(m.get('field')), asStr(m.get('stated')),
+                    asStr(m.get('note')), asStr(m.get('files'))));
+            } else if (o != null) {
+                out.add(issue('other', null, null, String.valueOf(o), null));
+            }
+        }
+        return out;
+    }
+
+    @TestVisible
+    private static String issue(String kind, String field, String stated, String note, String files) {
+        String s = '[' + (String.isBlank(kind) ? 'other' : kind.trim()) + ']'
+            + (String.isBlank(field) ? '' : ' ' + field.trim() + ':')
+            + (String.isBlank(note) ? '' : ' ' + note.trim());
+        if (String.isNotBlank(stated)) s += ' | stated: "' + stated.trim() + '"';
+        if (String.isNotBlank(files)) s += ' | ' + files.trim();
+        return s;
+    }
+
+    // A picklist answer the mapper could not place is an enum gap: kept visible,
+    // never replaced by the closest value.
+    public static final Map<String, String> MAPPED_PICKLISTS = new Map<String, String>{
+        'Renewal_Terms' => 'Renewal_Terms__c', 'Credit_Terms' => 'Credit_Terms__c',
+        'Payment_Terms' => 'Payment_Terms__c', 'Subscription_Schedule' => 'Subscription_Schedule__c',
+        'Value_Basis' => 'Value_Basis__c', 'Package_Tier' => 'Package_Tier__c',
+        'Logo_Publicity_Rights' => 'Logo_Publicity_Rights__c', 'Subprocessor_Gate_Type' => 'Subprocessor_Gate_Type__c',
+        'Processing_Location_Gate' => 'Processing_Location_Gate__c',
+        'Personal_Data_Disclosure_Gate' => 'Personal_Data_Disclosure_Gate__c'
+    };
+
+    private static void addEnumGaps(Order_Form_Extraction__c row, Map<String, Object> extracted, List<String> issues) {
+        for (String key : MAPPED_PICKLISTS.keySet()) {
+            String raw = asStr(extracted.get(key));
+            if (String.isNotBlank(raw) && row.get(MAPPED_PICKLISTS.get(key)) == null) {
+                issues.add(issue('enum_gap', key, raw, 'Not an allowed value; left blank.', null));
+            }
+        }
     }
 
     /**
@@ -1236,10 +1501,22 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Free_Seats__c = OrderFormLines.quantityOf(lines, 'Free Seats');
         row.Included_Credits__c = OrderFormLines.quantityOf(lines, 'Included Credits');
         if (row.Free_Credits__c == null) {
-            Decimal free = OrderFormLines.quantityOf(lines, 'Free Credits');
+            // Free_Credits__c is per year: a line counted per month / quarter / term
+            // is annualised (a term figure needs the term), never copied as-is.
+            Decimal free;
+            List<String> how = new List<String>();
+            for (OrderFormLines.Line l : lines) {
+                if (l.product != 'Free Credits' || l.quantity == null) continue;
+                Decimal perYear = (l.period == null || l.period == 'year') ? l.quantity
+                    : creditsPerYear(l.quantity, l.period, row.Contract_Length_Months__c);
+                if (perYear == null) continue;
+                free = (free == null ? 0 : free) + perYear;
+                if (l.period != null && l.period != 'year') how.add(l.quantity + ' per ' + l.period);
+            }
             if (free != null) {
-                row.Free_Credits__c = free;
-                d.mark('Free_Credits', 'From the order form\'s free credits line.');
+                row.Free_Credits__c = free.setScale(0, RoundingMode.HALF_UP);
+                d.mark('Free_Credits', 'From the order form\'s free credits line'
+                    + (how.isEmpty() ? '.' : ' (' + String.join(how, ' + ') + ') = ' + row.Free_Credits__c + ' per year.'));
             }
         }
         row.Lines_Recurring_Annual__c = OrderFormLines.recurringAnnual(lines);
@@ -1336,8 +1613,19 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             String file = doc.get('file') == null ? 'unlabelled file' : String.valueOf(doc.get('file'));
             String cls = OrderFormPicklistMapper.mapDocumentClass(asStr(doc.get('class')));
             Boolean isCurrent = isCurrentFile(file, asStr(doc.get('group')), currentFileCount);
-            lines.add(file + ' [' + (isCurrent ? 'Current' : 'Parent') + '] => ' + cls);
-            if (isCurrent && cls == 'Order Form') currentOrderForm = true;
+            // One PDF can hold an order form, the MSA and a DPA: its primary class
+            // must not hide an order form component.
+            List<String> comps = new List<String>();
+            if (doc.get('components') instanceof List<Object>) {
+                for (Object c : (List<Object>) doc.get('components')) {
+                    String mc = OrderFormPicklistMapper.mapDocumentClass(asStr(c));
+                    if (!comps.contains(mc)) comps.add(mc);
+                }
+            }
+            Boolean hidden = !comps.isEmpty() && !(comps.size() == 1 && comps[0] == cls);
+            lines.add(file + ' [' + (isCurrent ? 'Current' : 'Parent') + '] => ' + cls
+                + (hidden ? ' (contains: ' + String.join(comps, ', ') + ')' : ''));
+            if (isCurrent && (cls == 'Order Form' || comps.contains('Order Form'))) currentOrderForm = true;
         }
         if (lines.isEmpty()) return null;
         row.Document_Classes__c = truncate(String.join(lines, '\n'), 8192);
@@ -2146,6 +2434,111 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         }
     }
 
+    // Nov 2026: a value longer than its field (Peel Hunt's 384-character objection
+    // consequence in a 255 field) or with more decimals than the field keeps (a
+    // 9.9% escalator in a whole-number percent) is saved cut, but kept in full in
+    // Full_Text_Values__c and marked, so nothing is lost silently. Model key ->
+    // field for the text values the mapping truncates.
+    public static final Map<String, String> TEXT_VALUE_FIELDS = new Map<String, String>{
+        'Subprocessor_Objection_Consequence' => 'Subprocessor_Objection_Consequence__c',
+        'AI_Model_Change_Carveout' => 'AI_Model_Change_Carveout__c',
+        'AI_Model_Change_Documentation' => 'AI_Model_Change_Documentation__c',
+        'Approved_Locations' => 'Approved_Locations__c',
+        'Resolved_Subprocessor_Term' => 'Resolved_Subprocessor_Term__c',
+        'Subprocessor_Restrictions' => 'Subprocessor_Restrictions__c',
+        'Billing_Entity_Name' => 'Billing_Entity_Name__c',
+        'Billing_Entity_Address' => 'Billing_Entity_Address__c',
+        'Billing_Entity_Reg_Id' => 'Billing_Entity_Reg_Id__c',
+        'Billing_Entity_Jurisdiction' => 'Billing_Entity_Jurisdiction__c',
+        'Primary_Contact_Name' => 'Primary_Contact__c',
+        'Primary_Contact_Phone' => 'Primary_Contact_Phone__c',
+        'Customer_Signer_Name' => 'Customer_Signer_Name__c',
+        'Customer_Signer_Title' => 'Customer_Signer_Title__c',
+        'Requested_By_Name' => 'Requested_By_Name__c',
+        'Named_Users' => 'Named_Users__c',
+        'Special_Terms' => 'Special_Terms__c',
+        'Pilot_Success_Criteria' => 'Pilot_Success_Criteria__c',
+        'Logo_Publicity_Language' => 'Logo_Publicity_Language__c',
+        'Rate_Limit_Terms' => 'Rate_Limit_Notes__c',
+        'Renewal_Fee_Escalator_Terms' => 'Renewal_Fee_Escalator_Terms__c',
+        'Seat_Adds_By_Email_Terms' => 'Seat_Adds_By_Email_Terms__c',
+        'Credit_Rollover_Terms' => 'Credit_Rollover_Terms__c'
+    };
+    @TestVisible private static final Integer FULL_VALUES_LIMIT = 131072;
+
+    @TestVisible
+    private static void retainFullValues(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d) {
+        if (ofeFieldMap == null) ofeFieldMap = Schema.SObjectType.Order_Form_Extraction__c.fields.getMap();
+        Map<String, Object> full = new Map<String, Object>();
+        Map<String, String> fullText = new Map<String, String>();
+        for (String key : TEXT_VALUE_FIELDS.keySet()) {
+            Object raw = extracted.get(key);
+            if (raw == null) continue;
+            fullText.put(TEXT_VALUE_FIELDS.get(key), (raw instanceof String) ? (String) raw : JSON.serialize(raw));
+        }
+        if (extracted.get('Sub_Processor_List') != null) {
+            fullText.put('Sub_Processor_List__c', mapSubprocessorListValue(extracted.get('Sub_Processor_List')));
+        }
+        if (String.isNotBlank(row.Model_Change_Requirement__c) && extracted.get('Model_Change_Terms') != null) {
+            fullText.put('Model_Change_Terms__c',
+                modelChangeCell(row.Model_Change_Requirement__c, asStr(extracted.get('Model_Change_Terms'))));
+        }
+        for (String f : fullText.keySet()) {
+            String v = fullText.get(f);
+            Schema.SObjectField sf = ofeFieldMap.get(f.toLowerCase());
+            if (v == null || sf == null || row.get(f) == null) continue;
+            Integer cap = sf.getDescribe().getLength();
+            if (cap != null && cap > 0 && v.length() > cap) {
+                full.put(f, v);
+                d.truncated(f.removeEnd('__c'), v.length(), cap);
+            }
+        }
+        Map<String, Object> populated = row.getPopulatedFieldsAsMap();
+        for (String f : populated.keySet()) {
+            Object v = populated.get(f);
+            if (!(v instanceof Decimal)) continue;
+            Schema.SObjectField sf = ofeFieldMap.get(f.toLowerCase());
+            if (sf == null) continue;
+            Schema.DescribeFieldResult dr = sf.getDescribe();
+            Schema.DisplayType t = dr.getType();
+            if (t != Schema.DisplayType.DOUBLE && t != Schema.DisplayType.CURRENCY
+                    && t != Schema.DisplayType.PERCENT && t != Schema.DisplayType.INTEGER) continue;
+            Decimal dv = (Decimal) v;
+            Integer scale = dr.getScale() == null ? 0 : dr.getScale();
+            // Whole-number fields only: sub-cent rounding of a derived amount is not a lost value.
+            if (scale == 0 && dv.scale() > 0 && dv.setScale(0, RoundingMode.HALF_UP) != dv) {
+                full.put(f, dv.toPlainString());
+                d.rounded(f.removeEnd('__c'), dv, scale);
+            }
+        }
+        Integer evidenceLen = d.isTouched() ? d.evidenceLength()
+            : (row.Extract_Evidence__c == null ? 0 : asEvidenceString(extracted.get('Extract_Evidence')).length());
+        if (evidenceLen > 32768) {
+            full.put('Extract_Evidence__c', '(' + evidenceLen + ' characters; the field keeps 32768. The model\'s full '
+                + 'reply is in Raw_Response__c.)');
+        }
+        if (full.isEmpty()) {
+            row.Full_Text_Values__c = null;
+            return;
+        }
+        String serialized = JSON.serialize(full);
+        if (serialized.length() > FULL_VALUES_LIMIT) {
+            // Keep what fits; name the rest (their values are in Raw_Response__c).
+            Map<String, Object> kept = new Map<String, Object>();
+            List<String> omitted = new List<String>();
+            for (String f : full.keySet()) {
+                kept.put(f, full.get(f));
+                if (JSON.serialize(kept).length() > FULL_VALUES_LIMIT - 2000) {
+                    kept.remove(f);
+                    omitted.add(f);
+                }
+            }
+            kept.put('_omitted', omitted);
+            serialized = JSON.serialize(kept);
+        }
+        row.Full_Text_Values__c = serialized;
+    }
+
     @TestVisible
     private static Decimal maxForPrecision(Integer precision, Integer scale) {
         if (precision == null || precision <= 0) return null;
@@ -2178,6 +2571,19 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             note(field, field + '(clamped)', 'clamped',
                 'Raw value ' + raw + ' exceeds the field limit; stored ' + stored + '.');
         }
+
+        public void truncated(String field, Integer fullLength, Integer capacity) {
+            note(field, field + '(truncated)', 'truncated', 'The value is ' + fullLength + ' characters; the field '
+                + 'holds ' + capacity + '. The full value is kept in Full_Text_Values__c.');
+        }
+
+        public void rounded(String field, Decimal raw, Integer scale) {
+            note(field, field + '(rounded)', 'rounded', 'The value ' + raw + ' has more decimals than the field '
+                + 'keeps (' + scale + '); it is saved rounded and kept in full in Full_Text_Values__c.');
+        }
+
+        public Boolean isTouched() { return touched; }
+        public Integer evidenceLength() { return JSON.serialize(evidence).length(); }
 
         private void note(String field, String tag, String key, String text) {
             touched = true;

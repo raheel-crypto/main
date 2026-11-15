@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Extraction__c</fullName>
+    <description>The extraction the finding is about (for the related list on the extraction).</description>
+    <label>Order Form Extraction</label>
+    <deleteConstraint>SetNull</deleteConstraint>
+    <referenceTo>Order_Form_Extraction__c</referenceTo>
+    <relationshipLabel>Review Findings</relationshipLabel>
+    <relationshipName>Order_Form_Review_Findings</relationshipName>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Lookup</type>
+</CustomField>
