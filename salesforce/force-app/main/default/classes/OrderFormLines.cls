@@ -153,6 +153,105 @@ public with sharing class OrderFormLines {
         }
     }
 
+    // ===== Aligning the lines with the extraction's seat fee / credit split =====
+
+    private static final Set<String> AMEND_TYPES = new Set<String>{ 'Upsell', 'Downsell', 'Contract Restructure' };
+
+    /**
+     * Make the lines tell the same story as the extraction's fields, which split
+     * the seat fee (License_Fees__c) from the credits (Credit_Commit_Fee__c when
+     * the paper prices them on their own; none when they come with the seats):
+     *  - a credit commitment is a Paid Credits line priced at it; credits with no
+     *    commitment are an Included Credits line with no price of its own;
+     *  - a seat line that holds seats + credits in one amount is split into the
+     *    seat fee and the credits line;
+     *  - a line the read left out (seats, credits, free credits) is added from the
+     *    extraction's own figures.
+     * A line's own figures are never overwritten - only filled or split. Returns
+     * what was changed, for the evidence.
+     */
+    public static List<String> alignWith(List<Line> lines, Order_Form_Extraction__c row, Decimal termMonths) {
+        List<String> notes = new List<String>();
+        Boolean amend = AMEND_TYPES.contains(row.Type__c);
+        String basis = mapBasis(row.Value_Basis__c);
+        Decimal seatFee = row.License_Fees__c;
+        Decimal commitFee = row.Credit_Commit_Fee__c;
+        Decimal credits = (amend && row.Credits_Added__c != null) ? row.Credits_Added__c : row.Credits_Purchased__c;
+        Decimal seats = (amend && row.Seats_Added__c != null) ? row.Seats_Added__c : row.Seat_Licenses__c;
+
+        // Credits: paid by a commitment, or included with the seats.
+        Line paid = first(lines, 'Paid Credits');
+        Line included = first(lines, 'Included Credits');
+        if (commitFee != null && commitFee > 0) {
+            Line target = paid != null ? paid : included;
+            if (target == null) {
+                target = added(lines, 'Paid Credits', 'Credit Commitment', credits, row.Credits_Period__c, amend);
+                notes.add('Added a Paid Credits line for the ' + commitFee + ' credit commitment.');
+            } else if (target.product != 'Paid Credits') {
+                target.product = 'Paid Credits';
+                notes.add('Line ' + target.lineNo + ' is paid by the ' + commitFee + ' credit commitment, not included.');
+            }
+            if (target.amount == null && target.unitPrice == null) { target.amount = commitFee; target.basis = 'Annual'; }
+            if (target.quantity == null) target.quantity = credits;
+        } else if (credits != null && credits > 0) {
+            Line target = included;
+            if (target == null && paid != null && paid.amount == null && paid.unitPrice == null) {
+                target = paid;
+                target.product = 'Included Credits';
+                notes.add('Line ' + target.lineNo + ' has no price of its own: the credits come with the seats.');
+            }
+            if (target == null && paid == null) {
+                target = added(lines, 'Included Credits', 'Credit Allocation', credits, row.Credits_Period__c, amend);
+                notes.add('Added an Included Credits line for the ' + credits + ' credits that come with the seats.');
+            }
+            if (target != null && target.quantity == null) target.quantity = credits;
+        }
+        if (row.Free_Credits__c != null && row.Free_Credits__c > 0 && first(lines, 'Free Credits') == null) {
+            added(lines, 'Free Credits', 'Free Credits', row.Free_Credits__c, row.Credits_Period__c, false);
+            notes.add('Added a Free Credits line for ' + row.Free_Credits__c + ' complimentary credits.');
+        }
+
+        // Seats: the seat fee, split out of a seats + credits amount.
+        Line rogo = first(lines, 'Rogo Seats');
+        Line arvo = first(lines, 'Arvo Seats');
+        Boolean arvoOnly = rogo == null && arvo != null && (seats == null || arvo.quantity == seats);
+        if (rogo == null && !arvoOnly && seats != null && seats > 0) {
+            rogo = added(lines, 'Rogo Seats', 'Seats', seats, null, amend);
+            notes.add('Added a Rogo Seats line for ' + seats + ' seats.');
+        }
+        if (rogo != null && seatFee != null) {
+            if (rogo.amount == null && rogo.unitPrice == null) {
+                rogo.amount = seatFee;
+                rogo.basis = basis;
+            } else if (commitFee != null && rogo.amount != null && (rogo.amount - (seatFee + commitFee)).abs() <= 1) {
+                notes.add('Line ' + rogo.lineNo + ' held seats and credits together (' + rogo.amount + '); split into the '
+                    + seatFee + ' seat fee and the ' + commitFee + ' credit commitment.');
+                rogo.amount = seatFee;
+            }
+            if (rogo.quantity == null) rogo.quantity = seats;
+        }
+        for (Line l : lines) annualise(l, termMonths);
+        return notes;
+    }
+
+    private static Line first(List<Line> lines, String product) {
+        for (Line l : lines) if (l.product == product) return l;
+        return null;
+    }
+
+    private static Line added(List<Line> lines, String product, String label, Decimal quantity, String period, Boolean amend) {
+        Line l = new Line();
+        l.lineNo = lines.size() + 1;
+        l.product = product;
+        l.label = label;
+        l.quantity = quantity;
+        l.period = mapPeriod(period);
+        l.change = amend ? 'Added' : null;
+        l.quote = 'Not listed as its own line by the read; from the extraction\'s fields.';
+        lines.add(l);
+        return l;
+    }
+
     // ===== Keeping Order_Form_Line__c in step (Order_Form_Extraction__c trigger) =====
 
     public static void sync(List<Order_Form_Extraction__c> rows, Map<Id, Order_Form_Extraction__c> oldMap) {

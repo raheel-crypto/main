@@ -58,6 +58,51 @@ private class OrderFormLinesTest {
         System.assertEquals(null, OrderFormLines.toJson(new List<OrderFormLines.Line>()));
     }
 
+    private static Order_Form_Extraction__c split(Decimal seats, Decimal seatFee, Decimal commitFee, Decimal credits,
+                                                  String period, Decimal freeCredits) {
+        return new Order_Form_Extraction__c(Type__c = 'New Business', Value_Basis__c = 'Annual', Seat_Licenses__c = seats,
+            License_Fees__c = seatFee, Credit_Commit_Fee__c = commitFee, Credits_Purchased__c = credits,
+            Credits_Period__c = period, Free_Credits__c = freeCredits);
+    }
+
+    @isTest
+    static void linesFollowTheSeatFeeAndCreditSplit() {
+        // Peel Hunt read as one seats line holding seats + credits.
+        List<OrderFormLines.Line> bundled = OrderFormLines.parse(new List<Object>{
+            line('Rogo Seats', 'Platform Fee', 25, null, 115000, 'Annual') }, 12);
+        List<String> notes = OrderFormLines.alignWith(bundled, split(25, 69000, 46000, 2300000, 'contract', null), 12);
+        System.assertEquals(2, bundled.size());
+        System.assertEquals(69000, bundled[0].amount, 'The seat fee');
+        System.assertEquals('Paid Credits', bundled[1].product);
+        System.assertEquals(2300000, bundled[1].quantity);
+        System.assertEquals(46000, bundled[1].annualAmount, 'The credit commitment');
+        System.assertEquals(115000, OrderFormLines.recurringAnnual(bundled));
+        System.assertEquals(2, notes.size());
+
+        // Credits that come with the seats: no price of their own; free credits added.
+        List<OrderFormLines.Line> included = OrderFormLines.parse(new List<Object>{
+            line('Rogo Seats', 'Platform Fee', 30, null, 90000, 'Annual'),
+            line('Paid Credits', 'Credit Allocation', 3000000, null, null, null) }, 12);
+        OrderFormLines.alignWith(included, split(30, 90000, null, 3000000, 'year', 100000), 12);
+        System.assertEquals('Included Credits', included[1].product);
+        System.assertEquals(null, included[1].annualAmount);
+        System.assertEquals('Free Credits', included[2].product);
+        System.assertEquals(100000, included[2].quantity);
+        System.assertEquals(90000, OrderFormLines.recurringAnnual(included));
+
+        // Nothing listed: seats and credits come from the extraction's fields.
+        List<OrderFormLines.Line> none = new List<OrderFormLines.Line>();
+        OrderFormLines.alignWith(none, split(25, 69000, 46000, 2300000, 'contract', null), 12);
+        System.assertEquals(2, none.size());
+        System.assertEquals(115000, OrderFormLines.recurringAnnual(none));
+
+        // An Arvo-only paper: its seats are the Arvo line, no Rogo seats are added.
+        List<OrderFormLines.Line> arvo = OrderFormLines.parse(new List<Object>{
+            line('Arvo Seats', 'Licenses', 20, 100, null, 'Monthly') }, 12);
+        OrderFormLines.alignWith(arvo, split(20, null, null, null, null, null), 12);
+        System.assertEquals(1, arvo.size());
+    }
+
     @isTest
     static void triggerKeepsLineRecordsInStep() {
         Opportunity opp = new Opportunity(Name = 'Lines Sync', StageName = '4 - Proposal', CloseDate = Date.today());

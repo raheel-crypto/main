@@ -3052,13 +3052,21 @@ private class OrderFormExtractorTest {
         System.assertEquals(115000, ok.Lines_Recurring_Annual__c);
         System.assertEquals(false, ok.Lines_Mismatch__c);
 
-        // A line missing from the read: the lines no longer add up to the ARR.
+        // The read left the credits line out: it is added from the credit commitment.
         fields.put('Credit_Commit_Fee', 46000);
         fields.put('Line_Items', new List<Object>{ line('Rogo Seats', 'Platform Fee', 25, null, 69000, 'Annual') });
+        Order_Form_Extraction__c filled = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(fields));
+        System.assertEquals(115000, filled.Lines_Recurring_Annual__c, 'Seats 69,000 + the added 46,000 credits line');
+        System.assertEquals(false, filled.Lines_Mismatch__c);
+        System.assert(filled.Extract_Evidence__c.contains('Added a Paid Credits line'), filled.Extract_Evidence__c);
+
+        // A misread seat amount: the lines no longer add up to the ARR.
+        fields.put('Line_Items', new List<Object>{ line('Rogo Seats', 'Platform Fee', 25, null, 60000, 'Annual') });
         Order_Form_Extraction__c off = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
             makeAnthropicResponse(fields));
         System.assertEquals(true, off.Lines_Mismatch__c);
-        System.assert(off.Extract_Evidence__c.contains('The lines add up to 69000'), off.Extract_Evidence__c);
+        System.assert(off.Extract_Evidence__c.contains('The lines add up to 106000'), off.Extract_Evidence__c);
     }
 
     // ---- Credit commitment missed by the read (Peel Hunt, 2026-11-12) ----

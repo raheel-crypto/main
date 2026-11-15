@@ -1226,6 +1226,11 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     private static void applyLines(Order_Form_Extraction__c row, List<OrderFormLines.Line> lines,
                                    Opportunity parentOpp, Derivations d, Boolean read) {
         if (read) row.Lines_Read_At__c = System.now();
+        // The same seat fee / credits split as the row's fields.
+        if (read || !lines.isEmpty()) {
+            List<String> aligned = OrderFormLines.alignWith(lines, row, row.Contract_Length_Months__c);
+            if (!aligned.isEmpty()) d.mark('Line_Items', String.join(aligned, ' '));
+        }
         row.Line_Items__c = OrderFormLines.toJson(lines);
         row.Arvo_Seats__c = OrderFormLines.quantityOf(lines, 'Arvo Seats');
         row.Free_Seats__c = OrderFormLines.quantityOf(lines, 'Free Seats');
@@ -1265,7 +1270,9 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     public static Order_Form_Extraction__c linesFrom(Id extractionId, Map<String, Object> reply) {
         Order_Form_Extraction__c cur = [
             SELECT Id, Opportunity__c, Type__c, Contract_Length_Months__c, Annual_Recurring_Revenue__c,
-                   Incremental_ARR__c, Resulting_ARR__c, Free_Credits__c
+                   Incremental_ARR__c, Resulting_ARR__c, Free_Credits__c, Value_Basis__c, License_Fees__c,
+                   Credit_Commit_Fee__c, Credits_Purchased__c, Credits_Added__c, Credits_Period__c,
+                   Seat_Licenses__c, Seats_Added__c
             FROM Order_Form_Extraction__c WHERE Id = :extractionId
         ];
         Order_Form_Extraction__c row = cur.clone(true, true, false, false);
