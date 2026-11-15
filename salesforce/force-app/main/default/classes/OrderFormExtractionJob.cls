@@ -1263,6 +1263,40 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     }
 
     /**
+     * Re-run the line alignment and audit on extractions whose lines were already
+     * read, from the lines stored on them - no re-reading, no API call. For lines
+     * read before the seat fee / credit alignment existed. Returns the rows whose
+     * lines or line totals change, unsaved; the trigger replaces their line records.
+     */
+    public static List<Order_Form_Extraction__c> realignLines(Set<Id> extractionIds) {
+        List<Order_Form_Extraction__c> out = new List<Order_Form_Extraction__c>();
+        if (extractionIds == null || extractionIds.isEmpty()) return out;
+        for (Order_Form_Extraction__c cur : [
+            SELECT Id, Opportunity__c, Opportunity__r.Annual_Recurring_Revenue__c, Type__c, Contract_Length_Months__c,
+                   Annual_Recurring_Revenue__c, Incremental_ARR__c, Resulting_ARR__c, Free_Credits__c, Value_Basis__c,
+                   License_Fees__c, Credit_Commit_Fee__c, Credits_Purchased__c, Credits_Added__c, Credits_Period__c,
+                   Seat_Licenses__c, Seats_Added__c, Line_Items__c, Arvo_Seats__c, Free_Seats__c, Included_Credits__c,
+                   Lines_Recurring_Annual__c, Lines_Mismatch__c, Lines_Read_At__c
+            FROM Order_Form_Extraction__c WHERE Id IN :extractionIds AND Lines_Read_At__c != null
+        ]) {
+            Order_Form_Extraction__c row = cur.clone(true, true, false, false);
+            List<OrderFormLines.Line> lines = OrderFormLines.fromJson(cur.Line_Items__c);
+            OrderFormLines.alignWith(lines, row, cur.Contract_Length_Months__c);
+            applyLines(row, lines, cur.Opportunity__r, new Derivations(null), false);
+            if (row.Line_Items__c == cur.Line_Items__c && row.Arvo_Seats__c == cur.Arvo_Seats__c
+                    && row.Free_Seats__c == cur.Free_Seats__c && row.Included_Credits__c == cur.Included_Credits__c
+                    && row.Free_Credits__c == cur.Free_Credits__c
+                    && row.Lines_Recurring_Annual__c == cur.Lines_Recurring_Annual__c
+                    && row.Lines_Mismatch__c == cur.Lines_Mismatch__c) continue;
+            out.add(new Order_Form_Extraction__c(Id = cur.Id, Line_Items__c = row.Line_Items__c,
+                Arvo_Seats__c = row.Arvo_Seats__c, Free_Seats__c = row.Free_Seats__c,
+                Included_Credits__c = row.Included_Credits__c, Free_Credits__c = row.Free_Credits__c,
+                Lines_Recurring_Annual__c = row.Lines_Recurring_Annual__c, Lines_Mismatch__c = row.Lines_Mismatch__c));
+        }
+        return out;
+    }
+
+    /**
      * The line fields for this extraction from a focused read's reply
      * (OrderFormLinesBackfillBatch): Line_Items__c, the per-product totals and
      * the audit, checked as in a full read. Other fields are left as they are.

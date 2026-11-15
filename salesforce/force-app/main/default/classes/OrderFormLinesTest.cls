@@ -104,6 +104,36 @@ private class OrderFormLinesTest {
     }
 
     @isTest
+    static void realignFixesLinesReadBeforeTheSplit() {
+        // Lines backfilled before the alignment: one seats line holding seats + credits.
+        Opportunity opp = new Opportunity(Name = 'Realign', StageName = '4 - Proposal', CloseDate = Date.today());
+        insert opp;
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(Opportunity__c = opp.Id, Extraction_Status__c = 'Success',
+            Type__c = 'New Business', Value_Basis__c = 'Annual', Seat_Licenses__c = 25, License_Fees__c = 69000,
+            Credit_Commit_Fee__c = 46000, Credits_Purchased__c = 2300000, Credits_Period__c = 'contract',
+            Annual_Recurring_Revenue__c = 115000, Contract_Length_Months__c = 12, Lines_Read_At__c = System.now(),
+            Line_Items__c = OrderFormLines.toJson(OrderFormLines.parse(new List<Object>{
+                line('Rogo Seats', 'Platform Fee', 25, null, 115000, 'Annual') }, 12)));
+        insert row;
+        System.assertEquals(1, [SELECT COUNT() FROM Order_Form_Line__c WHERE Extraction__c = :row.Id]);
+
+        List<Order_Form_Extraction__c> changes = OrderFormExtractionJob.realignLines(new Set<Id>{ row.Id });
+        System.assertEquals(1, changes.size());
+        update changes;
+
+        Order_Form_Extraction__c after = [SELECT Lines_Recurring_Annual__c, Lines_Mismatch__c, Lines_Read_At__c
+                                          FROM Order_Form_Extraction__c WHERE Id = :row.Id];
+        System.assertEquals(115000, after.Lines_Recurring_Annual__c);
+        System.assertEquals(false, after.Lines_Mismatch__c);
+        List<Order_Form_Line__c> lines = [SELECT Product__c, Amount__c FROM Order_Form_Line__c
+                                          WHERE Extraction__c = :row.Id ORDER BY Line_Number__c];
+        System.assertEquals(2, lines.size(), 'Replaced with the split, not added to');
+        System.assertEquals(69000, lines[0].Amount__c);
+        System.assertEquals('Paid Credits', lines[1].Product__c);
+        System.assertEquals(0, OrderFormExtractionJob.realignLines(new Set<Id>{ row.Id }).size(), 'Nothing left to change');
+    }
+
+    @isTest
     static void triggerKeepsLineRecordsInStep() {
         Opportunity opp = new Opportunity(Name = 'Lines Sync', StageName = '4 - Proposal', CloseDate = Date.today());
         insert opp;
