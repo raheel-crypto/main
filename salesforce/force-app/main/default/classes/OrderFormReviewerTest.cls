@@ -889,6 +889,18 @@ private class OrderFormReviewerTest {
         System.assert(OrderFormReviewer.review(row.Id, true).skipped.contains('off'));
         System.assert(OrderFormReviewJob.enqueue(new List<Id>{ row.Id }, false).contains('off'));
         OrderFormReviewer.save(OrderFormReviewer.review(row.Id, true));
+        Test.startTest();
+        Database.executeBatch(new OrderFormReviewBatch(30), 1);   // the sweep finds nothing to do
+        Test.stopTest();
         System.assertEquals(0, [SELECT COUNT() FROM Order_Form_Review__c]);
+    }
+
+    @isTest
+    static void sweep_canBeScheduled() {
+        reviewerOn();
+        Test.startTest();
+        String jobId = System.schedule('Order form review sweep (test)', '0 0 0 1 1 ? 2099', new OrderFormReviewBatch());
+        Test.stopTest();
+        System.assertNotEquals(null, jobId);
     }
 }
