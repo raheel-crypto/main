@@ -3,7 +3,6 @@
     <fullName>Review_Is_Current__c</fullName>
     <description>True while the finding's review is the extraction's current review.</description>
     <label>Current Review</label>
-    <defaultValue>false</defaultValue>
     <formula>Review__r.Is_Current__c</formula>
     <type>Checkbox</type>
 </CustomField>
