@@ -257,6 +257,9 @@ public with sharing class OrderFormValidator {
             Object v = row.get(f);
             Schema.SObjectField target = fields.get(f.toLowerCase());
             if (v == null || target == null) continue;
+            // "Not specified" means the paper is silent: the appliers never write it
+            // (ContractLegalTermsApplier.NOT_SPECIFIED), so it never reaches the target.
+            if (String.valueOf(v) == 'Not specified') continue;
             Schema.DescribeFieldResult dr = target.getDescribe();
             if (dr.getType() != Schema.DisplayType.PICKLIST || !dr.isRestrictedPicklist()) continue;
             if (!picklistValues(dr).contains(String.valueOf(v))) {

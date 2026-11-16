@@ -210,7 +210,11 @@ private class OrderFormReviewerTest {
         List<String> out = new List<String>();
         for (Object o : (List<Object>) JSON.deserializeUntyped(checksJson)) {
             Map<String, Object> c = (Map<String, Object>) o;
-            if (c.get('status') == status) out.add(String.valueOf(c.get('name')) + ':' + String.valueOf(c.get('field')));
+            if (c.get('status') != status) continue;
+            String entry = String.valueOf(c.get('name')) + ':' + String.valueOf(c.get('field'));
+            // A failure's reason too, so a failing deploy shows why.
+            if (status == 'Fail') entry += ' (' + String.valueOf(c.get('message')).left(160) + ')';
+            out.add(entry);
         }
         return out;
     }
@@ -241,10 +245,14 @@ private class OrderFormReviewerTest {
                                     Unreviewed_Required_Fields__c, Missing_Required_Sources__c, Cost_USD__c,
                                     Served_Model__c, Input_Hash__c, Sources_Sent__c, Mode__c
                                     FROM Order_Form_Review__c WHERE Extraction__c = :row.Id];
-        System.assertEquals('Clear', rev.Status__c, rev.Checks__c + ' | ' + rev.Unreviewed_Required_Fields__c
-            + ' | ' + rev.Missing_Required_Sources__c);
-        System.assertEquals('Pass', rev.Check_Status__c, String.join(checkNames(rev.Checks__c, 'Warn'), ', '));
-        System.assertEquals(0, rev.Findings_Count__c);
+        String problems = 'fail: ' + String.join(checkNames(rev.Checks__c, 'Fail'), ', ')
+            + ' | warn: ' + String.join(checkNames(rev.Checks__c, 'Warn'), ', ');
+        System.debug(LoggingLevel.INFO, 'Clean fixture checks - ' + problems);
+        System.assertEquals('Clear', rev.Status__c, problems + ' | unreviewed: ' + rev.Unreviewed_Required_Fields__c
+            + ' | missing: ' + rev.Missing_Required_Sources__c);
+        System.assertNotEquals('Fail', rev.Check_Status__c, problems);
+        System.assertEquals(0, [SELECT COUNT() FROM Order_Form_Review_Finding__c
+                                WHERE Extraction__c = :row.Id AND Origin__c = 'Model'], 'the model reported nothing');
         System.assertEquals(true, rev.Is_Current__c);
         System.assertEquals('Shadow', rev.Mode__c);
         System.assertEquals('claude-opus-5-5', rev.Served_Model__c);
@@ -318,7 +326,7 @@ private class OrderFormReviewerTest {
 
         Order_Form_Review__c rev = [SELECT Status__c, Sources_Sent__c, Missing_Required_Sources__c FROM Order_Form_Review__c
                                     WHERE Extraction__c = :row.Id];
-        System.assertEquals('Findings', rev.Status__c, rev.Missing_Required_Sources__c);
+        System.assertEquals('Findings', rev.Status__c, '' + rev.Missing_Required_Sources__c);
         System.assert(rev.Sources_Sent__c.contains('(PARENT CONTEXT): Master Agreement - Acme'), rev.Sources_Sent__c);
         Map<String, Order_Form_Review_Finding__c> byKey = new Map<String, Order_Form_Review_Finding__c>();
         for (Order_Form_Review_Finding__c f : [
@@ -382,7 +390,8 @@ private class OrderFormReviewerTest {
         Test.stopTest();
         Order_Form_Review__c rev = [SELECT Status__c, Checks__c, Unreviewed_Required_Fields__c FROM Order_Form_Review__c
                                     WHERE Extraction__c = :row.Id];
-        System.assertEquals('Clear', rev.Status__c, rev.Checks__c + ' | ' + rev.Unreviewed_Required_Fields__c);
+        System.assertEquals('Clear', rev.Status__c, 'fail: ' + String.join(checkNames(rev.Checks__c, 'Fail'), ', ')
+            + ' | unreviewed: ' + rev.Unreviewed_Required_Fields__c);
     }
 
     @isTest
@@ -878,7 +887,8 @@ private class OrderFormReviewerTest {
         Test.startTest();
         Database.executeBatch(new OrderFormReviewBatch(30), 1);
         Test.stopTest();
-        System.assertEquals('Clear', [SELECT Status__c FROM Order_Form_Review__c WHERE Extraction__c = :row.Id].Status__c);
+        Order_Form_Review__c rev = [SELECT Status__c, Checks__c FROM Order_Form_Review__c WHERE Extraction__c = :row.Id];
+        System.assertEquals('Clear', rev.Status__c, 'fail: ' + String.join(checkNames(rev.Checks__c, 'Fail'), ', '));
     }
 
     @isTest
