@@ -48,7 +48,7 @@
     </values>
     <values>
         <field>Standard_Terms_URL__c</field>
-        <value xsi:type="xsd:string">https://rogo.com/legal/terms-and-conditions https://rogo.com/legal/data-processing-agreement https://rogo.com/legal/service-level-agreement https://trust.rogo.ai/</value>
+        <value xsi:type="xsd:string">https://rogo.com/legal/terms-and-conditions https://rogo.com/legal/data-processing-agreement https://rogo.com/legal/service-level-agreement</value>
     </values>
     <values>
         <field>Sweep_Days__c</field>

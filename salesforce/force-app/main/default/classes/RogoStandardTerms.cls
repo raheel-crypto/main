@@ -14,7 +14,9 @@
  * recorded and skipped - extraction and review go on without it.
  *
  * URLs: Order_Form_Review_Setting__mdt.Default Standard_Terms_URL__c, several
- * separated by spaces (blank = off). A #fragment is ignored. Each host needs a
+ * separated by spaces (blank = off). Only pages whose text is in the HTML work: the
+ * trust center (trust.rogo.ai) draws its subprocessor list in the browser, so
+ * Salesforce sees just its headings - it is left out. A #fragment is ignored. Each host needs a
  * Remote Site Setting (Rogo_Website, Rogo_Website_WWW, Rogo_Trust_Center).
  * Fetched once per transaction; redirects followed up to three times; at most
  * BUDGET_MS of the transaction's 120 callout seconds are spent here.

@@ -123,7 +123,8 @@ public with sharing class OrderFormReviewer {
         Order_Form_Review__c current;
         for (Order_Form_Review__c h : history) {
             if (h.Is_Current__c == true && current == null) current = h;
-            if (h.Input_Hash__c == inHash && h.Source_Hash__c == srcHash) attempts++;
+            // Attempts are per exact version: values, files AND prompts - a prompt change starts afresh.
+            if (h.Input_Hash__c == inHash && h.Source_Hash__c == srcHash && h.Prompt_Version__c == promptHash) attempts++;
         }
         if (force != true && current != null && current.Is_Stale__c != true && current.Status__c != 'Failed'
                 && current.Input_Hash__c == inHash && current.Source_Hash__c == srcHash
