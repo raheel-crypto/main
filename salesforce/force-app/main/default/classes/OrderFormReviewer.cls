@@ -185,8 +185,9 @@ public with sharing class OrderFormReviewer {
             'output_config' => outputConfig(s, replySchema)
         };
         if (s.Use_Fallbacks__c == true) shell.put('fallbacks', 'default');
-        // Rogo's online Terms & Conditions (fetched live), which most order forms incorporate by link.
-        RogoStandardTerms.Terms terms = RogoStandardTerms.get();
+        // Rogo's published T&Cs, DPA, SLA and subprocessor list (fetched live), which most order
+        // forms incorporate by link.
+        RogoStandardTerms.Library terms = RogoStandardTerms.library();
         if (terms.promptBlock() != null) {
             ((List<Object>) shell.get('system')).add(new Map<String, Object>{
                 'type' => 'text', 'text' => terms.promptBlock(),
@@ -205,7 +206,7 @@ public with sharing class OrderFormReviewer {
         List<String> sent = new List<String>(req.sentLabels);
         for (String sk : req.skipped) sent.add('NOT SENT: ' + sk);
         sent.addAll(sourceNotes);
-        if (terms.sourceLine() != null) sent.add(terms.sourceLine());
+        sent.addAll(terms.sourceLines());
         rev.Sources_Sent__c = truncate(String.join(sent, '\n'), LONG_TEXT);
 
         List<String> missing = OrderFormReviewCoverage.missingSources(row, req,

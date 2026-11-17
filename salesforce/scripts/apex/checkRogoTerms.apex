@@ -1,25 +1,34 @@
 // =============================================================================
-// Check that Salesforce can read Rogo's online Terms & Conditions
+// Check that Salesforce can read Rogo's published legal documents
 // =============================================================================
-// The extractor and the reviewer fetch the page live (RogoStandardTerms) from
-// the Standard Terms URL on the "Default" Order Form Review Setting. This fetches
-// it once and prints what they would get: status, final URL, the last-updated
-// date found, the size of the text, and its first and last lines. Read-only.
+// The extractor and the reviewer fetch them live (RogoStandardTerms) from the
+// Standard Terms URLs on the "Default" Order Form Review Setting: the online
+// T&Cs, DPA, SLA and trust center. This fetches them once and prints what they
+// would get for each: status, final URL, the last-updated date found, the size of
+// the text, and its first and last lines. Read-only.
 //
-// "Unauthorized endpoint": the Rogo_Website / Rogo_Website_WWW Remote Site
-// Settings are missing or the page redirects to another host - add that host.
+// "Unauthorized endpoint": the host has no Remote Site Setting (Rogo_Website,
+// Rogo_Website_WWW, Rogo_Trust_Center) or the page redirects to another host.
 // "only N characters of text": the page needs a browser to render; tell Claude.
 //
 // Run: sf apex run --target-org rogo --file scripts/apex/checkRogoTerms.apex
 // =============================================================================
 
-RogoStandardTerms.Terms t = RogoStandardTerms.get();
-System.debug('--- URL: ' + t.url + (t.finalUrl == null ? '' : ' -> ' + t.finalUrl) + ' (' + t.spentMs + ' ms)');
-if (!t.ok()) {
-    System.debug('--- NOT USABLE: ' + (t.skipped ? 'no Standard Terms URL is set' : t.failure));
+RogoStandardTerms.Library lib = RogoStandardTerms.library();
+if (lib.skipped) {
+    System.debug('--- No Standard Terms URLs are set.');
     return;
 }
-System.debug('--- Last updated found on the page: ' + (t.lastUpdated == null ? '(none)' : t.lastUpdated));
-System.debug('--- Text: ' + t.text.length() + ' characters');
-System.debug('--- Starts: ' + t.text.left(600));
-System.debug('--- Ends: ' + t.text.right(400));
+System.debug('--- ' + lib.docs.size() + ' document(s), ' + lib.spentMs + ' ms in all');
+for (RogoStandardTerms.Terms t : lib.docs) {
+    System.debug('=== ' + t.name + ' | ' + t.url + (t.finalUrl == null || t.finalUrl == t.url ? '' : ' -> ' + t.finalUrl)
+        + ' (' + t.spentMs + ' ms)');
+    if (!t.ok()) {
+        System.debug('    NOT USABLE: ' + t.failure);
+        continue;
+    }
+    System.debug('    Last updated: ' + (t.lastUpdated == null ? '(none found)' : t.lastUpdated) + ' | '
+        + t.text.length() + ' characters');
+    System.debug('    Starts: ' + t.text.left(400));
+    System.debug('    Ends: ' + t.text.right(250));
+}

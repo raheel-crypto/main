@@ -1,27 +1,44 @@
 @isTest
 private class RogoStandardTermsTest {
 
-    private static final String URL = 'https://rogo.com/legal/terms-and-conditions';
+    private static final String TERMS = 'https://rogo.com/legal/terms-and-conditions';
+    private static final String DPA = 'https://rogo.com/legal/data-processing-agreement';
+    private static final String TRUST = 'https://trust.rogo.ai/';
 
-    // Serves the terms page (after one relative redirect) for GETs; anything else is the extraction reply.
+    // The T&Cs redirect once; the DPA is a page with a date; the trust center is a
+    // browser-rendered shell. Anything that is not a GET is the extraction reply.
     public class SiteMock implements HttpCalloutMock {
-        public Integer pageStatus = 200;
-        public String pageBody = page();
+        public Integer termsStatus = 200;
         public Boolean fail = false;
         public Integer gets = 0;
+        public List<String> endpoints = new List<String>();
         public String lastPost;
         public HttpResponse respond(HttpRequest req) {
             HttpResponse r = new HttpResponse();
             if (req.getMethod() == 'GET') {
                 gets++;
+                endpoints.add(req.getEndpoint());
                 if (fail) throw new CalloutException('Unauthorized endpoint, please check Setup->Security->Remote site settings.');
-                if (req.getEndpoint() == URL) {
+                if (req.getEndpoint() == TERMS) {
                     r.setStatusCode(301);
                     r.setHeader('Location', '/legal/terms');
                     return r;
                 }
-                r.setStatusCode(pageStatus);
-                r.setBody(pageBody);
+                if (req.getEndpoint() == 'https://rogo.com/legal/terms') {
+                    r.setStatusCode(termsStatus);
+                    r.setBody(page('Terms &amp; Conditions', null,
+                        '14. Term and Renewal. This Agreement renews automatically unless either party gives notice of '
+                        + 'non-renewal at least thirty (30) days prior to the end of the then-current term.'));
+                    return r;
+                }
+                if (req.getEndpoint() == DPA) {
+                    r.setStatusCode(200);
+                    r.setBody(page('Data Processing Agreement', 'Last Updated: May 5, 2026',
+                        'Rogo shall give Customer at least thirty (30) days notice of any new Subprocessor.'));
+                    return r;
+                }
+                r.setStatusCode(200);
+                r.setBody('<html><body><div id="root"></div><script>app()</script></body></html>');
                 return r;
             }
             lastPost = req.getBody();
@@ -36,42 +53,65 @@ private class RogoStandardTermsTest {
         }
     }
 
-    private static String page() {
-        String clause = '<p>14. Term and Renewal. This Agreement renews automatically unless either party gives notice '
-            + 'of non-renewal at least thirty (30) days prior to the end of the then-current term.</p>\n';
-        return '<html><head><title>Terms</title><style>.x { color: red; }</style></head><body>'
+    private static String page(String title, String dateLine, String clause) {
+        return '<html><head><title>' + title + '</title><style>.x { color: red; }</style></head><body>'
             + '<script>var shell = "<p>not page text</p>";</script>'
-            + '<h1>Terms &amp; Conditions</h1><p>Last Updated: October 1, 2026</p>'
-            + clause.repeat(20)
+            + '<h1>' + title + '</h1>' + (dateLine == null ? '' : '<p>' + dateLine + '</p>')
+            + ('<p>' + clause + '</p>\n').repeat(20)
             + '<p>Use of &#8220;Marks&#8221; &sect;15</p></body></html>';
     }
 
-    private static void configure(String url) {
+    private static void configure(String urls) {
         OrderFormReviewer.settingsOverride = new Order_Form_Review_Setting__mdt(Mode__c = 'Shadow',
-            Standard_Terms_URL__c = url);
+            Standard_Terms_URL__c = urls);
         RogoStandardTerms.fetchInTests = true;
         RogoStandardTerms.cached = null;
     }
 
     @isTest
-    static void fetchesFollowsRedirectAndKeepsOnlyTheText() {
-        configure(URL);
+    static void fetchesEveryDocumentAndKeepsOnlyTheText() {
+        configure(TERMS + ' ' + DPA + '#annex-1 ' + TRUST);
         SiteMock mock = new SiteMock();
         Test.setMock(HttpCalloutMock.class, mock);
-        RogoStandardTerms.Terms t = RogoStandardTerms.get();
-        System.assert(t.ok(), t.failure);
-        System.assertEquals('https://rogo.com/legal/terms', t.finalUrl);
-        System.assertEquals('October 1, 2026', t.lastUpdated);
-        System.assert(t.text.startsWith('Terms & Conditions'), t.text.left(80));
-        System.assert(t.text.contains('notice of non-renewal at least thirty (30) days'), t.text.left(300));
-        System.assert(t.text.contains('“Marks” §15'), t.text.right(80));
-        System.assert(!t.text.contains('not page text') && !t.text.contains('color'), 'scripts and styles dropped');
-        System.assert(t.promptBlock().contains('the CURRENT online version'), t.promptBlock().left(300));
-        System.assert(t.promptBlock().contains('last updated October 1, 2026'));
-        System.assert(t.sourceLine().contains('last updated October 1, 2026'), t.sourceLine());
+        RogoStandardTerms.Library lib = RogoStandardTerms.library();
+        System.assertEquals(3, lib.docs.size());
+
+        RogoStandardTerms.Terms terms = lib.docs[0];
+        System.assert(terms.ok(), terms.failure);
+        System.assertEquals('Terms & Conditions', terms.name);
+        System.assertEquals('https://rogo.com/legal/terms', terms.finalUrl);
+        System.assertEquals(null, terms.lastUpdated);
+        System.assert(terms.text.startsWith('Terms & Conditions'), terms.text.left(80));
+        System.assert(terms.text.contains('notice of non-renewal at least thirty (30) days'), terms.text.left(300));
+        String marks = String.fromCharArray(new List<Integer>{ 8220 }) + 'Marks' + String.fromCharArray(new List<Integer>{ 8221 });
+        System.assert(terms.text.contains(marks + ' §15'), terms.text.right(80));
+        System.assert(!terms.text.contains('not page text') && !terms.text.contains('color'), 'scripts and styles dropped');
+
+        RogoStandardTerms.Terms dpa = lib.docs[1];
+        System.assert(dpa.ok(), dpa.failure);
+        System.assertEquals(DPA, dpa.url, 'the #fragment is not sent');
+        System.assertEquals('Data Processing Agreement', dpa.name);
+        System.assertEquals('May 5, 2026', dpa.lastUpdated);
+
+        RogoStandardTerms.Terms trust = lib.docs[2];
+        System.assert(!trust.ok());
+        System.assertEquals('Trust Center (published subprocessor list)', trust.name);
+        System.assert(trust.failure.contains('characters of text'), trust.failure);
+
+        String block = lib.promptBlock();
+        System.assert(block.contains('=== ROGO TERMS & CONDITIONS'), block.left(400));
+        System.assert(block.contains('=== ROGO DATA PROCESSING AGREEMENT'));
+        System.assert(block.contains('Data Processing Agreement (' + DPA + '): fetched'));
+        System.assert(block.contains('last updated May 5, 2026'));
+        System.assert(block.contains('Trust Center (published subprocessor list) (' + TRUST + '): could not be fetched'));
+        System.assert(block.contains('"By reference: <url>"'), 'a referenced subprocessor list stays by reference');
+        List<String> lines = lib.sourceLines();
+        System.assertEquals(3, lines.size());
+        System.assert(lines[2].startsWith('NOT FETCHED: Rogo Trust Center'), lines[2]);
+
         // Once per transaction.
-        RogoStandardTerms.get();
-        System.assertEquals(2, mock.gets, 'one redirect + one page, then cached');
+        RogoStandardTerms.library();
+        System.assertEquals(4, mock.gets, 'redirect + T&Cs page + DPA + trust center, then cached');
     }
 
     @isTest
@@ -79,41 +119,40 @@ private class RogoStandardTermsTest {
         SiteMock mock = new SiteMock();
         Test.setMock(HttpCalloutMock.class, mock);
 
-        configure(URL);
-        mock.pageStatus = 404;
-        RogoStandardTerms.Terms notFound = RogoStandardTerms.get();
+        configure(TERMS);
+        mock.termsStatus = 404;
+        RogoStandardTerms.Terms notFound = RogoStandardTerms.library().docs[0];
         System.assert(!notFound.ok());
         System.assert(notFound.failure.contains('HTTP 404'), notFound.failure);
-        System.assert(notFound.promptBlock().contains('could not be fetched'), notFound.promptBlock());
-        System.assert(notFound.sourceLine().startsWith('NOT FETCHED'), notFound.sourceLine());
+        System.assert(RogoStandardTerms.library().promptBlock().contains('could not be fetched'));
+        System.assert(RogoStandardTerms.library().sourceLines()[0].startsWith('NOT FETCHED'));
 
-        configure(URL);
-        mock.pageStatus = 200;
-        mock.pageBody = '<html><body><div id="root"></div><script>app()</script></body></html>';
-        System.assert(RogoStandardTerms.get().failure.contains('characters of text'), RogoStandardTerms.get().failure);
-
-        configure(URL);
+        configure(TERMS);
         mock.fail = true;
-        System.assert(RogoStandardTerms.get().failure.contains('Remote site'), RogoStandardTerms.get().failure);
+        System.assert(RogoStandardTerms.library().docs[0].failure.contains('Remote site'));
 
         configure(null);
-        System.assert(RogoStandardTerms.get().skipped, 'no URL configured: nothing fetched or sent');
-        System.assertEquals(null, RogoStandardTerms.get().promptBlock());
+        System.assert(RogoStandardTerms.library().skipped, 'no URL configured: nothing fetched or sent');
+        System.assertEquals(null, RogoStandardTerms.library().promptBlock());
+        System.assert(RogoStandardTerms.library().sourceLines().isEmpty());
 
         System.assertEquals('https://rogo.com/x', RogoStandardTerms.absolute('https://rogo.com/legal/terms', '/x'));
         System.assertEquals('https://www.rogo.com/t', RogoStandardTerms.absolute('https://rogo.com/a', 'https://www.rogo.com/t'));
+        System.assertEquals('Service Level Agreement', RogoStandardTerms.nameFor('https://rogo.com/legal/service-level-agreement'));
+        System.assertEquals('Privacy Policy', RogoStandardTerms.nameFor('https://rogo.com/legal/privacy-policy'));
     }
 
     @isTest
     static void notFetchedInOtherTestsUnlessAskedFor() {
-        OrderFormReviewer.settingsOverride = new Order_Form_Review_Setting__mdt(Mode__c = 'Shadow', Standard_Terms_URL__c = URL);
+        OrderFormReviewer.settingsOverride = new Order_Form_Review_Setting__mdt(Mode__c = 'Shadow',
+            Standard_Terms_URL__c = TERMS);
         RogoStandardTerms.cached = null;
-        System.assert(RogoStandardTerms.get().skipped);
+        System.assert(RogoStandardTerms.library().skipped);
         System.assertEquals(0, RogoStandardTerms.spentMs());
     }
 
     @isTest
-    static void extractionSendsTheTermsAsACachedSystemBlock() {
+    static void extractionSendsTheDocumentsAsACachedSystemBlock() {
         Opportunity opp = new Opportunity(Name = 'Terms In Extraction', StageName = '4 - Proposal', CloseDate = Date.today());
         insert opp;
         insert new ContentVersion(Title = 'Rogo Order Form', PathOnClient = 'Rogo Order Form.pdf',
@@ -122,7 +161,7 @@ private class RogoStandardTermsTest {
         for (ContentDocumentLink l : [SELECT ContentDocumentId FROM ContentDocumentLink WHERE LinkedEntityId = :opp.Id]) {
             docIds.add(l.ContentDocumentId);
         }
-        configure(URL);
+        configure(TERMS + ' ' + DPA);
         SiteMock mock = new SiteMock();
         Test.setMock(HttpCalloutMock.class, mock);
         Test.startTest();
@@ -130,9 +169,11 @@ private class RogoStandardTermsTest {
         Test.stopTest();
         Map<String, Object> req = (Map<String, Object>) JSON.deserializeUntyped(mock.lastPost);
         List<Object> sys = (List<Object>) req.get('system');
-        System.assertEquals(2, sys.size(), 'prompt + terms');
+        System.assertEquals(2, sys.size(), 'prompt + the documents');
         Map<String, Object> termsBlock = (Map<String, Object>) sys[1];
-        System.assert(String.valueOf(termsBlock.get('text')).startsWith('ROGO STANDARD TERMS & CONDITIONS'));
+        String text = String.valueOf(termsBlock.get('text'));
+        System.assert(text.startsWith('ROGO STANDARD TERMS'), text.left(80));
+        System.assert(text.contains('=== ROGO DATA PROCESSING AGREEMENT'));
         System.assertNotEquals(null, termsBlock.get('cache_control'));
     }
 }

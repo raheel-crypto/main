@@ -779,12 +779,11 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         List<String> skippedOut
     ) {
         Map<String, Object> shell = extractionShell(loadPrompt());
-        RogoStandardTerms.Terms terms = RogoStandardTerms.get();
-        String termsBlock = terms.promptBlock();
+        String termsBlock = RogoStandardTerms.library().promptBlock();
         if (termsBlock != null) {
-            // Rogo's online Terms & Conditions, which most order forms incorporate by link
-            // (renewal notice, payment, subprocessor, publicity and AI terms live there).
-            // Same text on every deal, so it is cached.
+            // Rogo's published T&Cs, DPA, SLA and subprocessor list, which most order forms
+            // incorporate by link (renewal notice, payment, subprocessor, publicity and AI
+            // terms live there). Same text on every deal, so it is cached.
             shell.put('system', new List<Object>{
                 new Map<String, Object>{ 'type' => 'text', 'text' => (String) shell.get('system') },
                 new Map<String, Object>{ 'type' => 'text', 'text' => termsBlock,

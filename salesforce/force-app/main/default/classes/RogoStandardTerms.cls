@@ -1,23 +1,29 @@
 /**
- * Rogo's online Terms & Conditions, fetched live (no stored copy to keep in step).
- * Most order forms incorporate them by link ("issued under and incorporates
- * Rogo's Terms & Conditions available at https://rogo.com/legal/terms-and-conditions"),
- * so the renewal notice, payment terms, subprocessor, publicity and AI terms of
- * those deals live there, not in the attached PDF.
+ * Rogo's published legal documents, fetched live (no stored copies to keep in step):
+ * the online Terms & Conditions, the Data Processing Agreement, the Service Level
+ * Agreement and the trust center's subprocessor list. Most order forms incorporate
+ * the T&Cs by link ("issued under and incorporates Rogo's Terms & Conditions
+ * available at https://rogo.com/legal/terms-and-conditions"), and the T&Cs in turn
+ * incorporate the DPA and SLA, so renewal notice, payment, subprocessor, publicity
+ * and AI terms of those deals live there, not in the attached PDF.
  *
- * The extractor and the reviewer both get the page as plain text, labelled with
- * when it was fetched and the "last updated" date it shows. It is the CURRENT
- * version: a deal signed before that date may be governed by an earlier one, and
- * the prompts say so. When the fetch fails, extraction and review go on without
- * it and the reason is recorded - the terms then count as missing referenced terms.
+ * The extractor and the reviewer both get the pages as plain text in one cached
+ * system block, each labelled with when it was fetched and the "last updated" date
+ * it shows. They are the CURRENT versions: a deal signed before that date may be
+ * governed by an earlier one, and the block says so. A page that cannot be read is
+ * recorded and skipped - extraction and review go on without it.
  *
- * URL: Order_Form_Review_Setting__mdt.Default Standard_Terms_URL__c (blank = off).
- * Needs a Remote Site Setting for the host (Rogo_Website / Rogo_Website_WWW).
- * One fetch per transaction (cached); redirects followed up to three times.
+ * URLs: Order_Form_Review_Setting__mdt.Default Standard_Terms_URL__c, several
+ * separated by spaces (blank = off). A #fragment is ignored. Each host needs a
+ * Remote Site Setting (Rogo_Website, Rogo_Website_WWW, Rogo_Trust_Center).
+ * Fetched once per transaction; redirects followed up to three times; at most
+ * BUDGET_MS of the transaction's 120 callout seconds are spent here.
  */
 public with sharing class RogoStandardTerms {
 
+    /** One fetched document. */
     public class Terms {
+        public String name;
         public String url;
         public String finalUrl;
         public String text;
@@ -26,7 +32,6 @@ public with sharing class RogoStandardTerms {
         public String failure;
         public String hash;
         public Integer spentMs = 0;
-        public Boolean skipped = false;
 
         public Boolean ok() {
             return String.isNotBlank(text) && failure == null;
@@ -34,43 +39,71 @@ public with sharing class RogoStandardTerms {
 
         /** One line for the review's Sources_Sent__c. */
         public String sourceLine() {
-            if (skipped) return null;
-            if (!ok()) return 'NOT FETCHED: Rogo Terms & Conditions (' + url + ') - ' + failure;
-            return 'Rogo Terms & Conditions (online, ' + finalUrl + '), fetched ' + fetchedAt.formatGmt('yyyy-MM-dd HH:mm')
+            if (!ok()) return 'NOT FETCHED: Rogo ' + name + ' (' + url + ') - ' + failure;
+            return 'Rogo ' + name + ' (online, ' + finalUrl + '), fetched ' + fetchedAt.formatGmt('yyyy-MM-dd HH:mm')
                 + ' UTC' + (lastUpdated == null ? '' : ', last updated ' + lastUpdated) + ', ' + text.length()
                 + ' characters, sha256 ' + hash.left(12);
         }
+    }
+
+    /** Every configured document, fetched (or not) in this transaction. */
+    public class Library {
+        public List<Terms> docs = new List<Terms>();
+        public Boolean skipped = false;
+        public Integer spentMs = 0;
+
+        public List<String> sourceLines() {
+            List<String> out = new List<String>();
+            if (!skipped) for (Terms t : docs) out.add(t.sourceLine());
+            return out;
+        }
 
         /**
-         * The block the extractor and reviewer read. Null when the fetch was
-         * skipped (tests, or no URL configured), so the request is unchanged.
+         * The block the extractor and reviewer read. Null when nothing is
+         * configured (or in tests that did not ask), so the request is unchanged.
          */
         public String promptBlock() {
-            if (skipped) return null;
-            String head = 'ROGO STANDARD TERMS & CONDITIONS (' + url + ')';
-            if (!ok()) {
-                return head + ' could not be fetched: ' + failure + '. Where a current-deal document incorporates '
-                    + 'them by reference, their content is unknown: treat it as missing referenced terms.';
+            if (skipped || docs.isEmpty()) return null;
+            List<String> index = new List<String>();
+            List<String> bodies = new List<String>();
+            for (Terms t : docs) {
+                if (t.ok()) {
+                    index.add('- ' + t.name + ' (' + t.url + '): fetched ' + t.fetchedAt.formatGmt('yyyy-MM-dd') + ' UTC, '
+                        + (t.lastUpdated == null ? 'the page shows no last-updated date' : 'last updated ' + t.lastUpdated)
+                        + '.');
+                    bodies.add('=== ROGO ' + t.name.toUpperCase() + ' (' + t.url + ') ===\n' + t.text);
+                } else {
+                    index.add('- ' + t.name + ' (' + t.url + '): could not be fetched (' + t.failure + '). Where a deal '
+                        + 'incorporates it, its content is unknown: treat it as missing referenced terms.');
+                }
             }
-            return head + ' - the CURRENT online version, fetched ' + fetchedAt.formatGmt('yyyy-MM-dd') + ' UTC'
-                + (lastUpdated == null ? ' (the page shows no last-updated date)' : ', last updated ' + lastUpdated) + '.\n'
-                + 'They govern a deal ONLY where a current-deal document incorporates Rogo\'s Terms & Conditions by '
-                + 'reference (for example "issued under and incorporates Rogo\'s Terms & Conditions available at '
-                + 'https://rogo.com/legal/terms-and-conditions"). Where the deal is on the customer\'s own agreement (an '
-                + 'attached MSA or customer paper), these terms do not apply. The order form controls where the two '
-                + 'conflict. A deal signed before the last-updated date may be governed by an earlier version: when a '
-                + 'value depends on these terms and the deal predates that date, say so (an Issues entry, or a gap).\n'
-                + 'Cite them as "Rogo Terms & Conditions (online) <section>".\n\n'
-                + text;
+            return 'ROGO STANDARD TERMS - Rogo\'s published legal documents, fetched live. These are the CURRENT '
+                + 'versions:\n' + String.join(index, '\n') + '\n'
+                + 'They govern a deal ONLY where its documents incorporate them: the Terms & Conditions where a '
+                + 'current-deal document incorporates Rogo\'s Terms & Conditions by link (for example "issued under and '
+                + 'incorporates Rogo\'s Terms & Conditions available at https://rogo.com/legal/terms-and-conditions"); '
+                + 'the Data Processing Agreement, Service Level Agreement and subprocessor list where those governing '
+                + 'terms incorporate them by reference. Where the deal is on a separately signed agreement (a Customer '
+                + 'Agreement, "Terms & Conditions entered into by the parties on <date>") or on the customer\'s own '
+                + 'paper, these documents do not govern it. The order form controls where it conflicts with them.\n'
+                + 'A deal signed before a document\'s last-updated date (or any document with no date) may be governed '
+                + 'by an earlier version: when a value depends on one of these documents, say so (an Issues entry, or a '
+                + 'gap) rather than treating it as certain. A subprocessor list incorporated by reference stays '
+                + '"By reference: <url>" in Sub_Processor_List - the published list is today\'s, not necessarily the '
+                + 'one approved at signing.\n'
+                + 'Cite them as "Rogo <document> (online) <section>".'
+                + (bodies.isEmpty() ? '' : '\n\n' + String.join(bodies, '\n\n'));
         }
     }
 
-    @TestVisible private static final Integer MIN_TEXT_CHARS = 2000;
+    @TestVisible private static final Integer MIN_TEXT_CHARS = 1500;
     @TestVisible private static final Integer MAX_TEXT_CHARS = 150000;
-    @TestVisible private static final Integer TIMEOUT_MS = 10000;
+    @TestVisible private static final Integer MAX_TOTAL_CHARS = 300000;
+    @TestVisible private static final Integer TIMEOUT_MS = 8000;
+    @TestVisible private static final Integer BUDGET_MS = 25000;
     // Tests opt in; otherwise no fetch runs in tests, so other tests' callout mocks are untouched.
     @TestVisible private static Boolean fetchInTests = false;
-    @TestVisible private static Terms cached;
+    @TestVisible private static Library cached;
 
     private static final Pattern LAST_UPDATED = Pattern.compile(
         '(?i)(last\\s+updated|last\\s+revised|last\\s+modified|effective\\s+date|effective\\s+as\\s+of|updated)'
@@ -84,25 +117,85 @@ public with sharing class RogoStandardTerms {
         'blockquote', 'header', 'footer', 'main'
     };
     private static final List<String> DROPPED_ELEMENTS = new List<String>{ 'script', 'style', 'noscript', 'svg', 'head', 'template' };
+    private static final Map<String, String> NAMES = new Map<String, String>{
+        'terms-and-conditions' => 'Terms & Conditions',
+        'data-processing-agreement' => 'Data Processing Agreement',
+        'service-level-agreement' => 'Service Level Agreement'
+    };
 
-    public static String configuredUrl() {
+    /** The configured URLs, in order, without #fragments. */
+    public static List<String> configuredUrls() {
         Order_Form_Review_Setting__mdt s = OrderFormReviewer.settings();
-        return s == null ? null : s.Standard_Terms_URL__c;
+        List<String> out = new List<String>();
+        String raw = s == null ? null : s.Standard_Terms_URL__c;
+        if (String.isBlank(raw)) return out;
+        for (String part : raw.split('[\\s,;]+')) {
+            String u = part.trim();
+            if (u.contains('#')) u = u.substringBefore('#');
+            if (u.startsWithIgnoreCase('http') && !out.contains(u)) out.add(u);
+        }
+        return out;
     }
 
-    /** The terms, fetched once per transaction. Never throws. */
-    public static Terms get() {
+    /** Every configured document, fetched once per transaction. Never throws. */
+    public static Library library() {
         if (cached != null) return cached;
-        Terms t = new Terms();
-        t.url = configuredUrl();
-        if (String.isBlank(t.url) || (Test.isRunningTest() && fetchInTests != true)) {
-            t.skipped = true;
-            cached = t;
-            return t;
+        Library lib = new Library();
+        List<String> urls = configuredUrls();
+        if (urls.isEmpty() || (Test.isRunningTest() && fetchInTests != true)) {
+            lib.skipped = true;
+            cached = lib;
+            return lib;
         }
+        Integer totalChars = 0;
+        for (String u : urls) {
+            Terms t;
+            if (lib.spentMs >= BUDGET_MS) {
+                t = new Terms();
+                t.url = u;
+                t.name = nameFor(u);
+                t.fetchedAt = System.now();
+                t.failure = 'skipped: the fetch time budget was used up by the documents before it';
+            } else {
+                t = fetch(u);
+            }
+            if (t.ok() && totalChars + t.text.length() > MAX_TOTAL_CHARS) {
+                t.text = null;
+                t.failure = 'skipped: the documents before it already fill the size budget';
+            }
+            if (t.ok()) totalChars += t.text.length();
+            lib.spentMs += t.spentMs;
+            lib.docs.add(t);
+        }
+        cached = lib;
+        return lib;
+    }
+
+    /** Time the fetches used of the transaction's 120 seconds of callouts (0 when cached-free or skipped). */
+    public static Integer spentMs() {
+        return cached == null ? 0 : cached.spentMs;
+    }
+
+    @TestVisible
+    private static String nameFor(String url) {
+        String path = url.substringAfter('://');
+        String host = path.contains('/') ? path.substringBefore('/') : path;
+        if (host.startsWithIgnoreCase('trust.')) return 'Trust Center (published subprocessor list)';
+        String slug = path.contains('/') ? path.substringAfterLast('/') : '';
+        if (NAMES.containsKey(slug.toLowerCase())) return NAMES.get(slug.toLowerCase());
+        if (String.isBlank(slug)) return host;
+        List<String> words = new List<String>();
+        for (String w : slug.split('[-_]+')) if (String.isNotBlank(w)) words.add(w.capitalize());
+        return String.join(words, ' ');
+    }
+
+    private static Terms fetch(String url) {
+        Terms t = new Terms();
+        t.url = url;
+        t.name = nameFor(url);
         Long started = System.currentTimeMillis();
         try {
-            String endpoint = t.url.trim();
+            String endpoint = url;
             HttpResponse resp;
             for (Integer hop = 0; hop < 4; hop++) {
                 HttpRequest req = new HttpRequest();
@@ -139,13 +232,7 @@ public with sharing class RogoStandardTerms {
         }
         t.spentMs = (System.currentTimeMillis() - started).intValue();
         t.fetchedAt = System.now();
-        cached = t;
         return t;
-    }
-
-    /** Time the fetch used of the transaction's 120 seconds of callouts (0 when cached or skipped). */
-    public static Integer spentMs() {
-        return cached == null ? 0 : cached.spentMs;
     }
 
     @TestVisible
