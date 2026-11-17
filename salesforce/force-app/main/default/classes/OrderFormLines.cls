@@ -303,7 +303,6 @@ public with sharing class OrderFormLines {
 
     // ===== Mapping =====
 
-    @TestVisible
     // Rogo's AI meeting assistant is one product sold under three names: Arvo,
     // Rogo Notes and the Rogo Meeting Assistant (RKS: "Rogo Meeting Assistant Fee").
     @TestVisible private static final Pattern ARVO_NAME = Pattern.compile(
@@ -315,6 +314,7 @@ public with sharing class OrderFormLines {
         return label != null && ARVO_NAME.matcher(label).find();
     }
 
+    @TestVisible
     private static String mapProduct(String raw, String label) {
         String s = ((raw == null ? '' : raw) + ' | ' + (label == null ? '' : label)).toLowerCase();
         // The line's own name beats a catch-all "Other" (or an unknown product).
