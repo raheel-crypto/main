@@ -138,6 +138,8 @@ def required_fields(extracted):
     out = []
     if has_of:
         out += apex_list(COVERAGE_CLS, "ECONOMICS")
+        if not extracted.get("Line_Items"):
+            out.append("Line_Items")   # with lines, each line is required on its own
         if extracted.get("Type") in ("Upsell", "Downsell", "Contract Restructure"):
             out += apex_list(COVERAGE_CLS, "AMENDMENT")
         if extracted.get("Type") == "Pilot":

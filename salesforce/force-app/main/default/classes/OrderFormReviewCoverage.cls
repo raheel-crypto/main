@@ -74,7 +74,7 @@ public with sharing class OrderFormReviewCoverage {
         'Type', 'Contract_Start_Date', 'Contract_End_Date', 'Contract_Length_Months', 'Seat_Licenses', 'Value_Basis',
         'License_Fees', 'Platform_Connection_Fee', 'Professional_Service_Fees', 'Total_Contract_Value',
         'Annual_Recurring_Revenue', 'Credits_Purchased', 'Credits_Period', 'Credit_Commit_Fee', 'Free_Credits',
-        'Credit_Rate', 'Overage_Rate', 'Billing_Contact_Email', 'Signature_Date', 'Currency', 'Line_Items'
+        'Credit_Rate', 'Overage_Rate', 'Billing_Contact_Email', 'Signature_Date'
     };
     private static final List<String> AMENDMENT = new List<String>{
         'Seats_Added', 'Credits_Added', 'Incremental_ARR', 'Resulting_ARR'
@@ -118,6 +118,10 @@ public with sharing class OrderFormReviewCoverage {
         }
         if (hasOrderForm) {
             out.addAll(ECONOMICS);
+            // With product lines, each line is required on its own (requiredProducts);
+            // with none, the review must still say whether the paper sells lines.
+            String lineItems = row.Line_Items__c;
+            if (String.isBlank(lineItems) || lineItems.trim() == '[]') out.add('Line_Items');
             if (AMEND_TYPES.contains(row.Type__c)) out.addAll(AMENDMENT);
             if (row.Type__c == 'Pilot') out.addAll(PILOT);
         }

@@ -694,10 +694,8 @@ public with sharing class OrderFormReviewer {
                 Map<String, Object> c = (Map<String, Object>) f.get('correction');
                 String action = str(c.get('action'));
                 if (!ACTIONS.contains(action)) p.add(at + 'correction.action "' + action + '"');
-                if (action == 'set_value' && String.isBlank(str(c.get('value')))) p.add(at + 'set_value without a value');
-                if (action == 'unresolved' && String.isBlank(str(c.get('unresolved_reason')))) {
-                    p.add(at + 'unresolved without a reason');
-                }
+                // A set_value without a value or an unresolved without a reason is
+                // normalised in modelFinding - one thin finding does not fail the review.
             }
             if (String.isBlank(field) && String.isBlank(ref) && str(f.get('stage')) != 'source_selection') {
                 p.add(at + 'names neither a field nor a product line');
@@ -724,6 +722,12 @@ public with sharing class OrderFormReviewer {
         String ref = str(f.get('product_ref'));
         String component = str(f.get('product_component'));
         String action = str(c.get('action'));
+        String reason = str(c.get('unresolved_reason'));
+        if (action == 'set_value' && String.isBlank(str(c.get('value')))) {
+            action = 'unresolved';
+            reason = 'The reviewer proposed a change but gave no value.';
+        }
+        if (action == 'unresolved' && String.isBlank(reason)) reason = '(The reviewer gave no reason.)';
         List<String> evidence = new List<String>();
         for (Object e : (List<Object>) f.get('evidence')) if (e != null) evidence.add(String.valueOf(e));
         List<String> refs = new List<String>();
@@ -752,7 +756,7 @@ public with sharing class OrderFormReviewer {
             Source_Refs__c = refs.isEmpty() ? null : truncate(String.join(refs, '\n'), 8192),
             Correction_Action__c = actionLabel(action),
             Proposed_Value__c = truncate(proposed, LONG_TEXT),
-            Unresolved_Reason__c = action == 'unresolved' ? truncate(str(c.get('unresolved_reason')), 2000) : null,
+            Unresolved_Reason__c = action == 'unresolved' ? truncate(reason, 2000) : null,
             Current_Value__c = truncate(currentValue(row, lines, field, lineNo, component), LONG_TEXT),
             Status__c = 'Open'
         );

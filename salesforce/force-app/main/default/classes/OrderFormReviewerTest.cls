@@ -913,8 +913,17 @@ private class OrderFormReviewerTest {
         String problems = String.join(OrderFormReviewer.validateReply(reply, allowed), ' | ');
         System.assert(problems.contains('unknown field "Not_A_Field"'), problems);
         System.assert(problems.contains('is not L<n>:<product>'), problems);
-        System.assert(problems.contains('set_value without a value'), problems);
-        System.assert(problems.contains('unresolved without a reason'), problems);
+        // A thin correction is normalised, not a failed review (SC Capital).
+        System.assert(!problems.contains('finding 3') && !problems.contains('finding 4'), problems);
+        Order_Form_Extraction__c row = new Order_Form_Extraction__c(Seat_Licenses__c = 5);
+        Order_Form_Review_Finding__c noValue = OrderFormReviewer.modelFinding(
+            finding('Seat_Licenses', '', '', 'wrong_value', 'set_value', '', ''), row, new List<OrderFormLines.Line>());
+        System.assertEquals('Unresolved', noValue.Correction_Action__c);
+        System.assert(noValue.Unresolved_Reason__c.contains('no value'), noValue.Unresolved_Reason__c);
+        Order_Form_Review_Finding__c noReason = OrderFormReviewer.modelFinding(
+            finding('Seat_Licenses', '', '', 'wrong_value', 'unresolved', '', ''), row, new List<OrderFormLines.Line>());
+        System.assertEquals('Unresolved', noReason.Correction_Action__c);
+        System.assertNotEquals(null, noReason.Unresolved_Reason__c);
         System.assertEquals('Clear', OrderFormReviewer.statusFor(false, new List<String>(), new List<String>(), 0,
             new OrderFormValidator.Result()));
         System.assertEquals('Failed', OrderFormReviewer.statusFor(true, new List<String>(), new List<String>(), 0,
