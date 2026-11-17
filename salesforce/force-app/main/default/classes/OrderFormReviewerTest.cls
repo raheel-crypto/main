@@ -786,6 +786,86 @@ private class OrderFormReviewerTest {
             new Map<String, Object>{ 'Subprocessor_Objection_Consequence' => consequence }).isEmpty());
     }
 
+    // ===================================================== pilot fee, online terms
+
+    @isTest
+    static void pilotFee_isTheTrialPriceNotArr() {
+        Opportunity opp = insertOpp('Interpath Pilot', null);
+        Map<String, Object> ex = cleanExtraction('Pilot Agreement');
+        ex.put('Type', 'Pilot');
+        ex.remove('Contract_Length_Months');
+        ex.put('Contract_Length_Days', 32);
+        ex.put('Value_Basis', 'Term');
+        ex.put('License_Fees', 7700);
+        ex.put('Recurring_Fees_Stated', 7700);
+        ex.put('Total_Contract_Value', 7700);
+        ex.put('Credit_Commit_Fee', null);
+        ex.put('Credits_Purchased', null);
+        ex.put('Line_Items', new List<Object>{ new Map<String, Object>{ 'product' => 'Rogo Seats', 'label' => 'Pilot Fee',
+            'quantity' => 5, 'amount' => 7700, 'basis' => 'Term', 'quote' => 'Pilot Fee: USD $7,700 for the Pilot Period' } });
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), extractionReply(ex));
+        System.assertEquals(null, row.Annual_Recurring_Revenue__c, 'a 32-day pilot fee is not annualised into ARR');
+        System.assertEquals(7700, row.Trial_Price__c);
+        System.assertEquals(true, row.Paid_Trial__c);
+        System.assert(row.Derived_Fields__c.contains('Annual_Recurring_Revenue'), row.Derived_Fields__c);
+        List<OrderFormLines.Line> lines = OrderFormLines.fromJson(row.Line_Items__c);
+        for (OrderFormLines.Line l : lines) {
+            System.assertNotEquals('Rogo Seats', l.product, 'no recurring seats on a pilot: ' + row.Line_Items__c);
+        }
+        System.assertEquals(null, row.Lines_Recurring_Annual__c);
+        System.assertEquals('Success', row.Extraction_Status__c, 'dates and the stated fee meet the minimums');
+    }
+
+    // Serves Rogo's terms page for GETs and the review reply for the model request.
+    public class SiteAndReviewMock implements HttpCalloutMock {
+        public String reviewBody;
+        public String lastPost;
+        public HttpResponse respond(HttpRequest req) {
+            HttpResponse r = new HttpResponse();
+            r.setStatusCode(200);
+            if (req.getMethod() == 'GET') {
+                r.setBody('<html><body><h1>Terms &amp; Conditions</h1><p>Last updated: March 3, 2026</p>'
+                    + ('<p>14. Renewal. Either party may give notice of non-renewal at least thirty (30) days before the '
+                    + 'end of the then-current term.</p>').repeat(30) + '</body></html>');
+                return r;
+            }
+            lastPost = req.getBody();
+            r.setBody(reviewBody);
+            return r;
+        }
+    }
+
+    @isTest
+    static void review_readsTheOnlineTermsAndRecordsTheVersion() {
+        reviewerOn();
+        OrderFormReviewer.settingsOverride.Standard_Terms_URL__c = 'https://rogo.com/legal/terms-and-conditions';
+        RogoStandardTerms.fetchInTests = true;
+        Opportunity opp = insertOpp('Terms Review', null);
+        Id doc = attachFile(opp.Id, 'Rogo Order Form - Terms');
+        Order_Form_Extraction__c row = saveExtraction(opp.Id, new List<Id>{ doc }, cleanExtraction('Rogo Order Form - Terms'));
+        SiteAndReviewMock mock = new SiteAndReviewMock();
+        mock.reviewBody = reviewReply(row, new List<Object>(), null, null);
+        Test.setMock(HttpCalloutMock.class, mock);
+        Test.startTest();
+        OrderFormReviewer.reviewAndSave(row.Id, true);
+        Test.stopTest();
+        List<Object> sys = (List<Object>) ((Map<String, Object>) JSON.deserializeUntyped(mock.lastPost)).get('system');
+        System.assertEquals(3, sys.size(), 'review prompt, field definitions, Rogo terms');
+        System.assert(String.valueOf(((Map<String, Object>) sys[2]).get('text')).contains('last updated March 3, 2026'));
+        Order_Form_Review__c rev = [SELECT Sources_Sent__c FROM Order_Form_Review__c WHERE Extraction__c = :row.Id];
+        System.assert(rev.Sources_Sent__c.contains('Rogo Terms & Conditions (online'), rev.Sources_Sent__c);
+    }
+
+    @isTest
+    static void emailCase_isNotAFinding() {
+        Order_Form_Extraction__c saved = new Order_Form_Extraction__c(Billing_Contact_Email__c = 'finance@example.com',
+            Raw_Response__c = '{}');
+        Order_Form_Extraction__c fresh = new Order_Form_Extraction__c(Billing_Contact_Email__c = 'Finance@example.com');
+        System.assert(OrderFormValidator.checkSavedVsProposed(saved, fresh).isEmpty(), 'case-only email difference');
+        // No quote to compare (older extraction): no warning either.
+        System.assert(OrderFormValidator.checkEmails(saved, null, new Map<String, Object>()).isEmpty());
+    }
+
     // ===================================================== extraction changes
 
     @isTest

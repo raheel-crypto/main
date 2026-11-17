@@ -185,6 +185,13 @@ public with sharing class OrderFormReviewer {
             'output_config' => outputConfig(s, replySchema)
         };
         if (s.Use_Fallbacks__c == true) shell.put('fallbacks', 'default');
+        // Rogo's online Terms & Conditions (fetched live), which most order forms incorporate by link.
+        RogoStandardTerms.Terms terms = RogoStandardTerms.get();
+        if (terms.promptBlock() != null) {
+            ((List<Object>) shell.get('system')).add(new Map<String, Object>{
+                'type' => 'text', 'text' => terms.promptBlock(),
+                'cache_control' => new Map<String, Object>{ 'type' => 'ephemeral' } });
+        }
 
         List<Object> blocks = inputBlocks(row, lines, raw, checks, requiredFields, requiredProducts);
         OrderFormExtractionJob.SourceRequest req;
@@ -198,6 +205,7 @@ public with sharing class OrderFormReviewer {
         List<String> sent = new List<String>(req.sentLabels);
         for (String sk : req.skipped) sent.add('NOT SENT: ' + sk);
         sent.addAll(sourceNotes);
+        if (terms.sourceLine() != null) sent.add(terms.sourceLine());
         rev.Sources_Sent__c = truncate(String.join(sent, '\n'), LONG_TEXT);
 
         List<String> missing = OrderFormReviewCoverage.missingSources(row, req,
@@ -212,7 +220,7 @@ public with sharing class OrderFormReviewer {
         Long started = System.currentTimeMillis();
         try {
             resp = OrderFormExtractionJob.callAnthropic(req.body, s.Use_Fallbacks__c == true ? FALLBACK_BETA : null,
-                s.Timeout_Ms__c == null ? 120000 : s.Timeout_Ms__c.intValue());
+                (s.Timeout_Ms__c == null ? 120000 : s.Timeout_Ms__c.intValue()) - RogoStandardTerms.spentMs());
         } catch (Exception e) {
             rev.Latency_Ms__c = System.currentTimeMillis() - started;
             rev.Missing_Required_Sources__c = truncate(String.join(missing, '\n'), LONG_TEXT);

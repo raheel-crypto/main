@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Standard_Terms_URL__c</fullName>
+    <description>Rogo's online Terms &amp; Conditions. Fetched live (RogoStandardTerms) and given to the extractor and the reviewer, for order forms that incorporate them by link. Blank = not fetched. The host needs a Remote Site Setting.</description>
+    <externalId>false</externalId>
+    <fieldManageability>DeveloperControlled</fieldManageability>
+    <label>Standard Terms URL</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

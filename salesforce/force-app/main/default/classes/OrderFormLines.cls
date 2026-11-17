@@ -176,6 +176,7 @@ public with sharing class OrderFormLines {
         for (Line l : lines) {
             if (l.product == 'Other' && namesArvo(l.label)) {
                 l.product = 'Arvo Seats';
+                l.annualAmount = null;
                 annualise(l, termMonths);
                 notes.add('Line ' + l.lineNo + ' ("' + l.label + '") is Rogo\'s meeting assistant (Arvo / Rogo Notes), '
                     + 'not Other.');
@@ -238,6 +239,19 @@ public with sharing class OrderFormLines {
                 rogo.amount = seatFee;
             }
             if (rogo.quantity == null) rogo.quantity = seats;
+        }
+        // A pilot's priced seats are its pilot fee, not recurring seats (Interpath: a 32-day
+        // fee annualised as recurring seats).
+        if (row.Type__c == 'Pilot') {
+            for (Line l : lines) {
+                if ((l.product == 'Rogo Seats' || l.product == 'Arvo Seats' || l.product == 'Other')
+                        && (l.amount != null || l.unitPrice != null)) {
+                    notes.add('Line ' + l.lineNo + ' ("' + l.label + '") is the pilot\'s fee, not recurring '
+                        + l.product + '.');
+                    l.product = 'Pilot Fee';
+                    l.annualAmount = null;
+                }
+            }
         }
         for (Line l : lines) annualise(l, termMonths);
         return notes;

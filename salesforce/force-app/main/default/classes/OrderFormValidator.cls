@@ -525,11 +525,9 @@ public with sharing class OrderFormValidator {
                     + '"); only the first, ' + saved + ', was saved.'));
             }
             String quote = quoteOf(evidence, key);
-            if (quote == null) {
-                out.add(warning(S_EXTRACTION, name, null, 'No quote shows ' + saved + ' as written, so its spelling cannot be '
-                    + 'checked against the source here.'));
-                continue;
-            }
+            // No quote (extractions before quotes were required): nothing to compare here; the
+            // reviewer reads the address in the source itself.
+            if (quote == null) continue;
             if (quote.toLowerCase().contains(saved.toLowerCase())) continue;
             String bare = letters(saved);
             String nearMiss;
@@ -634,6 +632,9 @@ public with sharing class OrderFormValidator {
             Object saved = row.get(f);
             Object fresh = proposed.get(f);
             if (sameValue(saved, fresh)) continue;
+            // Email addresses are not case-sensitive.
+            if (EMAIL_KEYS.containsKey(f) && saved instanceof String && fresh instanceof String
+                    && ((String) saved).equalsIgnoreCase((String) fresh)) continue;
             // Documented normalisation: text cut to the field, with the full value kept.
             if (saved instanceof String && fresh instanceof String) {
                 Schema.SObjectField sf = fields.get(f.toLowerCase());

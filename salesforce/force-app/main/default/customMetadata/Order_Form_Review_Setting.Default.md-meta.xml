@@ -47,6 +47,10 @@
         <value xsi:type="xsd:double">5</value>
     </values>
     <values>
+        <field>Standard_Terms_URL__c</field>
+        <value xsi:type="xsd:string">https://rogo.com/legal/terms-and-conditions</value>
+    </values>
+    <values>
         <field>Sweep_Days__c</field>
         <value xsi:type="xsd:double">30</value>
     </values>

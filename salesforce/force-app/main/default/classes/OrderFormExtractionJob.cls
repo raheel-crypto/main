@@ -778,7 +778,39 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         List<ContentVersion> baseFilesOut,
         List<String> skippedOut
     ) {
-        return buildRequestBody(chosen, currentOppId, parentOpp, currentFilesOut, baseFilesOut, skippedOut, loadPrompt());
+        Map<String, Object> shell = extractionShell(loadPrompt());
+        RogoStandardTerms.Terms terms = RogoStandardTerms.get();
+        String termsBlock = terms.promptBlock();
+        if (termsBlock != null) {
+            // Rogo's online Terms & Conditions, which most order forms incorporate by link
+            // (renewal notice, payment, subprocessor, publicity and AI terms live there).
+            // Same text on every deal, so it is cached.
+            shell.put('system', new List<Object>{
+                new Map<String, Object>{ 'type' => 'text', 'text' => (String) shell.get('system') },
+                new Map<String, Object>{ 'type' => 'text', 'text' => termsBlock,
+                    'cache_control' => new Map<String, Object>{ 'type' => 'ephemeral' } }
+            });
+        }
+        return assembleBody(chosen, currentOppId, parentOpp, currentFilesOut, baseFilesOut, skippedOut, shell,
+            null, EXTRACT_INSTRUCTION);
+    }
+
+    private static final String EXTRACT_INSTRUCTION =
+        'Extract the CURRENT deal per the schema, using parent docs only for context. Return JSON only.';
+
+    private static Map<String, Object> extractionShell(String systemPrompt) {
+        return new Map<String, Object>{
+            'model' => MODEL,
+            'max_tokens' => MAX_TOKENS,
+            // Sonnet 5 runs adaptive thinking by default; on a ~280K-token
+            // contract it burned the ENTIRE max_tokens budget on thinking and
+            // never emitted the JSON (stop_reason=max_tokens, 0 text tokens).
+            // This is deterministic field extraction - the prompt encodes the
+            // rules - so disable thinking: all output tokens go to the JSON, and
+            // it matches Sonnet 4.6's default (no-thinking) behavior we validated.
+            'thinking' => new Map<String, Object>{ 'type' => 'disabled' },
+            'system' => systemPrompt
+        };
     }
 
     // The same request with another system prompt (readWithPrompt).
@@ -791,20 +823,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         List<String> skippedOut,
         String systemPrompt
     ) {
-        Map<String, Object> shell = new Map<String, Object>{
-            'model' => MODEL,
-            'max_tokens' => MAX_TOKENS,
-            // Sonnet 5 runs adaptive thinking by default; on a ~280K-token
-            // contract it burned the ENTIRE max_tokens budget on thinking and
-            // never emitted the JSON (stop_reason=max_tokens, 0 text tokens).
-            // This is deterministic field extraction - the prompt encodes the
-            // rules - so disable thinking: all output tokens go to the JSON, and
-            // it matches Sonnet 4.6's default (no-thinking) behavior we validated.
-            'thinking' => new Map<String, Object>{ 'type' => 'disabled' },
-            'system' => systemPrompt
-        };
-        return assembleBody(chosen, currentOppId, parentOpp, currentFilesOut, baseFilesOut, skippedOut, shell,
-            null, 'Extract the CURRENT deal per the schema, using parent docs only for context. Return JSON only.');
+        return assembleBody(chosen, currentOppId, parentOpp, currentFilesOut, baseFilesOut, skippedOut,
+            extractionShell(systemPrompt), null, EXTRACT_INSTRUCTION);
     }
 
     /**
@@ -944,7 +964,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
     @TestVisible
     private static HttpResponse callAnthropic(String body) {
-        return callAnthropic(body, 'pdfs-2024-09-25', 120000);
+        return callAnthropic(body, 'pdfs-2024-09-25', 120000 - RogoStandardTerms.spentMs());
     }
 
     /** POST /v1/messages through the Anthropic named credential (extraction and reviewer). */
@@ -954,7 +974,8 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         req.setMethod('POST');
         req.setHeader('Content-Type', 'application/json');
         if (String.isNotBlank(betaHeader)) req.setHeader('anthropic-beta', betaHeader);
-        req.setTimeout(timeoutMs == null ? 120000 : Math.min(timeoutMs, 120000));
+        // A transaction gets 120 seconds of callouts in all; callers pass what is left.
+        req.setTimeout(timeoutMs == null ? 120000 : Math.max(1000, Math.min(timeoutMs, 120000)));
         req.setBody(body);
         return new Http().send(req);
     }
@@ -1927,6 +1948,19 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
 
         Contract gov = isAmend ? loadGoverningContract(parentOpp) : null;
 
+        if (!isAmend && row.Type__c == 'Pilot' && totalAnnual != null && (months == null || months < 12)) {
+            // Interpath: a 32-day pilot's fee annualised x12 into $87,876 of ARR. A pilot's fee is
+            // what the pilot costs, not recurring revenue: it is the trial price; ARR stays blank.
+            if (row.Trial_Price__c == null && totalStated != null) {
+                row.Trial_Price__c = totalStated;
+                row.Paid_Trial__c = totalStated > 0;
+                d.mark('Trial_Price', 'The pilot\'s fee as written (' + totalStated
+                    + (basis == null ? '' : ', ' + basis) + ') is its trial price.');
+            }
+            d.mark('Annual_Recurring_Revenue', 'Not set: the pilot\'s fee ' + totalStated + termNote
+                + ' is not recurring revenue.');
+            totalAnnual = null;
+        }
         if (!isAmend) {
             row.Annual_Recurring_Revenue__c = totalAnnual;
             if (totalAnnual != null && (totalHow != null || scaled)) {
