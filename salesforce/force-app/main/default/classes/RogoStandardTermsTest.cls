@@ -76,27 +76,27 @@ private class RogoStandardTermsTest {
         RogoStandardTerms.Library lib = RogoStandardTerms.library();
         System.assertEquals(3, lib.docs.size());
 
-        RogoStandardTerms.Terms terms = lib.docs[0];
-        System.assert(terms.ok(), terms.failure);
-        System.assertEquals('Terms & Conditions', terms.name);
-        System.assertEquals('https://rogo.com/legal/terms', terms.finalUrl);
-        System.assertEquals(null, terms.lastUpdated);
-        System.assert(terms.text.startsWith('Terms & Conditions'), terms.text.left(80));
-        System.assert(terms.text.contains('notice of non-renewal at least thirty (30) days'), terms.text.left(300));
+        RogoStandardTerms.Terms termsDoc = lib.docs[0];
+        System.assert(termsDoc.ok(), termsDoc.failure);
+        System.assertEquals('Terms & Conditions', termsDoc.name);
+        System.assertEquals('https://rogo.com/legal/terms', termsDoc.finalUrl);
+        System.assertEquals(null, termsDoc.lastUpdated);
+        System.assert(termsDoc.text.startsWith('Terms & Conditions'), termsDoc.text.left(80));
+        System.assert(termsDoc.text.contains('notice of non-renewal at least thirty (30) days'), termsDoc.text.left(300));
         String marks = String.fromCharArray(new List<Integer>{ 8220 }) + 'Marks' + String.fromCharArray(new List<Integer>{ 8221 });
-        System.assert(terms.text.contains(marks + ' §15'), terms.text.right(80));
-        System.assert(!terms.text.contains('not page text') && !terms.text.contains('color'), 'scripts and styles dropped');
+        System.assert(termsDoc.text.contains(marks + ' §15'), termsDoc.text.right(80));
+        System.assert(!termsDoc.text.contains('not page text') && !termsDoc.text.contains('color'), 'scripts and styles dropped');
 
-        RogoStandardTerms.Terms dpa = lib.docs[1];
-        System.assert(dpa.ok(), dpa.failure);
-        System.assertEquals(DPA, dpa.url, 'the #fragment is not sent');
-        System.assertEquals('Data Processing Agreement', dpa.name);
-        System.assertEquals('May 5, 2026', dpa.lastUpdated);
+        RogoStandardTerms.Terms dpaDoc = lib.docs[1];
+        System.assert(dpaDoc.ok(), dpaDoc.failure);
+        System.assertEquals(DPA, dpaDoc.url, 'the #fragment is not sent');
+        System.assertEquals('Data Processing Agreement', dpaDoc.name);
+        System.assertEquals('May 5, 2026', dpaDoc.lastUpdated);
 
-        RogoStandardTerms.Terms trust = lib.docs[2];
-        System.assert(!trust.ok());
-        System.assertEquals('Trust Center (published subprocessor list)', trust.name);
-        System.assert(trust.failure.contains('characters of text'), trust.failure);
+        RogoStandardTerms.Terms trustDoc = lib.docs[2];
+        System.assert(!trustDoc.ok());
+        System.assertEquals('Trust Center (published subprocessor list)', trustDoc.name);
+        System.assert(trustDoc.failure.contains('characters of text'), trustDoc.failure);
 
         String block = lib.promptBlock();
         System.assert(block.contains('=== ROGO TERMS & CONDITIONS'), block.left(400));
