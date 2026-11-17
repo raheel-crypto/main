@@ -312,10 +312,10 @@ CREDIT ROLLOVER:
 - Read the CURRENT deal's documents (including its own MSA / Credit Addendum when attached as current); a parent contract's clause is recorded on the parent deal.
 
 LINE ITEMS:
-- Line_Items lists what the CURRENT deal's paper sells, one entry per product line, so each product can be audited on its own. Rogo sells Arvo (also called Rogo Notes) beside regular Rogo seats, sometimes on the same order form - keep them on separate lines.
+- Line_Items lists what the CURRENT deal's paper sells, one entry per product line, so each product can be audited on its own. Rogo sells its AI meeting assistant - called Arvo, Rogo Notes or the Rogo Meeting Assistant - beside regular Rogo seats, sometimes on the same order form - keep them on separate lines.
 - product, exactly one of:
   * "Rogo Seats" - Rogo platform / subscription seats (Authorized Users), whatever the fee is called (Platform Fee, Subscription Fee, License Fee).
-  * "Arvo Seats" - Arvo or Rogo Notes licenses (an Arvo "Service Order" / "Subscription Order" is Arvo). Never fold them into Rogo Seats.
+  * "Arvo Seats" - licenses of Rogo's AI meeting assistant, whatever the paper calls it: Arvo, Rogo Notes, or the Rogo Meeting Assistant ("Rogo Meeting Assistant Fee: USD $1,500.00 per year for 3 Authorized Users of the Rogo Meeting Assistant" is an Arvo Seats line, quantity 3). An Arvo "Service Order" / "Subscription Order" is Arvo. Never fold them into Rogo Seats, and never file them as "Other".
   * "Free Seats" - seats given at no charge ("5 complimentary seats").
   * "Paid Credits" - credits bought by their own price, usually a "Credit Commitment" (amount = the commitment).
   * "Included Credits" - credits that come with the seats and have no price of their own ("Credit Allocation included in the Platform Fee").

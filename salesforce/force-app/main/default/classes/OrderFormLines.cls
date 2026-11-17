@@ -172,6 +172,15 @@ public with sharing class OrderFormLines {
      */
     public static List<String> alignWith(List<Line> lines, Order_Form_Extraction__c row, Decimal termMonths) {
         List<String> notes = new List<String>();
+        // A meeting assistant line read as "Other" (stored before the name was known) is Arvo.
+        for (Line l : lines) {
+            if (l.product == 'Other' && namesArvo(l.label)) {
+                l.product = 'Arvo Seats';
+                annualise(l, termMonths);
+                notes.add('Line ' + l.lineNo + ' ("' + l.label + '") is Rogo\'s meeting assistant (Arvo / Rogo Notes), '
+                    + 'not Other.');
+            }
+        }
         Boolean amend = AMEND_TYPES.contains(row.Type__c);
         String basis = mapBasis(row.Value_Basis__c);
         Decimal seatFee = row.License_Fees__c;
@@ -295,10 +304,25 @@ public with sharing class OrderFormLines {
     // ===== Mapping =====
 
     @TestVisible
+    // Rogo's AI meeting assistant is one product sold under three names: Arvo,
+    // Rogo Notes and the Rogo Meeting Assistant (RKS: "Rogo Meeting Assistant Fee").
+    @TestVisible private static final Pattern ARVO_NAME = Pattern.compile(
+        '(?i)(arvo|rogo notes|notes seat|meeting assistant|ai meeting|note-?taker)');
+
+    /** Whether a line's own name says it is Rogo's meeting assistant (Arvo / Rogo Notes). */
+    @TestVisible
+    private static Boolean namesArvo(String label) {
+        return label != null && ARVO_NAME.matcher(label).find();
+    }
+
     private static String mapProduct(String raw, String label) {
         String s = ((raw == null ? '' : raw) + ' | ' + (label == null ? '' : label)).toLowerCase();
+        // The line's own name beats a catch-all "Other" (or an unknown product).
+        if (namesArvo(label) && (raw == null || raw.equalsIgnoreCase('Other') || !PRODUCTS.contains(raw))) {
+            return 'Arvo Seats';
+        }
         for (String p : PRODUCTS) if (raw != null && raw.equalsIgnoreCase(p)) return p;
-        if (s.contains('arvo') || s.contains('rogo notes') || s.contains('notes seat')) return 'Arvo Seats';
+        if (ARVO_NAME.matcher(s).find()) return 'Arvo Seats';
         if (s.contains('free seat') || s.contains('complimentary seat') || s.contains('free user')) return 'Free Seats';
         if (s.contains('included credit')) return 'Included Credits';
         if (s.contains('credit') && (s.contains('free') || s.contains('complimentary') || s.contains('incentive')

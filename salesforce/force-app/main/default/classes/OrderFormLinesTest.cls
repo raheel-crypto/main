@@ -21,6 +21,33 @@ private class OrderFormLinesTest {
             'unit_price' => unitPrice, 'amount' => amount, 'basis' => basis };
     }
 
+    // RKS: "Rogo Meeting Assistant Fee" was read as "Other". It is Arvo (Rogo Notes),
+    // on a fresh read and on lines already stored that way (re-align, no re-read).
+    @isTest
+    static void meetingAssistantIsArvo() {
+        List<OrderFormLines.Line> lines = OrderFormLines.parse(new List<Object>{
+            line('Rogo Seats', 'Platform Fee', 3, null, 16500, 'Annual'),
+            line('Other', 'Rogo Meeting Assistant Fee', 3, 500, 1500, 'Annual'),
+            line(null, 'Rogo Notes', 2, null, 1000, 'Annual'),
+            line('Other', 'Market data', null, null, 2400, 'Annual')
+        }, 12);
+        System.assertEquals('Rogo Seats', lines[0].product);
+        System.assertEquals('Arvo Seats', lines[1].product, 'the line\'s own name beats "Other"');
+        System.assertEquals(1500, lines[1].annualAmount);
+        System.assertEquals('Arvo Seats', lines[2].product);
+        System.assertEquals('Other', lines[3].product, 'a real catch-all stays Other');
+        System.assertEquals(5, OrderFormLines.quantityOf(lines, 'Arvo Seats'));
+
+        // Stored before the fix: product "Other". Alignment re-files it.
+        OrderFormLines.Line stored = lines[1];
+        stored.product = 'Other';
+        List<String> notes = OrderFormLines.alignWith(new List<OrderFormLines.Line>{ lines[0], stored },
+            new Order_Form_Extraction__c(Type__c = 'New Business', Seat_Licenses__c = 3, License_Fees__c = 16500,
+                Value_Basis__c = 'Annual'), 12);
+        System.assertEquals('Arvo Seats', stored.product);
+        System.assert(String.join(notes, ' ').contains('meeting assistant'), String.join(notes, ' '));
+    }
+
     @isTest
     static void productsAndAnnualAmounts() {
         List<OrderFormLines.Line> lines = OrderFormLines.parse(new List<Object>{

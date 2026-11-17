@@ -14,18 +14,33 @@
 // Order Form Line records - nothing is duplicated. Safe to run again: rows with
 // nothing left to change are skipped.
 //
+// It also re-files a meeting assistant line read as "Other" (RKS: "Rogo Meeting
+// Assistant Fee") as Arvo Seats - Arvo, Rogo Notes and the Rogo Meeting
+// Assistant are one product.
+//
+// ONLY_EXTRACTIONS: limit it to these extractions by name (e.g. 'OFE-05097');
+// leave empty for every current closed-won extraction with lines.
 // DRY_RUN = true (default) lists what would change. Then set DRY_RUN = false.
 //
 // Run: sf apex run --target-org rogo --file scripts/apex/realignOrderFormLines.apex
 // =============================================================================
 
 Boolean DRY_RUN = true;   // <-- false to write
+List<String> ONLY_EXTRACTIONS = new List<String>{
+    // 'OFE-05097'
+};
 
-Map<Id, Order_Form_Extraction__c> rows = new Map<Id, Order_Form_Extraction__c>([
-    SELECT Id, Opportunity__r.Name, Lines_Recurring_Annual__c, Lines_Mismatch__c
-    FROM Order_Form_Extraction__c
-    WHERE Is_Current__c = true AND Lines_Read_At__c != null AND Opportunity__r.StageName = 'Closed Won'
-]);
+Map<Id, Order_Form_Extraction__c> rows = ONLY_EXTRACTIONS.isEmpty()
+    ? new Map<Id, Order_Form_Extraction__c>([
+        SELECT Id, Opportunity__r.Name, Lines_Recurring_Annual__c, Lines_Mismatch__c, Arvo_Seats__c
+        FROM Order_Form_Extraction__c
+        WHERE Is_Current__c = true AND Lines_Read_At__c != null AND Opportunity__r.StageName = 'Closed Won'
+    ])
+    : new Map<Id, Order_Form_Extraction__c>([
+        SELECT Id, Opportunity__r.Name, Lines_Recurring_Annual__c, Lines_Mismatch__c, Arvo_Seats__c
+        FROM Order_Form_Extraction__c
+        WHERE Name IN :ONLY_EXTRACTIONS AND Lines_Read_At__c != null
+    ]);
 List<Order_Form_Extraction__c> changes = OrderFormExtractionJob.realignLines(rows.keySet());
 
 Integer nowMatching = 0;
@@ -37,7 +52,8 @@ for (Order_Form_Extraction__c c : changes) {
     if (before.Lines_Mismatch__c != true && c.Lines_Mismatch__c == true) nowMismatched++;
     if (shown < 25) {
         System.debug(before.Opportunity__r.Name + ' | lines a year ' + before.Lines_Recurring_Annual__c + ' -> '
-            + c.Lines_Recurring_Annual__c + (c.Lines_Mismatch__c == true ? ' | MISMATCH' : ''));
+            + c.Lines_Recurring_Annual__c + ' | Arvo seats ' + before.Arvo_Seats__c + ' -> ' + c.Arvo_Seats__c
+            + (c.Lines_Mismatch__c == true ? ' | MISMATCH' : ''));
         shown++;
     }
 }
