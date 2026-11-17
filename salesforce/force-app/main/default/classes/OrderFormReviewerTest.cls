@@ -790,7 +790,8 @@ private class OrderFormReviewerTest {
 
     @isTest
     static void pilotFee_isTheTrialPriceNotArr() {
-        Opportunity opp = insertOpp('Interpath Pilot', null);
+        // No opportunity: the extractor takes the deal type from the opportunity, and a test
+        // opportunity gets the org's default Type - here the paper's "Pilot" must stand.
         Map<String, Object> ex = cleanExtraction('Pilot Agreement');
         ex.put('Type', 'Pilot');
         ex.remove('Contract_Length_Months');
@@ -803,7 +804,8 @@ private class OrderFormReviewerTest {
         ex.put('Credits_Purchased', null);
         ex.put('Line_Items', new List<Object>{ new Map<String, Object>{ 'product' => 'Rogo Seats', 'label' => 'Pilot Fee',
             'quantity' => 5, 'amount' => 7700, 'basis' => 'Term', 'quote' => 'Pilot Fee: USD $7,700 for the Pilot Period' } });
-        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), extractionReply(ex));
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(null, new List<Id>(), extractionReply(ex));
+        System.assertEquals('Pilot', row.Type__c);
         System.assertEquals(null, row.Annual_Recurring_Revenue__c, 'a 32-day pilot fee is not annualised into ARR');
         System.assertEquals(7700, row.Trial_Price__c);
         System.assertEquals(true, row.Paid_Trial__c);
