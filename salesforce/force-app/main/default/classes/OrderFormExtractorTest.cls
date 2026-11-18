@@ -1610,6 +1610,41 @@ private class OrderFormExtractorTest {
         System.assertEquals('Auto-renew (60-day)', sixty.Renewal_Terms__c);
     }
 
+    private static Order_Form_Extraction__c blankRenewalRow(String quote, String clause) {
+        Opportunity opp = insertOpp('Blank Renewal ' + Crypto.getRandomInteger(), 'Closed Won');
+        String body = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business',
+            'Renewal_Terms' => null,
+            'Extract_Evidence' => new Map<String, Object>{
+                'Renewal_Terms' => new Map<String, Object>{ 'quote' => quote, 'clause' => clause }
+            }
+        });
+        return OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(), body);
+    }
+
+    @isTest
+    static void renewal_blankAnswerTakesTheNoticeItsOwnQuoteStates() {
+        // RKS: the order form is silent; the model quoted the incorporated online T&Cs 14(a) yet answered null.
+        Order_Form_Extraction__c rks = blankRenewalRow('This Agreement will automatically renew for additional '
+            + 'successive terms equal to the length of the Initial Subscription Period unless earlier terminated pursuant '
+            + 'to this Agreement\'s express provisions or either party gives the other party written notice of '
+            + 'non-renewal at least thirty (30) days prior to the expiration of the then-current term',
+            'Rogo Terms & Conditions (online) Section 14(a)');
+        System.assertEquals('Auto-renew (30-day)', rks.Renewal_Terms__c);
+        System.assert(rks.Derived_Fields__c.contains('Renewal_Terms'), rks.Derived_Fields__c);
+
+        // No stated notice (Peel Hunt), a price-increase notice, or a count without non-renewal wording: stays blank.
+        System.assertEquals(null, blankRenewalRow('The Agreement will automatically renew at Rogo\'s then-current list '
+            + 'pricing unless otherwise mutually agreed.', 'Order Form').Renewal_Terms__c);
+        System.assertEquals(null, blankRenewalRow('The Agreement renews automatically. Rogo will give sixty (60) days '
+            + 'notice of any price increase.', 'Order Form').Renewal_Terms__c);
+        System.assertEquals(null, blankRenewalRow('The Agreement renews automatically for successive 12-month terms; '
+            + 'the renewal term starts 30 days after delivery.', 'Order Form').Renewal_Terms__c);
+        // A non-allowed period stays blank too.
+        System.assertEquals(null, blankRenewalRow('Auto-renews unless either party gives notice of non-renewal at least '
+            + 'forty-five (45) days prior to the end of the term.', 'MSA 9').Renewal_Terms__c);
+    }
+
     @isTest
     static void renewal_genuineManualAnswersStay() {
         System.assertEquals('Manual renewal', renewalRow('The Agreement will not automatically renew. Any renewal '

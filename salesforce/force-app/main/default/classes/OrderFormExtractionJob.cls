@@ -1369,6 +1369,10 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     @TestVisible
     private static void verifyRenewalTerms(Order_Form_Extraction__c row, Map<String, Object> extracted, Derivations d,
                                            List<String> issues) {
+        if (row.Renewal_Terms__c == null) {
+            fillRenewalFromEvidence(row, extracted, d);
+            return;
+        }
         if (row.Renewal_Terms__c != 'Manual renewal') return;
         String quote = evidenceQuote(extracted, 'Renewal_Terms');
         if (String.isBlank(quote)) return;
@@ -1388,6 +1392,22 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         issues.add(issue('enum_gap', 'Renewal_Terms', quote, 'Auto-renews; ' + why + '.', null));
     }
 
+    // A blank answer whose own evidence quotes an automatic renewal with a stated
+    // 30, 60 or 90-day NON-RENEWAL notice takes that value (RKS, Nov 2026: the order
+    // form is silent, the quote is the incorporated online T&Cs section 14(a)). Only a
+    // count introduced by non-renewal wording counts - never a fallback or default.
+    private static void fillRenewalFromEvidence(Order_Form_Extraction__c row, Map<String, Object> extracted,
+                                                Derivations d) {
+        String quote = evidenceQuote(extracted, 'Renewal_Terms');
+        if (String.isBlank(quote)) return;
+        if (!AUTO_RENEW_WORDS.matcher(quote).find() || MANUAL_RENEW_WORDS.matcher(quote).find()) return;
+        Integer days = noticeDays(quote, true);
+        if (days != 30 && days != 60 && days != 90) return;
+        row.Renewal_Terms__c = 'Auto-renew (' + days + '-day)';
+        d.mark('Renewal_Terms', 'Model left it blank, but its own evidence quote renews automatically with a ' + days
+            + '-day non-renewal notice.');
+    }
+
     private static final Pattern DAY_COUNT = Pattern.compile(
         '(?i)(?:\\b(thirty|sixty|ninety|forty[- ]five|fifteen|one hundred (?:and )?twenty)\\s*(?:\\(\\d{1,3}\\)\\s*)?'
         + '|(\\d{1,3})\\)?\\s*)(?:calendar\\s+|business\\s+)?days');
@@ -1399,6 +1419,11 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
     /** The non-renewal notice in days from a renewal clause, or null when it states none. */
     @TestVisible
     private static Integer nonRenewalNoticeDays(String quote) {
+        return noticeDays(quote, false);
+    }
+
+    // strict: only a count introduced by non-renewal wording; no fallback to another count.
+    private static Integer noticeDays(String quote, Boolean strict) {
         if (String.isBlank(quote)) return null;
         Matcher m = DAY_COUNT.matcher(quote);
         Integer fallback = null;
@@ -1411,7 +1436,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             if (renewalContext) return days;
             // "sixty (60) days notice of any price increase": a price notice, not the renewal one.
             Boolean priceContext = PRICE_NOTICE_WORDS.matcher(before).find() || PRICE_NOTICE_WORDS.matcher(after).find();
-            if (!priceContext && fallback == null) fallback = days;
+            if (!strict && !priceContext && fallback == null) fallback = days;
         }
         return fallback;
     }

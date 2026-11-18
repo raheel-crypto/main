@@ -460,6 +460,7 @@ INTERPRETATION HINTS:
 - Renewal_Terms' day count is the NON-RENEWAL notice: how long before the term ends a party must say it will not renew. A deadline for notice of a price increase, or for termination for cause, is not it.
 - "Auto-renews unless 90 days written notice" -> Renewal_Terms = "Auto-renew (90-day)"
 - "Evergreen" / "renews automatically" with no non-renewal notice period stated -> Renewal_Terms = null and an Issues entry (kind "enum_gap", "auto-renews; no non-renewal notice period stated"). Never assume 30 days.
+- "Stated" includes the terms the order form incorporates: when the order form renews automatically but is silent on notice, and an attached MSA or Rogo's online Terms & Conditions (when supplied and incorporated) state the non-renewal notice, set Renewal_Terms from that period (e.g. "Auto-renew (30-day)") and cite that clause in Extract_Evidence. No Issues entry is needed for it. The order form's own silence is not the agreement's silence.
 - "Renews unless either party gives notice of non-renewal at least forty-five (45) days prior" -> null and an Issues entry (kind "enum_gap"): 45 days is not an allowed value.
 - "Will not auto-renew" / "Renewal subject to mutual agreement" -> "Manual renewal"
 - "Renews unless either party gives written notice of non-renewal at least thirty (30) days prior" -> "Auto-renew (30-day)"
