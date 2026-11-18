@@ -103,10 +103,29 @@ for (String start : URLS) {
     }
     if (seen.isEmpty()) System.debug('  (no file / data addresses found in the page)');
 
+    // Are vendor names in the page at all?
+    for (String vendor : new List<String>{ 'anthropic', 'openai', 'amazon web services', 'aws', 'google', 'microsoft',
+            'azure', 'snowflake', 'fireworks', 'datadog', 'vercel', 'cloudflare' }) {
+        System.debug('  vendor "' + vendor + '": ' + low.countMatches(vendor) + ' mention(s)');
+    }
+    // What the page stores under the Subprocessors card's item.
+    String item = '4f5e1d9d-df3a-4fe4-9642-30ecbd6de789';
+    Integer itemShown = 0;
+    Integer ipos = 0;
+    while (itemShown < 4) {
+        Integer at = body.indexOf(item, ipos);
+        if (at < 0) break;
+        System.debug('  item ' + (itemShown + 1) + ': ' + body.substring(at, Math.min(body.length(), at + 1500))
+            .replace('\n', ' ').replace('\r', ' '));
+        itemShown++;
+        ipos = at + item.length();
+    }
+    if (itemShown == 0) System.debug('  (the Subprocessors item id does not appear in the page)');
+
     // Where the page (and the data embedded in it) mentions subprocessors: up to 12 excerpts.
     Integer shown = 0;
     pos = 0;
-    while (shown < 12) {
+    while (shown < 0) {
         Integer at = low.indexOf('subprocessor', pos);
         if (at < 0) break;
         String excerpt = body.substring(Math.max(0, at - 120), Math.min(body.length(), at + 280));
