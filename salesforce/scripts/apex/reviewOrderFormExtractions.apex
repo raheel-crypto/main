@@ -11,6 +11,11 @@
 //   Sweep Days (setting) without a current, up-to-date review.
 // - FORCE = true reviews again even when the current review is up to date or
 //   out of attempts.
+// - RERUN_REVIEWED_IN_LAST_DAYS = N (e.g. 2): review again (forced) every
+//   extraction whose current review was made in the last N days - to compare a
+//   batch before and after a change. Needed after a change to Rogo's online
+//   terms or the subprocessor list: those do not make a review out of date (they
+//   are not part of its hashes, so a website edit does not re-review everything).
 // - DRY_RUN = true (default) only reports the setting and what would be reviewed.
 // - SCHEDULE_HOURLY = true also schedules the sweep every hour (once).
 //
@@ -23,6 +28,7 @@
 Boolean DRY_RUN = true;              // <-- false to start
 Boolean FORCE = false;
 Boolean SCHEDULE_HOURLY = false;
+Integer RERUN_REVIEWED_IN_LAST_DAYS = 0;   // <-- e.g. 2 to redo the latest pilot
 List<Id> EXTRACTION_IDS = new List<Id>{
     // 'a1Gcv00000Fl9K9EAJ'
 };
@@ -46,6 +52,19 @@ for (AggregateResult ar : [
     System.debug('   current reviews ' + ar.get('st') + ': ' + ar.get('n'));
 }
 System.debug('   stale current reviews: ' + [SELECT COUNT() FROM Order_Form_Review__c WHERE Is_Current__c = true AND Is_Stale__c = true]);
+
+if (EXTRACTION_IDS.isEmpty() && RERUN_REVIEWED_IN_LAST_DAYS > 0) {
+    Datetime since = Datetime.now().addDays(-RERUN_REVIEWED_IN_LAST_DAYS);
+    for (Order_Form_Review__c r : [
+        SELECT Extraction__c FROM Order_Form_Review__c
+        WHERE Is_Current__c = true AND CreatedDate >= :since ORDER BY CreatedDate
+    ]) {
+        if (!EXTRACTION_IDS.contains(r.Extraction__c)) EXTRACTION_IDS.add(r.Extraction__c);
+    }
+    FORCE = true;
+    System.debug('--- Re-review (forced): ' + EXTRACTION_IDS.size() + ' extraction(s) whose current review is from the '
+        + 'last ' + RERUN_REVIEWED_IN_LAST_DAYS + ' day(s).');
+}
 
 if (DRY_RUN) {
     System.debug('--- DRY RUN: nothing started. ' + (EXTRACTION_IDS.isEmpty()
