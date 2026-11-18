@@ -12,8 +12,7 @@
 // =============================================================================
 
 List<String> URLS = new List<String>{
-    'https://trust.rogo.ai?itemUid=e3fae2ca-94a9-416b-b577-5c90e382df57',
-    'https://trust.rogo.ai/696deff1-2f4f-49b2-ae8e-b1166a4130de'
+    'https://trust.rogo.ai?itemUid=e3fae2ca-94a9-416b-b577-5c90e382df57'
 };
 List<String> KEYWORDS = new List<String>{ 'download', 'export', 'subprocessor', '.csv', '.pdf', '.json', '.xlsx',
     '/api/', 'item', 'document', 'file', 'storage', 'amazonaws', 'cloudfront' };
@@ -103,6 +102,18 @@ for (String start : URLS) {
         pos = e + 1;
     }
     if (seen.isEmpty()) System.debug('  (no file / data addresses found in the page)');
+
+    // Where the page (and the data embedded in it) mentions subprocessors: up to 12 excerpts.
+    Integer shown = 0;
+    pos = 0;
+    while (shown < 12) {
+        Integer at = low.indexOf('subprocessor', pos);
+        if (at < 0) break;
+        String excerpt = body.substring(Math.max(0, at - 120), Math.min(body.length(), at + 280));
+        System.debug('  excerpt ' + (shown + 1) + ': ' + excerpt.replace('\n', ' ').replace('\r', ' '));
+        shown++;
+        pos = at + 280;
+    }
     System.debug('  Mentions: ' + (low.countMatches('.pdf')) + ' x ".pdf", ' + low.countMatches('download')
         + ' x "download", ' + low.countMatches('subprocessor') + ' x "subprocessor"');
 }
