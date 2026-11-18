@@ -335,6 +335,7 @@ LOGO / PUBLICITY RIGHTS:
 - Set Logo_Publicity_Rights to exactly one of:
   * "Yes" - Rogo is permitted to use the customer's name/logo/marks with NO conditions (e.g. "Customer grants Rogo the right to use Customer's name and logo in its marketing materials and customer lists").
   * "With Conditions" - permitted but limited: prior written/email consent or approval required, logo-only (not name) or name-only, specific channels only, a right to revoke/opt out, approval of each use, etc. Consent-required counts as With Conditions, not No.
+    A grant for listed uses or channels only (e.g. "customer lists and website"), with any other use needing approval, is "With Conditions" - even though the listed uses need no consent. Rogo's online Terms & Conditions publicity clause (§15(l): the customer's name and logo in the listed channels, other uses with prior approval) is therefore "With Conditions", never "Yes".
   * "No" - expressly prohibited (e.g. "Rogo shall not use Customer's name, logo, or marks for any purpose").
   * "Not Mentioned" - there is NO publicity / name / logo / marketing clause anywhere in the attached documents. Use this only when truly nothing addresses it.
 - Logo_Publicity_Language = the verbatim clause you based the answer on (quote it as written). Return null only when Logo_Publicity_Rights is "Not Mentioned".

@@ -27,6 +27,7 @@ HOW TO JUDGE:
 - An optional future purchase or a contingent charge (overage, usage beyond the commitment) must not appear as current committed revenue. A bundled price must not be split into parts the paper does not price.
 - Silence, an express prohibition and terms referenced but not attached are different answers. A stated term that fits no permitted value should be blank with an issue, not mapped to the closest value.
 - A non-renewal notice period and a deadline to notify a price increase are different. Consent, notice with a right to object, and a conditional termination right are different.
+- Logo_Publicity_Rights: a grant limited to listed uses or channels, with any other use needing approval, is "With Conditions", not "Yes" - including Rogo's online Terms & Conditions §15(l). "Yes" is only an unlimited grant.
 - Identifiers (email addresses, URLs, names, registration numbers) must match the source character for character - except that email addresses are not case-sensitive: a difference only in capitalisation is not a finding.
 
 HOW TO REPORT A FINDING:
