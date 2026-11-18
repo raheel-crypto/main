@@ -842,6 +842,8 @@ private class OrderFormReviewerTest {
         reviewerOn();
         OrderFormReviewer.settingsOverride.Standard_Terms_URL__c = 'https://rogo.com/legal/terms-and-conditions';
         RogoStandardTerms.fetchInTests = true;
+        RogoStandardTerms.subprocessorCsv = '"Company Name","Purpose","Location","Additional Details","Created At"\n'
+            + '"OpenAI","OpenAI Enterprise LLM Inference API","United States","","May 15, 2025"\n';
         Opportunity opp = insertOpp('Terms Review', null);
         Id doc = attachFile(opp.Id, 'Rogo Order Form - Terms');
         Order_Form_Extraction__c row = saveExtraction(opp.Id, new List<Id>{ doc }, cleanExtraction('Rogo Order Form - Terms'));
@@ -856,6 +858,9 @@ private class OrderFormReviewerTest {
         System.assert(String.valueOf(((Map<String, Object>) sys[2]).get('text')).contains('last updated March 3, 2026'));
         Order_Form_Review__c rev = [SELECT Sources_Sent__c FROM Order_Form_Review__c WHERE Extraction__c = :row.Id];
         System.assert(rev.Sources_Sent__c.contains('Rogo Terms & Conditions (online'), rev.Sources_Sent__c);
+        System.assert(rev.Sources_Sent__c.contains('Rogo Subprocessor List (trust center export'), rev.Sources_Sent__c);
+        System.assert(String.valueOf(((Map<String, Object>) sys[2]).get('text')).contains('- OpenAI | Purpose: OpenAI '
+            + 'Enterprise LLM Inference API'));
     }
 
     @isTest

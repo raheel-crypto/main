@@ -4,6 +4,14 @@ private class RogoStandardTermsTest {
     private static final String TERMS = 'https://rogo.com/legal/terms-and-conditions';
     private static final String DPA = 'https://rogo.com/legal/data-processing-agreement';
     private static final String TRUST = 'https://trust.rogo.ai/';
+    // The trust center's export: CRLF lines, a quoted comma, a doubled quote, a line break inside a value.
+    private static final String SUBPROCESSORS = '"Company Name","Purpose","Location","Additional Details","Created At"\r\n'
+        + '"Google Cloud","Cloud Services","United States","Privacy Portal: https://cloud.google.com/privacy","May 15, 2025"\r\n'
+        + '"Deepgram","Speech-to-Text (Rogo Notes-only)","United States","Privacy: https://deepgram.com","October 8, 2026"\r\n'
+        + '"Anthropic","Anthropic Enterprise LLM Inference API","United States","Privacy Portal:\n'
+        + 'https://www.anthropic.com/legal/privacy","February 3, 2026"\r\n'
+        + '"FoundryLabs, Inc. (E2B)","Ephemeral ""sandboxed"" compute","United States","","February 3, 2026"\r\n'
+        + '\r\n';
 
     // The T&Cs redirect once; the DPA is a page with a date; the trust center is a
     // browser-rendered shell. Anything that is not a GET is the extraction reply.
@@ -66,6 +74,8 @@ private class RogoStandardTermsTest {
             Standard_Terms_URL__c = urls);
         RogoStandardTerms.fetchInTests = true;
         RogoStandardTerms.cached = null;
+        RogoStandardTerms.subprocessorCsv = SUBPROCESSORS;
+        RogoStandardTerms.subprocessorLoadedAt = Datetime.newInstanceGmt(2026, 11, 17, 15, 30, 0);
     }
 
     @isTest
@@ -74,7 +84,7 @@ private class RogoStandardTermsTest {
         SiteMock mock = new SiteMock();
         Test.setMock(HttpCalloutMock.class, mock);
         RogoStandardTerms.Library lib = RogoStandardTerms.library();
-        System.assertEquals(3, lib.docs.size());
+        System.assertEquals(4, lib.docs.size(), 'three pages + the subprocessor list');
 
         RogoStandardTerms.Terms termsDoc = lib.docs[0];
         System.assert(termsDoc.ok(), termsDoc.failure);
@@ -105,9 +115,12 @@ private class RogoStandardTermsTest {
         System.assert(block.contains('last updated May 5, 2026'));
         System.assert(block.contains('Trust Center (published subprocessor list) (' + TRUST + '): could not be fetched'));
         System.assert(block.contains('"By reference: <url>"'), 'a referenced subprocessor list stays by reference');
+        System.assert(block.contains('=== ROGO SUBPROCESSOR LIST (https://trust.rogo.ai) ==='));
         List<String> lines = lib.sourceLines();
-        System.assertEquals(3, lines.size());
+        System.assertEquals(4, lines.size());
         System.assert(lines[2].startsWith('NOT FETCHED: Rogo Trust Center'), lines[2]);
+        System.assert(lines[3].startsWith('Rogo Subprocessor List (trust center export, Salesforce static resource '
+            + 'RogoSubprocessors), loaded 2026-11-17 15:30 UTC, 4 entries, latest added October 8, 2026'), lines[3]);
 
         // Once per transaction.
         RogoStandardTerms.library();
@@ -140,6 +153,47 @@ private class RogoStandardTermsTest {
         System.assertEquals('https://www.rogo.com/t', RogoStandardTerms.absolute('https://rogo.com/a', 'https://www.rogo.com/t'));
         System.assertEquals('Service Level Agreement', RogoStandardTerms.nameFor('https://rogo.com/legal/service-level-agreement'));
         System.assertEquals('Privacy Policy', RogoStandardTerms.nameFor('https://rogo.com/legal/privacy-policy'));
+    }
+
+    @isTest
+    static void subprocessorList_readsTheTrustCenterExport() {
+        configure(TERMS);
+        Test.setMock(HttpCalloutMock.class, new SiteMock());
+        RogoStandardTerms.Terms subs = RogoStandardTerms.library().docs[1];
+        System.assert(subs.ok(), subs.failure);
+        System.assertEquals('Subprocessor List', subs.name);
+        System.assertEquals(4, subs.entries);
+        System.assertEquals('October 8, 2026', subs.lastUpdated, 'the latest "Created At", not the last row');
+        System.assert(subs.text.startsWith('Rogo\'s subprocessors (4), as listed on the trust center '
+            + '(https://trust.rogo.ai) and loaded into Salesforce on 2026-11-17.'), subs.text.left(200));
+        System.assert(subs.text.contains('\n- Google Cloud | Purpose: Cloud Services | Location: United States | '
+            + 'Additional Details: Privacy Portal: https://cloud.google.com/privacy | Added: May 15, 2025\n'), subs.text);
+        System.assert(subs.text.contains('- Anthropic | Purpose: Anthropic Enterprise LLM Inference API | Location: '
+            + 'United States | Additional Details: Privacy Portal: https://www.anthropic.com/legal/privacy | Added: '
+            + 'February 3, 2026'), 'a line break inside a value is a space: ' + subs.text);
+        System.assert(subs.text.contains('- FoundryLabs, Inc. (E2B) | Purpose: Ephemeral "sandboxed" compute | '
+            + 'Location: United States | Added: February 3, 2026'), 'quoted comma, doubled quote, blank detail: ' + subs.text);
+        String block = RogoStandardTerms.library().promptBlock();
+        System.assert(block.contains('- Subprocessor List (https://trust.rogo.ai): the trust center\'s list as exported '
+            + 'and loaded into Salesforce on 2026-11-17 UTC, 4 subprocessors, the latest added October 8, 2026.'), block.left(600));
+        System.assert(block.contains('a later addition is not a finding about the extraction'));
+
+        // Not the export: recorded, not thrown.
+        RogoStandardTerms.cached = null;
+        RogoStandardTerms.subprocessorCsv = 'just some text';
+        RogoStandardTerms.Terms bad = RogoStandardTerms.library().docs[1];
+        System.assert(!bad.ok());
+        System.assert(bad.failure.contains('not the trust center\'s CSV export'), bad.failure);
+        String badLine = RogoStandardTerms.library().sourceLines()[1];
+        System.assert(badLine.startsWith('NOT FETCHED: Rogo Subprocessor List (trust center export'), badLine);
+
+        System.assertEquals(Date.newInstance(2026, 9, 16), RogoStandardTerms.longDate('September 16, 2026'));
+        System.assertEquals(Date.newInstance(2026, 9, 16), RogoStandardTerms.longDate('16 Sept 2026'));
+        System.assertEquals(Date.newInstance(2026, 9, 16), RogoStandardTerms.longDate('2026-09-16'));
+        System.assertEquals(null, RogoStandardTerms.longDate('soon'));
+        List<List<String>> rows = RogoStandardTerms.parseCsv('a,b\nc,"d\n""e"" f"');
+        System.assertEquals(2, rows.size());
+        System.assertEquals('d\n"e" f', rows[1][1]);
     }
 
     @isTest

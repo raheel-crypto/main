@@ -1,0 +1,26 @@
+"Company Name","Purpose","Location","Additional Details","Created At"
+"Google Cloud","Cloud Services","United States","Privacy Portal: https://cloud.google.com/terms/cloud-privacy-notice","May 15, 2025"
+"Amazon Web Services (AWS)","Cloud Services","United States","Privacy Portal: https://aws.amazon.com/privacy/","May 15, 2025"
+"auth0 by Okta","IAM","United States","Privacy policy: https://www.okta.com/legal/privacy-policy/","May 15, 2025"
+"Cloudflare","Cloud hosting and storage for internal tools","United States","Privacy Policy: https://www.cloudflare.com/privacypolicy/","May 15, 2025"
+"Datadog","Operational Telemetry, Alerting","United States","Privacy Portal: https://www.datadoghq.com/privacy/","May 15, 2025"
+"OpenAI","OpenAI Enterprise LLM Inference API","United States","Privacy Portal: https://openai.com/enterprise-privacy/","May 15, 2025"
+"Anthropic","Anthropic Enterprise LLM Inference API","United States","Privacy Portal:
+https://www.anthropic.com/legal/privacy","February 3, 2026"
+"Mistral AI","Mistral Enterprise LLM Inference API","United States/EU","Privacy Policy: https://legal.mistral.ai/terms/privacy-policy/","September 16, 2026"
+"Parallel Web Systems","Paralell Enterprise LLM Inference API","United States","Privacy Portal:
+https://parallel.ai/privacy-policy","February 3, 2026"
+"Microsoft Azure","Cloud Services","United States","Privacy Portal: 
+https://www.microsoft.com/en-us/privacy/privacystatement","May 15, 2025"
+"SendGrid","Emails","US","Dedicated IPs, for sending email exports and onboarding","May 27, 2025"
+"FoundryLabs, Inc. (E2B)","Ephemeral sandboxed compute execution","United States","Privacy Portal:
+https://e2b.dev/privacy","February 3, 2026"
+"ElevenLabs","Voice AI for our iOS app","United States/EU","Privacy Policy: https://elevenlabs.io/privacy-policy","September 16, 2026"
+"Baseten","GPU provider","United States/EU","Privacy Policy: https://www.baseten.co/privacy-policy/","September 16, 2026"
+"Fireworks AI","GPU Provider","United States/EU","Privacy Policy: https://fireworks.ai/privacy-policy","September 16, 2026"
+"Together AI","GPU Provider","United States/EU","Privacy Policy: https://www.together.ai/privacy","September 16, 2026"
+"DigitalOcean","GPU Provider","United States/EU","Privacy Policy: https://www.digitalocean.com/legal/privacy-policy","September 16, 2026"
+"Modal","GPU Provider","United States/EU","Privacy Policy: https://modal.com/legal/privacy-policy","September 16, 2026"
+"Nebius","GPU Provider","United States/EU","Privacy Policy: https://docs.nebius.com/legal/privacy","September 16, 2026"
+"Deepgram","Speech-to-Text (Rogo Notes-only)","United States","Privacy: https://developers.deepgram.com/trust-security/data-privacy-compliance","October 8, 2026"
+"Recall.Ai","Meeting-data capture platform (Rogo Notes-only)","United States","Privacy: https://www.recall.ai/privacy","October 8, 2026"

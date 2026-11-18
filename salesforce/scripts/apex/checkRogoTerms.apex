@@ -3,9 +3,17 @@
 // =============================================================================
 // The extractor and the reviewer fetch them live (RogoStandardTerms) from the
 // Standard Terms URLs on the "Default" Order Form Review Setting: the online
-// T&Cs, DPA, SLA and trust center. This fetches them once and prints what they
-// would get for each: status, final URL, the last-updated date found, the size of
-// the text, and its first and last lines. Read-only.
+// T&Cs, DPA and SLA. This fetches them once and prints what they would get for
+// each: status, final URL, the last-updated date found, the size of the text, and
+// its first and last lines. Then the subprocessor list, in full. Read-only.
+//
+// The subprocessor list is the trust center's CSV export, kept in the static
+// resource RogoSubprocessors. To update it when the trust center changes:
+//   1. trust.rogo.ai > Subprocessors > download the list (CSV).
+//   2. Salesforce Setup > Quick Find "Static Resources" > RogoSubprocessors >
+//      Edit > Choose File (the CSV) > Save.
+//   3. Run this script: the list should show the new entries.
+// No deploy needed; the next extraction or review reads it.
 //
 // "Unauthorized endpoint": the host has no Remote Site Setting (Rogo_Website,
 // Rogo_Website_WWW, Rogo_Trust_Center) or the page redirects to another host.
@@ -25,6 +33,12 @@ for (RogoStandardTerms.Terms t : lib.docs) {
         + ' (' + t.spentMs + ' ms)');
     if (!t.ok()) {
         System.debug('    NOT USABLE: ' + t.failure);
+        continue;
+    }
+    if (t.origin != null) {
+        System.debug('    Uploaded to Salesforce ' + t.fetchedAt.format('yyyy-MM-dd') + ' | ' + t.entries
+            + ' subprocessors | latest added ' + (t.lastUpdated == null ? '(no dates found)' : t.lastUpdated));
+        for (String line : t.text.split('\n')) System.debug('    ' + line);
         continue;
     }
     System.debug('    Last updated: ' + (t.lastUpdated == null ? '(none found)' : t.lastUpdated) + ' | '

@@ -1,7 +1,7 @@
 /**
  * Rogo's published legal documents, fetched live (no stored copies to keep in step):
- * the online Terms & Conditions, the Data Processing Agreement, the Service Level
- * Agreement and the trust center's subprocessor list. Most order forms incorporate
+ * the online Terms & Conditions, the Data Processing Agreement and the Service Level
+ * Agreement - plus the trust center's subprocessor list. Most order forms incorporate
  * the T&Cs by link ("issued under and incorporates Rogo's Terms & Conditions
  * available at https://rogo.com/legal/terms-and-conditions"), and the T&Cs in turn
  * incorporate the DPA and SLA, so renewal notice, payment, subprocessor, publicity
@@ -14,12 +14,18 @@
  * recorded and skipped - extraction and review go on without it.
  *
  * URLs: Order_Form_Review_Setting__mdt.Default Standard_Terms_URL__c, several
- * separated by spaces (blank = off). Only pages whose text is in the HTML work: the
- * trust center (trust.rogo.ai) draws its subprocessor list in the browser, so
- * Salesforce sees just its headings - it is left out. A #fragment is ignored. Each host needs a
- * Remote Site Setting (Rogo_Website, Rogo_Website_WWW, Rogo_Trust_Center).
- * Fetched once per transaction; redirects followed up to three times; at most
- * BUDGET_MS of the transaction's 120 callout seconds are spent here.
+ * separated by spaces (blank = off, the subprocessor list included). Only pages whose
+ * text is in the HTML work. A #fragment is ignored. Each host needs a Remote Site
+ * Setting (Rogo_Website, Rogo_Website_WWW, Rogo_Trust_Center). Fetched once per
+ * transaction; redirects followed up to three times; at most BUDGET_MS of the
+ * transaction's 120 callout seconds are spent here.
+ *
+ * The subprocessor list is not fetched: the trust center (trust.rogo.ai) draws it in
+ * the browser. It is read from the static resource RogoSubprocessors, the CSV the
+ * trust center exports ("Company Name","Purpose","Location","Additional Details",
+ * "Created At"). To update it: download the CSV from the trust center, then Setup >
+ * Static Resources > RogoSubprocessors > Edit > Choose File > Save. No deploy; the
+ * next extraction or review reads it. Its upload date is recorded with each review.
  */
 public with sharing class RogoStandardTerms {
 
@@ -34,6 +40,9 @@ public with sharing class RogoStandardTerms {
         public String failure;
         public String hash;
         public Integer spentMs = 0;
+        // Null for a page fetched online; otherwise where the text came from (the subprocessor list).
+        public String origin;
+        public Integer entries;
 
         public Boolean ok() {
             return String.isNotBlank(text) && failure == null;
@@ -41,7 +50,12 @@ public with sharing class RogoStandardTerms {
 
         /** One line for the review's Sources_Sent__c. */
         public String sourceLine() {
-            if (!ok()) return 'NOT FETCHED: Rogo ' + name + ' (' + url + ') - ' + failure;
+            if (!ok()) return 'NOT FETCHED: Rogo ' + name + ' (' + (origin == null ? url : origin) + ') - ' + failure;
+            if (origin != null) {
+                return 'Rogo ' + name + ' (' + origin + '), loaded ' + fetchedAt.formatGmt('yyyy-MM-dd HH:mm') + ' UTC, '
+                    + entries + ' entries' + (lastUpdated == null ? '' : ', latest added ' + lastUpdated)
+                    + ', sha256 ' + hash.left(12);
+            }
             return 'Rogo ' + name + ' (online, ' + finalUrl + '), fetched ' + fetchedAt.formatGmt('yyyy-MM-dd HH:mm')
                 + ' UTC' + (lastUpdated == null ? '' : ', last updated ' + lastUpdated) + ', ' + text.length()
                 + ' characters, sha256 ' + hash.left(12);
@@ -69,7 +83,12 @@ public with sharing class RogoStandardTerms {
             List<String> index = new List<String>();
             List<String> bodies = new List<String>();
             for (Terms t : docs) {
-                if (t.ok()) {
+                if (t.ok() && t.origin != null) {
+                    index.add('- ' + t.name + ' (' + t.url + '): the trust center\'s list as exported and loaded into '
+                        + 'Salesforce on ' + t.fetchedAt.formatGmt('yyyy-MM-dd') + ' UTC, ' + t.entries + ' subprocessors'
+                        + (t.lastUpdated == null ? '' : ', the latest added ' + t.lastUpdated) + '.');
+                    bodies.add('=== ROGO ' + t.name.toUpperCase() + ' (' + t.url + ') ===\n' + t.text);
+                } else if (t.ok()) {
                     index.add('- ' + t.name + ' (' + t.url + '): fetched ' + t.fetchedAt.formatGmt('yyyy-MM-dd') + ' UTC, '
                         + (t.lastUpdated == null ? 'the page shows no last-updated date' : 'last updated ' + t.lastUpdated)
                         + '.');
@@ -79,8 +98,8 @@ public with sharing class RogoStandardTerms {
                         + 'incorporates it, its content is unknown: treat it as missing referenced terms.');
                 }
             }
-            return 'ROGO STANDARD TERMS - Rogo\'s published legal documents, fetched live. These are the CURRENT '
-                + 'versions:\n' + String.join(index, '\n') + '\n'
+            return 'ROGO STANDARD TERMS - Rogo\'s published legal documents, fetched live (the subprocessor list '
+                + 'from the trust center\'s export). These are the CURRENT versions:\n' + String.join(index, '\n') + '\n'
                 + 'They govern a deal ONLY where its documents incorporate them: the Terms & Conditions where a '
                 + 'current-deal document incorporates Rogo\'s Terms & Conditions by link (for example "issued under and '
                 + 'incorporates Rogo\'s Terms & Conditions available at https://rogo.com/legal/terms-and-conditions"); '
@@ -92,7 +111,11 @@ public with sharing class RogoStandardTerms {
                 + 'by an earlier version: when a value depends on one of these documents, say so (an Issues entry, or a '
                 + 'gap) rather than treating it as certain. A subprocessor list incorporated by reference stays '
                 + '"By reference: <url>" in Sub_Processor_List - the published list is today\'s, not necessarily the '
-                + 'one approved at signing.\n'
+                + 'one approved at signing. It shows the date each subprocessor was added: one added after a deal was '
+                + 'signed was not on the list then, and one removed since is not shown. Use it to read a deal\'s '
+                + 'subprocessor, location and AI-provider terms (which named providers are Rogo subprocessors, which '
+                + 'are AI inference providers); it does not by itself change an extracted value, and a later addition '
+                + 'is not a finding about the extraction.\n'
                 + 'Cite them as "Rogo <document> (online) <section>".'
                 + (bodies.isEmpty() ? '' : '\n\n' + String.join(bodies, '\n\n'));
         }
@@ -106,6 +129,15 @@ public with sharing class RogoStandardTerms {
     // Tests opt in; otherwise no fetch runs in tests, so other tests' callout mocks are untouched.
     @TestVisible private static Boolean fetchInTests = false;
     @TestVisible private static Library cached;
+    @TestVisible private static final String SUBPROCESSOR_RESOURCE = 'RogoSubprocessors';
+    @TestVisible private static final String TRUST_CENTER = 'https://trust.rogo.ai';
+    // Tests set these instead of reading the deployed static resource.
+    @TestVisible private static String subprocessorCsv;
+    @TestVisible private static Datetime subprocessorLoadedAt;
+    private static final Map<String, Integer> MONTHS = new Map<String, Integer>{
+        'jan' => 1, 'feb' => 2, 'mar' => 3, 'apr' => 4, 'may' => 5, 'jun' => 6, 'jul' => 7, 'aug' => 8, 'sep' => 9,
+        'oct' => 10, 'nov' => 11, 'dec' => 12
+    };
 
     private static final Pattern LAST_UPDATED = Pattern.compile(
         '(?i)(last\\s+updated|last\\s+revised|last\\s+modified|effective\\s+date|effective\\s+as\\s+of|updated)'
@@ -169,8 +201,177 @@ public with sharing class RogoStandardTerms {
             lib.spentMs += t.spentMs;
             lib.docs.add(t);
         }
+        Terms subprocessors = subprocessorList();
+        if (subprocessors.ok() && totalChars + subprocessors.text.length() > MAX_TOTAL_CHARS) {
+            subprocessors.text = null;
+            subprocessors.failure = 'skipped: the documents before it already fill the size budget';
+        }
+        lib.docs.add(subprocessors);
         cached = lib;
         return lib;
+    }
+
+    /** Rogo's subprocessor list, from the static resource holding the trust center's CSV export. Never throws. */
+    @TestVisible
+    private static Terms subprocessorList() {
+        Terms t = new Terms();
+        t.name = 'Subprocessor List';
+        t.url = TRUST_CENTER;
+        t.finalUrl = TRUST_CENTER;
+        t.origin = 'trust center export, Salesforce static resource ' + SUBPROCESSOR_RESOURCE;
+        t.fetchedAt = System.now();
+        try {
+            String csv = subprocessorCsv;
+            Datetime loaded = subprocessorLoadedAt;
+            if (csv == null) {
+                List<StaticResource> res = [SELECT Body, LastModifiedDate FROM StaticResource
+                                            WHERE Name = :SUBPROCESSOR_RESOURCE LIMIT 1];
+                if (res.isEmpty()) {
+                    t.failure = 'there is no static resource named ' + SUBPROCESSOR_RESOURCE;
+                    return t;
+                }
+                csv = res[0].Body.toString();
+                loaded = res[0].LastModifiedDate;
+            }
+            if (loaded != null) t.fetchedAt = loaded;
+            String bom = String.fromCharArray(new List<Integer>{ 65279 });
+            if (csv.startsWith(bom)) csv = csv.substring(1);
+            List<List<String>> rows = parseCsv(csv.left(MAX_TEXT_CHARS));
+            if (rows.size() < 2 || rows[0].size() < 2) {
+                t.failure = 'the static resource is not the trust center\'s CSV export (it needs a header row and at '
+                    + 'least one subprocessor)';
+                return t;
+            }
+            List<String> header = new List<String>();
+            Integer addedCol = -1;
+            for (String h : rows[0]) {
+                String label = clean(h);
+                if (label.equalsIgnoreCase('Created At') || label.equalsIgnoreCase('Date Added')) {
+                    addedCol = header.size();
+                    label = 'Added';
+                }
+                header.add(label);
+            }
+            List<String> lines = new List<String>();
+            Date latest;
+            for (Integer r = 1; r < rows.size(); r++) {
+                List<String> row = rows[r];
+                List<String> parts = new List<String>();
+                for (Integer c = 0; c < row.size(); c++) {
+                    String v = clean(row[c]);
+                    if (String.isBlank(v)) continue;
+                    parts.add(c == 0 || c >= header.size() || String.isBlank(header[c]) ? v : header[c] + ': ' + v);
+                }
+                lines.add('- ' + String.join(parts, ' | '));
+                Date added = addedCol >= 0 && addedCol < row.size() ? longDate(clean(row[addedCol])) : null;
+                if (added != null && (latest == null || added > latest)) {
+                    latest = added;
+                    t.lastUpdated = clean(row[addedCol]);
+                }
+            }
+            t.entries = lines.size();
+            t.text = 'Rogo\'s subprocessors (' + t.entries + '), as listed on the trust center (' + TRUST_CENTER
+                + ') and loaded into Salesforce on ' + t.fetchedAt.formatGmt('yyyy-MM-dd') + '. "Added" is the date '
+                + 'each was added to the list; one removed before then is not shown.\n' + String.join(lines, '\n');
+            t.hash = OrderFormReviewer.sha256(t.text);
+        } catch (Exception e) {
+            t.text = null;
+            t.failure = 'the static resource ' + SUBPROCESSOR_RESOURCE + ' could not be read: ' + e.getMessage();
+        }
+        return t;
+    }
+
+    /** Rows of a CSV: quoted fields may hold commas, doubled quotes and line breaks; blank rows are dropped. */
+    @TestVisible
+    private static List<List<String>> parseCsv(String csv) {
+        List<List<String>> rows = new List<List<String>>();
+        List<String> row = new List<String>();
+        String field = '';
+        Boolean quoted = false;
+        Integer i = 0;
+        Integer n = csv.length();
+        while (i < n) {
+            String c = csv.substring(i, i + 1);
+            if (quoted) {
+                if (c == '"') {
+                    if (i + 1 < n && csv.substring(i + 1, i + 2) == '"') {
+                        field += '"';
+                        i += 2;
+                    } else {
+                        quoted = false;
+                        i++;
+                    }
+                    continue;
+                }
+                Integer q = csv.indexOf('"', i);
+                if (q < 0) q = n;
+                field += csv.substring(i, q);
+                i = q;
+                continue;
+            }
+            if (c == '"') {
+                quoted = true;
+                i++;
+            } else if (c == ',') {
+                row.add(field);
+                field = '';
+                i++;
+            } else if (c == '\n' || c == '\r') {
+                row.add(field);
+                field = '';
+                if (!blankRow(row)) rows.add(row);
+                row = new List<String>();
+                i += (c == '\r' && i + 1 < n && csv.substring(i + 1, i + 2) == '\n') ? 2 : 1;
+            } else {
+                Integer stop = n;
+                for (String special : new List<String>{ ',', '"', '\n', '\r' }) {
+                    Integer k = csv.indexOf(special, i);
+                    if (k >= 0 && k < stop) stop = k;
+                }
+                field += csv.substring(i, stop);
+                i = stop;
+            }
+        }
+        row.add(field);
+        if (!blankRow(row)) rows.add(row);
+        return rows;
+    }
+
+    private static Boolean blankRow(List<String> row) {
+        for (String v : row) if (String.isNotBlank(v)) return false;
+        return true;
+    }
+
+    private static String clean(String v) {
+        return v == null ? '' : v.replaceAll('\\s+', ' ').trim();
+    }
+
+    /** "May 15, 2025", "15 May 2025" or "2025-05-15" as a Date; null otherwise. */
+    @TestVisible
+    private static Date longDate(String v) {
+        if (String.isBlank(v)) return null;
+        Matcher iso = Pattern.compile('^(\\d{4})-(\\d{2})-(\\d{2})').matcher(v);
+        if (iso.find()) {
+            return Date.newInstance(Integer.valueOf(iso.group(1)), Integer.valueOf(iso.group(2)), Integer.valueOf(iso.group(3)));
+        }
+        Matcher mdy = Pattern.compile('^([A-Za-z]{3})[A-Za-z]*\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})').matcher(v);
+        Matcher dmy = Pattern.compile('^(\\d{1,2})\\s+([A-Za-z]{3})[A-Za-z]*\\.?,?\\s+(\\d{4})').matcher(v);
+        String month;
+        String day;
+        String year;
+        if (mdy.find()) {
+            month = mdy.group(1);
+            day = mdy.group(2);
+            year = mdy.group(3);
+        } else if (dmy.find()) {
+            day = dmy.group(1);
+            month = dmy.group(2);
+            year = dmy.group(3);
+        } else {
+            return null;
+        }
+        Integer m = MONTHS.get(month.toLowerCase());
+        return m == null ? null : Date.newInstance(Integer.valueOf(year), m, Integer.valueOf(day));
     }
 
     /** Time the fetches used of the transaction's 120 seconds of callouts (0 when cached-free or skipped). */
