@@ -37,13 +37,13 @@ public with sharing class ContractRefresh implements Callable {
     public static Selection stale() {
         Selection s = new Selection();
 
-        Map<Id, Order_Form_Extraction__c> unapplied = new Map<Id, Order_Form_Extraction__c>([
+        Map<Id, Order_Form_Extraction__c> notOnContract = new Map<Id, Order_Form_Extraction__c>([
             SELECT Id, Opportunity__r.AccountId FROM Order_Form_Extraction__c
             WHERE Is_Current__c = true AND Applied_Contract__c = null AND Extraction_Status__c IN :APPLICABLE
               AND Opportunity__r.AccountId != null
         ]);
-        Map<Id, Id> targets = ContractLegalTermsApplier.currentTargets(unapplied.keySet());
-        for (Order_Form_Extraction__c r : unapplied.values()) {
+        Map<Id, Id> targets = ContractLegalTermsApplier.currentTargets(notOnContract.keySet());
+        for (Order_Form_Extraction__c r : notOnContract.values()) {
             if (targets.get(r.Id) == null) {
                 s.waitingForContract++;
                 continue;
