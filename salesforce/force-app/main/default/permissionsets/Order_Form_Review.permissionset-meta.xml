@@ -4,7 +4,7 @@
         <apexClass>OrderFormReviewAction</apexClass>
         <enabled>true</enabled>
     </classAccesses>
-    <description>See order form reviews and their findings on the Order Form Extraction page, and accept or dismiss findings. Also shows the extraction's issues, full values of cut fields and escalator terms, the contract history and credit transition period, and lets legal accept or reject Contract Term Changes.</description>
+    <description>Order form reviews and findings (accept or dismiss), extraction issues and full values, contract history and credit transition period, and deciding Contract Term Changes (accept or reject).</description>
     <fieldPermissions>
         <editable>false</editable>
         <field>Order_Form_Review__c.Attempt__c</field>
