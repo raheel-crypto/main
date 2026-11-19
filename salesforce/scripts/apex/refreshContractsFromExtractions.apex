@@ -12,9 +12,11 @@
 // is replaced by the extracted value.
 //
 // MODE
-//   'STALE' (default): only accounts whose contracts are behind their deals -
-//      a current extraction that is on no contract (new, or re-read since the
-//      last apply), a contract that still points at a superseded extraction,
+//   'STALE' (default): only accounts whose contracts are behind their deals,
+//      as the nightly refresh picks them (ContractRefresh) - a current
+//      extraction that is on no contract although its contract now exists
+//      (new, or re-read since the last apply; a deal whose contract is not
+//      created yet waits), a contract that still points at a superseded extraction,
 //      or a superseded extraction left on a contract its deal has since moved
 //      off (its credits still count there). An old version sitting beside its
 //      deal's current one on the same contract is harmless (the applier counts
@@ -40,9 +42,6 @@ List<String> ONLY_ACCOUNTS = new List<String>{
 };
 
 Set<String> APPLICABLE = new Set<String>{ 'Success', 'Incomplete', 'No Order Form' };
-String R_UNAPPLIED = 'a current extraction is on no contract';
-String R_POINTER = 'a contract points at a superseded extraction';
-String R_OLD = 'a superseded extraction still counts on a contract its deal moved off';
 String R_ALL = 'ALL mode';
 
 Map<Id, Set<String>> reasons = new Map<Id, Set<String>>();
@@ -58,50 +57,13 @@ if (MODE == 'ALL') {
         reasons.get(a).add(R_ALL);
     }
 } else {
-    for (Order_Form_Extraction__c r : [
-        SELECT Opportunity__r.AccountId FROM Order_Form_Extraction__c
-        WHERE Is_Current__c = true AND Applied_Contract__c = null AND Extraction_Status__c IN :APPLICABLE
-          AND Opportunity__r.AccountId != null
-    ]) {
-        Id a = r.Opportunity__r.AccountId;
-        if (!reasons.containsKey(a)) reasons.put(a, new Set<String>());
-        reasons.get(a).add(R_UNAPPLIED);
-    }
-    for (Contract c : [
-        SELECT AccountId FROM Contract
-        WHERE Latest_Order_Form_Extraction__c != null AND Latest_Order_Form_Extraction__r.Is_Current__c = false
-          AND AccountId != null
-    ]) {
-        if (!reasons.containsKey(c.AccountId)) reasons.put(c.AccountId, new Set<String>());
-        reasons.get(c.AccountId).add(R_POINTER);
-    }
-    List<Order_Form_Extraction__c> olds = [
-        SELECT Opportunity__c, Applied_Contract__c, Applied_Contract__r.AccountId FROM Order_Form_Extraction__c
-        WHERE Is_Current__c = false AND Applied_Contract__c != null AND Applied_Contract__r.AccountId != null
-    ];
-    Set<Id> oldOpps = new Set<Id>();
-    for (Order_Form_Extraction__c r : olds) if (r.Opportunity__c != null) oldOpps.add(r.Opportunity__c);
-    Map<Id, Id> currentContractByOpp = new Map<Id, Id>();
-    for (Order_Form_Extraction__c r : [
-        SELECT Opportunity__c, Applied_Contract__c FROM Order_Form_Extraction__c
-        WHERE Is_Current__c = true AND Opportunity__c IN :oldOpps
-    ]) {
-        currentContractByOpp.put(r.Opportunity__c, r.Applied_Contract__c);
-    }
-    Integer harmless = 0;
-    for (Order_Form_Extraction__c r : olds) {
-        Boolean sameContract = r.Opportunity__c != null && currentContractByOpp.containsKey(r.Opportunity__c)
-            && currentContractByOpp.get(r.Opportunity__c) == r.Applied_Contract__c;
-        if (sameContract) {
-            harmless++;
-            continue;
-        }
-        Id a = r.Applied_Contract__r.AccountId;
-        if (!reasons.containsKey(a)) reasons.put(a, new Set<String>());
-        reasons.get(a).add(R_OLD);
-    }
-    System.debug('--- ' + harmless + ' superseded extraction(s) sit beside their deal\'s current one on the same '
+    // The same selection the nightly refresh uses (ContractRefresh).
+    ContractRefresh.Selection sel = ContractRefresh.stale();
+    reasons = sel.reasons;
+    System.debug('--- ' + sel.harmless + ' superseded extraction(s) sit beside their deal\'s current one on the same '
         + 'contract: harmless, not a reason on their own (cleaned up when the account is rebuilt anyway).');
+    System.debug('--- ' + sel.waitingForContract + ' current extraction(s) wait for their contract to be created '
+        + '(left until it exists).');
 }
 
 // Only these accounts.
