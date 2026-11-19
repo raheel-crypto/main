@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <allowInChatterGroups>false</allowInChatterGroups>
+    <compactLayoutAssignment>SYSTEM</compactLayoutAssignment>
+    <deploymentStatus>Deployed</deploymentStatus>
+    <description>A term a later deal (upsell, downsell, restructure) adds to or would change on its contract, or a flag raised when the deal was applied (different entity, credits introduced, billing split mismatch). A conflicting change stays Open - the contract keeps its value - until legal marks it Accepted (the new term then wins on the contract, through every rebuild) or Rejected (the contract keeps its value). Added terms are Info. Written by the contract applier; decisions are kept across rebuilds while the values are unchanged.</description>
+    <enableActivities>false</enableActivities>
+    <enableBulkApi>true</enableBulkApi>
+    <enableFeeds>false</enableFeeds>
+    <enableHistory>true</enableHistory>
+    <enableLicensing>false</enableLicensing>
+    <enableReports>true</enableReports>
+    <enableSearch>false</enableSearch>
+    <enableSharing>true</enableSharing>
+    <enableStreamingApi>true</enableStreamingApi>
+    <externalSharingModel>ControlledByParent</externalSharingModel>
+    <label>Contract Term Change</label>
+    <nameField>
+        <displayFormat>CTC-{000000}</displayFormat>
+        <label>Contract Term Change Number</label>
+        <trackHistory>false</trackHistory>
+        <type>AutoNumber</type>
+    </nameField>
+    <pluralLabel>Contract Term Changes</pluralLabel>
+    <searchLayouts/>
+    <sharingModel>ControlledByParent</sharingModel>
+    <visibility>Public</visibility>
+</CustomObject>

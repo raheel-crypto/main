@@ -95,13 +95,25 @@ public with sharing class ContractRefresh implements Callable {
         if (sweepRunning()) return 'A contract rebuild sweep is still running; nothing new was started.';
         Selection s = stale();
         if (s.reasons.isEmpty()) {
+            // Nothing to rebuild; still bring the histories up to date (a contract
+            // applied by another route is marked for its history too).
+            Integer histories = [SELECT COUNT() FROM Contract WHERE Contract_History_Stale__c = true];
+            if (histories > 0 && !historyRunning()) System.enqueueJob(new ContractHistoryJob());
             return 'All contracts are in step with their extractions'
-                + (s.waitingForContract > 0 ? ' (' + s.waitingForContract + ' extraction(s) wait for a contract).' : '.');
+                + (s.waitingForContract > 0 ? ' (' + s.waitingForContract + ' extraction(s) wait for a contract)' : '')
+                + (histories > 0 ? '; ' + histories + ' contract history(ies) to bring up to date.' : '.');
         }
         List<Id> accounts = new List<Id>(s.reasons.keySet());
         accounts.sort();
         System.enqueueJob(new ContractRebuildSweep(accounts));
         return 'Rebuilding ' + accounts.size() + ' account(s) whose contracts were behind their extractions.';
+    }
+
+    public static Boolean historyRunning() {
+        return [
+            SELECT COUNT() FROM AsyncApexJob
+            WHERE ApexClass.Name = 'ContractHistoryJob' AND Status IN ('Holding', 'Queued', 'Preparing', 'Processing')
+        ] > 0;
     }
 
     public static Boolean sweepRunning() {

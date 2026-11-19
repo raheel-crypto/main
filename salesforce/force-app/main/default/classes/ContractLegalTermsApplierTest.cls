@@ -172,10 +172,12 @@ private class ContractLegalTermsApplierTest {
     @isTest
     static void upsell_booleanAddsButNeverRemoves() {
         Account a = makeAccount();
-        // Contract starts with ELA true, Credit_Commit false.
+        // Contract starts with ELA true, Credit_Commit false - and credits, so adding
+        // the commitment is not "credits introduced" (ContractTermChangeTest covers that flag).
         Contract c = makeContract(a.Id, new Map<String, Object>{
             'ELA__c' => true,
-            'Credit_Commit__c' => false
+            'Credit_Commit__c' => false,
+            'Total_Credits_Purchased__c' => 100000
         });
         Opportunity o = makeOpp(a.Id, 'Upsell', c.Id, null);
         // Upsell OFE: ELA false (silent/absent), Credit_Commit true (adds it).

@@ -915,7 +915,11 @@ public with sharing class OrderFormReviewer {
     /** SHA-256 of the saved values, product lines, derivations, evidence, issues and full values. */
     public static String inputHash(Order_Form_Extraction__c row) {
         List<String> parts = new List<String>();
-        for (String f : OrderFormReviewCoverage.PAYLOAD_FIELDS) parts.add(f + '=' + canon(row.get(f)));
+        for (String f : OrderFormReviewCoverage.PAYLOAD_FIELDS) {
+            String v = canon(row.get(f));
+            if (v == '' && OrderFormReviewCoverage.HASH_WHEN_SET.contains(f)) continue;
+            parts.add(f + '=' + v);
+        }
         for (String f : OrderFormReviewCoverage.HASH_EXTRA_FIELDS) parts.add(f + '=' + canon(row.get(f)));
         return sha256(String.join(parts, '\n'));
     }

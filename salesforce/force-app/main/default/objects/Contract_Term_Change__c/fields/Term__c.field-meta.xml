@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Term__c</fullName>
+    <description>The term in words, e.g. Renewal Terms, Billing Entity, Credits.</description>
+    <externalId>false</externalId>
+    <label>Term</label>
+    <length>255</length>
+    <required>false</required>
+    <type>Text</type>
+    <unique>false</unique>
+</CustomField>

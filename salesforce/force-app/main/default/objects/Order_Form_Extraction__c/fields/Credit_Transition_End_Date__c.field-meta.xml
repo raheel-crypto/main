@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Transition_End_Date__c</fullName>
+    <description>The last day of a transition period at the start of the term during which credits are not deducted (usage is unlimited and only the platform fee applies). Credits are consumed from the next day. Blank when the paper has no such period.</description>
+    <label>Credit Transition End Date</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Date</type>
+</CustomField>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Contract_History__c</fullName>
+    <description>The running history of this contract - new business, renewals and every upsell in order, what each bought or changed, and the open items - written by Claude from the deals' extractions and the contract term changes after each rebuild. Only regenerated when its inputs change.</description>
+    <label>Contract History</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>15</visibleLines>
+</CustomField>

@@ -25,7 +25,7 @@ public with sharing class OrderFormReviewCoverage {
         'Resulting_ARR__c',
         'Credits_Purchased__c', 'Credits_Added__c', 'Credits_Period__c', 'Credits_Per_Year__c',
         'Credit_Rate__c', 'Credit_Commit_Fee__c', 'Free_Credits__c', 'Overage_Rate__c', 'Ramp_Schedule__c',
-        'Free_Tier_Retained__c',
+        'Free_Tier_Retained__c', 'Credit_Transition_End_Date__c', 'Credit_Transition_Terms__c',
         'Renewal_Terms__c', 'Renewal_Fee_Escalator__c', 'Renewal_Fee_Escalator_Terms__c',
         'Subscription_Schedule__c', 'Payment_Terms__c', 'Credit_Terms__c',
         'Pricing_Structure__c', 'Package_Tier__c', 'ELA__c', 'Credit_Commit__c', 'Credit_Overcommit_Obligation__c',
@@ -50,6 +50,12 @@ public with sharing class OrderFormReviewCoverage {
         'Material_Change_Notice__c', 'AI_Training_Prohibition__c', 'AI_Training_Flowdown_Required__c',
         'Model_Capability_Floor__c', 'LLM_Gate_Confidence__c',
         'Arvo_Seats__c', 'Free_Seats__c', 'Included_Credits__c', 'Lines_Recurring_Annual__c', 'Lines_Mismatch__c'
+    };
+
+    // Payload fields added after reviews were recorded: hashed only when set, so
+    // adding them does not make every earlier review look out of date.
+    public static final Set<String> HASH_WHEN_SET = new Set<String>{
+        'Credit_Transition_End_Date__c', 'Credit_Transition_Terms__c'
     };
 
     // Also hashed: the product lines, how derived values were computed, the

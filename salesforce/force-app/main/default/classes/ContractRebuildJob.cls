@@ -24,6 +24,9 @@ public with sharing class ContractRebuildJob implements Queueable {
         List<Id> left = pending != null
             ? OrderFormOps.applyInOrder(pending, false)
             : OrderFormOps.rebuild(accountIds, contractIds);
-        if (!left.isEmpty() && !Test.isRunningTest()) System.enqueueJob(new ContractRebuildJob(left));
+        if (Test.isRunningTest()) return;
+        // Then the histories of the rebuilt contracts (only those whose inputs changed are rewritten).
+        if (left.isEmpty()) System.enqueueJob(new ContractHistoryJob());
+        else System.enqueueJob(new ContractRebuildJob(left));
     }
 }

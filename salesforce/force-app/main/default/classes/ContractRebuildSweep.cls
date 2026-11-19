@@ -31,8 +31,11 @@ public with sharing class ContractRebuildSweep implements Queueable {
         // A test cannot chain jobs: run the rest here.
         Integer guard = 0;
         while (Test.isRunningTest() && !(left.isEmpty() && rest.isEmpty()) && guard++ < 50) left = step(rest, left);
-        if (left.isEmpty() && rest.isEmpty()) return;
-        if (!Test.isRunningTest()) System.enqueueJob(new ContractRebuildSweep(rest, left));
+        if (Test.isRunningTest()) return;
+        // When every account is done, the histories of the rebuilt contracts follow
+        // (only those whose inputs changed are rewritten).
+        if (left.isEmpty() && rest.isEmpty()) System.enqueueJob(new ContractHistoryJob());
+        else System.enqueueJob(new ContractRebuildSweep(rest, left));
     }
 
     /** Finish the current account's deals, or rebuild the next account (removed from rest). */

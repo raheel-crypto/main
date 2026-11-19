@@ -1081,6 +1081,13 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         row.Credit_Commit_Fee__c = toDecimal(extracted.get('Credit_Commit_Fee'));
         row.Free_Credits__c = toDecimal(extracted.get('Free_Credits'));
         row.Ramp_Schedule__c = serializeRampSchedule(extracted.get('Ramp_Schedule'));
+        // Nov 2026: a credit transition period at the start of the term (Jefferies:
+        // credits not deducted through October 14, 2026, inclusive). The date is kept
+        // only with its clause.
+        String transition = asStr(extracted.get('Credit_Transition_Terms'));
+        row.Credit_Transition_Terms__c = String.isBlank(transition) ? null : truncate(transition.trim(), 2000);
+        row.Credit_Transition_End_Date__c = row.Credit_Transition_Terms__c == null ? null
+            : parseDate(asStr(extracted.get('Credit_Transition_End_Date')));
 
         populatePackageAndCreditFields(row, extracted);
         populateSignatureFields(row, extracted);

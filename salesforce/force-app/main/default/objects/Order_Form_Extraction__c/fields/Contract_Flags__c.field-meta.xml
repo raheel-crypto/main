@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Contract_Flags__c</fullName>
+    <description>Set when this extraction is applied to its contract: the paper is for a different entity than the contract, introduces credits on a contract that had none, or (signed paper) bills an entity that is not on the contract's billing split. One line per flag; also recorded as Contract Term Changes on the contract.</description>
+    <label>Contract Flags</label>
+    <length>4000</length>
+    <type>LongTextArea</type>
+    <visibleLines>4</visibleLines>
+</CustomField>

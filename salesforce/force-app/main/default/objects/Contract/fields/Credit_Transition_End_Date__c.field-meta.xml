@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Transition_End_Date__c</fullName>
+    <description>Last day of the credit transition period: until then credits are not deducted (usage is unlimited, only the platform fee applies); credits are consumed from the next day. Applied from the order form extractions.</description>
+    <label>Credit Transition End Date</label>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+    <type>Date</type>
+</CustomField>

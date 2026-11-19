@@ -144,9 +144,15 @@ public with sharing class OrderFormOps {
         for (Id cid : toClear) {
             Contract c = ContractLegalTermsApplier.clearedTerms(cid);
             c.Reconciliation_Notes__c = header() + '\n\n' + NONE_LANDED;
+            c.Contract_History_Stale__c = true;
             cleared.add(c);
         }
         if (!cleared.isEmpty()) update cleared;
+        // Term changes are recorded again as the deals are re-applied; legal's
+        // decisions (Accepted / Rejected) are kept and applied again.
+        if (!toClear.isEmpty()) {
+            delete [SELECT Id FROM Contract_Term_Change__c WHERE Contract__c IN :toClear AND Status__c IN ('Open', 'Info')];
+        }
 
         List<Id> ordered = new List<Id>(fresh);
         ordered.addAll(amends);

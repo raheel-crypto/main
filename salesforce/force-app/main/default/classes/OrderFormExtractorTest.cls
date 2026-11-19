@@ -1646,6 +1646,28 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void creditTransitionPeriod_isKeptWithItsClause() {
+        // Jefferies: credits are not deducted through October 14, 2026, inclusive.
+        Opportunity opp = insertOpp('Transition ' + Crypto.getRandomInteger(), 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Renewal',
+                'Credit_Transition_End_Date' => '2026-10-14',
+                'Credit_Transition_Terms' => 'Transition Period. Notwithstanding anything to the contrary, commencing as '
+                    + 'of the Effective Date of this Order Form through October 14, 2026, inclusive ("Transition Period"), '
+                    + 'Credits will not be deducted from the Initial Credit Allocation set forth above.'
+            }));
+        System.assertEquals(Date.newInstance(2026, 10, 14), row.Credit_Transition_End_Date__c);
+        System.assert(row.Credit_Transition_Terms__c.startsWith('Transition Period.'), row.Credit_Transition_Terms__c);
+
+        // A date without its clause is not kept.
+        Opportunity opp2 = insertOpp('Transition ' + Crypto.getRandomInteger(), 'Closed Won');
+        Order_Form_Extraction__c bare = OrderFormExtractionJob.buildFromResponseBody(opp2.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'Renewal', 'Credit_Transition_End_Date' => '2026-10-14' }));
+        System.assertEquals(null, bare.Credit_Transition_End_Date__c);
+    }
+
+    @isTest
     static void renewal_genuineManualAnswersStay() {
         System.assertEquals('Manual renewal', renewalRow('The Agreement will not automatically renew. Any renewal '
             + 'must be agreed in writing.').Renewal_Terms__c);

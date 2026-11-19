@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Status__c</fullName>
+    <description>Open: needs a decision (the contract keeps its value; Needs Legal Review is set). Accepted: the new term governs - it is written to the contract and wins on every rebuild (for a flag: acknowledged). Rejected: the contract keeps its value (for a flag: acknowledged as wrong). Info: nothing to decide. A decision resets to Open if the deal's value changes.</description>
+    <label>Status</label>
+    <required>false</required>
+    <inlineHelpText>Mark Accepted or Rejected to decide; the contract is rebuilt with the decision in a minute.</inlineHelpText>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Open</fullName><default>true</default><label>Open</label></value>
+            <value><fullName>Accepted</fullName><default>false</default><label>Accepted</label></value>
+            <value><fullName>Rejected</fullName><default>false</default><label>Rejected</label></value>
+            <value><fullName>Info</fullName><default>false</default><label>Info</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

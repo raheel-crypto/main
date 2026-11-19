@@ -20,6 +20,18 @@
  *         (free-text clause summaries are reworded, not changed: noted only).
  *       * Boolean legal terms (ELA, credit commits) only go false->true
  *         (a term can be added by an upsell, never silently removed).
+ *
+ * Contract Term Changes (Nov 2026): every term an amendment adds (Info) or would
+ * change (Conflict) is recorded as a Contract_Term_Change__c - one per term per
+ * deal per contract (Key__c). Legal decides a conflict: Accepted writes the new
+ * term to the contract (on every rebuild, while the deal's value is unchanged),
+ * Rejected keeps the contract's value; only Open conflicts set
+ * Needs_Legal_Review__c. Flags raised when a deal is applied - a signed
+ * amendment for another entity than the contract, an amendment that introduces
+ * credits on a contract that had none, signed paper billing an entity that is
+ * not on the contract's billing split - are recorded the same way and on the
+ * extraction (Contract_Flags__c). Each touched contract is marked for its history
+ * (Contract_History_Stale__c, written by ContractHistoryJob).
  */
 public with sharing class ContractLegalTermsApplier {
 
@@ -72,7 +84,9 @@ public with sharing class ContractLegalTermsApplier {
         new LegalField('Seat_Adds_By_Email__c', 'Seat_Adds_By_Email__c', true),
         new LegalField('Seat_Adds_By_Email_Terms__c', 'Seat_Adds_By_Email_Terms__c', false),
         new LegalField('Credit_Rollover__c', 'Credit_Rollover__c', false),
-        new LegalField('Credit_Rollover_Terms__c', 'Credit_Rollover_Terms__c', false)
+        new LegalField('Credit_Rollover_Terms__c', 'Credit_Rollover_Terms__c', false),
+        new LegalField('Credit_Transition_End_Date__c', 'Credit_Transition_End_Date__c', false),
+        new LegalField('Credit_Transition_Terms__c', 'Credit_Transition_Terms__c', false)
         // Credit_Rollover_Percent__c moves with a Partial answer: applyRolloverPercent.
     };
 
@@ -82,7 +96,8 @@ public with sharing class ContractLegalTermsApplier {
     // paper's wording is noted, and review is not flagged. The structured terms
     // (notice period, model changes, the picklists) still conflict.
     private static final Set<String> TEXT_FIELDS = new Set<String>{
-        'Subprocessor_Restrictions__c', 'Rate_Limit_Notes__c', 'Seat_Adds_By_Email_Terms__c', 'Credit_Rollover_Terms__c'
+        'Subprocessor_Restrictions__c', 'Rate_Limit_Notes__c', 'Seat_Adds_By_Email_Terms__c', 'Credit_Rollover_Terms__c',
+        'Credit_Transition_Terms__c'
     };
     private static final Integer NOTED_TEXT_MAX = 300;
 
@@ -121,7 +136,9 @@ public with sharing class ContractLegalTermsApplier {
                    Opportunity__r.Name, Opportunity__r.CloseDate, Opportunity__r.CreatedDate,
                    Type__c, Extracted_At__c, Package_Tier__c, Unlimited_Lite__c, Free_Max_Mid_Credits__c,
                    Free_Max_Mid_Amount__c, Free_Tier_Retained__c, Overage_Rate__c, Credit_Rate__c,
-                   Credits_Per_Year__c, Credits_Period__c, Contract_Length_Months__c
+                   Credits_Per_Year__c, Credits_Period__c, Contract_Length_Months__c,
+                   Credit_Transition_End_Date__c, Credit_Transition_Terms__c, Source_Document_Type__c,
+                   Signature_Date__c, Customer_Signer_Name__c, Extract_Evidence__c
             FROM Order_Form_Extraction__c
             WHERE Id IN :extractionIds
         ]);
@@ -146,9 +163,12 @@ public with sharing class ContractLegalTermsApplier {
                        Opportunity__c, Source_Opportunity_Id__c,
                        Package_Tier__c, Unlimited_Lite__c, Free_Max_Mid_Credits__c, Free_Max_Mid_Amount__c,
                        Free_Tier_Retained__c, Overage_Rate__c, Credits_Per_Year__c, Credit_Rate__c,
-                       Pricing_Structure__c, Total_Credits_Purchased__c
+                       Pricing_Structure__c, Total_Credits_Purchased__c,
+                       Credit_Transition_End_Date__c, Credit_Transition_Terms__c
                 FROM Contract WHERE Id IN :contractIds
             ]);
+        beginTermChanges(contractIds);
+        Map<Id, List<Billing_Split__c>> splitsByContract = billingSplits(contractIds);
 
         // Running credit total per contract (Total_Credits_Purchased__c), recomputed
         // as a SIGNED SUM across every Success OFE applied to the contract: fresh
@@ -225,10 +245,19 @@ public with sharing class ContractLegalTermsApplier {
             Contract changes = toUpdate.containsKey(contractId) ? toUpdate.get(contractId) : new Contract(Id = contractId);
 
             Boolean isAmend = ofe.Opportunity__r != null && AMEND_TYPES.contains(ofe.Opportunity__r.Type);
+            termContext(contractId, ofe);
+            List<String> flagLines = new List<String>();
+            Boolean openFlag = checkFlags(current, ofe, isAmend, splitsByContract.get(contractId), flagLines);
+            flagsByOfe.put(ofe.Id, flagLines);
             List<String> log = new List<String>();
             Boolean conflict = isAmend
                 ? reconcile(current, ofe, changes, log)
                 : freshWrite(current, ofe, changes, log);
+            for (String fl : flagLines) log.add('FLAG ' + fl);
+            if (openFlag) {
+                conflict = true;
+                log.add('>>> A flag above needs review (Contract Term Changes).');
+            }
             fillBillingDetails(current, ofe, changes, log);
 
             // Only point the contract at this extraction when it really is this
@@ -247,6 +276,7 @@ public with sharing class ContractLegalTermsApplier {
             }
             changes.Reconciliation_Notes__c = truncate(String.join(log, '\n'), 32768);
             if (conflict) changes.Needs_Legal_Review__c = true;
+            changes.Contract_History_Stale__c = true;
 
             // Fold this OFE into the contract's running credit total (signed), then
             // write the recomputed total. Set even when it is 0 - the field is a
@@ -276,10 +306,15 @@ public with sharing class ContractLegalTermsApplier {
         if (!ofeContractStamp.isEmpty()) {
             List<Order_Form_Extraction__c> stamps = new List<Order_Form_Extraction__c>();
             for (Id ofeId : ofeContractStamp.keySet()) {
-                stamps.add(new Order_Form_Extraction__c(Id = ofeId, Applied_Contract__c = ofeContractStamp.get(ofeId)));
+                List<String> fl = flagsByOfe.get(ofeId);
+                Boolean flagged = fl != null && !fl.isEmpty();
+                stamps.add(new Order_Form_Extraction__c(Id = ofeId, Applied_Contract__c = ofeContractStamp.get(ofeId),
+                    Contract_Flags__c = flagged ? truncate(String.join(fl, '\n'), 4000) : null,
+                    Has_Contract_Flags__c = flagged));
             }
             update stamps;
         }
+        saveTermChanges();
         return results;
     }
 
@@ -536,6 +571,7 @@ public with sharing class ContractLegalTermsApplier {
                 if (ofeVal == true && curVal != true) {
                     changes.put(f.contract, true);
                     log.add('Added ' + f.contract + ' = true (introduced by this order)');
+                    recordAdded(f.contract, true);
                 }
                 continue;
             }
@@ -545,15 +581,24 @@ public with sharing class ContractLegalTermsApplier {
             if (curVal == null || curVal == NOT_SPECIFIED) {
                 changes.put(f.contract, ofeVal);
                 log.add('Wrote ' + f.contract + ' = ' + ofeVal + ' (new term)');
+                recordAdded(f.contract, ofeVal);
             } else if (!sameValue(curVal, ofeVal)) {
                 if (TEXT_FIELDS.contains(f.contract)) {
                     log.add('Kept ' + f.contract + ' (this order words it differently: "'
                         + truncate(String.valueOf(ofeVal), NOTED_TEXT_MAX) + '")');
                     continue;
                 }
-                conflict = true;
-                log.add('CONFLICT ' + f.contract + ': contract="' + curVal + '" vs order form="' + ofeVal
-                        + '" - left contract unchanged, needs legal review');
+                String decision = decide(f.contract, null, 'Conflict', curVal, ofeVal);
+                if (decision == 'Accepted') {
+                    changes.put(f.contract, ofeVal);
+                    log.add('Wrote ' + f.contract + ' = ' + ofeVal + ' (was "' + curVal + '"; change accepted by legal)');
+                } else if (decision == 'Rejected') {
+                    log.add('Kept ' + f.contract + ' = ' + curVal + ' (change to "' + ofeVal + '" rejected by legal)');
+                } else {
+                    conflict = true;
+                    log.add('CONFLICT ' + f.contract + ': contract="' + curVal + '" vs order form="' + ofeVal
+                            + '" - left contract unchanged, needs legal review (Contract Term Changes)');
+                }
             }
         }
         appendSpecialTerms(current, ofe, changes, log);
@@ -597,12 +642,23 @@ public with sharing class ContractLegalTermsApplier {
         Decimal pct = ofe.Credit_Rollover__c == 'Partial' ? ofe.Credit_Rollover_Percent__c : null;
         if (pct == null || sameValue(cur, pct)) return false;
         if (isAmend && cur != null) {
+            String decision = decide('Credit_Rollover_Percent__c', null, 'Conflict', cur, pct);
+            if (decision == 'Accepted') {
+                changes.Credit_Rollover_Percent__c = pct;
+                log.add('Wrote Credit_Rollover_Percent__c = ' + pct + ' (was ' + cur + '; change accepted by legal)');
+                return false;
+            }
+            if (decision == 'Rejected') {
+                log.add('Kept Credit_Rollover_Percent__c = ' + cur + ' (change to ' + pct + ' rejected by legal)');
+                return false;
+            }
             log.add('CONFLICT Credit_Rollover_Percent__c: contract="' + cur + '" vs order form="' + pct
-                + '" - left contract unchanged, needs legal review');
+                + '" - left contract unchanged, needs legal review (Contract Term Changes)');
             return true;
         }
         changes.Credit_Rollover_Percent__c = pct;
         log.add('Wrote Credit_Rollover_Percent__c = ' + pct + (isAmend ? ' (new term)' : ''));
+        if (isAmend) recordAdded('Credit_Rollover_Percent__c', pct);
         return false;
     }
 
@@ -619,9 +675,11 @@ public with sharing class ContractLegalTermsApplier {
         if (String.isBlank(existing)) {
             changes.Special_Terms__c = truncate(added, SPECIAL_TERMS_MAX);
             log.add('Wrote Special_Terms__c (new)');
+            recordAdded('Special_Terms__c', added.trim());
             return;
         }
         if (existing.contains(added.trim())) return;
+        recordAdded('Special_Terms__c', added.trim());
         String label = (ofe.Opportunity__r == null) ? 'Order form' : ofe.Opportunity__r.Name
             + (ofe.Opportunity__r.CloseDate == null ? '' : ', closed ' + String.valueOf(ofe.Opportunity__r.CloseDate));
         String combined = existing + '\n\n[' + label + '] ' + added.trim();
@@ -644,8 +702,21 @@ public with sharing class ContractLegalTermsApplier {
         Boolean existingReal = String.isNotBlank(existing) && !MODEL_CHANGE_SILENT.contains(existing);
         if (!incomingReal && existingReal) return false;
         if (isAmend && existingReal && existing != incoming) {
+            String decision = decide('Model_Change_Requirement__c', null, 'Conflict', existing, incoming);
+            if (decision == 'Accepted') {
+                changes.Model_Change_Requirement__c = incoming;
+                changes.Model_Change_Terms__c = ofe.Model_Change_Terms__c;
+                log.add('Wrote Model_Change_Requirement__c = ' + incoming + ' (was "' + existing
+                    + '"; change accepted by legal)');
+                return false;
+            }
+            if (decision == 'Rejected') {
+                log.add('Kept Model_Change_Requirement__c = ' + existing + ' (change to "' + incoming
+                    + '" rejected by legal)');
+                return false;
+            }
             log.add('CONFLICT Model_Change_Requirement__c: contract="' + existing + '" vs order form="' + incoming
-                + '" (' + ofe.Model_Change_Terms__c + ') - left contract unchanged, needs legal review');
+                + '" (' + ofe.Model_Change_Terms__c + ') - left contract unchanged, needs legal review (Contract Term Changes)');
             return true;
         }
         if (isAmend && existing == incoming) {
@@ -658,6 +729,7 @@ public with sharing class ContractLegalTermsApplier {
         changes.Model_Change_Requirement__c = incoming;
         changes.Model_Change_Terms__c = ofe.Model_Change_Terms__c;
         log.add('Wrote Model_Change_Requirement__c = ' + incoming);
+        if (isAmend && incomingReal) recordAdded('Model_Change_Requirement__c', incoming);
         return false;
     }
 
@@ -760,6 +832,7 @@ public with sharing class ContractLegalTermsApplier {
      * the changes, unsaved; the caller saves them.
      */
     public static List<Contract> backfillModelChange(Set<Id> contractIds) {
+        termContext(null, null);   // a backfill records no Contract Term Changes
         List<Contract> out = new List<Contract>();
         if (contractIds == null || contractIds.isEmpty()) return out;
         Map<Id, Contract> contracts = new Map<Id, Contract>([
@@ -870,6 +943,265 @@ public with sharing class ContractLegalTermsApplier {
             out.add(c);
         }
         return out;
+    }
+
+    // ===== Contract Term Changes and flags =====
+
+    private static final Set<String> DECIDED = new Set<String>{ 'Accepted', 'Rejected' };
+    private static Map<String, Contract_Term_Change__c> existingChanges = new Map<String, Contract_Term_Change__c>();
+    private static Map<String, Contract_Term_Change__c> pendingChanges = new Map<String, Contract_Term_Change__c>();
+    private static Map<Id, List<String>> flagsByOfe = new Map<Id, List<String>>();
+    private static Id ctxContract;
+    private static Order_Form_Extraction__c ctxOfe;
+    private static Map<String, Object> ctxEvidence;
+    private static Map<String, Schema.SObjectField> contractFieldMap;
+    // Extract_Evidence keys of the model that differ from the contract field name.
+    private static final Map<String, List<String>> EVIDENCE_KEYS = new Map<String, List<String>>{
+        'Subprocessor_Notice_Period__c' => new List<String>{ 'Subprocessor_Notice_Period_Days' },
+        'Renewal_Fee_Escalator__c' => new List<String>{ 'Renewal_Fee_Escalator_Percent', 'Renewal_Fee_Escalator' },
+        'Rate_Limitable__c' => new List<String>{ 'Rate_Limitable_By_Rogo', 'Rate_Limitable' },
+        'Rate_Limit_Notes__c' => new List<String>{ 'Rate_Limit_Terms', 'Rate_Limit_Notes' },
+        'Total_Credits_Purchased__c' => new List<String>{ 'Credits_Added', 'Credits_Purchased', 'Credit_Commit_Fee' },
+        'Billing_Split__c' => new List<String>{ 'Billing_Entity_Name' }
+    };
+    // Words that do not tell two legal entities apart.
+    private static final Set<String> ENTITY_NOISE = new Set<String>{
+        'llc', 'inc', 'incorporated', 'ltd', 'limited', 'lp', 'llp', 'plc', 'corp', 'corporation', 'co', 'company',
+        'sa', 'ag', 'gmbh', 'bv', 'nv', 'sarl', 'slu', 'sl', 'sas', 'spa', 'pte', 'pty', 'the'
+    };
+
+    private static void beginTermChanges(Set<Id> contractIds) {
+        existingChanges = new Map<String, Contract_Term_Change__c>();
+        pendingChanges = new Map<String, Contract_Term_Change__c>();
+        flagsByOfe = new Map<Id, List<String>>();
+        if (contractIds == null || contractIds.isEmpty()) return;
+        for (Contract_Term_Change__c t : [
+            SELECT Id, Key__c, Status__c, New_Value__c FROM Contract_Term_Change__c
+            WHERE Contract__c IN :contractIds AND Key__c != null
+        ]) {
+            existingChanges.put(t.Key__c, t);
+        }
+    }
+
+    private static void termContext(Id contractId, Order_Form_Extraction__c ofe) {
+        ctxContract = contractId;
+        ctxOfe = ofe;
+        ctxEvidence = null;
+    }
+
+    /**
+     * A term this deal would change on the contract, or a flag: legal's decision
+     * ('Accepted' / 'Rejected') while the deal's value is unchanged, else 'Open'.
+     * Either way the change is recorded.
+     */
+    private static String decide(String field, String termLabel, String changeType, Object baseValue, Object newValue) {
+        if (ctxOfe == null || ctxContract == null) return 'Open';
+        String key = termKey(field);
+        String newCanon = canonTerm(newValue);
+        Contract_Term_Change__c have = existingChanges.get(key);
+        Contract_Term_Change__c t = stage(key, field, termLabel, changeType, baseValue, newCanon);
+        if (have != null && DECIDED.contains(have.Status__c) && canonTerm(have.New_Value__c) == newCanon) {
+            t.Status__c = have.Status__c;
+            return have.Status__c;
+        }
+        t.Status__c = 'Open';
+        if (have != null && DECIDED.contains(have.Status__c)) {
+            t.Decided_By__c = null;
+            t.Decided_At__c = null;
+            t.Decision_Note__c = 'Reopened: this deal\'s value is now "' + truncate(newCanon, 300) + '"; it was "'
+                + truncate(have.New_Value__c, 300) + '" when it was ' + have.Status__c.toLowerCase() + '.';
+        }
+        return 'Open';
+    }
+
+    /** A term this amendment adds where the contract had none: recorded, nothing to decide. */
+    private static void recordAdded(String field, Object newValue) {
+        if (ctxOfe == null || ctxContract == null) return;
+        String key = termKey(field);
+        Contract_Term_Change__c have = existingChanges.get(key);
+        Contract_Term_Change__c t = stage(key, field, null, 'Added', null, canonTerm(newValue));
+        t.Status__c = (have != null && DECIDED.contains(have.Status__c)) ? have.Status__c : 'Info';
+    }
+
+    private static Contract_Term_Change__c stage(String key, String field, String termLabel, String changeType,
+                                                 Object baseValue, String newCanon) {
+        Contract_Term_Change__c t = new Contract_Term_Change__c(
+            Key__c = key, Field__c = field, Term__c = termLabel == null ? labelOf(field) : termLabel,
+            Change_Type__c = changeType, Base_Value__c = truncate(canonTerm(baseValue), 4000),
+            New_Value__c = truncate(newCanon, 4000), Extraction__c = ctxOfe.Id, Opportunity__c = ctxOfe.Opportunity__c,
+            Deal_Date__c = ctxOfe.Opportunity__r == null ? null : ctxOfe.Opportunity__r.CloseDate,
+            Source_Quote__c = truncate(evidenceFor(field), 4000), Last_Applied__c = System.now());
+        Contract_Term_Change__c have = existingChanges.get(key);
+        if (have != null) t.Id = have.Id;
+        else t.Contract__c = ctxContract;
+        pendingChanges.put(key, t);
+        return t;
+    }
+
+    private static String termKey(String field) {
+        return String.valueOf(ctxContract) + ':'
+            + String.valueOf(ctxOfe.Opportunity__c != null ? ctxOfe.Opportunity__c : ctxOfe.Id) + ':' + field;
+    }
+
+    private static void saveTermChanges() {
+        if (pendingChanges.isEmpty()) return;
+        List<Contract_Term_Change__c> inserts = new List<Contract_Term_Change__c>();
+        List<Contract_Term_Change__c> updates = new List<Contract_Term_Change__c>();
+        for (Contract_Term_Change__c t : pendingChanges.values()) {
+            if (t.Id == null) inserts.add(t);
+            else updates.add(t);
+        }
+        if (!inserts.isEmpty()) insert inserts;
+        if (!updates.isEmpty()) update updates;
+        pendingChanges = new Map<String, Contract_Term_Change__c>();
+    }
+
+    @TestVisible
+    private static String canonTerm(Object v) {
+        if (v == null) return null;
+        if (v instanceof Decimal) return ((Decimal) v).stripTrailingZeros().toPlainString();
+        if (v instanceof Date) return String.valueOf((Date) v);
+        String s = String.valueOf(v).trim();
+        return String.isBlank(s) ? null : s;
+    }
+
+    private static String labelOf(String field) {
+        if (contractFieldMap == null) contractFieldMap = Schema.SObjectType.Contract.fields.getMap();
+        Schema.SObjectField f = field == null ? null : contractFieldMap.get(field.toLowerCase());
+        return f == null ? field : f.getDescribe().getLabel();
+    }
+
+    // The clause and quote the extraction gives for a contract field.
+    private static String evidenceFor(String field) {
+        if (ctxOfe == null || String.isBlank(ctxOfe.Extract_Evidence__c) || field == null) return null;
+        if (ctxEvidence == null) {
+            try {
+                Object parsed = JSON.deserializeUntyped(ctxOfe.Extract_Evidence__c);
+                ctxEvidence = parsed instanceof Map<String, Object> ? (Map<String, Object>) parsed : new Map<String, Object>();
+            } catch (Exception e) {
+                ctxEvidence = new Map<String, Object>();
+            }
+        }
+        List<String> keys = new List<String>{ field.removeEnd('__c') };
+        if (EVIDENCE_KEYS.containsKey(field)) keys.addAll(EVIDENCE_KEYS.get(field));
+        for (String k : keys) {
+            Object e = ctxEvidence.get(k);
+            if (!(e instanceof Map<String, Object>)) continue;
+            Map<String, Object> m = (Map<String, Object>) e;
+            String quote = m.get('quote') == null ? null : String.valueOf(m.get('quote'));
+            String clause = m.get('clause') == null ? null : String.valueOf(m.get('clause'));
+            if (String.isBlank(quote)) continue;
+            return (String.isBlank(clause) ? '' : clause + ': ') + '"' + quote + '"';
+        }
+        return null;
+    }
+
+    private static Map<Id, List<Billing_Split__c>> billingSplits(Set<Id> contractIds) {
+        Map<Id, List<Billing_Split__c>> out = new Map<Id, List<Billing_Split__c>>();
+        if (contractIds == null || contractIds.isEmpty()) return out;
+        for (Billing_Split__c b : [
+            SELECT Contract__c, Entity_Name__c FROM Billing_Split__c WHERE Contract__c IN :contractIds
+        ]) {
+            if (!out.containsKey(b.Contract__c)) out.put(b.Contract__c, new List<Billing_Split__c>());
+            out.get(b.Contract__c).add(b);
+        }
+        return out;
+    }
+
+    /**
+     * Flags raised when a deal is applied (before its terms land): a signed
+     * amendment for another entity than the contract; signed paper billing an
+     * entity that is not on the contract's billing split; an amendment that
+     * introduces credits on a contract that had none. Adds one line per flag;
+     * returns true when one still needs a decision.
+     */
+    @TestVisible
+    private static Boolean checkFlags(Contract current, Order_Form_Extraction__c ofe, Boolean isAmend,
+                                      List<Billing_Split__c> splits, List<String> lines) {
+        Boolean open = false;
+        Boolean signed = isSignedPaper(ofe);
+        String paperEntity = ofe.Billing_Entity_Name__c;
+        String contractEntity = current == null ? null : current.Billing_Entity_Name__c;
+        Boolean hasSplits = splits != null && !splits.isEmpty();
+
+        if (signed && hasSplits && String.isNotBlank(paperEntity) && !matchesSplit(paperEntity, splits)
+                && (String.isBlank(contractEntity) || !sameEntity(paperEntity, contractEntity))) {
+            List<String> names = new List<String>();
+            for (Billing_Split__c b : splits) names.add(b.Entity_Name__c);
+            String decision = decide('Billing_Split__c', 'Billing Split', 'Billing Split Mismatch',
+                String.join(names, '; '), paperEntity);
+            lines.add('[Billing Split Mismatch] the signed paper bills "' + paperEntity + '", which is not on the '
+                + 'contract\'s billing split (' + String.join(names, '; ') + ')' + ack(decision));
+            if (decision == 'Open') open = true;
+        } else if (isAmend && signed && !hasSplits && String.isNotBlank(paperEntity)
+                && String.isNotBlank(contractEntity) && !sameEntity(paperEntity, contractEntity)) {
+            String decision = decide('Billing_Entity_Name__c', 'Billing Entity', 'Entity Mismatch', contractEntity,
+                paperEntity);
+            lines.add('[Entity Mismatch] the signed paper is for "' + paperEntity + '"; the contract is with "'
+                + contractEntity + '"' + ack(decision));
+            if (decision == 'Open') open = true;
+        }
+
+        Boolean paperCredits = (ofe.Credits_Added__c != null && ofe.Credits_Added__c > 0)
+            || (ofe.Credits_Purchased__c != null && ofe.Credits_Purchased__c > 0) || ofe.Credit_Commit__c == true;
+        Boolean contractCredits = current != null && (
+            (current.Total_Credits_Purchased__c != null && current.Total_Credits_Purchased__c > 0)
+            || current.Credit_Commit__c == true
+            || (current.Credits_Per_Year__c != null && current.Credits_Per_Year__c > 0));
+        if (isAmend && paperCredits && !contractCredits) {
+            String what = creditsText(ofe);
+            String decision = decide('Total_Credits_Purchased__c', 'Credits', 'Credits Introduced',
+                'No credits on the contract', what);
+            lines.add('[Credits Introduced] the contract had no credits; this paper adds ' + what + ack(decision));
+            if (decision == 'Open') open = true;
+        }
+        return open;
+    }
+
+    private static String ack(String decision) {
+        if (decision == 'Accepted') return ' (acknowledged)';
+        if (decision == 'Rejected') return ' (marked wrong)';
+        return '';
+    }
+
+    private static String creditsText(Order_Form_Extraction__c ofe) {
+        List<String> parts = new List<String>();
+        Decimal n = ofe.Credits_Added__c != null && ofe.Credits_Added__c > 0 ? ofe.Credits_Added__c : ofe.Credits_Purchased__c;
+        if (n != null && n > 0) {
+            parts.add(n.setScale(0).format() + ' credits' + (String.isBlank(ofe.Credits_Period__c) ? '' : ' per ' + ofe.Credits_Period__c));
+        }
+        if (ofe.Credit_Commit__c == true) parts.add('a credit commitment');
+        return parts.isEmpty() ? 'credits' : String.join(parts, ' and ');
+    }
+
+    // Signed paper: not an email confirmation, and a signature date or signer.
+    @TestVisible
+    private static Boolean isSignedPaper(Order_Form_Extraction__c ofe) {
+        return ofe.Source_Document_Type__c != 'Email Confirmation'
+            && (ofe.Signature_Date__c != null || String.isNotBlank(ofe.Customer_Signer_Name__c));
+    }
+
+    private static Boolean matchesSplit(String entity, List<Billing_Split__c> splits) {
+        if (splits == null) return false;
+        for (Billing_Split__c b : splits) if (sameEntity(entity, b.Entity_Name__c)) return true;
+        return false;
+    }
+
+    /** Same legal entity: equal once case, punctuation, single letters and suffixes (LLC, Inc, Ltd...) are set aside. */
+    @TestVisible
+    private static Boolean sameEntity(String a, String b) {
+        return entityKey(a) == entityKey(b);
+    }
+
+    @TestVisible
+    private static String entityKey(String name) {
+        if (String.isBlank(name)) return '';
+        String s = name.toLowerCase().replace('&', ' and ').replaceAll('[^a-z0-9 ]', ' ');
+        List<String> kept = new List<String>();
+        for (String w : s.split('\\s+')) {
+            if (w.length() > 1 && !ENTITY_NOISE.contains(w)) kept.add(w);
+        }
+        return String.join(kept, ' ');
     }
 
     private static Boolean sameValue(Object a, Object b) {

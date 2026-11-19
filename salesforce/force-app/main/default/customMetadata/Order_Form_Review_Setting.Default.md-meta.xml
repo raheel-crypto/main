@@ -54,4 +54,8 @@
         <field>Sweep_Days__c</field>
         <value xsi:type="xsd:double">30</value>
     </values>
+    <values>
+        <field>History_Model__c</field>
+        <value xsi:type="xsd:string">claude-sonnet-5-5</value>
+    </values>
 </CustomMetadata>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Contract_History_Stale__c</fullName>
+    <defaultValue>false</defaultValue>
+    <description>Set when the contract's terms are re-applied; the history job then checks whether the inputs changed and rewrites the history if they did.</description>
+    <label>Contract History Stale</label>
+    <trackTrending>false</trackTrending>
+    <type>Checkbox</type>
+</CustomField>

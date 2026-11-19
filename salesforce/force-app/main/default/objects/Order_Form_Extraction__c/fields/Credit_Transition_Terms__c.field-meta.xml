@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Transition_Terms__c</fullName>
+    <description>The credit transition period clause, verbatim (e.g. Jefferies: &quot;Transition Period ... through October 14, 2026, inclusive ... Credits will not be deducted ...&quot;).</description>
+    <label>Credit Transition Terms</label>
+    <length>2000</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>
