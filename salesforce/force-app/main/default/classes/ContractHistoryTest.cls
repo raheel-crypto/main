@@ -18,9 +18,15 @@ private class ContractHistoryTest {
         public Integer status = 200;
         public String lastBody;
         public HttpResponse respond(HttpRequest req) {
+            HttpResponse r = new HttpResponse();
+            // Other automation in the org may call out when a contract is saved: answer, but count only Claude.
+            if (req.getEndpoint() == null || !req.getEndpoint().contains('Anthropic_Claude')) {
+                r.setStatusCode(200);
+                r.setBody('{}');
+                return r;
+            }
             calls++;
             lastBody = req.getBody();
-            HttpResponse r = new HttpResponse();
             r.setStatusCode(status);
             r.setBody(status != 200 ? '{"type":"error","error":{"message":"overloaded"}}' : JSON.serialize(
                 new Map<String, Object>{ 'stop_reason' => 'end_turn', 'content' => new List<Object>{
