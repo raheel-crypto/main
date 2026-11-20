@@ -15,7 +15,8 @@
 //   'STATUS' (default): refreshed / to do, the running jobs, and what is left
 //     with its reason. Changes nothing.
 //   'START': refresh every deal still to do, split into SHARDS jobs that run
-//     side by side, one deal at a time each (a read takes about a minute).
+//     side by side, one deal at a time each (a read takes about a minute). The
+//     deals listed for the large-document script are left to it.
 //
 // When the jobs are done: STATUS; START again to retry what failed; the deals
 // listed for the large-document script go through it; then rebuild every
@@ -101,18 +102,22 @@ if (!running.isEmpty()) {
     System.debug('--- A refresh is still running; wait for it to finish (STATUS), then START again for what is left.');
     return;
 }
-if (todo.isEmpty()) {
-    System.debug('--- Nothing to do.');
+Set<String> largeSet = new Set<String>(large);
+List<Id> inSalesforce = new List<Id>();
+for (Id o : todo) if (!largeSet.contains(String.valueOf(o))) inSalesforce.add(o);
+if (inSalesforce.isEmpty()) {
+    System.debug('--- Nothing to do in Salesforce' + (large.isEmpty() ? '.' : ' - the rest is for the large-document script.'));
     return;
 }
 Integer n = Math.max(1, Math.min(SHARDS, 5));
 List<Set<Id>> passes = new List<Set<Id>>();
 for (Integer i = 0; i < n; i++) passes.add(new Set<Id>());
-for (Integer i = 0; i < todo.size(); i++) passes[Math.mod(i, n)].add(todo[i]);
+for (Integer i = 0; i < inSalesforce.size(); i++) passes[Math.mod(i, n)].add(inSalesforce[i]);
 for (Set<Id> pass : passes) {
     if (pass.isEmpty()) continue;
     Id jobId = OrderFormBackfillBatch.runRefresh(cutoff, pass, 1);
     System.debug('--- Started ' + jobId + ' for ' + pass.size() + ' deal(s).');
 }
-System.debug('--- About ' + Math.max(1, todo.size() / n) + ' minute(s) at roughly a minute per deal per job. '
-    + 'Progress: Setup > Apex Jobs, or run this again with ACTION = \'STATUS\'.');
+System.debug('--- ' + inSalesforce.size() + ' deal(s) in Salesforce, about ' + Math.max(1, inSalesforce.size() / n)
+    + ' minute(s) at roughly a minute per deal per job' + (large.isEmpty() ? '' : '; ' + large.size()
+    + ' left to the large-document script') + '. Progress: Setup > Apex Jobs, or run this again with ACTION = \'STATUS\'.');
