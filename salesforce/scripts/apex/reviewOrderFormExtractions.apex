@@ -16,6 +16,9 @@
 //   batch before and after a change. Needed after a change to Rogo's online
 //   terms or the subprocessor list: those do not make a review out of date (they
 //   are not part of its hashes, so a website edit does not re-review everything).
+// - REVIEW_ALL_JOBS = N (e.g. 4): review EVERY current extraction (any date) in N
+//   job chains running side by side. Extractions whose current review is up to
+//   date are skipped without an API call, so it can be started again safely.
 // - DRY_RUN = true (default) only reports the setting and what would be reviewed.
 // - SCHEDULE_HOURLY = true also schedules the sweep every hour (once).
 //
@@ -29,6 +32,7 @@ Boolean DRY_RUN = true;              // <-- false to start
 Boolean FORCE = false;
 Boolean SCHEDULE_HOURLY = false;
 Integer RERUN_REVIEWED_IN_LAST_DAYS = 0;   // <-- e.g. 2 to redo the latest pilot
+Integer REVIEW_ALL_JOBS = 0;               // <-- e.g. 4 to review every current extraction
 List<Id> EXTRACTION_IDS = new List<Id>{
     // 'a1Gcv00000Fl9K9EAJ'
 };
@@ -66,13 +70,32 @@ if (EXTRACTION_IDS.isEmpty() && RERUN_REVIEWED_IN_LAST_DAYS > 0) {
         + 'last ' + RERUN_REVIEWED_IN_LAST_DAYS + ' day(s).');
 }
 
+List<List<Id>> chains = new List<List<Id>>();
+if (EXTRACTION_IDS.isEmpty() && REVIEW_ALL_JOBS > 0) {
+    List<Id> everyId = new List<Id>();
+    for (Order_Form_Extraction__c r : [
+        SELECT Id FROM Order_Form_Extraction__c
+        WHERE Is_Current__c = true AND Extraction_Status__c IN ('Success', 'Incomplete', 'No Order Form')
+        ORDER BY Opportunity__r.CloseDate DESC
+    ]) {
+        everyId.add(r.Id);
+    }
+    Integer jobs = Math.max(1, Math.min(REVIEW_ALL_JOBS, 10));
+    for (Integer i = 0; i < jobs; i++) chains.add(new List<Id>());
+    for (Integer i = 0; i < everyId.size(); i++) chains[Math.mod(i, jobs)].add(everyId[i]);
+    System.debug('--- Review every current extraction: ' + everyId.size() + ' in ' + jobs + ' job chain(s) side by side '
+        + '(about ' + Math.max(1, everyId.size() / jobs) + ' minute(s)); up-to-date ones are skipped without an API call.');
+}
+
 if (DRY_RUN) {
     System.debug('--- DRY RUN: nothing started. ' + (EXTRACTION_IDS.isEmpty()
         ? 'Set DRY_RUN = false to start the sweep (extractions already up to date are skipped without an API call).'
         : 'Set DRY_RUN = false to review ' + EXTRACTION_IDS.size() + ' extraction(s).'));
     return;
 }
-if (!EXTRACTION_IDS.isEmpty()) {
+if (!chains.isEmpty()) {
+    for (List<Id> chain : chains) if (!chain.isEmpty()) System.debug('--- ' + OrderFormReviewJob.enqueue(chain, FORCE));
+} else if (!EXTRACTION_IDS.isEmpty()) {
     System.debug('--- ' + OrderFormReviewJob.enqueue(EXTRACTION_IDS, FORCE));
 } else {
     Id jobId = Database.executeBatch(new OrderFormReviewBatch(), 1);

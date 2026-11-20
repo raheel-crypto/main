@@ -369,6 +369,14 @@ def extract_one(client, model, system_prompt, opp, docs, target_org):
     return resp.model_dump_json(), used_doc_ids, resp
 
 
+def standard_terms(target_org):
+    """Rogo's standard terms block (online T&Cs, DPA, SLA, subprocessor list) exactly
+    as the Apex extractor sends it, from GET /services/apexrest/OrderFormExtractionFromResponse.
+    Returns (block or None, source lines)."""
+    out = json.loads(sf_rest(target_org, "/services/apexrest/OrderFormExtractionFromResponse"))
+    return out.get("termsBlock"), out.get("sources") or []
+
+
 def write_back(target_org, opp_id, doc_ids, response_body):
     payload = json.dumps({
         "opportunityId": opp_id,
@@ -389,6 +397,8 @@ def main():
     ap.add_argument("--model", default=DEFAULT_MODEL, help=f"Anthropic model (default: {DEFAULT_MODEL})")
     ap.add_argument("--write", action="store_true",
                     help="Insert the OFE via the SF REST endpoint (default is a dry run that only prints)")
+    ap.add_argument("--allow-no-terms", action="store_true",
+                    help="Go on when Rogo's standard terms cannot be fetched from Salesforce (reads then miss them)")
     args = ap.parse_args()
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -396,7 +406,23 @@ def main():
     if not PROMPT_PATH.exists():
         sys.exit(f"Prompt not found at {PROMPT_PATH}")
 
-    system_prompt = PROMPT_PATH.read_text()
+    # The same two system blocks as the Apex extractor: the prompt, then Rogo's
+    # standard terms (cached), so a large deal is read exactly like any other.
+    system_prompt = [{"type": "text", "text": PROMPT_PATH.read_text()}]
+    try:
+        terms, sources = standard_terms(args.target_org)
+    except Exception as e:  # noqa: BLE001 - report and decide below
+        terms, sources = None, [f"could not fetch: {e}"]
+    if terms:
+        system_prompt.append({"type": "text", "text": terms, "cache_control": {"type": "ephemeral"}})
+        print("Rogo standard terms sent with each read:")
+        for line in sources:
+            print(f"  {line}")
+    elif args.allow_no_terms:
+        print("WARNING: no Rogo standard terms block - reads will miss the online T&Cs, DPA, SLA and subprocessor list.")
+    else:
+        sys.exit("Rogo's standard terms could not be fetched from Salesforce "
+                 f"({'; '.join(sources) or 'none configured'}). Deploy OrderFormExtractionRest, or pass --allow-no-terms.")
     client = Anthropic()
 
     for opp_id in args.opportunity_ids:

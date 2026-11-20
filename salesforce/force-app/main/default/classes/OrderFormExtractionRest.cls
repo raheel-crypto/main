@@ -10,6 +10,11 @@
  * POST /services/apexrest/OrderFormExtractionFromResponse
  * Body: { "opportunityId": "006...", "contentDocumentIds": ["069...","069..."],
  *         "responseBody": "<raw Anthropic Messages API response JSON>" }
+ *
+ * GET /services/apexrest/OrderFormExtractionFromResponse
+ * Returns Rogo's standard terms block exactly as the Apex extractor sends it
+ * (RogoStandardTerms: online T&Cs, DPA, SLA, subprocessor list), so the script's
+ * reads see the same terms: { "termsBlock": "...", "sources": ["..."] }.
  */
 @RestResource(urlMapping='/OrderFormExtractionFromResponse/*')
 global with sharing class OrderFormExtractionRest {
@@ -24,6 +29,20 @@ global with sharing class OrderFormExtractionRest {
         global String extractionId;
         global String status;
         global String message;
+    }
+
+    global class TermsResult {
+        global String termsBlock;
+        global List<String> sources;
+    }
+
+    @HttpGet
+    global static TermsResult doGet() {
+        TermsResult out = new TermsResult();
+        RogoStandardTerms.Library lib = RogoStandardTerms.library();
+        out.termsBlock = lib.promptBlock();
+        out.sources = lib.sourceLines();
+        return out;
     }
 
     @HttpPost

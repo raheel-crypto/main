@@ -18,6 +18,9 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
     // data. refreshCutoff makes a re-run resumable (skip opps already refreshed).
     private Boolean refreshMode = false;
     private Datetime refreshCutoff;
+    // Set only by runRefresh(cutoff, onlyOpps, scopeSize): a refresh pass over these
+    // opps only, so several passes on disjoint sets can run side by side.
+    private Set<Id> onlyOpps;
     private Integer totalProcessed = 0;
     private Integer totalSkippedNoFile = 0;
     private Integer totalRefreshSkipped = 0;
@@ -58,6 +61,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         // Declared at method scope so the dynamic-SOQL bind :cutoff resolves.
         Datetime cutoff = (refreshMode ? refreshCutoff : rescanCutoff);
         if (cutoff == null) cutoff = Datetime.now();
+        Set<Id> only = onlyOpps;
         if (refreshMode) {
             // Every Closed Won opp EXCEPT those already refreshed in this pass
             // (an extraction row EXTRACTED at/after the cutoff - not merely
@@ -67,6 +71,7 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
             return Database.getQueryLocator(
                 'SELECT Id, Name FROM Opportunity ' +
                 'WHERE StageName = \'Closed Won\' ' +
+                (only == null ? '' : 'AND Id IN :only ') +
                 'AND Id NOT IN (SELECT Opportunity__c FROM Order_Form_Extraction__c WHERE Extracted_At__c >= :cutoff) ' +
                 'ORDER BY CloseDate ASC, CreatedDate ASC'
             );
@@ -234,6 +239,22 @@ public with sharing class OrderFormBackfillBatch implements Database.Batchable<S
         b.refreshMode = true;
         b.refreshCutoff = Datetime.now();
         return Database.executeBatch(b, SCOPE_SIZE);
+    }
+
+    /**
+     * A refresh pass over these opps only (null = every Closed Won opp), with
+     * scopeSize deals per transaction. Use 1 now that the prompt carries Rogo's
+     * online terms: one read can take most of a transaction's 120 callout
+     * seconds, and a second read in the same transaction would time out and keep
+     * the old row. Passes on disjoint sets run side by side
+     * (scripts/apex/refreshAllExtractions.apex).
+     */
+    public static Id runRefresh(Datetime cutoff, Set<Id> onlyOpps, Integer scopeSize) {
+        OrderFormBackfillBatch b = new OrderFormBackfillBatch();
+        b.refreshMode = true;
+        b.refreshCutoff = cutoff == null ? Datetime.now() : cutoff;
+        b.onlyOpps = onlyOpps;
+        return Database.executeBatch(b, scopeSize == null || scopeSize < 1 ? 1 : scopeSize);
     }
 
     // Resume a partially-completed refresh: pass the timestamp of when the pass

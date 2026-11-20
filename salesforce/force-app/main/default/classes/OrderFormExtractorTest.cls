@@ -1486,6 +1486,40 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void runRefresh_onlyTheGivenDeals() {
+        Opportunity a = insertOpp('Refresh Shard A', 'Closed Won');
+        Opportunity b = insertOpp('Refresh Shard B', 'Closed Won');
+        attachSignedFile(a.Id, 'signed__OrderForm');
+        attachSignedFile(b.Id, 'signed__OrderForm');
+        Order_Form_Extraction__c ra = new Order_Form_Extraction__c(Opportunity__c = a.Id, Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now().addDays(-1), Seat_Licenses__c = 1);
+        Order_Form_Extraction__c rb = new Order_Form_Extraction__c(Opportunity__c = b.Id, Extraction_Status__c = 'Success',
+            Extracted_At__c = System.now().addDays(-1), Seat_Licenses__c = 1);
+        insert new List<Order_Form_Extraction__c>{ ra, rb };
+
+        MockAnthropic mock = new MockAnthropic();
+        mock.responseBody = makeAnthropicResponse(new Map<String, Object>{
+            'Type' => 'New Business', 'Seat_Licenses' => 9 });
+        Test.setMock(HttpCalloutMock.class, mock);
+
+        Test.startTest();
+        OrderFormBackfillBatch.runRefresh(Datetime.now().addHours(-1), new Set<Id>{ a.Id }, 1);
+        Test.stopTest();
+
+        System.assertEquals(9, [SELECT Seat_Licenses__c FROM Order_Form_Extraction__c WHERE Id = :ra.Id].Seat_Licenses__c);
+        System.assertEquals(1, [SELECT Seat_Licenses__c FROM Order_Form_Extraction__c WHERE Id = :rb.Id].Seat_Licenses__c,
+            'a deal outside the pass is left alone');
+    }
+
+    @isTest
+    static void rest_get_returnsTheStandardTermsBlock() {
+        // Not fetched in tests unless asked: no block, no sources.
+        OrderFormExtractionRest.TermsResult res = OrderFormExtractionRest.doGet();
+        System.assertEquals(null, res.termsBlock);
+        System.assert(res.sources.isEmpty());
+    }
+
+    @isTest
     static void runRefresh_resumeRedoesRowsOnlyStampedSinceTheCutoff() {
         // A stopped pass resumed with its original cutoff: a row the applier
         // touched after the cutoff (modified, not re-extracted) is still refreshed.
