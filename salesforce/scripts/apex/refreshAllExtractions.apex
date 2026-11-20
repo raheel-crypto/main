@@ -106,13 +106,13 @@ if (todo.isEmpty()) {
     return;
 }
 Integer n = Math.max(1, Math.min(SHARDS, 5));
-List<Set<Id>> shards = new List<Set<Id>>();
-for (Integer i = 0; i < n; i++) shards.add(new Set<Id>());
-for (Integer i = 0; i < todo.size(); i++) shards[Math.mod(i, n)].add(todo[i]);
-for (Set<Id> shard : shards) {
-    if (shard.isEmpty()) continue;
-    Id jobId = OrderFormBackfillBatch.runRefresh(cutoff, shard, 1);
-    System.debug('--- Started ' + jobId + ' for ' + shard.size() + ' deal(s).');
+List<Set<Id>> passes = new List<Set<Id>>();
+for (Integer i = 0; i < n; i++) passes.add(new Set<Id>());
+for (Integer i = 0; i < todo.size(); i++) passes[Math.mod(i, n)].add(todo[i]);
+for (Set<Id> pass : passes) {
+    if (pass.isEmpty()) continue;
+    Id jobId = OrderFormBackfillBatch.runRefresh(cutoff, pass, 1);
+    System.debug('--- Started ' + jobId + ' for ' + pass.size() + ' deal(s).');
 }
 System.debug('--- About ' + Math.max(1, todo.size() / n) + ' minute(s) at roughly a minute per deal per job. '
     + 'Progress: Setup > Apex Jobs, or run this again with ACTION = \'STATUS\'.');
