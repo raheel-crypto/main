@@ -85,8 +85,20 @@ for (Id o : notYet) {
     }
 }
 
-System.debug('--- Closed Won deals: ' + won.size() + '. Refreshed: ' + refreshed.size() + '. To do: ' + todo.size()
-    + '. No files (nothing to read): ' + noFiles + '.');
+// Refreshed, but Salesforce had to leave files out (a ZIP envelope, or files over its
+// size limits): complete only once the large-document script has read the deal whole.
+Integer refreshedPartial = 0;
+for (Id o : refreshed) {
+    Order_Form_Extraction__c cur = currentByOpp.get(o);
+    if (cur != null && cur.Docs_Dropped__c == true) {
+        refreshedPartial++;
+        large.add(String.valueOf(o));
+    }
+}
+
+System.debug('--- Closed Won deals: ' + won.size() + '. Refreshed: ' + refreshed.size()
+    + (refreshedPartial > 0 ? ' (' + refreshedPartial + ' with files left out - for the large-document script)' : '')
+    + '. To do: ' + todo.size() + '. No files (nothing to read): ' + noFiles + '.');
 for (String k : todoByStatus.keySet()) System.debug('   to do - ' + k + ': ' + todoByStatus.get(k));
 if (!large.isEmpty()) {
     System.debug('--- ' + large.size() + ' deal(s) to read with the large-document script (Salesforce would leave files out). '
