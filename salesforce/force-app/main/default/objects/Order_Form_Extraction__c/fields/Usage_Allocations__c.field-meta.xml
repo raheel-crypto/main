@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Usage_Allocations__c</fullName>
+    <description>Usage-based papers: the named groups (division, business unit, team, entity, region or product) the paper assigns credits or usage to, as JSON [{group, credits, period, quote}]. Blank for one customer-wide pool.</description>
+    <label>Usage Allocations</label>
+    <length>32768</length>
+    <type>LongTextArea</type>
+    <visibleLines>5</visibleLines>
+</CustomField>

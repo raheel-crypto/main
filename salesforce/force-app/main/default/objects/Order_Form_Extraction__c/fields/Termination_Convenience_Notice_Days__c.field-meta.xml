@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Termination_Convenience_Notice_Days__c</fullName>
+    <description>Notice the termination-for-convenience right requires, in days.</description>
+    <externalId>false</externalId>
+    <label>Termination for Convenience Notice Days</label>
+    <precision>5</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

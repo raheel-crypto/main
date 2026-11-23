@@ -26,6 +26,12 @@ public with sharing class OrderFormReviewCoverage {
         'Credits_Purchased__c', 'Credits_Added__c', 'Credits_Period__c', 'Credits_Per_Year__c',
         'Credit_Rate__c', 'Credit_Commit_Fee__c', 'Free_Credits__c', 'Overage_Rate__c', 'Ramp_Schedule__c',
         'Free_Tier_Retained__c', 'Credit_Transition_End_Date__c', 'Credit_Transition_Terms__c',
+        'Non_Cancellable__c', 'Non_Cancellable_Terms__c', 'Termination_For_Convenience__c',
+        'Termination_Convenience_Notice_Days__c', 'Termination_Convenience_Terms__c', 'User_Reduction_Right__c',
+        'User_Reduction_Floor__c', 'User_Reduction_Terms__c', 'Usage_Allocations__c', 'Credit_Order_Of_Use__c',
+        'Credit_Order_Of_Use_Terms__c', 'Non_Refundable__c', 'Non_Refundable_Terms__c', 'Overage_Billing_Frequency__c',
+        'Overage_Cap__c', 'Overage_Terms__c', 'Usage_Notice_Threshold_Percent__c', 'Usage_Notice_Terms__c',
+        'Usage_Statement_Frequency__c', 'Dispute_Window_Days__c', 'Usage_Statement_Terms__c',
         'Renewal_Terms__c', 'Renewal_Fee_Escalator__c', 'Renewal_Fee_Escalator_Terms__c',
         'Subscription_Schedule__c', 'Payment_Terms__c', 'Credit_Terms__c',
         'Pricing_Structure__c', 'Package_Tier__c', 'ELA__c', 'Credit_Commit__c', 'Credit_Overcommit_Obligation__c',
@@ -55,7 +61,13 @@ public with sharing class OrderFormReviewCoverage {
     // Payload fields added after reviews were recorded: hashed only when set, so
     // adding them does not make every earlier review look out of date.
     public static final Set<String> HASH_WHEN_SET = new Set<String>{
-        'Credit_Transition_End_Date__c', 'Credit_Transition_Terms__c'
+        'Credit_Transition_End_Date__c', 'Credit_Transition_Terms__c',
+        'Non_Cancellable__c', 'Non_Cancellable_Terms__c', 'Termination_For_Convenience__c',
+        'Termination_Convenience_Notice_Days__c', 'Termination_Convenience_Terms__c', 'User_Reduction_Right__c',
+        'User_Reduction_Floor__c', 'User_Reduction_Terms__c', 'Usage_Allocations__c', 'Credit_Order_Of_Use__c',
+        'Credit_Order_Of_Use_Terms__c', 'Non_Refundable__c', 'Non_Refundable_Terms__c', 'Overage_Billing_Frequency__c',
+        'Overage_Cap__c', 'Overage_Terms__c', 'Usage_Notice_Threshold_Percent__c', 'Usage_Notice_Terms__c',
+        'Usage_Statement_Frequency__c', 'Dispute_Window_Days__c', 'Usage_Statement_Terms__c'
     };
 
     // Also hashed: the product lines, how derived values were computed, the
@@ -74,7 +86,14 @@ public with sharing class OrderFormReviewCoverage {
     private static final List<String> LEGAL = new List<String>{
         'Renewal_Terms', 'Renewal_Fee_Escalator', 'Payment_Terms', 'Credit_Terms', 'Billing_Entity_Name',
         'Subprocessor_Gate_Type', 'Subprocessor_Notice_Period', 'Sub_Processor_List', 'Model_Change_Requirement',
-        'AI_Training_Prohibition', 'Logo_Publicity_Rights', 'Credit_Rollover'
+        'AI_Training_Prohibition', 'Logo_Publicity_Rights', 'Credit_Rollover',
+        'Non_Cancellable', 'Termination_For_Convenience', 'User_Reduction_Right', 'Non_Refundable'
+    };
+    // Usage-based deals (credits, a credit commitment or an overage price) also
+    // account for how usage is allocated, drawn down, billed, noticed and reported.
+    private static final List<String> USAGE = new List<String>{
+        'Usage_Allocations', 'Credit_Order_Of_Use', 'Overage_Billing_Frequency', 'Overage_Cap',
+        'Usage_Notice_Threshold_Percent', 'Usage_Statement_Frequency', 'Dispute_Window_Days'
     };
     private static final List<String> ECONOMICS = new List<String>{
         'Type', 'Contract_Start_Date', 'Contract_End_Date', 'Contract_Length_Months', 'Seat_Licenses', 'Value_Basis',
@@ -130,9 +149,24 @@ public with sharing class OrderFormReviewCoverage {
             if (String.isBlank(lineItems) || lineItems.trim() == '[]') out.add('Line_Items');
             if (AMEND_TYPES.contains(row.Type__c)) out.addAll(AMENDMENT);
             if (row.Type__c == 'Pilot') out.addAll(PILOT);
+            if (usageBased(row)) out.addAll(USAGE);
         }
         for (String f : LEGAL) if (!out.contains(f)) out.add(f);
         return out;
+    }
+
+    // Credits, a credit commitment or an overage price - read without failing on a row
+    // that was queried without those fields.
+    @TestVisible
+    private static Boolean usageBased(Order_Form_Extraction__c row) {
+        Map<String, Object> m = row.getPopulatedFieldsAsMap();
+        return m.get('Credit_Commit__c') == true
+            || positive(m.get('Credits_Purchased__c')) || positive(m.get('Credits_Added__c'))
+            || m.get('Overage_Rate__c') != null;
+    }
+
+    private static Boolean positive(Object v) {
+        return v instanceof Decimal && (Decimal) v > 0;
     }
 
     /** Every product line on the extraction must be reviewed on its own. */

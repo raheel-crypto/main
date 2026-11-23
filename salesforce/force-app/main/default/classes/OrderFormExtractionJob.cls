@@ -1283,6 +1283,7 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         deriveEscalatorFromRamp(row, d);
         populateSeatAddsByEmail(row, extracted, d);
         populateCreditRollover(row, extracted, d);
+        populateCancellationAndUsageTerms(row, extracted, issues);
         row.Extraction_Issues__c = issues.isEmpty() ? null : truncate(String.join(issues, '\n'), 32768);
         clampToFieldLimits(row, d);
         retainFullValues(row, extracted, d);
@@ -1367,6 +1368,96 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
             }
         }
         if (pct != null && pct > 0 && pct <= 100) row.Credit_Rollover_Percent__c = pct;
+    }
+
+    // ===== Cancellation, termination, reductions, refunds and usage terms =====
+    // Nov 2026 (Raheel): dedicated fields for terms that used to land only in
+    // Special_Terms. Each answer is kept with its clause; a picklist answer outside
+    // the allowed values is left blank with an enum-gap issue (never mapped to the
+    // closest value).
+    private static final List<String> YES_NO_UNSTATED = new List<String>{ 'Yes', 'No', 'Not specified' };
+    private static final List<String> T4C_VALUES = new List<String>{ 'Customer', 'Rogo', 'Both', 'None', 'Not specified' };
+    private static final List<String> ORDER_OF_USE_VALUES = new List<String>{
+        'Free credits first', 'Paid credits first', 'Other', 'Not specified'
+    };
+    private static final List<String> OVERAGE_FREQUENCY_VALUES = new List<String>{
+        'Monthly', 'Quarterly', 'Semi-Annually', 'Annually', 'End of term', 'In arrears (period not stated)', 'Not specified'
+    };
+    private static final List<String> STATEMENT_FREQUENCY_VALUES = new List<String>{
+        'Monthly', 'Quarterly', 'Annually', 'On request', 'Self-serve dashboard', 'Other', 'Not specified'
+    };
+
+    @TestVisible
+    private static void populateCancellationAndUsageTerms(Order_Form_Extraction__c row, Map<String, Object> extracted,
+                                                          List<String> issues) {
+        row.Non_Cancellable__c = allowedValue(extracted, 'Non_Cancellable', YES_NO_UNSTATED, issues);
+        row.Non_Cancellable_Terms__c = clauseText(extracted, 'Non_Cancellable_Terms', 2000);
+        row.Termination_For_Convenience__c = allowedValue(extracted, 'Termination_For_Convenience', T4C_VALUES, issues);
+        row.Termination_Convenience_Notice_Days__c = wholeNumber(extracted.get('Termination_For_Convenience_Notice_Days'));
+        row.Termination_Convenience_Terms__c = clauseText(extracted, 'Termination_For_Convenience_Terms', 2000);
+        row.User_Reduction_Right__c = allowedValue(extracted, 'User_Reduction_Right', YES_NO_UNSTATED, issues);
+        row.User_Reduction_Floor__c = wholeNumber(extracted.get('User_Reduction_Floor'));
+        row.User_Reduction_Terms__c = clauseText(extracted, 'User_Reduction_Terms', 2000);
+        row.Usage_Allocations__c = usageAllocations(extracted.get('Usage_Allocations'));
+        row.Credit_Order_Of_Use__c = allowedValue(extracted, 'Credit_Order_Of_Use', ORDER_OF_USE_VALUES, issues);
+        row.Credit_Order_Of_Use_Terms__c = clauseText(extracted, 'Credit_Order_Of_Use_Terms', 2000);
+        row.Non_Refundable__c = allowedValue(extracted, 'Non_Refundable', YES_NO_UNSTATED, issues);
+        row.Non_Refundable_Terms__c = clauseText(extracted, 'Non_Refundable_Terms', 2000);
+        row.Overage_Billing_Frequency__c = allowedValue(extracted, 'Overage_Billing_Frequency', OVERAGE_FREQUENCY_VALUES,
+            issues);
+        row.Overage_Cap__c = clauseText(extracted, 'Overage_Cap', 255);
+        row.Overage_Terms__c = clauseText(extracted, 'Overage_Terms', 2000);
+        Decimal threshold = toDecimal(extracted.get('Usage_Notice_Threshold_Percent'));
+        row.Usage_Notice_Threshold_Percent__c = threshold == null || threshold <= 0 || threshold > 100
+            ? null : threshold.setScale(2, RoundingMode.HALF_UP);
+        row.Usage_Notice_Terms__c = clauseText(extracted, 'Usage_Notice_Terms', 2000);
+        row.Usage_Statement_Frequency__c = allowedValue(extracted, 'Usage_Statement_Frequency', STATEMENT_FREQUENCY_VALUES,
+            issues);
+        row.Dispute_Window_Days__c = wholeNumber(extracted.get('Dispute_Window_Days'));
+        row.Usage_Statement_Terms__c = clauseText(extracted, 'Usage_Statement_Terms', 2000);
+    }
+
+    // The allowed value the model answered (case and spacing aside); blank with an
+    // enum-gap issue when it answered something else.
+    private static String allowedValue(Map<String, Object> extracted, String key, List<String> allowed,
+                                       List<String> issues) {
+        String raw = asStr(extracted.get(key));
+        if (String.isBlank(raw)) return null;
+        String want = raw.trim().replaceAll('\\s+', ' ');
+        for (String v : allowed) if (v.equalsIgnoreCase(want)) return v;
+        issues.add(issue('enum_gap', key, null, 'answered "' + want.left(200) + '", which is not one of: '
+            + String.join(allowed, ', ') + '. Left blank.', null));
+        return null;
+    }
+
+    private static String clauseText(Map<String, Object> extracted, String key, Integer maxLen) {
+        String raw = asStr(extracted.get(key));
+        return String.isBlank(raw) ? null : truncate(raw.trim(), maxLen);
+    }
+
+    private static Decimal wholeNumber(Object raw) {
+        Decimal n = toDecimal(raw);
+        return n == null || n < 0 ? null : n.setScale(0, RoundingMode.HALF_UP);
+    }
+
+    // Named usage allocations as JSON [{group, credits, period, quote}]; null when none is named.
+    @TestVisible
+    private static String usageAllocations(Object raw) {
+        if (!(raw instanceof List<Object>)) return null;
+        List<Object> out = new List<Object>();
+        for (Object o : (List<Object>) raw) {
+            if (!(o instanceof Map<String, Object>)) continue;
+            Map<String, Object> m = (Map<String, Object>) o;
+            String groupName = asStr(m.get('group'));
+            if (String.isBlank(groupName)) continue;
+            out.add(new Map<String, Object>{
+                'group' => groupName.trim(),
+                'credits' => toDecimal(m.get('credits')),
+                'period' => String.isBlank(asStr(m.get('period'))) ? null : asStr(m.get('period')).trim(),
+                'quote' => String.isBlank(asStr(m.get('quote'))) ? null : asStr(m.get('quote')).trim()
+            });
+        }
+        return out.isEmpty() ? null : truncate(JSON.serialize(out), 32768);
     }
 
     // Nov 2026: no invented default and no closest value. Only a stated 30, 60 or
@@ -2527,7 +2618,16 @@ public with sharing class OrderFormExtractionJob implements Queueable, Database.
         'Rate_Limit_Terms' => 'Rate_Limit_Notes__c',
         'Renewal_Fee_Escalator_Terms' => 'Renewal_Fee_Escalator_Terms__c',
         'Seat_Adds_By_Email_Terms' => 'Seat_Adds_By_Email_Terms__c',
-        'Credit_Rollover_Terms' => 'Credit_Rollover_Terms__c'
+        'Credit_Rollover_Terms' => 'Credit_Rollover_Terms__c',
+        'Non_Cancellable_Terms' => 'Non_Cancellable_Terms__c',
+        'Termination_For_Convenience_Terms' => 'Termination_Convenience_Terms__c',
+        'User_Reduction_Terms' => 'User_Reduction_Terms__c',
+        'Credit_Order_Of_Use_Terms' => 'Credit_Order_Of_Use_Terms__c',
+        'Non_Refundable_Terms' => 'Non_Refundable_Terms__c',
+        'Overage_Cap' => 'Overage_Cap__c',
+        'Overage_Terms' => 'Overage_Terms__c',
+        'Usage_Notice_Terms' => 'Usage_Notice_Terms__c',
+        'Usage_Statement_Terms' => 'Usage_Statement_Terms__c'
     };
     @TestVisible private static final Integer FULL_VALUES_LIMIT = 131072;
 

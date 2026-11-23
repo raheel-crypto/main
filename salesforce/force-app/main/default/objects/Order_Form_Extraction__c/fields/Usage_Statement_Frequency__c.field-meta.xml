@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Usage_Statement_Frequency__c</fullName>
+    <description>How often Rogo reports usage to the customer when the paper says: Monthly, Quarterly, Annually, On request, Self-serve dashboard (the customer monitors usage in the platform), Other, or Not specified.</description>
+    <label>Usage Statement Frequency</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Monthly</fullName><default>false</default><label>Monthly</label></value>
+            <value><fullName>Quarterly</fullName><default>false</default><label>Quarterly</label></value>
+            <value><fullName>Annually</fullName><default>false</default><label>Annually</label></value>
+            <value><fullName>On request</fullName><default>false</default><label>On request</label></value>
+            <value><fullName>Self-serve dashboard</fullName><default>false</default><label>Self-serve dashboard</label></value>
+            <value><fullName>Other</fullName><default>false</default><label>Other</label></value>
+            <value><fullName>Not specified</fullName><default>false</default><label>Not specified</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

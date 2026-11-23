@@ -1680,6 +1680,70 @@ private class OrderFormExtractorTest {
     }
 
     @isTest
+    static void cancellationAndUsageTerms_haveTheirOwnFields() {
+        // JPM-style terms that used to land only in Special_Terms, plus a usage-based paper's terms.
+        Opportunity opp = insertOpp('Protections ' + Crypto.getRandomInteger(), 'Closed Won');
+        Order_Form_Extraction__c row = OrderFormExtractionJob.buildFromResponseBody(opp.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{
+                'Type' => 'Upsell',
+                'Non_Cancellable' => 'Yes',
+                'Non_Cancellable_Terms' => 'This Order Form is non-cancellable for the Initial Subscription Period.',
+                'Termination_For_Convenience' => 'customer',
+                'Termination_For_Convenience_Notice_Days' => 30,
+                'Termination_For_Convenience_Terms' => 'JPMC may terminate for convenience on thirty (30) days notice and shall pay the Total Annual Fees for the Initial Schedule Term.',
+                'User_Reduction_Right' => 'Yes',
+                'User_Reduction_Floor' => 2500,
+                'User_Reduction_Terms' => 'At the end of the first contract year JPMC may True-Down to no less than 2,500 Authorized Users by Amendment.',
+                'Usage_Allocations' => new List<Object>{
+                    new Map<String, Object>{ 'group' => 'Investment Banking Division', 'credits' => 50000000, 'period' => 'year',
+                        'quote' => 'Investment Banking Division: 50,000,000 Credits per year' },
+                    new Map<String, Object>{ 'group' => '', 'credits' => 1 } },
+                'Credit_Order_Of_Use' => 'Free credits first',
+                'Credit_Order_Of_Use_Terms' => 'Complimentary Credits are consumed before paid Credits.',
+                'Non_Refundable' => 'Yes',
+                'Non_Refundable_Terms' => 'All Fees paid for Credits are non-refundable except as expressly set forth in this Agreement.',
+                'Overage_Billing_Frequency' => 'Quarterly',
+                'Overage_Cap' => 'No overage without written agreement',
+                'Overage_Terms' => 'Overage is invoiced quarterly in arrears.',
+                'Usage_Notice_Threshold_Percent' => 80,
+                'Usage_Notice_Terms' => 'Upon Customer reaching eighty percent (80%) utilization Rogo shall notify Customer in writing.',
+                'Usage_Statement_Frequency' => 'Self-serve dashboard',
+                'Dispute_Window_Days' => 30,
+                'Usage_Statement_Terms' => 'Customer may dispute usage within thirty (30) days of the invoice.'
+            }));
+        System.assertEquals('Yes', row.Non_Cancellable__c);
+        System.assert(row.Non_Cancellable_Terms__c.startsWith('This Order Form is non-cancellable'));
+        System.assertEquals('Customer', row.Termination_For_Convenience__c, 'matched whatever the case');
+        System.assertEquals(30, row.Termination_Convenience_Notice_Days__c);
+        System.assert(row.Termination_Convenience_Terms__c.contains('Total Annual Fees'));
+        System.assertEquals('Yes', row.User_Reduction_Right__c);
+        System.assertEquals(2500, row.User_Reduction_Floor__c);
+        System.assert(row.User_Reduction_Terms__c.contains('True-Down'));
+        List<Object> groups = (List<Object>) JSON.deserializeUntyped(row.Usage_Allocations__c);
+        System.assertEquals(1, groups.size(), 'an allocation without a group name is dropped');
+        System.assertEquals('Investment Banking Division', ((Map<String, Object>) groups[0]).get('group'));
+        System.assertEquals('Free credits first', row.Credit_Order_Of_Use__c);
+        System.assertEquals('Yes', row.Non_Refundable__c);
+        System.assert(row.Non_Refundable_Terms__c.contains('except as expressly set forth'));
+        System.assertEquals('Quarterly', row.Overage_Billing_Frequency__c);
+        System.assertEquals('No overage without written agreement', row.Overage_Cap__c);
+        System.assertEquals(80, row.Usage_Notice_Threshold_Percent__c);
+        System.assertEquals('Self-serve dashboard', row.Usage_Statement_Frequency__c);
+        System.assertEquals(30, row.Dispute_Window_Days__c);
+        System.assert(row.Usage_Statement_Terms__c.contains('thirty (30) days'));
+
+        // An answer outside the allowed values is left blank with an issue, never mapped to the closest value.
+        Opportunity opp2 = insertOpp('Protections ' + Crypto.getRandomInteger(), 'Closed Won');
+        Order_Form_Extraction__c odd = OrderFormExtractionJob.buildFromResponseBody(opp2.Id, new List<Id>(),
+            makeAnthropicResponse(new Map<String, Object>{ 'Type' => 'New Business',
+                'Termination_For_Convenience' => 'Mutual with 90 days', 'Usage_Notice_Threshold_Percent' => 180 }));
+        System.assertEquals(null, odd.Termination_For_Convenience__c);
+        System.assert(odd.Extraction_Issues__c.contains('[enum_gap] Termination_For_Convenience'), odd.Extraction_Issues__c);
+        System.assertEquals(null, odd.Usage_Notice_Threshold_Percent__c, 'not a percentage');
+        System.assertEquals(null, odd.Non_Cancellable__c, 'not answered: blank, not Not specified');
+    }
+
+    @isTest
     static void creditTransitionPeriod_isKeptWithItsClause() {
         // Jefferies: credits are not deducted through October 14, 2026, inclusive.
         Opportunity opp = insertOpp('Transition ' + Crypto.getRandomInteger(), 'Closed Won');

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>User_Reduction_Floor__c</fullName>
+    <description>The minimum number of users a reduction may go to, when stated (e.g. &quot;to no less than 2,500&quot;).</description>
+    <externalId>false</externalId>
+    <label>User Reduction Floor</label>
+    <precision>9</precision>
+    <required>false</required>
+    <scale>0</scale>
+    <trackTrending>false</trackTrending>
+    <type>Number</type>
+    <unique>false</unique>
+</CustomField>

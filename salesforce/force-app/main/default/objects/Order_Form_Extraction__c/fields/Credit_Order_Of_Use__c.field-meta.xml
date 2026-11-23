@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Credit_Order_Of_Use__c</fullName>
+    <description>The order in which credits are drawn down when the paper states it: Free credits first, Paid credits first, Other (another stated order, e.g. one named allocation before another), or Not specified.</description>
+    <label>Credit Order of Use</label>
+    <required>false</required>
+    <type>Picklist</type>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Free credits first</fullName><default>false</default><label>Free credits first</label></value>
+            <value><fullName>Paid credits first</fullName><default>false</default><label>Paid credits first</label></value>
+            <value><fullName>Other</fullName><default>false</default><label>Other</label></value>
+            <value><fullName>Not specified</fullName><default>false</default><label>Not specified</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

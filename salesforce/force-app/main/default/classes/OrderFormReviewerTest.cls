@@ -864,6 +864,35 @@ private class OrderFormReviewerTest {
     }
 
     @isTest
+    static void coverage_cancellationTermsAlways_usageTermsOnlyForUsageDeals() {
+        Order_Form_Extraction__c seats = new Order_Form_Extraction__c(Extraction_Status__c = 'Success', Type__c = 'New Business',
+            Source_Document_Type__c = 'Order Form', Seat_Licenses__c = 10);
+        List<String> seatsRequired = OrderFormReviewCoverage.requiredFields(seats);
+        for (String f : new List<String>{ 'Non_Cancellable', 'Termination_For_Convenience', 'User_Reduction_Right', 'Non_Refundable' }) {
+            System.assert(seatsRequired.contains(f), f + ' is required on every deal with an order form');
+        }
+        System.assert(!seatsRequired.contains('Credit_Order_Of_Use'), 'usage terms only for usage-based deals');
+
+        Order_Form_Extraction__c usage = seats.clone();
+        usage.Credits_Purchased__c = 1000000;
+        List<String> usageRequired = OrderFormReviewCoverage.requiredFields(usage);
+        for (String f : new List<String>{ 'Usage_Allocations', 'Credit_Order_Of_Use', 'Overage_Billing_Frequency',
+                'Overage_Cap', 'Usage_Notice_Threshold_Percent', 'Usage_Statement_Frequency', 'Dispute_Window_Days' }) {
+            System.assert(usageRequired.contains(f), f + ' is required on a usage-based deal');
+        }
+        System.assert(OrderFormReviewCoverage.usageBased(new Order_Form_Extraction__c(Overage_Rate__c = 0.02)));
+        System.assert(!OrderFormReviewCoverage.usageBased(new Order_Form_Extraction__c(Credits_Purchased__c = 0)));
+
+        // New fields count in the review fingerprint only once they hold a value.
+        Order_Form_Extraction__c blank = new Order_Form_Extraction__c(Type__c = 'New Business');
+        Order_Form_Extraction__c withTerm = blank.clone();
+        withTerm.Non_Cancellable__c = 'Yes';
+        System.assertNotEquals(OrderFormReviewer.inputHash(blank), OrderFormReviewer.inputHash(withTerm));
+        Order_Form_Extraction__c unset = new Order_Form_Extraction__c(Type__c = 'New Business');
+        System.assertEquals(OrderFormReviewer.inputHash(blank), OrderFormReviewer.inputHash(unset));
+    }
+
+    @isTest
     static void emailCase_isNotAFinding() {
         Order_Form_Extraction__c saved = new Order_Form_Extraction__c(Billing_Contact_Email__c = 'finance@example.com',
             Raw_Response__c = '{}');

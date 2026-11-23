@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>User_Reduction_Terms__c</fullName>
+    <description>The user / seat reduction clause verbatim: when, how (amendment, notice), by how much, the floor and the fee effect.</description>
+    <label>User Reduction Terms</label>
+    <length>2000</length>
+    <type>LongTextArea</type>
+    <visibleLines>3</visibleLines>
+</CustomField>
