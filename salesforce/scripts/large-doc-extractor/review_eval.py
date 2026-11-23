@@ -144,8 +144,21 @@ def required_fields(extracted):
             out += apex_list(COVERAGE_CLS, "AMENDMENT")
         if extracted.get("Type") == "Pilot":
             out += apex_list(COVERAGE_CLS, "PILOT")
+        if usage_based(extracted):
+            out += apex_list(COVERAGE_CLS, "USAGE")
     out += [f for f in apex_list(COVERAGE_CLS, "LEGAL") if f not in out]
     return out
+
+
+def usage_based(extracted):
+    """OrderFormReviewCoverage.usageBased: credits, a credit commitment or an overage price."""
+    def positive(v):
+        try:
+            return v is not None and float(v) > 0
+        except (TypeError, ValueError):
+            return False
+    return (extracted.get("Credit_Commit") is True or positive(extracted.get("Credits_Purchased"))
+            or positive(extracted.get("Credits_Added")) or extracted.get("Overage_Rate") is not None)
 
 
 # ---------------------------------------------------------------- documents

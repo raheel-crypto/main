@@ -169,7 +169,9 @@ private class OrderFormReviewerTest {
     // marked verified unless listed as not reviewed.
     private static String reviewReply(Order_Form_Extraction__c row, List<Object> findings, Set<String> notReviewed,
                                       List<String> gaps) {
-        Order_Form_Extraction__c saved = [SELECT Id, Source_Document_Type__c, Extraction_Status__c, Type__c, Line_Items__c
+        // The fields requiredFields reads, as the reviewer loads them (usage-based deals need the credit fields).
+        Order_Form_Extraction__c saved = [SELECT Id, Source_Document_Type__c, Extraction_Status__c, Type__c, Line_Items__c,
+                                                 Credit_Commit__c, Credits_Purchased__c, Credits_Added__c, Overage_Rate__c
                                           FROM Order_Form_Extraction__c WHERE Id = :row.Id];
         Set<String> named = new Set<String>();
         for (Object o : findings) {
